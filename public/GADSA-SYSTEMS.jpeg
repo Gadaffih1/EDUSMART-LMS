@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300" fill="none">
+  <!-- Outer Yellow Halo Arc -->
+  <path d="M 48 135 A 88 88 0 1 1 252 135" stroke="#F5A623" stroke-width="10" stroke-linecap="round" fill="none" />
+  
+  <!-- Graduation Cap Mortarboard -->
+  <polygon points="150,30 236,70 150,100 64,70" fill="#0B3075" />
+  <path d="M 104 86 Q 150 114 196 86 L 193 110 Q 150 128 107 110 Z" fill="#0B3075" />
+  <path d="M 150,68 Q 220,74 228,110 L 232,140" stroke="#F5A623" stroke-width="4.5" stroke-linecap="round" fill="none" />
+  <polygon points="226,138 238,138 235,160 229,160" fill="#F5A623" />
+
+  <!-- Laptop Screen & Celebratory Learner -->
+  <rect x="88" y="102" width="124" height="82" rx="7" fill="#0B3075" />
+  <rect x="97" y="109" width="106" height="66" rx="3" fill="#FFFFFF" />
+  <circle cx="150" cy="128" r="13" fill="#0B3075" />
+  <path d="M 112 135 Q 131 152 150 170 Q 169 152 188 135 L 180 160 Q 150 182 120 160 Z" fill="#0B3075" />
+  <path d="M 74 182 L 226 182 L 214 202 L 86 202 Z" fill="#0B3075" />
+  <path d="M 132 187 L 168 187 L 165 193 L 135 193 Z" fill="#FFFFFF" opacity="0.9" />
+
+  <!-- Open Book Wing Pages -->
+  <path d="M 38 202 Q 94 200 150 234 Q 206 200 262 202 Q 206 230 150 255 Q 94 230 38 202 Z" fill="#F5A623" />
+  <path d="M 32 212 Q 94 216 150 252 Q 206 216 268 212 Q 206 244 150 270 Q 94 244 32 212 Z" fill="#0B3075" />
+
+  <!-- Brand Typography -->
+  <text x="75" y="248" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" fill="#0B3075">Edu-</text>
+  <text x="145" y="248" font-family="system-ui, -apple-system, sans-serif" font-size="34" font-weight="900" fill="#F5A623">Smart</text>
+
+  <!-- PORTAL sub-brand -->
+  <line x1="45" y1="265" x2="85" y2="265" stroke="#F5A623" stroke-width="2" stroke-linecap="round" />
+  <text x="100" y="269" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="900" letter-spacing="4" fill="#0B3075">PORTAL</text>
+  <line x1="215" y1="265" x2="255" y2="265" stroke="#F5A623" stroke-width="2" stroke-linecap="round" />
+
+  <!-- By Gadsa Systems Pill -->
+  <line x1="50" y1="288" x2="70" y2="288" stroke="#F5A623" stroke-width="2" stroke-linecap="round" />
+  <rect x="75" y="278" width="150" height="20" rx="10" fill="#08255B" stroke="#F5A623" stroke-width="1.5" />
+  <text x="150" y="292" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" font-style="italic" fill="#FFFFFF" text-anchor="middle">By Gadsa Systems</text>
+  <line x1="230" y1="288" x2="250" y2="288" stroke="#F5A623" stroke-width="2" stroke-linecap="round" />
+</svg>

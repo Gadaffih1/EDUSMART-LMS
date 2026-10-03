@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@media print {
+  /* Hide interactive non-printable elements */
+  header, 
+  nav, 
+  button, 
+  .no-print,
+  [role="banner"],
+  [aria-label*="Notifications"] {
+    display: none !important;
+  }
+
+  /* Optimize page layout for print & PDF */
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .printable-report {
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    page-break-inside: avoid;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Force background colors on print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

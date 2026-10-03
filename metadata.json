@@ -1,0 +1,8 @@
+{
+  "name": "EduSmart LMS",
+  "description": "Comprehensive Grade 1-9 CBC digital learning \u0026 school management platform with grade-based access control, interactive resources, topical quizzes, virtual classes, attendance register, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

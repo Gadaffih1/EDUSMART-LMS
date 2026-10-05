@@ -14,6 +14,8 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { 
   BookOpen, 
   BarChart3, 
@@ -32,7 +34,9 @@ import {
   FileCheck,
   Sparkles,
   FileSpreadsheet,
-  HeartPulse
+  HeartPulse,
+  Bus,
+  Trophy
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -63,7 +67,7 @@ interface ExamScheduleItem {
 }
 
 export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ currentUser }) => {
-  type DeanTab = 'assessments' | 'analytics' | 'report_cards' | 'curriculum' | 'work_entries' | 'sanatorium' | 'reporting_hub';
+  type DeanTab = 'assessments' | 'analytics' | 'report_cards' | 'curriculum' | 'work_entries' | 'sanatorium' | 'transport' | 'cocurricular' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<DeanTab>('assessments');
   const workLogs = Storage.getWorkEntryLogs();
 
@@ -300,6 +304,26 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
         >
           <HeartPulse className="w-4 h-4 text-rose-400" />
           <span>Sanatorium & Health Logs</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Bus className="w-4 h-4 text-amber-400" />
+          <span>School Transport</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cocurricular')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Trophy className="w-4 h-4 text-purple-400" />
+          <span>Co-Curriculum & Sports</span>
         </button>
 
         <button
@@ -582,8 +606,22 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           currentUser={currentUser}
           canRecord={false}
           title="Dean of Studies Sanatorium & Medical Logs"
-          subtitle="Monitor learner clinical attendances, assessment exemptions, exam medical leaves, and doctor recommendations."
+          subtitle="Monitor learner clinical attendances, assessment exemptions, exam medical leaves, and doctor recommendations. (Read-Only Audit Mode)"
         />
+      )}
+
+      {/* ========================================================
+          TAB: SCHOOL TRANSPORT & FLEET SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'transport' && (
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+      )}
+
+      {/* ========================================================
+          TAB: CO-CURRICULAR & SPORTS SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'cocurricular' && (
+        <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
 
       {/* ========================================================

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GradeLevel, User, PRIMARY_STREAMS, JUNIOR_STREAMS } from '../../types';
 import { Storage } from '../../utils/storage';
+import { INITIAL_USERS } from '../../data/initialData';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { 
   GraduationCap, 
@@ -107,7 +108,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
     setErrorMsg('');
 
-    const user = Storage.findUserByEmail(email);
+    let user = Storage.findUserByEmail(email);
+    if (!user) {
+      user = INITIAL_USERS.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
+      if (user) {
+        Storage.addUser(user);
+      }
+    }
     if (!user) {
       setErrorMsg('Account not found with this email. Please check your credentials or contact the School Administration.');
       return;
@@ -202,7 +209,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
 
   // Quick 1-click test login
   const handleQuickDemoLogin = (emailToUse: string) => {
-    const user = Storage.findUserByEmail(emailToUse);
+    let user = Storage.findUserByEmail(emailToUse);
+    if (!user) {
+      user = INITIAL_USERS.find(u => u.email.toLowerCase() === emailToUse.trim().toLowerCase());
+      if (user) {
+        Storage.addUser(user);
+      }
+    }
     if (user) {
       Storage.setCurrentUser(user);
       onLoginSuccess(user);
@@ -2409,6 +2422,50 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                       <div className="text-[10px] text-slate-500">Library & cataloging</div>
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600" />
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickDemoLogin('adminstaff@edusmart.ac.ke')}
+                    className="p-2.5 bg-slate-50 hover:bg-teal-50 hover:border-teal-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
+                  >
+                    <div>
+                      <div className="font-extrabold text-slate-900 group-hover:text-teal-800">School Admin Staff</div>
+                      <div className="text-[10px] text-slate-500">Secretariat & registers</div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-600" />
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickDemoLogin('nurse@edusmart.ac.ke')}
+                    className="p-2.5 bg-rose-50/80 hover:bg-rose-100 hover:border-rose-300 rounded-xl border border-rose-200 text-left transition-colors flex items-center justify-between group"
+                  >
+                    <div>
+                      <div className="font-extrabold text-rose-950">🏥 Sanatorium Nurse</div>
+                      <div className="text-[10px] text-rose-700">Sister Grace Wambui (RN)</div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-rose-600" />
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickDemoLogin('transport@edusmart.ac.ke')}
+                    className="p-2.5 bg-amber-50/80 hover:bg-amber-100 hover:border-amber-300 rounded-xl border border-amber-200 text-left transition-colors flex items-center justify-between group"
+                  >
+                    <div>
+                      <div className="font-extrabold text-amber-950">🚌 Transport Team</div>
+                      <div className="text-[10px] text-amber-700">Lead Driver & Fleet Supervisor</div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-amber-600" />
+                  </button>
+
+                  <button
+                    onClick={() => handleQuickDemoLogin('cocurricular@edusmart.ac.ke')}
+                    className="p-2.5 bg-emerald-50/80 hover:bg-emerald-100 hover:border-emerald-300 rounded-xl border border-emerald-200 text-left transition-colors flex items-center justify-between group"
+                  >
+                    <div>
+                      <div className="font-extrabold text-emerald-950">🎯 Co-Curricular Lead</div>
+                      <div className="text-[10px] text-emerald-700">Coach Benjamin Omwenga</div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-emerald-600" />
                   </button>
 
                   <button

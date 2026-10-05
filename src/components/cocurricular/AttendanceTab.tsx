@@ -24,6 +24,7 @@ interface AttendanceTabProps {
   attendanceRecords: CoCurricularAttendanceRecord[];
   onSaveAttendance: (records: CoCurricularAttendanceRecord[]) => void;
   currentUser: User;
+  readOnly?: boolean;
 }
 
 export const AttendanceTab: React.FC<AttendanceTabProps> = ({
@@ -31,7 +32,8 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   profiles,
   attendanceRecords,
   onSaveAttendance,
-  currentUser
+  currentUser,
+  readOnly = false
 }) => {
   const [selectedActivityId, setSelectedActivityId] = useState<string>(activities[0]?.id || '');
   const [selectedDate, setSelectedDate] = useState<string>('2026-10-04');
@@ -51,6 +53,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   );
 
   const handleStatusClick = (studentId: string, status: 'Present' | 'Absent' | 'Excused' | 'Late') => {
+    if (readOnly) return;
     setSessionStatuses(prev => ({
       ...prev,
       [studentId]: status
@@ -110,19 +113,27 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleMarkAllPresent}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors"
-            >
-              Mark All Present
-            </button>
-            <button
-              onClick={handleSaveAttendance}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Save className="w-4 h-4" />
-              <span>Submit Roll Call</span>
-            </button>
+            {!readOnly ? (
+              <>
+                <button
+                  onClick={handleMarkAllPresent}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Mark All Present
+                </button>
+                <button
+                  onClick={handleSaveAttendance}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Submit Roll Call</span>
+                </button>
+              </>
+            ) : (
+              <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 font-mono text-xs font-bold">
+                Read-Only Attendance Audit
+              </span>
+            )}
           </div>
         </div>
 

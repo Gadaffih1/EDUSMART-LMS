@@ -35,13 +35,15 @@ import {
   LogOut,
   Bell,
   Menu,
-  X
+  X,
+  Eye
 } from 'lucide-react';
 
 interface CoCurricularWorkspaceProps {
   currentUser: User;
   onLogout?: () => void;
   isEmbedded?: boolean;
+  readOnly?: boolean;
 }
 
 export type CoCurricularTab = 
@@ -57,9 +59,13 @@ export type CoCurricularTab =
 export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
   currentUser,
   onLogout,
-  isEmbedded = false
+  isEmbedded = false,
+  readOnly
 }) => {
   const [activeTab, setActiveTab] = useState<CoCurricularTab>('dashboard');
+
+  const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher', 'hod', 'school_admin_staff', 'admin'].includes(currentUser.role);
+  const isReadOnly = readOnly !== undefined ? readOnly : (currentUser.role !== 'cocurricular_team' || isExecutiveOrAdmin);
 
   // State from Storage
   const [activities, setActivities] = useState<CoCurricularActivity[]>(() => Storage.getCoCurricularActivities());
@@ -318,7 +324,32 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
       </div>
 
       {/* Main View Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+        {/* Read-Only Surveillance Notice for Executive Leadership and Admin Staff */}
+        {isReadOnly && (
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-purple-950 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+                <Eye className="w-4 h-4 text-purple-700" />
+              </div>
+              <div>
+                <div className="font-bold text-purple-900 flex items-center gap-2">
+                  <span>Read-Only Co-Curriculum & Sports Surveillance</span>
+                  <span className="px-2 py-0.5 rounded-full bg-purple-200 text-purple-800 text-[10px] font-black uppercase tracking-wider">
+                    No Editing Rights
+                  </span>
+                </div>
+                <div className="text-[11px] text-purple-800 mt-0.5">
+                  Accessible with no editing rights to Executive Leadership and Administration Staff ({currentUser.name}). Activity schedules, team rosters, and roll call registers are maintained by the Co-Curricular Team & Patrons.
+                </div>
+              </div>
+            </div>
+            <div className="text-[10px] font-mono font-bold text-purple-800 bg-white/80 border border-purple-200 px-2.5 py-1 rounded-lg shrink-0">
+              ACTIVITIES AUDIT MODE
+            </div>
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           <DashboardTab
             activities={activities}
@@ -342,6 +373,7 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
             onUpdateActivity={handleUpdateActivity}
             selectedActivity={selectedActivity}
             onSelectActivity={setSelectedActivity}
+            readOnly={isReadOnly}
           />
         )}
 
@@ -352,6 +384,7 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
             onAddProfile={handleAddProfile}
             onUpdateProfile={handleUpdateProfile}
             onDeleteProfile={handleDeleteProfile}
+            readOnly={isReadOnly}
           />
         )}
 
@@ -362,6 +395,7 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
             attendanceRecords={attendance}
             onSaveAttendance={handleSaveAttendance}
             currentUser={currentUser}
+            readOnly={isReadOnly}
           />
         )}
 
@@ -371,6 +405,7 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
             activities={activities}
             onAddCompetition={handleAddCompetition}
             onUpdateCompetition={handleUpdateCompetition}
+            readOnly={isReadOnly}
           />
         )}
 
@@ -381,6 +416,7 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
             buses={buses}
             onAddTrip={handleAddTrip}
             onUpdateTrip={handleUpdateTrip}
+            readOnly={isReadOnly}
           />
         )}
 
@@ -391,6 +427,7 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
             activities={activities}
             onAddEquipment={handleAddEquipment}
             onAddBudget={handleAddBudget}
+            readOnly={isReadOnly}
           />
         )}
 

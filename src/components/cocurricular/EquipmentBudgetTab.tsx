@@ -18,6 +18,7 @@ interface EquipmentBudgetTabProps {
   activities: CoCurricularActivity[];
   onAddEquipment: (item: CoCurricularEquipment) => void;
   onAddBudget: (item: CoCurricularBudgetItem) => void;
+  readOnly?: boolean;
 }
 
 export const EquipmentBudgetTab: React.FC<EquipmentBudgetTabProps> = ({
@@ -25,7 +26,8 @@ export const EquipmentBudgetTab: React.FC<EquipmentBudgetTabProps> = ({
   budgets,
   activities,
   onAddEquipment,
-  onAddBudget
+  onAddBudget,
+  readOnly = false
 }) => {
   const [activeSection, setActiveSection] = useState<'equipment' | 'budget'>('equipment');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -97,7 +99,7 @@ export const EquipmentBudgetTab: React.FC<EquipmentBudgetTabProps> = ({
             </button>
           </div>
 
-          {activeSection === 'equipment' && (
+          {!readOnly && activeSection === 'equipment' && (
             <button
               onClick={() => setShowAddModal(true)}
               className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"

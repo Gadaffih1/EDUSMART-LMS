@@ -21,6 +21,7 @@ interface TripsTabProps {
   buses: SchoolBus[];
   onAddTrip: (trip: CoCurricularTrip) => void;
   onUpdateTrip: (id: string, updates: Partial<CoCurricularTrip>) => void;
+  readOnly?: boolean;
 }
 
 export const TripsTab: React.FC<TripsTabProps> = ({
@@ -28,7 +29,8 @@ export const TripsTab: React.FC<TripsTabProps> = ({
   activities,
   buses,
   onAddTrip,
-  onUpdateTrip
+  onUpdateTrip,
+  readOnly = false
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -98,13 +100,15 @@ export const TripsTab: React.FC<TripsTabProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Plan New Excursion</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Plan New Excursion</span>
+          </button>
+        )}
       </div>
 
       {/* Trips Cards Grid */}

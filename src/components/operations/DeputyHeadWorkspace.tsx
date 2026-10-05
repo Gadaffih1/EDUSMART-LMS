@@ -38,6 +38,12 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { 
+  Bus,
+  Trophy
+} from 'lucide-react';
 
 interface DeputyHeadWorkspaceProps {
   currentUser: User;
@@ -70,7 +76,7 @@ interface StaffDutyAssignment {
 }
 
 export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ currentUser }) => {
-  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'work_ledger' | 'sanatorium' | 'reporting_hub';
+  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'work_ledger' | 'sanatorium' | 'transport' | 'cocurricular' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<DeputyTab>('operations');
 
   // Gate passes from storage
@@ -343,6 +349,26 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
         >
           <HeartPulse className="w-4 h-4 text-rose-400" />
           <span>Sanatorium & Health</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Bus className="w-4 h-4 text-amber-400" />
+          <span>Transport & Fleet</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cocurricular')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Trophy className="w-4 h-4 text-purple-400" />
+          <span>Co-Curriculum & Sports</span>
         </button>
 
         <button
@@ -930,8 +956,22 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           currentUser={currentUser}
           canRecord={false}
           title="Deputy Head Sanatorium & Student Health Oversight"
-          subtitle="Campus healthcare surveillance, observation bay logs, nurse in-charge notes, hospital referrals, and emergency gate pass coordination."
+          subtitle="Campus healthcare surveillance, observation bay logs, nurse in-charge notes, hospital referrals, and emergency gate pass coordination. (Read-Only Audit Mode)"
         />
+      )}
+
+      {/* ========================================================
+          TAB: SCHOOL TRANSPORT & FLEET SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'transport' && (
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+      )}
+
+      {/* ========================================================
+          TAB: CO-CURRICULAR & SPORTS SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'cocurricular' && (
+        <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
 
       {/* ========================================================

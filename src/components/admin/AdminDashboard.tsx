@@ -14,6 +14,7 @@ import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { 
   Users, 
   UserPlus, 
@@ -29,7 +30,8 @@ import {
   AlertCircle,
   RefreshCw,
   HeartPulse,
-  Bus
+  Bus,
+  Trophy
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -46,7 +48,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
     ? 'oversight'
     : 'users';
-  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'oversight'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'oversight'>(defaultTab);
 
   // Create User Form
   const [newName, setNewName] = useState('');
@@ -248,6 +250,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <Bus className="w-3.5 h-3.5 text-amber-400" />
           <span>School Transport</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cocurricular')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Trophy className="w-3.5 h-3.5 text-purple-400" />
+          <span>Co-Curricular Programmes</span>
         </button>
 
         <button
@@ -680,9 +692,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       {activeTab === 'sanatorium' && (
         <SanatoriumSection
           currentUser={currentUser}
-          canRecord={true}
+          canRecord={false}
           title="System Administration Sanatorium & Medical Audit"
-          subtitle="System-wide clinic attendance records, nurse in-charge notes, vital signs, and institutional recommendations. Print/Export PDF dossiers."
+          subtitle="System-wide clinic attendance records, nurse in-charge notes, vital signs, and institutional recommendations. Print/Export PDF dossiers. (Read-Only Audit Mode)"
         />
       )}
 
@@ -690,7 +702,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           TAB: SCHOOL TRANSPORT & FLEET TRACKING SYSTEM
           ======================================================== */}
       {activeTab === 'transport' && (
-        <TransportWorkspace currentUser={currentUser} isEmbedded={true} />
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+      )}
+
+      {/* ========================================================
+          TAB: CO-CURRICULAR & TALENT SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'cocurricular' && (
+        <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
 
       {/* ========================================================

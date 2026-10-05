@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   User, 
   SanatoriumRecord, 
@@ -45,6 +45,7 @@ interface SanatoriumSectionProps {
   currentUser: User;
   canRecord?: boolean;
   filterStudentId?: string; // Strictly for specific parent
+  allowedStudentIds?: string[]; // Strictly restrict to parent's children
   filterGrade?: GradeLevel; // For class teacher
   filterStream?: StreamName; // For class teacher
   title?: string;
@@ -70,6 +71,7 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
   currentUser,
   canRecord = false,
   filterStudentId,
+  allowedStudentIds,
   filterGrade,
   filterStream,
   title = "School Sanatorium & Health Bay",
@@ -82,19 +84,46 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
   const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher', 'hod', 'school_admin_staff', 'admin'].includes(currentUser.role);
   const isReadOnlyAudit = isExecutiveOrAdmin && !isNurseOfficer;
 
+  // For parent accounts: strictly link records to parent's registered children
+  const parentChildren = useMemo(() => {
+    if (currentUser.role === 'parent') {
+      return Storage.getParentChildren(currentUser);
+    }
+    return [];
+  }, [currentUser]);
+
+  const parentRestrictedIds = useMemo(() => {
+    if (currentUser.role === 'parent') {
+      return parentChildren.map(c => c.id);
+    }
+    return allowedStudentIds || null;
+  }, [currentUser.role, parentChildren, allowedStudentIds]);
+
+  // Load records scoped by permissions
+  const loadScopedRecords = useCallback(() => {
+    const raw = Storage.getSanatoriumRecords(filterStudentId, filterGrade, filterStream);
+    if (parentRestrictedIds) {
+      return raw.filter(r => parentRestrictedIds.includes(r.studentId));
+    }
+    return raw;
+  }, [filterStudentId, filterGrade, filterStream, parentRestrictedIds]);
+
   // All records state
-  const [records, setRecords] = useState<SanatoriumRecord[]>(() => {
-    return Storage.getSanatoriumRecords(filterStudentId, filterGrade, filterStream);
-  });
+  const [records, setRecords] = useState<SanatoriumRecord[]>(loadScopedRecords);
 
   // Listen to updates from other tabs/workspaces
   useEffect(() => {
     const handleUpdate = () => {
-      setRecords(Storage.getSanatoriumRecords(filterStudentId, filterGrade, filterStream));
+      setRecords(loadScopedRecords());
     };
     window.addEventListener('sanatorium-records-updated', handleUpdate);
     return () => window.removeEventListener('sanatorium-records-updated', handleUpdate);
-  }, [filterStudentId, filterGrade, filterStream]);
+  }, [loadScopedRecords]);
+
+  // Keep records in sync when props change
+  useEffect(() => {
+    setRecords(loadScopedRecords());
+  }, [loadScopedRecords]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');

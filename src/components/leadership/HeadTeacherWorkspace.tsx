@@ -11,6 +11,8 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { 
   School, 
   Users, 
@@ -28,7 +30,9 @@ import {
   BookOpen,
   Printer,
   FileSpreadsheet,
-  HeartPulse
+  HeartPulse,
+  Bus,
+  Trophy
 } from 'lucide-react';
 
 interface HeadTeacherWorkspaceProps {
@@ -36,7 +40,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'work_entry_audit' | 'sanatorium' | 'bom_report' | 'reporting_hub';
+  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
 
   const allUsers = Storage.getUsers();
@@ -201,6 +205,26 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         >
           <HeartPulse className="w-4 h-4 text-rose-400" />
           <span>Sanatorium & Clinic</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Bus className="w-4 h-4 text-amber-400" />
+          <span>School Transport</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cocurricular')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Trophy className="w-4 h-4 text-purple-400" />
+          <span>Co-Curriculum & Sports</span>
         </button>
 
         <button
@@ -430,8 +454,22 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           currentUser={currentUser}
           canRecord={false}
           title="Head Teacher Sanatorium & Campus Clinic Surveillance"
-          subtitle="Institutional healthcare oversight: Student illness logs, observation bay admissions, emergency hospital transfers, and outbreak prevention."
+          subtitle="Institutional healthcare oversight: Student illness logs, observation bay admissions, emergency hospital transfers, and outbreak prevention. (Read-Only Audit Mode)"
         />
+      )}
+
+      {/* ========================================================
+          TAB: SCHOOL TRANSPORT & FLEET SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'transport' && (
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+      )}
+
+      {/* ========================================================
+          TAB: CO-CURRICULAR & SPORTS SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'cocurricular' && (
+        <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
 
       {/* ========================================================

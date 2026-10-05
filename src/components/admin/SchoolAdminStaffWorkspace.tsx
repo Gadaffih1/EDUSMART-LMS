@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   User, 
   GradeLevel, 
@@ -19,6 +19,7 @@ import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { 
   Calendar, 
   Clock, 
@@ -54,7 +55,8 @@ import {
   GraduationCap, 
   Sparkles,
   HeartPulse,
-  Bus
+  Bus,
+  Trophy
 } from 'lucide-react';
 
 interface SchoolAdminStaffWorkspaceProps {
@@ -66,6 +68,7 @@ type AdminTab =
   | 'work_entries'
   | 'sanatorium'
   | 'transport'
+  | 'cocurricular'
   | 'gate_exits'
   | 'registers'
   | 'communications'
@@ -83,6 +86,12 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       ? 'sanatorium'
       : 'work_entries'
   );
+
+  useEffect(() => {
+    if (currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.designation && currentUser.designation.toLowerCase().includes('nurse'))) {
+      setActiveTab('sanatorium');
+    }
+  }, [currentUser]);
 
   // Core Data States from Storage
   const [workEntries] = useState<WorkEntryLog[]>(() => Storage.getWorkEntryLogs());
@@ -433,7 +442,20 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               >
                 <Bus className="w-4 h-4 text-amber-400" />
                 <span>3. School Transport</span>
-                <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">Fleet & Roll</span>
+                <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">Read-Only</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('cocurricular')}
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
+                  activeTab === 'cocurricular'
+                    ? 'border-purple-400 text-purple-400 font-bold'
+                    : 'border-transparent text-slate-300 hover:text-white'
+                }`}
+              >
+                <Trophy className="w-4 h-4 text-purple-400" />
+                <span>4. Co-Curriculum & Sports</span>
+                <span className="ml-1 text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-mono font-bold">Read-Only</span>
               </button>
 
               <button
@@ -537,9 +559,13 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
         {activeTab === 'sanatorium' && (
           <SanatoriumSection 
             currentUser={currentUser} 
-            canRecord={true}
-            title="School Sanatorium & Healthcare Bay Register"
-            subtitle="Record student clinic attendance, nurse in-charge notes, symptoms, vital signs, and clinical recommendations. Export PDF reports."
+            canRecord={currentUser.email === 'nurse@edusmart.ac.ke' || (Boolean(currentUser.designation) && currentUser.designation!.toLowerCase().includes('nurse'))}
+            title={currentUser.email === 'nurse@edusmart.ac.ke' || (Boolean(currentUser.designation) && currentUser.designation!.toLowerCase().includes('nurse'))
+              ? "School Sanatorium & Healthcare Bay (Clinical Care Register)"
+              : "School Sanatorium & Healthcare Bay (Surveillance Register)"}
+            subtitle={currentUser.email === 'nurse@edusmart.ac.ke' || (Boolean(currentUser.designation) && currentUser.designation!.toLowerCase().includes('nurse'))
+              ? "Official medical register: Student clinic attendance logs, nurse in-charge notes, vital signs, and clinical recommendations."
+              : "View student clinic attendance, nurse in-charge notes, symptoms, vital signs, and clinical recommendations. Export PDF reports. Read-only access for Admin Staff."}
           />
         )}
 
@@ -547,7 +573,14 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             TAB 3: SCHOOL TRANSPORT & FLEET OPERATIONS
             ======================================================== */}
         {activeTab === 'transport' && (
-          <TransportWorkspace currentUser={currentUser} isEmbedded={true} />
+          <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+        )}
+
+        {/* ========================================================
+            TAB 4: CO-CURRICULAR & SPORTS SURVEILLANCE
+            ======================================================== */}
+        {activeTab === 'cocurricular' && (
+          <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
         )}
 
         {/* ========================================================

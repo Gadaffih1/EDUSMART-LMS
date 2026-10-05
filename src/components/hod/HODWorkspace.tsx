@@ -30,6 +30,14 @@ import {
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { 
+  HeartPulse,
+  Bus,
+  Trophy
+} from 'lucide-react';
 
 interface HODWorkspaceProps {
   currentUser: User;
@@ -45,7 +53,7 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
     ? ['English', 'Kiswahili']
     : ['Social Studies', 'Religious Education', 'Creative Arts', 'Pretechnical Education'];
 
-  type HODTab = 'syllabus' | 'work_logs' | 'quiz_audit' | 'subject_analytics' | 'curriculum_resources' | 'reporting_hub';
+  type HODTab = 'syllabus' | 'work_logs' | 'quiz_audit' | 'subject_analytics' | 'curriculum_resources' | 'sanatorium' | 'transport' | 'cocurricular' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HODTab>('syllabus');
 
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
@@ -232,6 +240,63 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
             <div className="font-bold text-xs sm:text-sm">6. Reporting Hub</div>
             <div className={`text-[10px] mt-0.5 ${activeTab === 'reporting_hub' ? 'text-emerald-200' : 'text-slate-500'}`}>
               Periodic dossiers
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sanatorium')}
+          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+            activeTab === 'sanatorium'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-rose-500'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-rose-100 text-rose-800">
+            <HeartPulse className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-xs sm:text-sm">7. Sanatorium</div>
+            <div className={`text-[10px] mt-0.5 ${activeTab === 'sanatorium' ? 'text-rose-200' : 'text-slate-500'}`}>
+              Health logs
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+            activeTab === 'transport'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-amber-100 text-amber-800">
+            <Bus className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-xs sm:text-sm">8. Transport</div>
+            <div className={`text-[10px] mt-0.5 ${activeTab === 'transport' ? 'text-amber-200' : 'text-slate-500'}`}>
+              Fleet & routes
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cocurricular')}
+          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+            activeTab === 'cocurricular'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-purple-500'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
+            <Trophy className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-xs sm:text-sm">9. Co-Curricular</div>
+            <div className={`text-[10px] mt-0.5 ${activeTab === 'cocurricular' ? 'text-purple-200' : 'text-slate-500'}`}>
+              Activities & clubs
             </div>
           </div>
         </button>
@@ -563,10 +628,29 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
       )}
 
       {/* ========================================================
-          TAB 6: REPORTING HUB (AGGREGATED & INDIVIDUAL DOSSIERS)
+          TAB 7: SANATORIUM SURVEILLANCE
           ======================================================== */}
-      {activeTab === 'reporting_hub' && (
-        <ReportingHub currentUser={currentUser} />
+      {activeTab === 'sanatorium' && (
+        <SanatoriumSection
+          currentUser={currentUser}
+          canRecord={false}
+          title="Department Head Sanatorium & Student Health Oversight"
+          subtitle="Department health logs, observation bay admissions, and nurse notes. (Read-Only Audit Mode)"
+        />
+      )}
+
+      {/* ========================================================
+          TAB 8: SCHOOL TRANSPORT & FLEET SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'transport' && (
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+      )}
+
+      {/* ========================================================
+          TAB 9: CO-CURRICULAR & SPORTS SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'cocurricular' && (
+        <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
     </div>
   );

@@ -1844,12 +1844,56 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
           ======================================================== */}
       {activeTab === 'sanatorium' && (
         <section className="space-y-6">
+          {/* Child-Specific Linking Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">Filter Sanatorium Records by Child:</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setSelectedChildId('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedChildId === 'all'
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  All Registered Children ({myChildren.length})
+                </button>
+                {myChildren.map(child => (
+                  <button
+                    key={child.id}
+                    onClick={() => setSelectedChildId(child.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      selectedChildId === child.id
+                        ? 'bg-rose-700 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{child.name}</span>
+                    <span className="text-[10px] opacity-80">(Gr {child.grade} {child.stream})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedChild ? (
+              <div className="text-xs text-slate-600">
+                Child Link: <strong className="text-slate-900">{selectedChild.name}</strong> · Admission: <span className="font-mono font-bold text-rose-800">{selectedChild.admissionNumber}</span>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">
+                Showing clinical history for <strong className="text-slate-800">all {myChildren.length} registered children</strong>
+              </div>
+            )}
+          </div>
+
           <SanatoriumSection
             currentUser={currentUser}
             canRecord={false}
             filterStudentId={selectedChild ? selectedChild.id : undefined}
+            allowedStudentIds={myChildren.map(c => c.id)}
             title={selectedChild ? `${selectedChild.name}'s Medical & Sanatorium Visits` : 'Children Sanatorium & Medical History'}
-            subtitle={`Confidential clinical attendance records, vital signs checks, nurse in-charge notes, and recommendations for ${selectedChild ? selectedChild.name : 'your registered child(ren)'}.`}
+            subtitle={`Confidential clinical attendance records, vital signs checks, nurse in-charge notes, and recommendations strictly linked to ${selectedChild ? selectedChild.name : 'your registered child(ren)'}.`}
           />
         </section>
       )}

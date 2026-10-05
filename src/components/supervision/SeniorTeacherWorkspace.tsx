@@ -28,19 +28,23 @@ import {
   BarChart3,
   Sparkles,
   CheckCircle2,
-  HeartPulse
+  HeartPulse,
+  Bus,
+  Trophy
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
+import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 
 interface SeniorTeacherWorkspaceProps {
   currentUser: User;
 }
 
 export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ currentUser }) => {
-  type SupervisionTab = 'gate_safety' | 'work_entry_audit' | 'sanatorium' | 'attendance_monitor' | 'mentorship' | 'curriculum_coordination' | 'reporting_hub';
+  type SupervisionTab = 'gate_safety' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'attendance_monitor' | 'mentorship' | 'curriculum_coordination' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<SupervisionTab>('gate_safety');
 
   // Mentorship log state
@@ -202,6 +206,44 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
             <div className="font-bold text-xs sm:text-sm">3. Sanatorium</div>
             <div className={`text-[10px] mt-0.5 ${activeTab === 'sanatorium' ? 'text-rose-200' : 'text-slate-500'}`}>
               Health logs
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+            activeTab === 'transport'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-amber-100 text-amber-800">
+            <Bus className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-xs sm:text-sm">4. Transport</div>
+            <div className={`text-[10px] mt-0.5 ${activeTab === 'transport' ? 'text-amber-200' : 'text-slate-500'}`}>
+              Fleet & routes
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cocurricular')}
+          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+            activeTab === 'cocurricular'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-purple-500'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
+            <Trophy className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-xs sm:text-sm">5. Co-Curricular</div>
+            <div className={`text-[10px] mt-0.5 ${activeTab === 'cocurricular' ? 'text-purple-200' : 'text-slate-500'}`}>
+              Clubs & sports
             </div>
           </div>
         </button>
@@ -375,8 +417,22 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
           currentUser={currentUser}
           canRecord={false}
           title="Senior Teacher Sanatorium & Student Health Oversight"
-          subtitle="Learner health visits, medical triage records, activity exemptions, and nurse in-charge recommendations across all grades."
+          subtitle="Learner health visits, medical triage records, activity exemptions, and nurse in-charge recommendations across all grades. (Read-Only Audit Mode)"
         />
+      )}
+
+      {/* ========================================================
+          TAB: SCHOOL TRANSPORT & FLEET SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'transport' && (
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
+      )}
+
+      {/* ========================================================
+          TAB: CO-CURRICULAR & SPORTS SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'cocurricular' && (
+        <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
 
       {/* ========================================================

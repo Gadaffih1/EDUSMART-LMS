@@ -55,6 +55,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'librarian': return 'Librarian';
       case 'head_teacher': return 'Head Teacher';
       case 'school_admin_staff': return 'School Admin Staff / Registrar';
+      case 'transport_team': return 'School Transport Team';
+      case 'cocurricular_team': return 'Co-Curricular & Sports Academy';
       case 'admin': return 'System Administrator';
       default: return role;
     }
@@ -347,7 +349,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {allUsers
-                    .filter(u => ['deputy_head', 'head_teacher', 'school_admin_staff', 'admin'].includes(u.role))
+                    .filter(u => ['deputy_head', 'head_teacher', 'admin'].includes(u.role) || (u.role === 'school_admin_staff' && u.email !== 'nurse@edusmart.ac.ke'))
                     .map(user => (
                       <button
                         key={user.id}
@@ -376,6 +378,59 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <Shield className="w-4 h-4 text-slate-400 shrink-0" />
                       </button>
                     ))}
+                </div>
+              </div>
+
+              {/* 5. Sanatorium, Transport & Co-Curricular Teams */}
+              <div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>5. Sanatorium, Transport & Co-Curricular Teams</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Active Operations & Healthcare Care</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {allUsers
+                    .filter(u => ['transport_team', 'cocurricular_team'].includes(u.role) || u.email === 'nurse@edusmart.ac.ke' || (u.designation && u.designation.toLowerCase().includes('nurse')))
+                    .map(user => {
+                      const isNurse = user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'));
+                      const isTransport = user.role === 'transport_team';
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => {
+                            onSwitchUser(user);
+                            setShowSwitchModal(false);
+                          }}
+                          className={`text-left p-2.5 rounded-lg border transition-all flex items-center justify-between ${
+                            currentUser?.id === user.id
+                              ? 'border-emerald-600 bg-emerald-50/50 ring-1 ring-emerald-600'
+                              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{user.name}</div>
+                            <div className={`text-[11px] font-bold ${
+                              isNurse ? 'text-rose-700' : isTransport ? 'text-amber-700' : 'text-emerald-700'
+                            }`}>
+                              {isNurse ? 'School Nursing Officer' : getRoleLabel(user.role)}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              Main Access: {
+                                isNurse ? 'Sanatorium clinical admissions, triage & sick bay logs' :
+                                isTransport ? 'Fleet operations, student boarding & daily route tracking' :
+                                'Sports academy, clubs, fixtures & talent matrix'
+                              }
+                            </div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold shrink-0 ${
+                            isNurse ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                            isTransport ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                            'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {isNurse ? '🏥 Sanatorium' : isTransport ? '🚌 Transport' : '🎯 Sports'}
+                          </span>
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
 

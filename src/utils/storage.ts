@@ -257,7 +257,26 @@ export const Storage = {
 
   // Users
   getUsers(): User[] {
-    return getFromStorage<User[]>(KEYS.USERS, INITIAL_USERS);
+    const stored = getFromStorage<User[]>(KEYS.USERS, INITIAL_USERS);
+    // Guarantee that all demo accounts from INITIAL_USERS are actively present in stored users
+    let hasMissing = false;
+    const existingIds = new Set(stored.map(u => u.id));
+    const existingEmails = new Set(stored.map(u => u.email.toLowerCase()));
+    const merged = [...stored];
+
+    for (const initUser of INITIAL_USERS) {
+      if (!existingIds.has(initUser.id) && !existingEmails.has(initUser.email.toLowerCase())) {
+        merged.push(initUser);
+        existingIds.add(initUser.id);
+        existingEmails.add(initUser.email.toLowerCase());
+        hasMissing = true;
+      }
+    }
+
+    if (hasMissing) {
+      setToStorage(KEYS.USERS, merged);
+    }
+    return merged;
   },
   addUser(user: User): void {
     const users = this.getUsers();
@@ -282,7 +301,15 @@ export const Storage = {
   },
   findUserByEmail(email: string): User | undefined {
     const cleanEmail = email.trim().toLowerCase();
-    return this.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
+    const userInStorage = this.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
+    if (userInStorage) return userInStorage;
+    // Guaranteed fallback directly to INITIAL_USERS so it can NEVER fail even if cache is stale
+    const userInInitial = INITIAL_USERS.find(u => u.email.toLowerCase() === cleanEmail);
+    if (userInInitial) {
+      this.addUser(userInInitial);
+      return userInInitial;
+    }
+    return undefined;
   },
 
   // Grade Passwords

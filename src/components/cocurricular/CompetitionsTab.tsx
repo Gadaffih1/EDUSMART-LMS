@@ -21,13 +21,15 @@ interface CompetitionsTabProps {
   activities: CoCurricularActivity[];
   onAddCompetition: (comp: CoCurricularCompetition) => void;
   onUpdateCompetition: (id: string, updates: Partial<CoCurricularCompetition>) => void;
+  readOnly?: boolean;
 }
 
 export const CompetitionsTab: React.FC<CompetitionsTabProps> = ({
   competitions,
   activities,
   onAddCompetition,
-  onUpdateCompetition
+  onUpdateCompetition,
+  readOnly = false
 }) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'Upcoming' | 'Completed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -131,13 +133,15 @@ export const CompetitionsTab: React.FC<CompetitionsTabProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Schedule Tournament / Fixture</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Schedule Tournament / Fixture</span>
+          </button>
+        )}
       </div>
 
       {/* Competitions Cards */}

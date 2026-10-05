@@ -33,6 +33,7 @@ interface LearnerPortfolioTabProps {
   onAddProfile: (profile: LearnerCoCurricularProfile) => void;
   onUpdateProfile: (id: string, updates: Partial<LearnerCoCurricularProfile>) => void;
   onDeleteProfile: (id: string) => void;
+  readOnly?: boolean;
 }
 
 export const LearnerPortfolioTab: React.FC<LearnerPortfolioTabProps> = ({
@@ -40,7 +41,8 @@ export const LearnerPortfolioTab: React.FC<LearnerPortfolioTabProps> = ({
   activities,
   onAddProfile,
   onUpdateProfile,
-  onDeleteProfile
+  onDeleteProfile,
+  readOnly = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -147,13 +149,15 @@ export const LearnerPortfolioTab: React.FC<LearnerPortfolioTabProps> = ({
           </select>
         </div>
 
-        <button
-          onClick={() => setShowRegisterModal(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Enroll Learner</span>
-        </button>
+        {!readOnly && (
+          <button
+            onClick={() => setShowRegisterModal(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Enroll Learner</span>
+          </button>
+        )}
       </div>
 
       {/* Profiles Table */}

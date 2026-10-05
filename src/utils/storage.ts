@@ -605,18 +605,27 @@ export const Storage = {
 
   // Timetable
   getTimetable(grade: GradeLevel, stream: StreamName): TimetableSlot[] {
-    const slots = getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, INITIAL_TIMETABLE);
+    const slots = this.getAllTimetableSlots();
     return slots.filter(s => s.grade === grade && s.stream === stream);
   },
   saveTimetableSlot(slot: TimetableSlot): void {
-    const slots = getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, INITIAL_TIMETABLE);
+    const slots = this.getAllTimetableSlots();
     const idx = slots.findIndex(s => s.id === slot.id);
+    let updated: TimetableSlot[];
     if (idx !== -1) {
-      slots[idx] = slot;
+      updated = [...slots];
+      updated[idx] = slot;
     } else {
-      slots.push(slot);
+      updated = [...slots, slot];
     }
-    setToStorage(KEYS.TIMETABLE, slots);
+    setToStorage(KEYS.TIMETABLE, updated);
+    window.dispatchEvent(new CustomEvent('timetable-updated', { detail: updated }));
+  },
+  deleteTimetableSlot(id: string): void {
+    const slots = this.getAllTimetableSlots();
+    const updated = slots.filter(s => s.id !== id);
+    setToStorage(KEYS.TIMETABLE, updated);
+    window.dispatchEvent(new CustomEvent('timetable-updated', { detail: updated }));
   },
 
   // Report Cards
@@ -1277,7 +1286,15 @@ export const Storage = {
   },
 
   getAllTimetableSlots(): TimetableSlot[] {
-    return getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, INITIAL_TIMETABLE);
+    const stored = getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, INITIAL_TIMETABLE);
+    const existingIds = new Set(stored.map(s => s.id));
+    const missing = INITIAL_TIMETABLE.filter(s => !existingIds.has(s.id));
+    if (missing.length > 0) {
+      const merged = [...stored, ...missing];
+      setToStorage(KEYS.TIMETABLE, merged);
+      return merged;
+    }
+    return stored;
   },
 
   // ========================================================

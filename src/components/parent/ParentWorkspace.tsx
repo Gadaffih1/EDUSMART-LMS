@@ -18,6 +18,7 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { AchievementSystem } from '../student/AchievementSystem';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { 
   Home,
   Users, 
@@ -1241,72 +1242,44 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       )}
 
       {/* ========================================================
-          6. 📅 TIMETABLE
+          6. 📅 TIMETABLE & DAILY BELL SCHEDULE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="space-y-6">
+          {/* Child Selector Pills for Parent */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Weekly Class Timetable & Periods</h2>
+              <h3 className="text-sm font-extrabold text-slate-900">
+                Child Timetable View
+              </h3>
               <p className="text-xs text-slate-500">
-                Weekly lesson schedule for {selectedChild ? `Grade ${selectedChild.grade} (${selectedChild.stream})` : 'your children'}.
+                Inspect weekly class timetable, assigned subject teachers, and Google Meet rooms for each child.
               </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+              {myChildren.map(child => (
+                <button
+                  key={child.id}
+                  onClick={() => setSelectedChildId(child.id)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                    (selectedChild?.id === child.id || (selectedChildId === 'all' && myChildren[0]?.id === child.id))
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {child.name} (Grade {child.grade} {child.stream})
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-4">Period Time</th>
-                  <th className="py-2.5 px-4">Monday</th>
-                  <th className="py-2.5 px-4">Tuesday</th>
-                  <th className="py-2.5 px-4">Wednesday</th>
-                  <th className="py-2.5 px-4">Thursday</th>
-                  <th className="py-2.5 px-4">Friday</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                <tr className="hover:bg-slate-50">
-                  <td className="py-2.5 px-4 font-mono font-bold text-slate-700">08:00 - 08:40</td>
-                  <td className="py-2.5 px-4 font-semibold text-blue-700">Mathematics</td>
-                  <td className="py-2.5 px-4 font-semibold text-emerald-700">Integrated Science</td>
-                  <td className="py-2.5 px-4 font-semibold text-purple-700">English</td>
-                  <td className="py-2.5 px-4 font-semibold text-blue-700">Mathematics</td>
-                  <td className="py-2.5 px-4 font-semibold text-teal-700">Kiswahili</td>
-                </tr>
-                <tr className="hover:bg-slate-50">
-                  <td className="py-2.5 px-4 font-mono font-bold text-slate-700">08:40 - 09:20</td>
-                  <td className="py-2.5 px-4 font-semibold text-purple-700">English</td>
-                  <td className="py-2.5 px-4 font-semibold text-blue-700">Mathematics</td>
-                  <td className="py-2.5 px-4 font-semibold text-emerald-700">Integrated Science</td>
-                  <td className="py-2.5 px-4 font-semibold text-amber-700">Social Studies</td>
-                  <td className="py-2.5 px-4 font-semibold text-indigo-700">Creative Arts</td>
-                </tr>
-                <tr className="bg-slate-50/80 font-bold text-slate-500">
-                  <td className="py-1 px-4 font-mono text-[10px]">09:20 - 09:40</td>
-                  <td colSpan={5} className="py-1 px-4 text-center text-[10px] tracking-wider uppercase">Morning Break & Snack</td>
-                </tr>
-                <tr className="hover:bg-slate-50">
-                  <td className="py-2.5 px-4 font-mono font-bold text-slate-700">09:40 - 10:20</td>
-                  <td className="py-2.5 px-4 font-semibold text-emerald-700">Integrated Science</td>
-                  <td className="py-2.5 px-4 font-semibold text-teal-700">Kiswahili</td>
-                  <td className="py-2.5 px-4 font-semibold text-blue-700">Mathematics</td>
-                  <td className="py-2.5 px-4 font-semibold text-purple-700">English</td>
-                  <td className="py-2.5 px-4 font-semibold text-emerald-700">Agriculture</td>
-                </tr>
-                <tr className="hover:bg-slate-50">
-                  <td className="py-2.5 px-4 font-mono font-bold text-slate-700">10:20 - 11:00</td>
-                  <td className="py-2.5 px-4 font-semibold text-amber-700">Social Studies</td>
-                  <td className="py-2.5 px-4 font-semibold text-purple-700">Religious Ed.</td>
-                  <td className="py-2.5 px-4 font-semibold text-teal-700">Kiswahili</td>
-                  <td className="py-2.5 px-4 font-semibold text-emerald-700">Integrated Science</td>
-                  <td className="py-2.5 px-4 font-semibold text-blue-700">Mathematics</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <TimetablePortal 
+            currentUser={currentUser}
+            initialGrade={selectedChild?.grade || myChildren[0]?.grade || 4}
+            initialStream={selectedChild?.stream || myChildren[0]?.stream || 'Dove'}
+            readOnly={true}
+          />
+        </div>
       )}
 
       {/* ========================================================

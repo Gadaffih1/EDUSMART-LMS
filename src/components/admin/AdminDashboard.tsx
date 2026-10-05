@@ -15,6 +15,7 @@ import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { 
   Users, 
   UserPlus, 
@@ -31,7 +32,8 @@ import {
   RefreshCw,
   HeartPulse,
   Bus,
-  Trophy
+  Trophy,
+  CalendarDays
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -48,7 +50,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
     ? 'oversight'
     : 'users';
-  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'oversight'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'timetable' | 'sanatorium' | 'transport' | 'cocurricular' | 'oversight'>(defaultTab);
 
   // Create User Form
   const [newName, setNewName] = useState('');
@@ -230,6 +232,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           <FileText className="w-3.5 h-3.5 text-emerald-400" />
           <span>Work Entry Sign-Ins ({workLogs.length})</span>
           <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('timetable')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'timetable' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <CalendarDays className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Curriculum Timetable & Bell Schedule</span>
         </button>
 
         <button
@@ -683,6 +695,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           currentUser={currentUser} 
           title="System Administrator Work Entry Sign-In Register"
           subtitle="System-wide institutional audit ledger: Real-time clock-in logs, GPS stamps, staff credentials, and verified biometric photos. Strictly non-editable."
+        />
+      )}
+
+      {/* ========================================================
+          TAB: MASTER TIMETABLE & BELL SCHEDULE
+          ======================================================== */}
+      {activeTab === 'timetable' && (
+        <TimetablePortal 
+          currentUser={currentUser} 
         />
       )}
 

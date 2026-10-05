@@ -28,6 +28,7 @@ import { AchievementSystem } from './AchievementSystem';
 import { ExternalToolsHub } from './ExternalToolsHub';
 import { SafeBrowser } from './SafeBrowser';
 import { ReportingHub } from '../reports/ReportingHub';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { 
   BookOpen, 
@@ -1391,71 +1392,15 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          ADDITIONAL TAB: CLASS TIMETABLE
+          ADDITIONAL TAB: CLASS TIMETABLE & BELL CADENCE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <section className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Weekly Class Timetable (Grade {studentGrade} · Stream: {studentStream})
-              </h2>
-              <p className="text-xs text-slate-500">
-                Official period timetable published by your class teacher.
-              </p>
-            </div>
-            <span className="text-xs font-mono text-slate-500">8:00 AM – 4:00 PM Active</span>
-          </div>
-
-          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">Day</th>
-                  <th className="py-3 px-4 text-center">Period</th>
-                  <th className="py-3 px-4">Time Slot</th>
-                  <th className="py-3 px-4">Subject</th>
-                  <th className="py-3 px-4">Instructor</th>
-                  <th className="py-3 px-4">Location / Meet</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {streamTimetable.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-slate-400">
-                      No timetable slots configured yet for Grade {studentGrade} {studentStream}.
-                    </td>
-                  </tr>
-                ) : (
-                  streamTimetable.map((slot) => (
-                    <tr key={slot.id} className="hover:bg-slate-50">
-                      <td className="py-2.5 px-4 font-bold text-slate-900">{slot.dayOfWeek}</td>
-                      <td className="py-2.5 px-4 text-center font-mono font-semibold">Period {slot.period}</td>
-                      <td className="py-2.5 px-4 font-mono text-slate-600">{slot.startTime} - {slot.endTime}</td>
-                      <td className="py-2.5 px-4 font-bold text-emerald-800">{slot.subject}</td>
-                      <td className="py-2.5 px-4 text-slate-700">{slot.teacherName}</td>
-                      <td className="py-2.5 px-4">
-                        {slot.roomOrMeetLink ? (
-                          <a
-                            href={slot.roomOrMeetLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-blue-700 hover:underline font-mono"
-                          >
-                            <span>Google Meet Link</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        ) : (
-                          <span className="text-slate-500 font-mono text-[11px]">Main Class {studentStream}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <TimetablePortal 
+          currentUser={currentUser} 
+          initialGrade={studentGrade} 
+          initialStream={studentStream} 
+          readOnly={true} 
+        />
       )}
 
       {/* ========================================================

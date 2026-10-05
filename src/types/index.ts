@@ -43,7 +43,7 @@ export type PrimaryStream = typeof PRIMARY_STREAMS[number];
 export type JuniorStream = typeof JUNIOR_STREAMS[number];
 export type StreamName = PrimaryStream | JuniorStream;
 
-// Primary Subjects (Grades 1 to 6 - 8 subjects)
+// Primary Subjects (Grades 1 to 6 - 8 subjects + PHE)
 export const PRIMARY_SUBJECTS = [
   'Mathematics',
   'English',
@@ -52,10 +52,11 @@ export const PRIMARY_SUBJECTS = [
   'Agriculture and Nutrition',
   'Social Studies',
   'Religious Education',
-  'Creative Arts'
+  'Creative Arts',
+  'Physical and Health Education'
 ] as const;
 
-// Junior School Subjects (Grades 7 to 9 - 9 subjects)
+// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE)
 export const JUNIOR_SUBJECTS = [
   'Mathematics',
   'English',
@@ -65,7 +66,8 @@ export const JUNIOR_SUBJECTS = [
   'Social Studies',
   'Religious Education',
   'Creative Arts',
-  'Pretechnical Education'
+  'Pretechnical Education',
+  'Physical and Health Education'
 ] as const;
 
 export type PrimarySubject = typeof PRIMARY_SUBJECTS[number];
@@ -344,6 +346,13 @@ export interface TimetableSlot {
   subject: SubjectName;
   teacherName: string;
   roomOrMeetLink?: string;
+  roomName?: string;
+  strandTopic?: string;
+  teacherEmail?: string;
+  isRemedial?: boolean;
+  notes?: string;
+  materialsNeeded?: string[];
+  competencies?: string[];
 }
 
 export interface ReportCard {

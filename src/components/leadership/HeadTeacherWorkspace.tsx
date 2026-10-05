@@ -13,6 +13,7 @@ import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { 
   School, 
   Users, 
@@ -32,7 +33,8 @@ import {
   FileSpreadsheet,
   HeartPulse,
   Bus,
-  Trophy
+  Trophy,
+  CalendarDays
 } from 'lucide-react';
 
 interface HeadTeacherWorkspaceProps {
@@ -40,7 +42,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
+  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
 
   const allUsers = Storage.getUsers();
@@ -184,6 +186,16 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         >
           <Users className="w-4 h-4 text-purple-400" />
           <span>Faculty Allocation</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('timetable')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'timetable' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4 text-emerald-400" />
+          <span>Master Timetable & Bell Schedule</span>
         </button>
 
         <button
@@ -433,6 +445,15 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
             ))}
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB: MASTER TIMETABLE & BELL SCHEDULE
+          ======================================================== */}
+      {activeTab === 'timetable' && (
+        <TimetablePortal 
+          currentUser={currentUser} 
+        />
       )}
 
       {/* ========================================================

@@ -24,6 +24,7 @@ import { ClassTeacherModule } from './ClassTeacherModule';
 import { StudentGateExit } from './StudentGateExit';
 import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
 import { ReportingHub } from '../reports/ReportingHub';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { 
   ClipboardCheck,
@@ -1148,23 +1149,14 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          AUX TAB: POST TIMETABLE
+          AUX TAB: POST & MANAGE CLASS TIMETABLE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Post & Manage Class Timetable
-            </h2>
-            <p className="text-xs text-slate-500">
-              Configure weekly learning period schedules for assigned streams.
-            </p>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
-            Timetable is active for Grade {defaultGrade} ({defaultStream}). All learners can view period timings, teacher allocations, and linked Google Meet rooms.
-          </div>
-        </section>
+        <TimetablePortal
+          currentUser={currentUser}
+          initialGrade={defaultGrade}
+          initialStream={defaultStream}
+        />
       )}
 
       {/* ========================================================

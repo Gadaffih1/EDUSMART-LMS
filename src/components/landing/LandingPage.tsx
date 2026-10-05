@@ -34,8 +34,10 @@ import {
   ExternalLink,
   Library,
   ShieldCheck,
-  FileText
+  FileText,
+  CalendarDays
 } from 'lucide-react';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 
 interface LandingPageProps {
   onLoginSuccess: (user: User) => void;
@@ -264,6 +266,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             >
               <span>📅</span>
               <span>School Calendar</span>
+            </button>
+
+            {/* 4. 🕒 Timetable Portal */}
+            <button
+              onClick={() => {
+                const el = document.getElementById('timetable-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors"
+            >
+              <span>🕒</span>
+              <span>Master Timetable</span>
             </button>
 
             {/* 4. 🏥 Sanatorium */}
@@ -1196,6 +1210,48 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
 
           </div>
 
+        </div>
+      </section>
+
+      {/* ========================================================
+          SECTION: MASTER TIMETABLE & BELL CADENCE
+          Public Explorer of CBC routine, bell schedules & labs
+          ======================================================== */}
+      <section id="timetable-section" className="py-16 bg-gradient-to-b from-slate-50 via-blue-50/20 to-white border-b border-slate-200 scroll-mt-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 border border-blue-200 rounded-full text-blue-900 text-xs font-bold uppercase tracking-wider mb-2">
+                <span>📅</span>
+                <span>Synchronized 8-Period Daily Schedule</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                Master Class Timetable & Bell Schedule Portal
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
+                Explore official weekly routines across Grades 1 through 9, live bell cadences, teacher allocations, specialist laboratories, and terminal examination schedules.
+              </p>
+            </div>
+            <div className="text-xs text-slate-500 font-mono bg-white px-3 py-2 rounded-xl border border-slate-200 shrink-0">
+              Interactive Public Demonstration Mode (Read-Only)
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
+            <TimetablePortal 
+              currentUser={{
+                id: 'usr-public-guest',
+                name: 'Public Visitor',
+                email: 'visitor@edusmart.ac.ke',
+                role: 'student',
+                grade: 4,
+                stream: 'Dove'
+              }}
+              initialGrade={4}
+              initialStream="Dove"
+              readOnly={true}
+            />
+          </div>
         </div>
       </section>
 

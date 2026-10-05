@@ -10,6 +10,8 @@ export type UserRole =
   | 'librarian'      // Librarian: Library
   | 'head_teacher'   // Head Teacher: School-wide management
   | 'school_admin_staff' // School Admin Staff: Secretarial, registers, gate exits, work analysis, calendar
+  | 'transport_team' // Transport Team: Drivers, Assistants, Fleet & Route Operations
+  | 'cocurricular_team' // Co-Curricular Team: Sports Coaches, Club Patrons, Talent & Activities Management
   | 'admin';         // System Administrator: Full system administration
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -99,6 +101,8 @@ export interface User {
   phone?: string;
   avatarUrl?: string;
   admissionNumber?: string;
+  parentName?: string;
+  parentPhone?: string;
   tscNumber?: string; // Teachers Service Commission ID
   designation?: string;
 }
@@ -424,6 +428,149 @@ export interface LibraryBorrowRecord {
   remarks?: string;
 }
 
+// ========================================================
+// 📚 EXPANDED LIBRARY MANAGEMENT PORTAL TYPES
+// ========================================================
+
+export interface LibraryReservation {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  borrowerId: string;
+  borrowerName: string;
+  borrowerRole: 'student' | 'teacher';
+  grade?: GradeLevel;
+  stream?: StreamName;
+  reservationDate: string;
+  expiryDate: string;
+  status: 'pending' | 'ready_for_pickup' | 'fulfilled' | 'cancelled';
+  notes?: string;
+}
+
+export interface LibraryFine {
+  id: string;
+  borrowRecordId: string;
+  bookTitle: string;
+  borrowerId: string;
+  borrowerName: string;
+  borrowerRole: 'student' | 'teacher';
+  daysOverdue: number;
+  fineAmount: number;
+  amountPaid: number;
+  status: 'unpaid' | 'paid' | 'waived';
+  dateIssued: string;
+}
+
+export interface LibraryAcquisition {
+  id: string;
+  title: string;
+  author: string;
+  isbn: string;
+  publisher: string;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  supplier: string;
+  requestDate: string;
+  status: 'requested' | 'approved' | 'ordered' | 'received' | 'catalogued';
+  requestedBy: string;
+}
+
+export interface LibraryShelfLocation {
+  id: string;
+  code: string;
+  sectionName: string;
+  floor: string;
+  aisle: string;
+  deweyRange: string;
+  capacity: number;
+  currentCount: number;
+  categorySpecialization: string;
+}
+
+export interface DigitalLibraryItem {
+  id: string;
+  title: string;
+  author: string;
+  fileType: 'PDF' | 'EPUB' | 'Audiobook' | 'Video';
+  fileSize: string;
+  category: string;
+  gradeLevel?: GradeLevel;
+  accessLevel: 'all' | 'students' | 'teachers';
+  downloadCount: number;
+  readUrl: string;
+  coverColor: string;
+}
+
+export interface ReadingProgrammeMember {
+  id: string;
+  studentId: string;
+  studentName: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  currentLevel: 'Bronze Reader' | 'Silver Reader' | 'Gold Reader' | 'Platinum Scholar';
+  booksReadThisTerm: number;
+  targetBooks: number;
+  pointsEarned: number;
+  badges: string[];
+  lastBookReviewed: string;
+}
+
+export interface LibraryAttendanceLog {
+  id: string;
+  learnerOrStaffId: string;
+  name: string;
+  role: 'student' | 'teacher' | 'visitor';
+  grade?: GradeLevel;
+  stream?: StreamName;
+  entryTime: string;
+  exitTime?: string;
+  purpose: 'Study & Revision' | 'Borrowing / Return' | 'Computer / Research' | 'Class Session';
+  date: string;
+}
+
+export interface LibraryTimetableSlot {
+  id: string;
+  dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  startTime: string;
+  endTime: string;
+  grade: GradeLevel;
+  stream: string;
+  teacherInCharge: string;
+  sessionType: 'Library Reading Period' | 'Research & Digital Literacy' | 'Open Study';
+  venue: string;
+}
+
+export interface LibraryEvent {
+  id: string;
+  title: string;
+  type: 'Book Fair' | 'Author Visit' | 'Spelling Bee' | 'Storytelling Day' | 'Literacy Workshop';
+  date: string;
+  time: string;
+  venue: string;
+  targetAudience: string;
+  coordinator: string;
+  status: 'Upcoming' | 'Completed';
+  description: string;
+}
+
+export interface LibraryAuditLog {
+  id: string;
+  action: string;
+  performedBy: string;
+  role: string;
+  timestamp: string;
+  details: string;
+}
+
+export interface LibraryPolicy {
+  id: string;
+  policyName: string;
+  category: 'Lending' | 'Fines' | 'Conduct' | 'Acquisitions';
+  value: string;
+  description: string;
+}
+
 export type NotificationCategory = 'assignment' | 'grade' | 'announcement' | 'system' | 'safety';
 
 export interface AppNotification {
@@ -567,5 +714,364 @@ export interface ExamTimetableEntry {
   invigilatorName: string;
   instructions: string;
 }
+
+// ========================================================
+// SCHOOL SANATORIUM & CLINIC HEALTH AUDIT TYPES
+// ========================================================
+
+export type SanatoriumDisposition = 
+  | 'treated_returned_to_class'     // Treated & Returned to Class
+  | 'admitted_observation_bay'     // Resting in Sanatorium Observation Bay
+  | 'referred_to_hospital'         // Referred to Hospital / Clinic
+  | 'signed_out_to_parent'         // Signed Out to Parent / Picked Up
+  | 'under_monitoring';            // Continuous Bedside Monitoring
+
+export interface SanatoriumRecord {
+  id: string;
+  
+  // Student details
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  parentName?: string;
+  parentPhone?: string;
+
+  // Nurse In-Charge
+  nurseInCharge: string;            // e.g. "Sister Grace Wambui, RN"
+  nurseLicenseNo?: string;          // e.g. "NCK/RN-58921"
+  nurseStaffNo?: string;            // e.g. "SAN/002"
+
+  // Time & Details of Attendance
+  date: string;                     // e.g. "2026-10-02"
+  arrivalTime: string;              // e.g. "09:30 AM"
+  departureTime?: string;           // e.g. "10:15 AM"
+  visitReason: string;              // Chief complaint e.g. "Sudden high fever & chills"
+  symptoms: string[];               // e.g. ["High Fever", "Headache", "Fatigue"]
+  vitalSigns?: {
+    temperature: number;            // in °C e.g. 38.6
+    pulseRate?: number;             // in bpm e.g. 88
+    bloodPressure?: string;         // e.g. "115/75"
+    respiratoryRate?: number;       // e.g. 19
+  };
+  treatmentAdministered: string;    // Clinical treatment & medicines provided
+  disposition: SanatoriumDisposition; // Clinic outcome
+  bedNumber?: string;               // e.g. "Observation Bed #02"
+
+  // Recommendations
+  recommendations: string;          // Clinical guidance for teachers, parent, and learner
+  activityRestrictions?: string;    // e.g. "Exempt from Physical Education for 3 days"
+  followUpPlan?: string;            // e.g. "Review at 2:00 PM before prep"
+  parentNotified: boolean;          // Phone / SMS notification logged
+  parentNotificationNotes?: string; // Summary of communication with parent
+  gatePassId?: string;              // Linked Gate Exit Pass ID if signed out to parent
+
+  recordedAt: string;               // ISO timestamp
+  recordedBy?: string;              // Staff member or nurse who logged
+}
+
+// ========================================================
+// 🚌 SCHOOL TRANSPORT & FLEET TRACKING SYSTEM TYPES
+// ========================================================
+
+export type TransportStatus = 'Active' | 'Suspended' | 'Temporary';
+export type BoardingStatus = 'Boarded' | 'Safely Alighted' | 'Absent' | 'Parent Transported' | 'Waiting';
+export type TripType = 'Morning Pickup' | 'Afternoon Drop-off';
+export type TripStatus = 'Scheduled' | 'In Transit' | 'Completed' | 'Delayed';
+
+export interface TransportStop {
+  id: string;
+  stopName: string;
+  landmark: string;
+  morningPickupTime: string;
+  afternoonDropoffTime: string;
+  studentCount: number;
+}
+
+export interface TransportRoute {
+  id: string;
+  routeNumber: string;
+  name: string;
+  description: string;
+  busPlate: string;
+  busNumber: string;
+  driverName: string;
+  driverPhone: string;
+  assistantName: string;
+  assistantPhone: string;
+  morningStartTime: string;
+  morningSchoolArrivalTime: string;
+  afternoonDepartureTime: string;
+  afternoonEndTime: string;
+  stops: TransportStop[];
+  termFee: number;
+  status: 'Active' | 'Suspended';
+}
+
+export interface SchoolBus {
+  id: string;
+  registrationNumber: string; // Plate e.g. "KDG 218M"
+  busNumber: string;          // e.g. "Bus 01"
+  model: string;              // e.g. "Isuzu FRR 33-Seater"
+  capacity: number;
+  currentOccupancy: number;
+  driverName: string;
+  driverPhone: string;
+  assistantName: string;
+  assistantPhone: string;
+  assignedRouteId: string;
+  assignedRouteName: string;
+  insuranceExpiry: string;
+  inspectionStatus: 'Valid / Compliant' | 'Due Soon' | 'Maintenance Needed';
+  speedGovernorStatus: string;
+  gpsTrackingStatus: 'Active & Transmitting' | 'Stationary' | 'Offline';
+  currentLocation: string;
+  emergencyContact: string;
+  lastServiceDate: string;
+  nextServiceDue: string;
+}
+
+export interface StudentTransportProfile {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  parentName: string;
+  parentPhone: string;
+  routeId: string;
+  routeName: string;
+  busPlate: string;
+  busNumber: string;
+  seatNumber: string;
+  pickupStop: string;
+  dropoffStop: string;
+  morningPickupTime: string;
+  afternoonDropoffTime: string;
+  transportStatus: TransportStatus;
+  specialInstructions: string;
+  authorizedCollector: string;
+  feeStatus: 'Paid' | 'Partial' | 'Pending';
+  termFee: number;
+  balance: number;
+}
+
+export interface TransportTripRecord {
+  id: string;
+  date: string;
+  tripType: TripType;
+  routeId: string;
+  routeName: string;
+  busPlate: string;
+  driverName: string;
+  assistantName: string;
+  studentId: string;
+  studentName: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  stopName: string;
+  status: BoardingStatus;
+  timestamp: string;
+  recordedBy: string;
+  notes?: string;
+}
+
+export interface TransportIncident {
+  id: string;
+  date: string;
+  time: string;
+  busPlate: string;
+  driverName: string;
+  route: string;
+  severity: 'Low' | 'Medium' | 'High' | 'Critical';
+  incidentType: 'Traffic Delay' | 'Mechanical Glitch' | 'Minor Misbehaviour' | 'Medical Concern' | 'Unauthorized Collector Attempt' | 'Weather Obstacle';
+  description: string;
+  actionTaken: string;
+  reportedBy: string;
+  followUpStatus: 'Resolved' | 'Under Investigation' | 'Requires Parent Meeting';
+  studentsInvolved?: string[];
+}
+
+export interface TransportAlert {
+  id: string;
+  timestamp: string;
+  routeId: string;
+  busPlate: string;
+  type: 'departure' | 'boarded' | 'arrived_school' | 'alighted' | 'delayed' | 'breakdown' | 'emergency' | 'absence';
+  title: string;
+  message: string;
+  targetAudience: 'all_parents' | 'route_parents' | 'admin_only';
+}
+
+// ========================================================
+// 🎯 CO-CURRICULAR ACTIVITIES & TALENT PORTAL TYPES
+// ========================================================
+
+export type CoCurricularCategory = 
+  | 'Sports' 
+  | 'Clubs & Societies' 
+  | 'Creative Arts & Music' 
+  | 'STEM & Innovation' 
+  | 'Leadership & Service';
+
+export type ActivityMemberRole = 
+  | 'Member' 
+  | 'Team Captain' 
+  | 'Vice Captain' 
+  | 'Club President' 
+  | 'Vice President' 
+  | 'Secretary' 
+  | 'Treasurer' 
+  | 'Organizing Secretary';
+
+export type RegistrationStatus = 'Pending' | 'Approved' | 'Active' | 'Withdrawn';
+
+export type TalentArea = 
+  | 'Football' 
+  | 'Basketball' 
+  | 'Athletics' 
+  | 'Swimming' 
+  | 'Debate & Public Speaking' 
+  | 'Robotics & STEM' 
+  | 'Music & Instruments' 
+  | 'Drama & Acting' 
+  | 'Fine Art' 
+  | 'Chess' 
+  | 'Leadership';
+
+export interface CoCurricularActivity {
+  id: string;
+  name: string;
+  category: CoCurricularCategory;
+  type: 'sport' | 'club';
+  description: string;
+  patronName: string;
+  patronPhone: string;
+  patronEmail: string;
+  assistantName?: string;
+  venue: string;
+  meetingDays: string[];
+  meetingTime: string;
+  targetGrades: GradeLevel[];
+  maxParticipants: number;
+  currentMembersCount: number;
+  status: 'Active' | 'Seasonal' | 'Recruiting';
+  achievementsCount: number;
+  icon: string;
+}
+
+export interface LearnerCoCurricularProfile {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  activityId: string;
+  activityName: string;
+  category: CoCurricularCategory;
+  role: ActivityMemberRole;
+  registrationStatus: RegistrationStatus;
+  registrationDate: string;
+  attendanceRate: number;
+  talentStrengths: TalentArea[];
+  competitionsAttended: string[];
+  awardsEarned: string[];
+  coachNotes: string;
+  parentConsentGiven: boolean;
+}
+
+export interface CoCurricularAttendanceRecord {
+  id: string;
+  activityId: string;
+  activityName: string;
+  date: string;
+  studentId: string;
+  studentName: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  status: 'Present' | 'Absent' | 'Excused' | 'Late';
+  recordedBy: string;
+  notes?: string;
+}
+
+export interface CoCurricularCompetition {
+  id: string;
+  title: string;
+  activityId: string;
+  activityName: string;
+  category: string;
+  date: string;
+  venue: string;
+  host: string;
+  participatingSchools: string[];
+  ourPosition: string;
+  scoreOrTime: string;
+  awards: string[];
+  coachAccompanying: string;
+  status: 'Upcoming' | 'Completed';
+  report: string;
+}
+
+export interface CoCurricularEquipment {
+  id: string;
+  itemName: string;
+  category: string;
+  quantity: number;
+  condition: 'New / Excellent' | 'Good' | 'Fair / Maintenance Due';
+  assignedActivity: string;
+  storageLocation: string;
+  lastAuditDate: string;
+}
+
+export interface CoCurricularTrip {
+  id: string;
+  activityId: string;
+  activityName: string;
+  destination: string;
+  date: string;
+  departureTime: string;
+  returnTime: string;
+  purpose: string;
+  busAllocated?: string;
+  driverName?: string;
+  accompanyingStaff: string[];
+  participantLearnerIds: string[];
+  parentConsentRequired: boolean;
+  status: 'Scheduled' | 'Departed' | 'Completed' | 'Cancelled';
+  emergencyContact: string;
+  estimatedCostPerLearner?: number;
+  report?: string;
+}
+
+export interface CoCurricularAnnouncement {
+  id: string;
+  title: string;
+  category: 'All' | 'Sports' | 'Clubs' | 'Competitions' | 'Trips';
+  message: string;
+  targetAudience: 'All' | 'Learners' | 'Parents' | 'Coaches';
+  activityId?: string;
+  activityName?: string;
+  date: string;
+  author: string;
+  priority: 'Normal' | 'High' | 'Urgent';
+}
+
+export interface CoCurricularBudgetItem {
+  id: string;
+  activityId: string;
+  activityName: string;
+  category: 'Equipment' | 'Tournaments & Entry' | 'Transport & Fuel' | 'Uniforms & Kits' | 'Refreshments & First Aid' | 'Awards & Trophies';
+  allocatedAmount: number;
+  spentAmount: number;
+  term: 'Term 1' | 'Term 2' | 'Term 3';
+  academicYear: number;
+  approvedBy: string;
+  status: 'Approved' | 'Pending Review' | 'Disbursed';
+}
+
+
 
 

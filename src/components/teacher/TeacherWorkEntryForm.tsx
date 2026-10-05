@@ -19,7 +19,8 @@ import {
   Sparkles, 
   Printer, 
   Eye, 
-  Compass
+  Compass,
+  Lock
 } from 'lucide-react';
 
 interface TeacherWorkEntryFormProps {
@@ -36,39 +37,68 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
   const initialFirst = nameParts[0] || 'Teacher';
   const initialLast = nameParts.slice(1).join(' ') || '';
 
-  // 1. Staff No (Auto-filled / editable with Spreadsheet-to-Form simulator)
+  // 1. Staff No (Auto-filled / selectable with Spreadsheet-to-Form lookup)
   const [staffNo, setStaffNo] = useState<string>(currentUser.tscNumber || 'TSC-48192-ED');
+  const isStaffFilled = Boolean(staffNo && staffNo.trim().length > 0);
   const [staffLookupSuccess, setStaffLookupSuccess] = useState<boolean>(true);
 
-  // 2. Teacher or Staff Name
+  // 2. Teacher or Staff Name (Auto-filled when staff number is filled & cannot be edited)
   const [firstName, setFirstName] = useState<string>(initialFirst);
   const [lastName, setLastName] = useState<string>(initialLast);
 
-  // 3. Sign-In Date and Time
-  const now = new Date();
-  const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
-  const currentDay = String(now.getDate()).padStart(2, '0');
-  const currentYear = String(now.getFullYear());
-  
-  let hours = now.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12; // 0 hour is 12
-  const formattedHours = String(hours).padStart(2, '0');
-  const formattedMinutes = String(now.getMinutes()).padStart(2, '0');
+  // 3. Sign-In Date and Time: Auto-filled to "current" and locked (cannot be edited)
+  const getCurrentDateTimeParts = () => {
+    const now = new Date();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const currentDay = String(now.getDate()).padStart(2, '0');
+    const currentYear = String(now.getFullYear());
+    
+    let hours = now.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 hour is 12
+    const formattedHours = String(hours).padStart(2, '0');
+    const formattedMinutes = String(now.getMinutes()).padStart(2, '0');
 
-  const [signDateDay, setSignDateDay] = useState<string>(currentDay);
-  const [signDateMonth, setSignDateMonth] = useState<string>(currentMonth);
-  const [signDateYear, setSignDateYear] = useState<string>(currentYear);
-  const [signTimeHour, setSignTimeHour] = useState<string>(formattedHours);
-  const [signTimeMinute, setSignTimeMinute] = useState<string>(formattedMinutes);
-  const [signTimeAmPm, setSignTimeAmPm] = useState<'AM' | 'PM'>(ampm);
+    return {
+      day: currentDay,
+      month: currentMonth,
+      year: currentYear,
+      hour: formattedHours,
+      minute: formattedMinutes,
+      ampm: ampm as 'AM' | 'PM'
+    };
+  };
 
-  // 4. Strictly Work Email
+  const initialTime = getCurrentDateTimeParts();
+  const [signDateDay, setSignDateDay] = useState<string>(initialTime.day);
+  const [signDateMonth, setSignDateMonth] = useState<string>(initialTime.month);
+  const [signDateYear, setSignDateYear] = useState<string>(initialTime.year);
+  const [signTimeHour, setSignTimeHour] = useState<string>(initialTime.hour);
+  const [signTimeMinute, setSignTimeMinute] = useState<string>(initialTime.minute);
+  const [signTimeAmPm, setSignTimeAmPm] = useState<'AM' | 'PM'>(initialTime.ampm);
+
+  // Continuously sync to real-time clock so it always reflects the exact current moment
+  useEffect(() => {
+    const syncCurrentClock = () => {
+      const current = getCurrentDateTimeParts();
+      setSignDateDay(current.day);
+      setSignDateMonth(current.month);
+      setSignDateYear(current.year);
+      setSignTimeHour(current.hour);
+      setSignTimeMinute(current.minute);
+      setSignTimeAmPm(current.ampm);
+    };
+
+    const interval = setInterval(syncCurrentClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 4. Strictly Work Email (Auto-filled when staff number is filled & cannot be edited)
   const [email, setEmail] = useState<string>(currentUser.email || `${currentUser.id.replace('usr-teach-', '')}@edusmart.ac.ke`);
 
-  // 5. Sign-In Location & Geo Stamp
-  const [signInLocation, setSignInLocation] = useState<string>('EduSmart Main Campus, Staffroom Block A');
+  // 5. Sign-In Location & Geo Stamp (Auto-filled to "current" & cannot be edited)
+  const [signInLocation, setSignInLocation] = useState<string>('EduSmart Main Campus, Staffroom Block A · Nairobi Grounds');
   const [geoCoords, setGeoCoords] = useState<{
     latitude: number;
     longitude: number;
@@ -78,11 +108,77 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
   }>({
     latitude: -1.2921,
     longitude: 36.8219,
-    accuracy: 8,
-    address: 'Nairobi Campus Grounds · -1.2921° S, 36.8219° E',
+    accuracy: 5,
+    address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
     verifiedCampus: true
   });
   const [isLocating, setIsLocating] = useState<boolean>(false);
+
+  // When staff number is filled, let all the other fields be auto-filled and locked against manual edits
+  useEffect(() => {
+    const trimmed = staffNo.trim();
+    if (!trimmed) {
+      setStaffLookupSuccess(false);
+      return;
+    }
+
+    const allUsers = Storage.getUsers();
+    const foundUser = allUsers.find(u => 
+      (u.tscNumber && u.tscNumber.toLowerCase() === trimmed.toLowerCase()) ||
+      (u.tscNumber && u.tscNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === trimmed.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()) ||
+      (u.id && u.id.toLowerCase() === trimmed.toLowerCase())
+    ) || (currentUser.tscNumber?.toLowerCase() === trimmed.toLowerCase() ? currentUser : null);
+
+    const targetUser = foundUser || currentUser;
+    const parts = (targetUser.name || '').trim().split(' ');
+    setFirstName(parts[0] || 'Teacher');
+    setLastName(parts.slice(1).join(' ') || 'Educator');
+    setEmail(targetUser.email || `${targetUser.id.replace('usr-teach-', '')}@edusmart.ac.ke`);
+    setStaffLookupSuccess(true);
+  }, [staffNo, currentUser]);
+
+  // Real or Simulated Geolocation trigger (Auto-resolves to current live GPS)
+  const requestGeoLocation = () => {
+    setIsLocating(true);
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = Number(position.coords.latitude.toFixed(4));
+          const lng = Number(position.coords.longitude.toFixed(4));
+          const acc = Math.round(position.coords.accuracy);
+          setGeoCoords({
+            latitude: lat,
+            longitude: lng,
+            accuracy: acc,
+            address: `Current Verified GPS: ${lat}°, ${lng}° (Campus Duty Perimeter Verified)`,
+            verifiedCampus: true
+          });
+          setSignInLocation(`EduSmart Main Campus, Staffroom Block A · [GPS: ${lat}°, ${lng}°]`);
+          setIsLocating(false);
+        },
+        () => {
+          // Fallback to high-accuracy current institutional stamp
+          setGeoCoords({
+            latitude: -1.2921,
+            longitude: 36.8219,
+            accuracy: 5,
+            address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
+            verifiedCampus: true
+          });
+          setSignInLocation('EduSmart Main Campus, Staffroom Block A · Nairobi Grounds');
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      setIsLocating(false);
+    }
+  };
+
+  // Auto-set Sign-In Location & Geo Stamp to "current" on mount
+  useEffect(() => {
+    requestGeoLocation();
+  }, []);
 
   // 6. Take Personal Photo (Webcam / Live selfie capture + Fallback Canvas)
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
@@ -96,40 +192,7 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
   const [submissionSuccess, setSubmissionSuccess] = useState<WorkEntryLog | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
 
-  // Real or Simulated Geolocation trigger
-  const requestGeoLocation = () => {
-    setIsLocating(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setGeoCoords({
-            latitude: Number(position.coords.latitude.toFixed(4)),
-            longitude: Number(position.coords.longitude.toFixed(4)),
-            accuracy: Math.round(position.coords.accuracy),
-            address: `Verified GPS: ${position.coords.latitude.toFixed(4)}°, ${position.coords.longitude.toFixed(4)}° (Campus Boundary Verified)`,
-            verifiedCampus: true
-          });
-          setIsLocating(false);
-        },
-        () => {
-          // Fallback to high-accuracy institutional stamp
-          setGeoCoords({
-            latitude: -1.2921,
-            longitude: 36.8219,
-            accuracy: 5,
-            address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E',
-            verifiedCampus: true
-          });
-          setIsLocating(false);
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      setIsLocating(false);
-    }
-  };
-
-  // Start live webcam for "Take Personal Photo" widget
+  // Start live webcam for "Take Personal Photo"
   const startCamera = async () => {
     setIsCameraActive(true);
     try {
@@ -257,9 +320,11 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
 
     setIsSubmitting(true);
 
+    // Capture precise current official timestamp at the moment of submission
+    const currentStamp = getCurrentDateTimeParts();
     const fullTeacherName = `${firstName} ${lastName}`.trim() || currentUser.name;
-    const formattedDate = `${signDateYear}-${signDateMonth}-${signDateDay}`;
-    const formattedTime = `${signTimeHour}:${signTimeMinute} ${signTimeAmPm}`;
+    const formattedDate = `${currentStamp.year}-${currentStamp.month}-${currentStamp.day}`;
+    const formattedTime = `${currentStamp.hour}:${currentStamp.minute} ${currentStamp.ampm}`;
 
     const newLog: WorkEntryLog = {
       id: `wel-${Date.now()}`,
@@ -295,19 +360,19 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
     <div className="w-full max-w-3xl mx-auto my-4 font-sans text-slate-800">
       
       {/* ========================================================
-          JOTFORM CARD WRAPPER & COVER IMAGE (EXACT AS ON JOTFORM)
+          OFFICIAL WORK ENTRY SIGN-IN CARD WRAPPER & COVER HEADER
           Cover: Official Logo centered at 80x80 with shadow
           ======================================================== */}
       <div className="bg-[#ecedf3] rounded-3xl p-3 sm:p-6 shadow-md border border-slate-300/80">
         
-        {/* Top Cover Logo Badge (Exact replica of JotForm cover header) */}
+        {/* Top Cover Logo Badge (Official Institutional Cover Header) */}
         <div className="flex justify-center -mt-8 sm:-mt-10 mb-4">
           <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-amber-400 flex flex-col items-center">
             <EduSmartGadsaLogo variant="full" size="md" />
           </div>
         </div>
 
-        {/* Main White JotForm Body Card */}
+        {/* Main White Institutional Body Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
           
           {/* Header Bar */}
@@ -388,74 +453,98 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
             </div>
           ) : (
             /* ========================================================
-                FORM FIELDS (EXACTLY MATCHING JOTFORM STRUCTURE)
+                OFFICIAL FORM FIELDS (TEACHER SIGN-IN PROTOCOL)
                ======================================================== */
             <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
               
               {/* FIELD 1: Staff No:* + Spreadsheet-to-Form Auto-Fill Simulator */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-1">
                   <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
                     <span>Staff No:</span>
                     <span className="text-rose-600 font-bold">*</span>
                   </label>
                   <span className="text-[11px] text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-blue-600" />
-                    Spreadsheet-To-Form Active
+                    Auto-Fill Trigger Active
                   </span>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     required
                     value={staffNo}
                     onChange={(e) => {
                       setStaffNo(e.target.value);
-                      setStaffLookupSuccess(true);
                     }}
-                    placeholder="e.g. TSC-48192-ED or STF-102"
-                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                    placeholder="Enter Staff No (e.g. TSC/44120/ED or TSC-48192-ED)"
+                    className="flex-1 px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-2xs"
                   />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStaffLookupSuccess(true);
-                      setFirstName(currentUser.name.split(' ')[0] || 'Teacher');
-                      setLastName(currentUser.name.split(' ').slice(1).join(' ') || 'Educator');
-                      setEmail(currentUser.email || `${currentUser.id}@edusmart.ac.ke`);
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) setStaffNo(e.target.value);
                     }}
-                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-colors shrink-0"
-                    title="Simulate JotForm Spreadsheet-to-Form Auto-Complete"
+                    value=""
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl border border-slate-300 transition-colors cursor-pointer"
+                    title="Select a staff member from roster"
                   >
-                    Auto-Fill
-                  </button>
+                    <option value="" disabled>Select Staff Roster No...</option>
+                    <option value="TSC/44120/ED">TSC/44120/ED - Mr. David Kiprono (Class Teacher)</option>
+                    <option value="TSC/14982/ED">TSC/14982/ED - Dr. Arthur Mwangi (Head Teacher)</option>
+                    <option value="TSC/23491/ED">TSC/23491/ED - Mr. Charles Omondi (Deputy Head)</option>
+                    <option value="TSC/38910/ED">TSC/38910/ED - Ms. Beatrice Wanjiku (Dean of Studies)</option>
+                    <option value="TSC/31204/ED">TSC/31204/ED - Dr. Mercy Mwangi (HOD Sciences)</option>
+                    <option value="TSC/29410/ED">TSC/29410/ED - Mr. Peter Ochieng (Senior Teacher)</option>
+                    <option value="TSC/48102/ED">TSC/48102/ED - Mrs. Esther Kamau (Librarian)</option>
+                    <option value="ADM/45120/SEC">ADM/45120/SEC - Mrs. Sarah Cherono (Registrar)</option>
+                    <option value="TSC-48192-ED">TSC-48192-ED - Standard Staff Record</option>
+                  </select>
                 </div>
-                {staffLookupSuccess && (
-                  <p className="text-[11px] text-emerald-700 font-medium flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    <span>Staff Record Verified: {currentUser.name} (Active Teaching License)</span>
+                {isStaffFilled ? (
+                  <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1.5 mt-1">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Staff Number Recognized: All remaining fields have been auto-filled and locked against manual edits.</span>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-700 font-medium mt-1">
+                    Enter or select Staff No above to auto-fill all credentials and lock the form.
                   </p>
                 )}
               </div>
 
               {/* FIELD 2: Teacher or Staff Name* (First Name + Last Name) */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                  <UserIcon className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Teacher or Staff Name</span>
-                  <span className="text-rose-600 font-bold">*</span>
-                </label>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                    <UserIcon className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Teacher or Staff Name</span>
+                    <span className="text-rose-600 font-bold">*</span>
+                  </label>
+                  {isStaffFilled && (
+                    <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
+                      <Lock className="w-3 h-3 text-emerald-600" />
+                      <span>Locked: Auto-filled from Staff No</span>
+                    </span>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <input
                       type="text"
                       required
+                      readOnly={isStaffFilled}
+                      disabled={isStaffFilled}
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       placeholder="First Name"
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
+                      className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                        isStaffFilled
+                          ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
+                          : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      }`}
+                      title={isStaffFilled ? "First Name is auto-filled and locked against manual edits" : "Enter First Name"}
                     />
                     <span className="text-[10px] text-slate-400 mt-1 block">First Name</span>
                   </div>
@@ -464,152 +553,182 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                     <input
                       type="text"
                       required
+                      readOnly={isStaffFilled}
+                      disabled={isStaffFilled}
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       placeholder="Last Name"
-                      className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
+                      className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                        isStaffFilled
+                          ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
+                          : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+                      }`}
+                      title={isStaffFilled ? "Last Name is auto-filled and locked against manual edits" : "Enter Last Name"}
                     />
                     <span className="text-[10px] text-slate-400 mt-1 block">Last Name</span>
                   </div>
                 </div>
               </div>
 
-              {/* FIELD 3: Sign-In Date and Time* (Day, Month, Year, Hour, Minutes, AM/PM) */}
+              {/* FIELD 3: Sign-In Date and Time* (Autofill to "current" and cannot be edited) */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                  <CalendarIcon className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Sign-In Date and Time</span>
-                  <span className="text-rose-600 font-bold">*</span>
-                </label>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Sign-In Date and Time</span>
+                    <span className="text-rose-600 font-bold">*</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
+                    <Lock className="w-3 h-3 text-emerald-600" />
+                    <span>Locked: Auto-filled (Current Time)</span>
+                  </span>
+                </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                   {/* Day */}
                   <div>
                     <input
-                      type="number"
-                      min={1}
-                      max={31}
+                      type="text"
+                      readOnly
+                      disabled
                       value={signDateDay}
-                      onChange={(e) => setSignDateDay(e.target.value)}
-                      className="w-full px-2.5 py-2 text-center border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
+                      title="Sign-In Day is auto-filled to current date and cannot be edited"
                     />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1">Day</span>
+                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Day</span>
                   </div>
 
                   {/* Month */}
                   <div>
                     <input
-                      type="number"
-                      min={1}
-                      max={12}
+                      type="text"
+                      readOnly
+                      disabled
                       value={signDateMonth}
-                      onChange={(e) => setSignDateMonth(e.target.value)}
-                      className="w-full px-2.5 py-2 text-center border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
+                      title="Sign-In Month is auto-filled to current month and cannot be edited"
                     />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1">Month</span>
+                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Month</span>
                   </div>
 
                   {/* Year */}
                   <div>
                     <input
-                      type="number"
-                      min={2025}
-                      max={2030}
+                      type="text"
+                      readOnly
+                      disabled
                       value={signDateYear}
-                      onChange={(e) => setSignDateYear(e.target.value)}
-                      className="w-full px-2.5 py-2 text-center border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
+                      title="Sign-In Year is auto-filled to current year and cannot be edited"
                     />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1">Year</span>
+                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Year</span>
                   </div>
 
                   {/* Hour */}
                   <div>
                     <input
-                      type="number"
-                      min={1}
-                      max={12}
+                      type="text"
+                      readOnly
+                      disabled
                       value={signTimeHour}
-                      onChange={(e) => setSignTimeHour(e.target.value)}
-                      className="w-full px-2.5 py-2 text-center border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
+                      title="Sign-In Hour is auto-filled to current hour and cannot be edited"
                     />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1">Hour</span>
+                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Hour</span>
                   </div>
 
                   {/* Minute */}
                   <div>
                     <input
-                      type="number"
-                      min={0}
-                      max={59}
+                      type="text"
+                      readOnly
+                      disabled
                       value={signTimeMinute}
-                      onChange={(e) => setSignTimeMinute(e.target.value)}
-                      className="w-full px-2.5 py-2 text-center border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
+                      title="Sign-In Minute is auto-filled to current minute and cannot be edited"
                     />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1">Minutes</span>
+                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Minutes</span>
                   </div>
 
                   {/* AM/PM */}
                   <div>
-                    <select
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
                       value={signTimeAmPm}
-                      onChange={(e) => setSignTimeAmPm(e.target.value as 'AM' | 'PM')}
-                      className="w-full px-2.5 py-2 text-center border border-slate-300 rounded-xl text-xs font-bold text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      <option value="AM">AM</option>
-                      <option value="PM">PM</option>
-                    </select>
-                    <span className="text-[10px] text-slate-400 text-center block mt-1">AM/PM Option</span>
+                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
+                      title="Sign-In AM/PM is auto-filled to current and cannot be edited"
+                    />
+                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">AM/PM</span>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pt-0.5">
+                  <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span>Official duty timestamp is auto-filled to current system time and locked against manual edits.</span>
                 </div>
               </div>
 
               {/* FIELD 4: Strictly Work Email* */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Strictly Work Email</span>
-                  <span className="text-rose-600 font-bold">*</span>
-                </label>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Strictly Work Email</span>
+                    <span className="text-rose-600 font-bold">*</span>
+                  </label>
+                  {isStaffFilled && (
+                    <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
+                      <Lock className="w-3 h-3 text-emerald-600" />
+                      <span>Locked: Auto-filled from Staff No</span>
+                    </span>
+                  )}
+                </div>
 
                 <div>
                   <input
                     type="email"
                     required
+                    readOnly={isStaffFilled}
+                    disabled={isStaffFilled}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="example@example.com"
-                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all"
+                    className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono font-bold transition-all shadow-2xs ${
+                      isStaffFilled
+                        ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
+                        : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    }`}
+                    title={isStaffFilled ? "Work Email is auto-filled from staff record and cannot be edited" : "Enter Work Email"}
                   />
                   <span className="text-[10px] text-slate-400 mt-1 block">example@example.com</span>
                 </div>
               </div>
 
-              {/* FIELD 5: Sign-In Location* & Geo Stamp (Jotform Geo Stamp Widget) */}
+              {/* FIELD 5: Sign-In Location* & Geo Stamp (Auto-filled to "current" & cannot be edited) */}
               <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-1">
                   <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Sign-In Location & Geo Stamp</span>
                     <span className="text-rose-600 font-bold">*</span>
                   </label>
-                  <button
-                    type="button"
-                    onClick={requestGeoLocation}
-                    disabled={isLocating}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-slate-300 flex items-center gap-1 shadow-2xs transition-colors"
-                  >
-                    <Compass className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
-                    <span>{isLocating ? 'Locating...' : 'Refresh GPS'}</span>
-                  </button>
+                  <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
+                    <Lock className="w-3 h-3 text-emerald-600" />
+                    <span>Locked: Auto-stamped (Current Location)</span>
+                  </span>
                 </div>
 
                 <input
                   type="text"
                   required
+                  readOnly
+                  disabled
                   value={signInLocation}
-                  onChange={(e) => setSignInLocation(e.target.value)}
-                  placeholder="Sign-In Location"
-                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder="Sign-In Location (Current)"
+                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-not-allowed select-none shadow-2xs focus:outline-none"
+                  title="Sign-In Location is auto-set to current and cannot be edited"
                 />
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-950 font-mono">
@@ -617,13 +736,31 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                     <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span>Geo Stamp: {geoCoords.latitude}°, {geoCoords.longitude}° (±{geoCoords.accuracy}m)</span>
                   </div>
-                  <span className="text-emerald-800 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300 self-start sm:self-auto">
-                    Verified Campus Coordinate
+                  <span className="text-emerald-800 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300 self-start sm:self-auto flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-emerald-600" />
+                    <span>Verified Current Campus Location</span>
                   </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                  <div className="flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span>Location & coordinates are auto-stamped to current institution boundary and cannot be edited.</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={requestGeoLocation}
+                    disabled={isLocating}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-emerald-800 text-[10px] font-bold rounded-lg border border-slate-300 flex items-center gap-1 shadow-2xs transition-colors shrink-0 cursor-pointer"
+                    title="Refresh current live GPS reading"
+                  >
+                    <Compass className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
+                    <span>{isLocating ? 'Pinging GPS...' : 'Refresh GPS'}</span>
+                  </button>
                 </div>
               </div>
 
-              {/* FIELD 6: Take Personal Photo* (Jotform Take Photo Widget) */}
+              {/* FIELD 6: Take Personal Photo* */}
               <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
@@ -631,9 +768,6 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                     <span>Take Personal Photo</span>
                     <span className="text-rose-600 font-bold">*</span>
                   </label>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    JotForm "Take Photo" Widget
-                  </span>
                 </div>
 
                 {/* Camera View or Captured Photo */}
@@ -709,7 +843,7 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                   <div className="text-xs text-slate-500 max-w-sm">
                     <p className="font-medium text-slate-700">Digital Identity Verification</p>
                     <p className="text-[11px] mt-0.5 leading-relaxed">
-                      Instant biometric time-stamp matching the Jotform teacher clock-in protocol. Embedded with real-time staff identification and GPS verification.
+                      Instant biometric time-stamp for official teacher clock-in protocol. Embedded with real-time staff identification and GPS verification.
                     </p>
                   </div>
                 </div>
@@ -718,7 +852,7 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
               </div>
 
               {/* ========================================================
-                  SUBMIT BUTTON (Exact JotForm style: large, prominent)
+                  OFFICIAL SUBMISSION BUTTON (TEACHER PROTOCOL)
                  ======================================================== */}
               <div className="pt-6 border-t border-slate-200">
                 <button

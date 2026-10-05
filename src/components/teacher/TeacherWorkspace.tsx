@@ -73,6 +73,25 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
     isClassTeacher ? 'class_register' : 'work_entry'
   );
 
+  // Handle direct tab navigation from notification items
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub'].includes(tab)) {
+          setActiveTab(tab as TeacherTab);
+        } else if (tab === 'attendance' || tab === 'register') {
+          setActiveTab('class_register');
+        } else if (tab === 'notes' || tab === 'videos' || tab === 'audio') {
+          setActiveTab('resources');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Assignment Creation Form State
   const [asgTitle, setAsgTitle] = useState('');
   const [asgGrade, setAsgGrade] = useState<GradeLevel>(defaultGrade);
@@ -496,7 +515,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          TAB 1: WORK ENTRY SIGN IN (JOTFORM DESIGN)
+          TAB 1: WORK ENTRY SIGN IN (OFFICIAL INSTITUTIONAL PROTOCOL)
           ======================================================== */}
       {activeTab === 'work_entry' && (
         <section className="space-y-6">

@@ -1,710 +1,587 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   LibraryBook, 
   LibraryBorrowRecord, 
-  GradeLevel, 
-  SubjectName 
+  LibraryReservation, 
+  LibraryFine, 
+  LibraryAcquisition, 
+  LibraryShelfLocation, 
+  DigitalLibraryItem, 
+  ReadingProgrammeMember, 
+  LibraryAttendanceLog, 
+  LibraryTimetableSlot, 
+  LibraryEvent, 
+  LibraryPolicy, 
+  LibraryAuditLog,
+  GradeLevel
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { LibraryPortalSection } from './types';
+import { LibrarySidebar } from './LibrarySidebar';
+import { LibraryDashboardView } from './LibraryDashboardView';
+import { CirculationViews } from './CirculationViews';
+import { CollectionViews } from './CollectionViews';
+import { ProgrammesViews } from './ProgrammesViews';
+import { GovernanceViews } from './GovernanceViews';
 import { 
-  BookOpen, 
-  Search, 
+  LogOut, 
+  Menu, 
+  X, 
+  ArrowLeftRight, 
   Plus, 
-  Check, 
-  Clock, 
-  AlertCircle, 
-  CheckCircle, 
-  UserCheck, 
-  GraduationCap, 
-  Bookmark, 
-  FileText, 
-  Layers, 
-  Filter, 
-  RotateCcw,
-  BookMarked
+  BookOpen, 
+  Sparkles,
+  Search
 } from 'lucide-react';
 
 interface LibrarianWorkspaceProps {
   currentUser: User;
+  onLogout?: () => void;
 }
 
-export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({ currentUser }) => {
-  type LibraryTab = 'catalog' | 'circulation' | 'borrow_book' | 'add_book';
-  const [activeTab, setActiveTab] = useState<LibraryTab>('catalog');
+export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
+  currentUser,
+  onLogout
+}) => {
+  const [currentSection, setCurrentSection] = useState<LibraryPortalSection>('dashboard');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Storage states
   const [books, setBooks] = useState<LibraryBook[]>(() => Storage.getLibraryBooks());
   const [borrowRecords, setBorrowRecords] = useState<LibraryBorrowRecord[]>(() => Storage.getBorrowRecords());
+  const [reservations, setReservations] = useState<LibraryReservation[]>(() => Storage.getLibraryReservations());
+  const [fines, setFines] = useState<LibraryFine[]>(() => Storage.getLibraryFines());
+  const [acquisitions, setAcquisitions] = useState<LibraryAcquisition[]>(() => Storage.getLibraryAcquisitions());
+  const [shelves, setShelves] = useState<LibraryShelfLocation[]>(() => Storage.getLibraryShelves());
+  const [digitalItems, setDigitalItems] = useState<DigitalLibraryItem[]>(() => Storage.getDigitalLibraryItems());
+  const [readingMembers, setReadingMembers] = useState<ReadingProgrammeMember[]>(() => Storage.getReadingProgrammeMembers());
+  const [attendanceLogs, setAttendanceLogs] = useState<LibraryAttendanceLog[]>(() => Storage.getLibraryAttendance());
+  const [timetableSlots, setTimetableSlots] = useState<LibraryTimetableSlot[]>(() => Storage.getLibraryTimetable());
+  const [events, setEvents] = useState<LibraryEvent[]>(() => Storage.getLibraryEvents());
+  const [policies, setPolicies] = useState<LibraryPolicy[]>(() => Storage.getLibraryPolicies());
+  const [auditLogs, setAuditLogs] = useState<LibraryAuditLog[]>(() => Storage.getLibraryAuditLogs());
 
-  // Search & Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [gradeFilter, setGradeFilter] = useState<string>('all');
+  // Quick Issue Modal state
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [issueBookId, setIssueBookId] = useState(books[0]?.id || '');
+  const [issueBorrowerId, setIssueBorrowerId] = useState('');
+  const [issueBorrowerRole, setIssueBorrowerRole] = useState<'student' | 'teacher'>('student');
+  const [issueDueDate, setIssueDueDate] = useState('2026-10-18');
+  const [issueRemarks, setIssueRemarks] = useState('');
 
-  // Issue Book Form State
-  const [issueBookId, setIssueBookId] = useState<string>('');
-  const [borrowerType, setBorrowerType] = useState<'student' | 'teacher'>('student');
-  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string>('');
-  const [borrowDueDate, setBorrowDueDate] = useState<string>('2026-10-15');
-  const [borrowRemarks, setBorrowRemarks] = useState<string>('');
-  const [issueSuccess, setIssueSuccess] = useState(false);
-
-  // Add Book Form State
+  // Quick Add Book Modal state
+  const [showAddBookModal, setShowAddBookModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newAuthor, setNewAuthor] = useState('');
-  const [newPublisher, setNewPublisher] = useState('');
-  const [newIsbn, setNewIsbn] = useState('');
+  const [newIsbn, setNewIsbn] = useState('978-9966-');
+  const [newPublisher, setNewPublisher] = useState('Kenya Literature Bureau');
   const [newCategory, setNewCategory] = useState<'CBC Textbook' | 'CBC Teacher Guide' | 'Supplementary Reader' | 'Encyclopedia' | 'Fiction Storybook'>('CBC Textbook');
-  const [newGrade, setNewGrade] = useState<GradeLevel>(4);
-  const [newCopies, setNewCopies] = useState<number>(30);
-  const [newShelf, setNewShelf] = useState('');
-  const [addBookSuccess, setAddBookSuccess] = useState(false);
+  const [newCopies, setNewCopies] = useState(30);
+  const [newShelf, setNewShelf] = useState('SEC-A-01');
 
   const allUsers = Storage.getUsers();
-  const studentsList = allUsers.filter(u => u.role === 'student');
-  const teachersList = allUsers.filter(u => ['teacher', 'class_teacher', 'hod', 'dean_of_studies'].includes(u.role));
 
-  // Filtered books
-  const filteredBooks = books.filter(b => {
-    const matchesSearch = b.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          b.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          b.isbn.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          b.locationShelf.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCat = categoryFilter === 'all' || b.category === categoryFilter;
-    const matchesGrade = gradeFilter === 'all' || (b.grade && b.grade.toString() === gradeFilter);
-    return matchesSearch && matchesCat && matchesGrade;
-  });
+  // Storage event sync
+  useEffect(() => {
+    const handleBooks = () => setBooks(Storage.getLibraryBooks());
+    const handleBorrow = () => setBorrowRecords(Storage.getBorrowRecords());
+    const handleRes = () => setReservations(Storage.getLibraryReservations());
+    const handleFines = () => setFines(Storage.getLibraryFines());
+    const handleAcq = () => setAcquisitions(Storage.getLibraryAcquisitions());
+    const handleShelves = () => setShelves(Storage.getLibraryShelves());
+    const handleDig = () => setDigitalItems(Storage.getDigitalLibraryItems());
+    const handleReading = () => setReadingMembers(Storage.getReadingProgrammeMembers());
+    const handleAtt = () => setAttendanceLogs(Storage.getLibraryAttendance());
+    const handleTime = () => setTimetableSlots(Storage.getLibraryTimetable());
+    const handleEvt = () => setEvents(Storage.getLibraryEvents());
+    const handlePol = () => setPolicies(Storage.getLibraryPolicies());
+    const handleAud = () => setAuditLogs(Storage.getLibraryAuditLogs());
 
-  // Issue Book Handler
-  const handleIssueBook = (e: React.FormEvent) => {
+    window.addEventListener('library-books-updated', handleBooks);
+    window.addEventListener('library-reservations-updated', handleRes);
+    window.addEventListener('library-fines-updated', handleFines);
+    window.addEventListener('library-acquisitions-updated', handleAcq);
+    window.addEventListener('library-shelves-updated', handleShelves);
+    window.addEventListener('digital-library-updated', handleDig);
+    window.addEventListener('reading-programme-updated', handleReading);
+    window.addEventListener('library-attendance-updated', handleAtt);
+    window.addEventListener('library-timetable-updated', handleTime);
+    window.addEventListener('library-events-updated', handleEvt);
+    window.addEventListener('library-policies-updated', handlePol);
+    window.addEventListener('library-audit-updated', handleAud);
+
+    return () => {
+      window.removeEventListener('library-books-updated', handleBooks);
+      window.removeEventListener('library-reservations-updated', handleRes);
+      window.removeEventListener('library-fines-updated', handleFines);
+      window.removeEventListener('library-acquisitions-updated', handleAcq);
+      window.removeEventListener('library-shelves-updated', handleShelves);
+      window.removeEventListener('digital-library-updated', handleDig);
+      window.removeEventListener('reading-programme-updated', handleReading);
+      window.removeEventListener('library-attendance-updated', handleAtt);
+      window.removeEventListener('library-timetable-updated', handleTime);
+      window.removeEventListener('library-events-updated', handleEvt);
+      window.removeEventListener('library-policies-updated', handlePol);
+      window.removeEventListener('library-audit-updated', handleAud);
+    };
+  }, []);
+
+  // Actions
+  const handleIssueBook = (record: LibraryBorrowRecord) => {
+    Storage.borrowBook(record);
+    Storage.addLibraryAuditLog({
+      id: `aud-${Date.now()}`,
+      action: 'Book Loan Issued',
+      performedBy: currentUser.name,
+      role: 'librarian',
+      timestamp: new Date().toISOString(),
+      details: `Issued "${record.bookTitle}" to ${record.borrowerName} (${record.borrowerRole})`
+    });
+    setBooks(Storage.getLibraryBooks());
+    setBorrowRecords(Storage.getBorrowRecords());
+    setAuditLogs(Storage.getLibraryAuditLogs());
+  };
+
+  const handleReturnBook = (recordId: string, remarks?: string) => {
+    Storage.returnBook(recordId, remarks);
+    Storage.addLibraryAuditLog({
+      id: `aud-${Date.now()}`,
+      action: 'Book Loan Returned',
+      performedBy: currentUser.name,
+      role: 'librarian',
+      timestamp: new Date().toISOString(),
+      details: `Returned loan record ${recordId}. Remarks: ${remarks || 'None'}`
+    });
+    setBooks(Storage.getLibraryBooks());
+    setBorrowRecords(Storage.getBorrowRecords());
+    setAuditLogs(Storage.getLibraryAuditLogs());
+  };
+
+  const handleAddBook = (book: LibraryBook) => {
+    Storage.saveLibraryBook(book);
+    Storage.addLibraryAuditLog({
+      id: `aud-${Date.now()}`,
+      action: 'New Title Catalogued',
+      performedBy: currentUser.name,
+      role: 'librarian',
+      timestamp: new Date().toISOString(),
+      details: `Catalogued "${book.title}" (${book.isbn}) - ${book.totalCopies} copies`
+    });
+    setBooks(Storage.getLibraryBooks());
+    setAuditLogs(Storage.getLibraryAuditLogs());
+  };
+
+  const handleQuickIssueSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!issueBookId || !selectedBorrowerId) return;
+    const bk = books.find(b => b.id === issueBookId);
+    const user = allUsers.find(u => u.id === issueBorrowerId);
+    if (!bk || !user) return;
 
-    const book = books.find(b => b.id === issueBookId);
-    const borrower = allUsers.find(u => u.id === selectedBorrowerId);
-    if (!book || !borrower) return;
-
-    if (book.copiesAvailable <= 0) {
-      alert('No copies currently available for this book.');
+    if (bk.copiesAvailable <= 0) {
+      alert('No available copies of this title currently.');
       return;
     }
 
-    const newRecord: LibraryBorrowRecord = {
+    const newRec: LibraryBorrowRecord = {
       id: `bor-${Date.now()}`,
-      bookId: book.id,
-      bookTitle: book.title,
-      borrowerId: borrower.id,
-      borrowerName: borrower.name,
-      borrowerRole: borrowerType,
-      grade: borrower.grade,
-      stream: borrower.stream,
+      bookId: bk.id,
+      bookTitle: bk.title,
+      borrowerId: user.id,
+      borrowerName: user.name,
+      borrowerRole: issueBorrowerRole,
+      grade: user.grade,
+      stream: user.stream,
       borrowedDate: new Date().toISOString().split('T')[0],
-      dueDate: borrowDueDate,
+      dueDate: issueDueDate,
       status: 'active',
-      remarks: borrowRemarks || 'Regular loan issued'
+      remarks: issueRemarks || 'Circulated at main desk'
     };
 
-    Storage.borrowBook(newRecord);
-    setBorrowRecords(Storage.getBorrowRecords());
-    setBooks(Storage.getLibraryBooks());
-    setIssueSuccess(true);
-    setBorrowRemarks('');
-    setTimeout(() => {
-      setIssueSuccess(false);
-      setActiveTab('circulation');
-    }, 1500);
+    handleIssueBook(newRec);
+    setShowIssueModal(false);
+    setIssueRemarks('');
   };
 
-  // Return Book Handler
-  const handleReturnBook = (recordId: string) => {
-    Storage.returnBook(recordId, 'Returned in good condition');
-    setBorrowRecords(Storage.getBorrowRecords());
-    setBooks(Storage.getLibraryBooks());
-  };
+  // Section categorize
+  const isCirculation = ['issue_return', 'reservations', 'borrowers', 'overdue', 'fines_charges'].includes(currentSection);
+  const isCollection = ['catalogue', 'books_resources', 'acquisitions', 'inventory', 'shelves_locations', 'digital_library'].includes(currentSection);
+  const isProgrammes = ['reading_programme', 'attendance', 'timetable', 'events_programmes'].includes(currentSection);
+  const isGovernance = ['reports_analytics', 'notifications', 'policies', 'settings', 'audit_trail'].includes(currentSection);
 
-  // Add Book Handler
-  const handleAddBook = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newAuthor.trim()) return;
-
-    const newBook: LibraryBook = {
-      id: `bk-${Date.now()}`,
-      isbn: newIsbn || `978-9966-${Math.floor(100 + Math.random() * 900)}-${Math.floor(10 + Math.random() * 90)}`,
-      title: newTitle.trim(),
-      author: newAuthor.trim(),
-      publisher: newPublisher.trim() || 'Kenya Educational Press',
-      category: newCategory,
-      grade: newGrade,
-      copiesAvailable: Number(newCopies),
-      totalCopies: Number(newCopies),
-      locationShelf: newShelf.trim() || 'Shelf GEN-01'
-    };
-
-    Storage.saveLibraryBook(newBook);
-    setBooks(Storage.getLibraryBooks());
-    setAddBookSuccess(true);
-    setNewTitle('');
-    setNewAuthor('');
-    setNewPublisher('');
-    setNewIsbn('');
-    setNewShelf('');
-    setTimeout(() => {
-      setAddBookSuccess(false);
-      setActiveTab('catalog');
-    }, 1500);
-  };
-
-  // Metrics
-  const totalBooksCount = books.reduce((acc, b) => acc + b.totalCopies, 0);
-  const totalAvailableCount = books.reduce((acc, b) => acc + b.copiesAvailable, 0);
-  const activeLoansCount = borrowRecords.filter(r => r.status === 'active' || r.status === 'overdue').length;
   const overdueCount = borrowRecords.filter(r => r.status === 'overdue').length;
+  const reservationsCount = reservations.filter(r => r.status === 'pending' || r.status === 'ready_for_pickup').length;
+  const unpaidFinesCount = fines.filter(f => f.status === 'unpaid').length;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 tracking-wider uppercase">
-              <span>School Learning Resource Center</span>
-              <span aria-hidden="true">·</span>
-              <span>Librarian Console</span>
-            </div>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            EduSmart Library & Learning Archive
-          </h1>
-          <p className="text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Manage physical and digital Competency-Based Curriculum textbooks, issue learning guides, track borrower circulation, and preserve educational media for {currentUser.name}.
-          </p>
-        </div>
+      {/* Top Header */}
+      <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white lg:hidden"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-        {/* Quick KPI stats */}
-        <div className="bg-white/10 backdrop-blur p-4 rounded-xl border border-white/20 shrink-0 text-xs">
-          <div className="text-[10px] uppercase font-bold text-amber-300 mb-1">Library Lead</div>
-          <div className="font-extrabold text-base">{currentUser.name}</div>
-          <div className="text-slate-300 font-mono text-[11px]">{currentUser.tscNumber || 'TSC/48102/ED'}</div>
-          <div className="mt-2 pt-2 border-t border-white/20 flex gap-3 text-[11px]">
-            <span>{totalBooksCount} Volumes</span>
-            <span>·</span>
-            <span className="text-emerald-300 font-bold">{totalAvailableCount} Available</span>
-            <span>·</span>
-            <span className="text-amber-300 font-bold">{activeLoansCount} on Loan</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Primary Action Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button
-          onClick={() => setActiveTab('catalog')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'catalog'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-amber-100 text-amber-800">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">1. Book Catalog</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'catalog' ? 'text-amber-200' : 'text-slate-500'}`}>
-              Search {books.length} titles & shelves
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('circulation')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'circulation'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-emerald-100 text-emerald-800">
-            <BookMarked className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">2. Circulation Desk</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'circulation' ? 'text-emerald-200' : 'text-slate-500'}`}>
-              Active loans & returns ({borrowRecords.length})
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('borrow_book')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'borrow_book'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-blue-100 text-blue-800">
-            <UserCheck className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">3. Issue Book</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'borrow_book' ? 'text-blue-200' : 'text-slate-500'}`}>
-              Lend to learner or teacher
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('add_book')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'add_book'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
-            <Plus className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">4. Add New Title</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'add_book' ? 'text-purple-200' : 'text-slate-500'}`}>
-              Register new stock & shelf
-            </div>
-          </div>
-        </button>
-      </div>
-
-      {/* ========================================================
-          TAB 1: BOOK CATALOG
-          ======================================================== */}
-      {activeTab === 'catalog' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                School CBC Textbooks & Reader Catalog
-              </h2>
-              <p className="text-xs text-slate-500">
-                Explore available titles, shelf locations, and copies in stock.
-              </p>
+            <div className="bg-white p-1 rounded-xl shadow-2xs">
+              <EduSmartGadsaLogo variant="horizontal" size="sm" />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Search */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search title, author, ISBN, shelf..."
-                  className="pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 w-56 sm:w-64"
-                />
+            <div className="hidden sm:block border-l border-slate-700 pl-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black px-2 py-0.5 rounded bg-purple-500 text-white uppercase tracking-wider">
+                  📚 Library Portal
+                </span>
+                <span className="text-xs text-slate-300 font-bold">
+                  Dewey & CBC Information Hub
+                </span>
               </div>
-
-              {/* Category Filter */}
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-bold"
-              >
-                <option value="all">All Categories</option>
-                <option value="CBC Textbook">CBC Textbook</option>
-                <option value="CBC Teacher Guide">CBC Teacher Guide</option>
-                <option value="Supplementary Reader">Supplementary Reader</option>
-                <option value="Fiction Storybook">Fiction Storybook</option>
-                <option value="Encyclopedia">Encyclopedia</option>
-              </select>
-
-              {/* Grade Filter */}
-              <select
-                value={gradeFilter}
-                onChange={(e) => setGradeFilter(e.target.value)}
-                className="px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-bold"
-              >
-                <option value="all">All Grades</option>
-                {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
-                  <option key={g} value={g.toString()}>Grade {g}</option>
-                ))}
-              </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredBooks.map((bk) => (
-              <div key={bk.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-                    <span className="font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[10px]">
-                      {bk.category}
-                    </span>
-                    <span className="font-mono text-slate-500 text-[10px]">{bk.locationShelf}</span>
-                  </div>
-
-                  <h3 className="font-extrabold text-slate-900 text-sm mt-2">{bk.title}</h3>
-                  <div className="text-slate-600 mt-0.5">Author: <strong className="text-slate-800">{bk.author}</strong></div>
-                  <div className="text-slate-500 text-[11px]">Publisher: {bk.publisher}</div>
-                  <div className="font-mono text-slate-400 text-[10px] mt-1">ISBN: {bk.isbn}</div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                  <div className="text-[11px]">
-                    <span className="font-bold text-slate-900 font-mono">{bk.copiesAvailable}</span> of <span className="font-mono text-slate-600">{bk.totalCopies}</span> copies free
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIssueBookId(bk.id);
-                      setActiveTab('borrow_book');
-                    }}
-                    disabled={bk.copiesAvailable <= 0}
-                    className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
-                      bk.copiesAvailable > 0
-                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {bk.copiesAvailable > 0 ? 'Issue Book' : 'Out of Stock'}
-                  </button>
-                </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <div className="font-bold text-xs text-white">
+                {currentUser.name}
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ========================================================
-          TAB 2: CIRCULATION DESK (ACTIVE LOANS & RETURNS)
-          ======================================================== */}
-      {activeTab === 'circulation' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="pb-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Active Book Loans & Circulation Ledger
-              </h2>
-              <p className="text-xs text-slate-500">
-                Track borrowed volumes, return dates, and overdue alerts.
-              </p>
+              <div className="text-[11px] text-purple-300 font-medium">
+                Head Librarian & Information Specialist
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
-                {borrowRecords.filter(r => r.status === 'active').length} Active
-              </span>
-              <span className="px-3 py-1.5 rounded-lg bg-rose-50 text-rose-800 font-bold border border-rose-200">
-                {overdueCount} Overdue
-              </span>
-              <span className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                {borrowRecords.filter(r => r.status === 'returned').length} Returned
-              </span>
-            </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
+        </div>
+      </header>
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-            <table className="w-full text-left">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-3">Book Title</th>
-                  <th className="py-2.5 px-3">Borrower Name</th>
-                  <th className="py-2.5 px-3">Role / Class</th>
-                  <th className="py-2.5 px-3">Date Borrowed</th>
-                  <th className="py-2.5 px-3">Due Date</th>
-                  <th className="py-2.5 px-3 text-center">Loan Status</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {borrowRecords.map((rec) => (
-                  <tr key={rec.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-3 font-bold text-slate-900 max-w-xs">{rec.bookTitle}</td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-800">{rec.borrowerName}</td>
-                    <td className="py-2.5 px-3 text-slate-600">
-                      <span className="capitalize">{rec.borrowerRole}</span>
-                      {rec.grade ? ` (Grade ${rec.grade} ${rec.stream || ''})` : ''}
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-600">{rec.borrowedDate}</td>
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{rec.dueDate}</td>
-                    <td className="py-2.5 px-3 text-center">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                        rec.status === 'returned'
-                          ? 'bg-slate-100 text-slate-600'
-                          : rec.status === 'overdue'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {rec.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      {rec.status !== 'returned' ? (
-                        <button
-                          onClick={() => handleReturnBook(rec.id)}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-semibold transition-colors"
-                        >
-                          Mark Returned
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 font-mono">Completed</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      {/* Main Workspace Layout with Sidebar Tree */}
+      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+        <LibrarySidebar
+          currentSection={currentSection}
+          onSelectSection={setCurrentSection}
+          overdueCount={overdueCount}
+          reservationsCount={reservationsCount}
+          unpaidFinesCount={unpaidFinesCount}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        />
 
-      {/* ========================================================
-          TAB 3: ISSUE BOOK FORM
-          ======================================================== */}
-      {activeTab === 'borrow_book' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="pb-4 border-b border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900">
-              Circulation Desk: Issue Book on Loan
-            </h2>
-            <p className="text-xs text-slate-500">
-              Register a book loan to an enrolled student or faculty member.
-            </p>
-          </div>
-
-          {issueSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-600" />
-              <span>Book issued successfully! Stock count updated.</span>
-            </div>
+        {/* Content View Area */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {currentSection === 'dashboard' && (
+            <LibraryDashboardView
+              books={books}
+              borrowRecords={borrowRecords}
+              reservations={reservations}
+              fines={fines}
+              readingMembers={readingMembers}
+              onNavigate={setCurrentSection}
+              onOpenIssueModal={() => setShowIssueModal(true)}
+              onOpenAddBookModal={() => setShowAddBookModal(true)}
+            />
           )}
 
-          <form onSubmit={handleIssueBook} className="max-w-2xl space-y-4 text-xs">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                Select Book to Issue *
-              </label>
-              <select
-                required
-                value={issueBookId}
-                onChange={(e) => setIssueBookId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-900"
-              >
-                <option value="">-- Choose a title from catalog --</option>
-                {books.map(b => (
-                  <option key={b.id} value={b.id} disabled={b.copiesAvailable <= 0}>
-                    {b.title} (Available: {b.copiesAvailable}/{b.totalCopies} · Shelf: {b.locationShelf})
-                  </option>
-                ))}
-              </select>
+          {isCirculation && (
+            <CirculationViews
+              section={currentSection}
+              books={books}
+              borrowRecords={borrowRecords}
+              reservations={reservations}
+              fines={fines}
+              allUsers={allUsers}
+              onIssueBook={handleIssueBook}
+              onReturnBook={handleReturnBook}
+              onUpdateReservation={(id, updates) => {
+                Storage.updateLibraryReservation(id, updates);
+                setReservations(Storage.getLibraryReservations());
+              }}
+              onAddReservation={(res) => {
+                Storage.addLibraryReservation(res);
+                setReservations(Storage.getLibraryReservations());
+              }}
+              onUpdateFine={(id, updates) => {
+                Storage.updateLibraryFine(id, updates);
+                setFines(Storage.getLibraryFines());
+              }}
+              onAddFine={(fine) => {
+                Storage.addLibraryFine(fine);
+                setFines(Storage.getLibraryFines());
+              }}
+            />
+          )}
+
+          {isCollection && (
+            <CollectionViews
+              section={currentSection}
+              books={books}
+              acquisitions={acquisitions}
+              shelves={shelves}
+              digitalItems={digitalItems}
+              onAddBook={handleAddBook}
+              onAddAcquisition={(acq) => {
+                Storage.addLibraryAcquisition(acq);
+                setAcquisitions(Storage.getLibraryAcquisitions());
+              }}
+              onAddDigitalItem={(item) => {
+                Storage.addDigitalLibraryItem(item);
+                setDigitalItems(Storage.getDigitalLibraryItems());
+              }}
+            />
+          )}
+
+          {isProgrammes && (
+            <ProgrammesViews
+              section={currentSection}
+              readingMembers={readingMembers}
+              attendanceLogs={attendanceLogs}
+              timetableSlots={timetableSlots}
+              events={events}
+              onAddAttendanceLog={(log) => {
+                Storage.addLibraryAttendanceLog(log);
+                setAttendanceLogs(Storage.getLibraryAttendance());
+              }}
+              onAddTimetableSlot={(slot) => {
+                Storage.addLibraryTimetableSlot(slot);
+                setTimetableSlots(Storage.getLibraryTimetable());
+              }}
+              onAddEvent={(event) => {
+                Storage.addLibraryEvent(event);
+                setEvents(Storage.getLibraryEvents());
+              }}
+            />
+          )}
+
+          {isGovernance && (
+            <GovernanceViews
+              section={currentSection}
+              policies={policies}
+              auditLogs={auditLogs}
+              books={books}
+              borrowRecords={borrowRecords}
+              onUpdatePolicy={(id, updates) => {
+                Storage.updateLibraryPolicy(id, updates);
+                setPolicies(Storage.getLibraryPolicies());
+              }}
+              onAddAuditLog={(log) => {
+                Storage.addLibraryAuditLog(log);
+                setAuditLogs(Storage.getLibraryAuditLogs());
+              }}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Quick Issue Modal */}
+      {showIssueModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="p-5 bg-gradient-to-r from-purple-800 to-indigo-900 text-white flex items-center justify-between">
+              <h3 className="font-black text-sm flex items-center gap-2">
+                <ArrowLeftRight className="w-4 h-4 text-purple-300" />
+                <span>Issue Book (Circulation Checkout)</span>
+              </h3>
+              <button onClick={() => setShowIssueModal(false)} className="text-slate-300 hover:text-white">✕</button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleQuickIssueSubmit} className="p-5 space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Borrower Type</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Book</label>
                 <select
-                  value={borrowerType}
-                  onChange={(e) => {
-                    const type = e.target.value as 'student' | 'teacher';
-                    setBorrowerType(type);
-                    setSelectedBorrowerId(type === 'student' ? studentsList[0]?.id || '' : teachersList[0]?.id || '');
-                  }}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
+                  value={issueBookId}
+                  onChange={(e) => setIssueBookId(e.target.value)}
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
                 >
-                  <option value="student">Student / Learner</option>
-                  <option value="teacher">Teacher / Staff</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Select Borrower *</label>
-                <select
-                  required
-                  value={selectedBorrowerId}
-                  onChange={(e) => setSelectedBorrowerId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
-                >
-                  <option value="">-- Choose Borrower --</option>
-                  {(borrowerType === 'student' ? studentsList : teachersList).map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} {u.grade ? `(Grade ${u.grade} ${u.stream || ''})` : ''} - {u.email}
-                    </option>
+                  {books.map(b => (
+                    <option key={b.id} value={b.id}>{b.title} ({b.copiesAvailable}/{b.totalCopies} Avail)</option>
                   ))}
                 </select>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Due Return Date</label>
-                <input
-                  type="date"
-                  required
-                  value={borrowDueDate}
-                  onChange={(e) => setBorrowDueDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono font-bold"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Borrower Type</label>
+                  <select
+                    value={issueBorrowerRole}
+                    onChange={(e) => setIssueBorrowerRole(e.target.value as any)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
+                  >
+                    <option value="student">Student</option>
+                    <option value="teacher">Teacher</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={issueDueDate}
+                    onChange={(e) => setIssueDueDate(e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Loan Remarks / Purpose</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Member</label>
+                <select
+                  value={issueBorrowerId}
+                  onChange={(e) => setIssueBorrowerId(e.target.value)}
+                  required
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
+                >
+                  <option value="">-- Choose Borrower --</option>
+                  {allUsers
+                    .filter(u => issueBorrowerRole === 'student' ? u.role === 'student' : ['teacher', 'class_teacher', 'hod', 'dean_of_studies'].includes(u.role))
+                    .map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} {u.grade ? `(Grade ${u.grade})` : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Remarks / Note</label>
                 <input
                   type="text"
-                  value={borrowRemarks}
-                  onChange={(e) => setBorrowRemarks(e.target.value)}
-                  placeholder="e.g. CBC Term 1 Science revision project"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg"
+                  value={issueRemarks}
+                  onChange={(e) => setIssueRemarks(e.target.value)}
+                  placeholder="e.g. Supplementary homework reading"
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2"
                 />
               </div>
-            </div>
 
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-xs"
-            >
-              <Check className="w-4 h-4" />
-              <span>Confirm Book Loan</span>
-            </button>
-          </form>
-        </section>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowIssueModal(false)}
+                  className="px-3 py-1.5 text-xs text-slate-600 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-purple-600 text-white font-black text-xs rounded-lg shadow-xs"
+                >
+                  Complete Checkout
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      {/* ========================================================
-          TAB 4: ADD NEW BOOK TITLE
-          ======================================================== */}
-      {activeTab === 'add_book' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="pb-4 border-b border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900">
-              Accession New Book into Library Database
-            </h2>
-            <p className="text-xs text-slate-500">
-              Catalog new curriculum titles, supplementary readers, and shelf placements.
-            </p>
-          </div>
-
-          {addBookSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-600" />
-              <span>New volume added to library catalog!</span>
+      {/* Quick Add Book Modal */}
+      {showAddBookModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h4 className="font-bold text-sm text-slate-900">Add Book Title</h4>
+              <button onClick={() => setShowAddBookModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
             </div>
-          )}
 
-          <form onSubmit={handleAddBook} className="max-w-2xl space-y-4 text-xs">
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Book Title *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
               <input
                 type="text"
                 required
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. Spotlight Social Studies Learner's Book Grade 7"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
+                placeholder="Title of book..."
+                className="w-full text-xs border border-slate-300 rounded-lg p-2"
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Author / Editor *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Author</label>
                 <input
                   type="text"
                   required
                   value={newAuthor}
                   onChange={(e) => setNewAuthor(e.target.value)}
-                  placeholder="e.g. Kenya Literature Bureau"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2"
                 />
               </div>
-
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Publisher</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">ISBN</label>
                 <input
                   type="text"
-                  value={newPublisher}
-                  onChange={(e) => setNewPublisher(e.target.value)}
-                  placeholder="e.g. KLB Publishing"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
+                  required
+                  value={newIsbn}
+                  onChange={(e) => setNewIsbn(e.target.value)}
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Category</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
                 >
                   <option value="CBC Textbook">CBC Textbook</option>
                   <option value="CBC Teacher Guide">CBC Teacher Guide</option>
                   <option value="Supplementary Reader">Supplementary Reader</option>
-                  <option value="Fiction Storybook">Fiction Storybook</option>
                   <option value="Encyclopedia">Encyclopedia</option>
+                  <option value="Fiction Storybook">Fiction Storybook</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Target Grade</label>
-                <select
-                  value={newGrade}
-                  onChange={(e) => setNewGrade(Number(e.target.value) as GradeLevel)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
-                >
-                  {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
-                    <option key={g} value={g}>Grade {g}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Initial Copies</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies</label>
                 <input
                   type="number"
-                  min={1}
-                  max={200}
                   value={newCopies}
                   onChange={(e) => setNewCopies(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold font-mono"
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">ISBN Number</label>
-                <input
-                  type="text"
-                  value={newIsbn}
-                  onChange={(e) => setNewIsbn(e.target.value)}
-                  placeholder="e.g. 978-9966-25-104-1"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Shelf Location</label>
-                <input
-                  type="text"
-                  value={newShelf}
-                  onChange={(e) => setNewShelf(e.target.value)}
-                  placeholder="e.g. Shelf SS-07A"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono font-bold"
-                />
-              </div>
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button onClick={() => setShowAddBookModal(false)} className="px-3 py-1.5 text-xs text-slate-600 font-bold">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!newTitle || !newAuthor) return;
+                  handleAddBook({
+                    id: `bk-${Date.now()}`,
+                    title: newTitle,
+                    author: newAuthor,
+                    isbn: newIsbn,
+                    publisher: newPublisher,
+                    category: newCategory,
+                    copiesAvailable: newCopies,
+                    totalCopies: newCopies,
+                    locationShelf: newShelf
+                  });
+                  setShowAddBookModal(false);
+                  setNewTitle('');
+                }}
+                className="px-4 py-1.5 bg-purple-600 text-white font-black text-xs rounded-lg"
+              >
+                Save Title
+              </button>
             </div>
-
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Save to Library Catalog</span>
-            </button>
-          </form>
-        </section>
+          </div>
+        </div>
       )}
 
     </div>

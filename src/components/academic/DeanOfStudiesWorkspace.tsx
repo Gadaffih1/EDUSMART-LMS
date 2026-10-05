@@ -12,6 +12,8 @@ import {
 import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { 
   BookOpen, 
   BarChart3, 
@@ -29,7 +31,8 @@ import {
   Layers,
   FileCheck,
   Sparkles,
-  FileSpreadsheet
+  FileSpreadsheet,
+  HeartPulse
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -60,8 +63,9 @@ interface ExamScheduleItem {
 }
 
 export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ currentUser }) => {
-  type DeanTab = 'assessments' | 'analytics' | 'report_cards' | 'curriculum' | 'reporting_hub';
+  type DeanTab = 'assessments' | 'analytics' | 'report_cards' | 'curriculum' | 'work_entries' | 'sanatorium' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<DeanTab>('assessments');
+  const workLogs = Storage.getWorkEntryLogs();
 
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
 
@@ -275,6 +279,27 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
         >
           <BookOpen className="w-4 h-4 text-amber-400" />
           <span>Curriculum Strands & KPSEA Pacing</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('work_entries')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'work_entries' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-emerald-400" />
+          <span>Faculty Work Entry Sign-Ins ({workLogs.length})</span>
+          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sanatorium')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <HeartPulse className="w-4 h-4 text-rose-400" />
+          <span>Sanatorium & Health Logs</span>
         </button>
 
         <button
@@ -539,7 +564,30 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       )}
 
       {/* ========================================================
-          TAB 5: REPORTING HUB (MONTHLY, TERMLY, ANNUAL PDF)
+          TAB 5: FACULTY WORK ENTRY SIGN-IN AUDIT (READ-ONLY)
+          ======================================================== */}
+      {activeTab === 'work_entries' && (
+        <WorkEntryAuditViewer 
+          currentUser={currentUser} 
+          title="Dean of Studies Work Entry Sign-In Register"
+          subtitle="Curriculum pacing and instructional delivery verification: Official sign-in logs, GPS stamps, and biometric photo ID stamps. Strictly non-editable."
+        />
+      )}
+
+      {/* ========================================================
+          TAB: SANATORIUM & MEDICAL LOGS (READ-ONLY FOR DEAN)
+          ======================================================== */}
+      {activeTab === 'sanatorium' && (
+        <SanatoriumSection
+          currentUser={currentUser}
+          canRecord={false}
+          title="Dean of Studies Sanatorium & Medical Logs"
+          subtitle="Monitor learner clinical attendances, assessment exemptions, exam medical leaves, and doctor recommendations."
+        />
+      )}
+
+      {/* ========================================================
+          TAB 6: REPORTING HUB (MONTHLY, TERMLY, ANNUAL PDF)
           ======================================================== */}
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />

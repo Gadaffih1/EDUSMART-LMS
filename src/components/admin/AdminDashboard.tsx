@@ -11,6 +11,9 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { 
   Users, 
   UserPlus, 
@@ -24,7 +27,9 @@ import {
   Search,
   School,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  HeartPulse,
+  Bus
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -41,7 +46,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
     ? 'oversight'
     : 'users';
-  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'oversight'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'oversight'>(defaultTab);
 
   // Create User Form
   const [newName, setNewName] = useState('');
@@ -212,6 +217,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <Video className="w-3.5 h-3.5" />
           <span>Google Meet Room Links</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('work_entry_audit')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'work_entry_audit' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Work Entry Sign-Ins ({workLogs.length})</span>
+          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sanatorium')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <HeartPulse className="w-3.5 h-3.5 text-rose-400" />
+          <span>Sanatorium Logs</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Bus className="w-3.5 h-3.5 text-amber-400" />
+          <span>School Transport</span>
         </button>
 
         <button
@@ -625,6 +661,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             ))}
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB: WORK ENTRY SIGN-IN AUDIT (READ-ONLY)
+          ======================================================== */}
+      {activeTab === 'work_entry_audit' && (
+        <WorkEntryAuditViewer 
+          currentUser={currentUser} 
+          title="System Administrator Work Entry Sign-In Register"
+          subtitle="System-wide institutional audit ledger: Real-time clock-in logs, GPS stamps, staff credentials, and verified biometric photos. Strictly non-editable."
+        />
+      )}
+
+      {/* ========================================================
+          TAB: SYSTEM SANATORIUM & CLINIC LOGS
+          ======================================================== */}
+      {activeTab === 'sanatorium' && (
+        <SanatoriumSection
+          currentUser={currentUser}
+          canRecord={true}
+          title="System Administration Sanatorium & Medical Audit"
+          subtitle="System-wide clinic attendance records, nurse in-charge notes, vital signs, and institutional recommendations. Print/Export PDF dossiers."
+        />
+      )}
+
+      {/* ========================================================
+          TAB: SCHOOL TRANSPORT & FLEET TRACKING SYSTEM
+          ======================================================== */}
+      {activeTab === 'transport' && (
+        <TransportWorkspace currentUser={currentUser} isEmbedded={true} />
       )}
 
       {/* ========================================================

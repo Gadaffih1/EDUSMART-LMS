@@ -9,6 +9,8 @@ import {
 import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { 
   School, 
   Users, 
@@ -25,7 +27,8 @@ import {
   Award,
   BookOpen,
   Printer,
-  FileSpreadsheet
+  FileSpreadsheet,
+  HeartPulse
 } from 'lucide-react';
 
 interface HeadTeacherWorkspaceProps {
@@ -33,7 +36,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'bom_report' | 'reporting_hub';
+  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'work_entry_audit' | 'sanatorium' | 'bom_report' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
 
   const allUsers = Storage.getUsers();
@@ -176,7 +179,28 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           }`}
         >
           <Users className="w-4 h-4 text-purple-400" />
-          <span>Faculty Allocation & Work Logs</span>
+          <span>Faculty Allocation</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('work_entry_audit')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'work_entry_audit' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-emerald-400" />
+          <span>Staff Work Entry Sign-Ins ({workLogs.length})</span>
+          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sanatorium')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <HeartPulse className="w-4 h-4 text-rose-400" />
+          <span>Sanatorium & Clinic</span>
         </button>
 
         <button
@@ -385,6 +409,29 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
             ))}
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB: WORK ENTRY AUDIT REGISTER (STRICTLY READ-ONLY)
+          ======================================================== */}
+      {activeTab === 'work_entry_audit' && (
+        <WorkEntryAuditViewer 
+          currentUser={currentUser} 
+          title="Executive Work Entry Sign-In Audit Register"
+          subtitle="Head Teacher executive oversight: All teacher work entry sign-ins, timestamps, verified GPS stamps, biometric photo ID records, and staff credentials. Strictly non-editable."
+        />
+      )}
+
+      {/* ========================================================
+          TAB: SANATORIUM & CAMPUS CLINIC SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'sanatorium' && (
+        <SanatoriumSection
+          currentUser={currentUser}
+          canRecord={false}
+          title="Head Teacher Sanatorium & Campus Clinic Surveillance"
+          subtitle="Institutional healthcare oversight: Student illness logs, observation bay admissions, emergency hospital transfers, and outbreak prevention."
+        />
       )}
 
       {/* ========================================================

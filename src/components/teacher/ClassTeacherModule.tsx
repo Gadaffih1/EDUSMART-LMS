@@ -10,6 +10,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { 
   ClipboardCheck, 
   BarChart3, 
@@ -29,7 +30,8 @@ import {
   FileSpreadsheet,
   AlertTriangle,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  HeartPulse
 } from 'lucide-react';
 
 interface ClassTeacherModuleProps {
@@ -41,8 +43,8 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(currentUser.grade || 4);
   const [selectedStream, setSelectedStream] = useState<StreamName>(currentUser.stream || 'Dove');
 
-  // Sub-tabs: Attendance Register, Multi-Day Matrix, Graphical Analysis, Print Report Cards
-  const [activeSubTab, setActiveSubTab] = useState<'daily_register' | 'history_matrix' | 'graphics' | 'reports'>('daily_register');
+  // Sub-tabs: Attendance Register, Multi-Day Matrix, Graphical Analysis, Print Report Cards, Sanatorium Records
+  const [activeSubTab, setActiveSubTab] = useState<'daily_register' | 'history_matrix' | 'graphics' | 'reports' | 'sanatorium'>('daily_register');
 
   // Attendance Date (default to today: 2026-10-01)
   const todayDateString = '2026-10-01';
@@ -287,6 +289,18 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print Report Cards</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('sanatorium')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              activeSubTab === 'sanatorium'
+                ? 'bg-rose-700 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <HeartPulse className="w-3.5 h-3.5 text-rose-300" />
+            <span>Sanatorium Records</span>
           </button>
         </div>
       </div>
@@ -951,6 +965,22 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
               No report cards found for this stream.
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================
+          SUB-TAB 5: SANATORIUM & HEALTH RECORDS (FOR THIS CLASS)
+          ======================================================== */}
+      {activeSubTab === 'sanatorium' && (
+        <div className="space-y-4">
+          <SanatoriumSection
+            currentUser={currentUser}
+            canRecord={false}
+            filterGrade={selectedGrade}
+            filterStream={selectedStream}
+            title={`Grade ${selectedGrade} (${selectedStream}) Class Sanatorium & Health Register`}
+            subtitle="Learner medical visits, attendance details, nurse recommendations, and activity exemptions for your assigned stream."
+          />
         </div>
       )}
     </div>

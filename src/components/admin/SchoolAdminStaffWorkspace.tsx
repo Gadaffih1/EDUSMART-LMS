@@ -16,6 +16,9 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { 
   Calendar, 
   Clock, 
@@ -36,20 +39,22 @@ import {
   Eye, 
   Check, 
   X, 
-  ArrowRight,
-  TrendingUp,
-  BarChart3,
-  LogOut,
-  MapPin,
-  Phone,
-  UserCheck,
-  CalendarDays,
-  FileCheck,
-  DoorOpen,
-  Award,
-  Layers,
-  GraduationCap,
-  Sparkles
+  ArrowRight, 
+  TrendingUp, 
+  BarChart3, 
+  LogOut, 
+  MapPin, 
+  Phone, 
+  UserCheck, 
+  CalendarDays, 
+  FileCheck, 
+  DoorOpen, 
+  Award, 
+  Layers, 
+  GraduationCap, 
+  Sparkles,
+  HeartPulse,
+  Bus
 } from 'lucide-react';
 
 interface SchoolAdminStaffWorkspaceProps {
@@ -59,6 +64,8 @@ interface SchoolAdminStaffWorkspaceProps {
 
 type AdminTab = 
   | 'work_entries'
+  | 'sanatorium'
+  | 'transport'
   | 'gate_exits'
   | 'registers'
   | 'communications'
@@ -70,8 +77,12 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
   currentUser,
   onLogout
 }) => {
-  // Navigation active tab
-  const [activeTab, setActiveTab] = useState<AdminTab>('work_entries');
+  // Navigation active tab - default to sanatorium if nurse or sanatorium officer
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => 
+    currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.designation && currentUser.designation.toLowerCase().includes('nurse'))
+      ? 'sanatorium'
+      : 'work_entries'
+  );
 
   // Core Data States from Storage
   const [workEntries] = useState<WorkEntryLog[]>(() => Storage.getWorkEntryLogs());
@@ -400,6 +411,32 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               </button>
 
               <button
+                onClick={() => setActiveTab('sanatorium')}
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
+                  activeTab === 'sanatorium'
+                    ? 'border-rose-400 text-rose-400 font-bold'
+                    : 'border-transparent text-slate-300 hover:text-white'
+                }`}
+              >
+                <HeartPulse className="w-4 h-4 text-rose-400" />
+                <span>2. School Sanatorium</span>
+                <span className="ml-1 text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-mono font-bold">Entry & Logs</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('transport')}
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
+                  activeTab === 'transport'
+                    ? 'border-amber-400 text-amber-400 font-bold'
+                    : 'border-transparent text-slate-300 hover:text-white'
+                }`}
+              >
+                <Bus className="w-4 h-4 text-amber-400" />
+                <span>3. School Transport</span>
+                <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">Fleet & Roll</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('gate_exits')}
                 className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
                   activeTab === 'gate_exits'
@@ -408,7 +445,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                 }`}
               >
                 <DoorOpen className="w-4 h-4" />
-                <span>2. Students Gate Exits</span>
+                <span>4. Students Gate Exits</span>
                 <span className="ml-1 text-[10px] text-slate-400 font-mono">({gatePasses.length})</span>
               </button>
 
@@ -484,177 +521,37 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
 
         {/* ========================================================
-            TAB 1: TEACHERS WORK ENTRY ANALYSIS WINDOW
+            TAB 1: TEACHERS WORK ENTRY ANALYSIS WINDOW (READ-ONLY)
             ======================================================== */}
         {activeTab === 'work_entries' && (
-          <div className="space-y-6">
-            
-            {/* Top Stat Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Total Logged Entries</span>
-                  <FileCheck className="w-4 h-4 text-emerald-600" />
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
-                  {workEntries.length}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Verified across Grades 1 to 9
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Active Teaching Staff</span>
-                  <Users className="w-4 h-4 text-blue-600" />
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
-                  {new Set(workEntries.map(w => w.teacherId)).size}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Reporting daily pedagogical progress
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Average Class Attendance</span>
-                  <TrendingUp className="w-4 h-4 text-amber-600" />
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
-                  {Math.round(workEntries.reduce((acc, curr) => acc + (curr.learnersPresent || 35), 0) / (workEntries.length || 1))}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Learners present per lesson period
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-                  <span>Campus Geo-Stamping</span>
-                  <ShieldCheck className="w-4 h-4 text-purple-600" />
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-2 font-mono text-emerald-600">
-                  100%
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  All work entries verified on school grounds
-                </div>
-              </div>
-            </div>
-
-            {/* Filter & Search Bar */}
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-              <div className="flex-1 relative w-full">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search by teacher name, staff number, subject, or strand topic..."
-                  value={workSearch}
-                  onChange={(e) => setWorkSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-xs focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-slate-50/50"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Filter className="w-4 h-4 text-slate-500" />
-                <select
-                  value={workGradeFilter}
-                  onChange={(e) => setWorkGradeFilter(e.target.value)}
-                  className="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="all">All Grades (1-9)</option>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(g => (
-                    <option key={g} value={g}>Grade {g}</option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={() => setPrintModalType('work_ledger')}
-                  className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Ledger</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Work Entries Table */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-              <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900">
-                    Teachers Work Entry & CBC Delivery Ledger
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Showing {filteredWorkEntries.length} verified teacher log entries
-                  </p>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-100 text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
-                    <tr>
-                      <th className="py-3 px-4">Sign-In Stamp</th>
-                      <th className="py-3 px-4">Teacher Name & Staff ID</th>
-                      <th className="py-3 px-4">Class</th>
-                      <th className="py-3 px-4">Subject & Topic</th>
-                      <th className="py-3 px-4">Learners Present</th>
-                      <th className="py-3 px-4">Objectives Covered</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredWorkEntries.map(entry => (
-                      <tr key={entry.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="font-mono font-bold text-slate-900">{entry.date}</div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-emerald-600" />
-                            <span>{entry.time}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900">{entry.teacherName}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">
-                            {entry.staffNo || 'TSC/VERIFIED'}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 whitespace-nowrap font-medium">
-                          Grade {entry.grade || '-'} · {entry.stream || 'Stream A'}
-                        </td>
-                        <td className="py-3 px-4 max-w-xs">
-                          <div className="font-semibold text-emerald-800">{entry.subject}</div>
-                          <div className="text-[11px] text-slate-600 line-clamp-1">{entry.topicTaught}</div>
-                        </td>
-                        <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                          {entry.learnersPresent || 38} students
-                        </td>
-                        <td className="py-3 px-4 max-w-xs text-slate-600 text-[11px] line-clamp-2">
-                          {entry.objectivesCovered || entry.teacherRemarks || 'Lesson delivered as per strand guide.'}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => setSelectedWorkEntry(entry)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-2.5 py-1 rounded text-xs font-semibold inline-flex items-center gap-1 transition-colors"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>View</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <WorkEntryAuditViewer 
+            currentUser={currentUser} 
+            title="School Admin Staff Work Entry Sign-In Register"
+            subtitle="Official institutional secretariat register: All teacher work entry sign-ins, timestamps, verified GPS stamps, biometric photo IDs, and staff credentials. Strictly non-editable."
+          />
         )}
 
         {/* ========================================================
-            TAB 2: STUDENTS GATE EXIT ANALYSIS WINDOW
+            TAB 2: SCHOOL SANATORIUM REGISTER (ENTRY FORM & AUDIT LOG)
+            ======================================================== */}
+        {activeTab === 'sanatorium' && (
+          <SanatoriumSection 
+            currentUser={currentUser} 
+            canRecord={true}
+            title="School Sanatorium & Healthcare Bay Register"
+            subtitle="Record student clinic attendance, nurse in-charge notes, symptoms, vital signs, and clinical recommendations. Export PDF reports."
+          />
+        )}
+
+        {/* ========================================================
+            TAB 3: SCHOOL TRANSPORT & FLEET OPERATIONS
+            ======================================================== */}
+        {activeTab === 'transport' && (
+          <TransportWorkspace currentUser={currentUser} isEmbedded={true} />
+        )}
+
+        {/* ========================================================
+            TAB 4: STUDENTS GATE EXIT ANALYSIS WINDOW
             ======================================================== */}
         {activeTab === 'gate_exits' && (
           <div className="space-y-6">

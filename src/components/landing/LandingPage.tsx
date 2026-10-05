@@ -48,6 +48,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
     | 'parent' 
     | 'librarian' 
     | 'school_admin_staff'
+    | 'sanatorium'
+    | 'transport'
+    | 'cocurricular'
     | 'administration' 
     | 'grade_pass'
     | 'learning_resources'
@@ -99,7 +102,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   // Handle credential login
   const handleCredentialLogin = (
     e: React.FormEvent, 
-    expectedRoleCategory: 'student' | 'parent' | 'teacher' | 'librarian' | 'school_admin_staff' | 'administration'
+    expectedRoleCategory: 'student' | 'parent' | 'teacher' | 'librarian' | 'school_admin_staff' | 'sanatorium' | 'transport' | 'cocurricular' | 'administration'
   ) => {
     e.preventDefault();
     setErrorMsg('');
@@ -137,6 +140,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
 
     if (expectedRoleCategory === 'school_admin_staff' && user.role !== 'school_admin_staff') {
       setErrorMsg('This portal is reserved for School Admin Staff (Registrar & Secretariat).');
+      return;
+    }
+
+    if (expectedRoleCategory === 'sanatorium' && !['school_admin_staff', 'admin'].includes(user.role)) {
+      setErrorMsg('This portal is reserved for School Sanatorium Medical Officers & Staff.');
+      return;
+    }
+
+    if (expectedRoleCategory === 'transport' && !['transport_team', 'school_admin_staff', 'admin'].includes(user.role)) {
+      setErrorMsg('This portal is reserved for School Transport Drivers, Chaperones, and Fleet Managers.');
+      return;
+    }
+
+    if (expectedRoleCategory === 'cocurricular' && !['cocurricular_team', 'teacher', 'class_teacher', 'senior_teacher', 'deputy_head', 'head_teacher', 'admin'].includes(user.role)) {
+      setErrorMsg('This portal is reserved for Sports Coaches, Club Patrons, and Co-Curricular Team.');
       return;
     }
 
@@ -235,7 +253,43 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <span>School Calendar</span>
             </button>
 
-            {/* 4. 📞 Contact School */}
+            {/* 4. 🏥 Sanatorium */}
+            <button
+              onClick={() => {
+                const el = document.getElementById('sanatorium-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden md:flex"
+            >
+              <span>🏥</span>
+              <span>Sanatorium</span>
+            </button>
+
+            {/* 5. 🚌 Transport */}
+            <button
+              onClick={() => {
+                const el = document.getElementById('transport-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden md:flex"
+            >
+              <span>🚌</span>
+              <span>Transport</span>
+            </button>
+
+            {/* 6. 🎯 Co-Curriculum */}
+            <button
+              onClick={() => {
+                const el = document.getElementById('cocurricular-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden md:flex"
+            >
+              <span>🎯</span>
+              <span>Co-Curriculum</span>
+            </button>
+
+            {/* 6. 📞 Contact School */}
             <button
               onClick={() => setActiveModal('contact_us')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden sm:flex"
@@ -246,7 +300,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
           </div>
 
           <div>
-            {/* 5. 🔐 Sign In */}
+            {/* 6. 🔐 Sign In */}
             <button
               onClick={() => {
                 const el = document.getElementById('portal-login-section');
@@ -490,6 +544,146 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               </div>
             </button>
 
+            {/* DUAL FEATURED SPECIALIZED PORTALS: SANATORIUM & TRANSPORT TEAM */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 col-span-1 sm:col-span-2 lg:col-span-3">
+              
+              {/* 7. SCHOOL SANATORIUM & HEALTHCARE BAY LOGIN */}
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('nurse@edusmart.ac.ke');
+                  setPassword('nurse2026');
+                  setActiveModal('sanatorium');
+                }}
+                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-800 via-rose-900 to-slate-900 hover:from-rose-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-rose-400/60 ring-2 ring-rose-400/20 group text-left cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
+                      🏥
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-400 text-slate-950 shadow-2xs uppercase tracking-wider">
+                        School Sanatorium & Clinic
+                      </span>
+                      <div className="text-[11px] text-rose-200 font-mono mt-0.5">
+                        24/7 Campus Healthcare & Bay
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-white/10 rounded-lg text-[10px] font-semibold text-rose-200">
+                    <span>Sister Grace, RN</span>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col justify-between gap-2">
+                  <div>
+                    <div className="font-black text-base sm:text-lg tracking-wide flex items-center gap-1.5 text-white">
+                      <span>SCHOOL SANATORIUM LOGIN</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-rose-300" />
+                    </div>
+                    <p className="text-xs text-rose-100 mt-1 font-medium">
+                      Student clinic visits, nurse notes, vital signs check, treatments, and medical recommendations.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-300 group-hover:text-white pt-2 border-t border-rose-500/20">
+                    <span>Enter Clinic Bay</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </button>
+
+              {/* 8. SCHOOL TRANSPORT & FLEET TEAM LOGIN */}
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('transport@edusmart.ac.ke');
+                  setPassword('transport2026');
+                  setActiveModal('transport');
+                }}
+                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-700 via-amber-800 to-slate-900 hover:from-amber-600 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-400/60 ring-2 ring-amber-400/20 group text-left cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
+                      🚌
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-2xs uppercase tracking-wider">
+                        School Transport & Fleet
+                      </span>
+                      <div className="text-[11px] text-amber-200 font-mono mt-0.5">
+                        Live Commuter GPS & Safety
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-white/10 rounded-lg text-[10px] font-semibold text-amber-200">
+                    <span>Mr. Kipkoech · Lead Driver</span>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col justify-between gap-2">
+                  <div>
+                    <div className="font-black text-base sm:text-lg tracking-wide flex items-center gap-1.5 text-white">
+                      <span>TRANSPORT TEAM LOGIN</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-amber-300" />
+                    </div>
+                    <p className="text-xs text-amber-100 mt-1 font-medium">
+                      Student boarding & alighting roll call, GPS tracking, routes & stops, parent safety alerts, and fleet compliance.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-300 group-hover:text-white pt-2 border-t border-amber-500/20">
+                    <span>Enter Transport Bay</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </button>
+
+              {/* 9. CO-CURRICULUM TEAM LOGIN */}
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('cocurricular@edusmart.ac.ke');
+                  setPassword('cocurricular2026');
+                  setActiveModal('cocurricular');
+                }}
+                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-950 hover:from-emerald-700 hover:to-slate-900 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-emerald-400/60 ring-2 ring-emerald-400/20 group text-left cursor-pointer sm:col-span-2 lg:col-span-2"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
+                      🎯
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 shadow-2xs uppercase tracking-wider">
+                        Sports Academies & Clubs Team
+                      </span>
+                      <div className="text-[11px] text-emerald-200 font-mono mt-0.5">
+                        CBC Talent Matrix & Tournaments
+                      </div>
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-white/10 rounded-lg text-[10px] font-semibold text-emerald-200">
+                    <span>Coach Benjamin · Sports Director</span>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-col justify-between gap-2">
+                  <div>
+                    <div className="font-black text-base sm:text-lg tracking-wide flex items-center gap-1.5 text-white">
+                      <span>CO-CURRICULUM TEAM LOGIN</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-300" />
+                    </div>
+                    <p className="text-xs text-emerald-100 mt-1 font-medium">
+                      Sports academy coaching, clubs & societies, talent development matrix, inter-school tournaments & tours, equipment & parent consent.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300 group-hover:text-white pt-2 border-t border-emerald-500/20">
+                    <span>Enter Co-Curriculum Hub</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </button>
+
+            </div>
+
           </div>
 
           {/* Quick Demo Credentials Bar */}
@@ -518,10 +712,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 Teacher
               </button>
               <button
-                onClick={() => handleQuickDemoLogin('librarian@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-purple-950/60 hover:bg-purple-900 text-purple-300 font-bold rounded-lg border border-purple-800 transition-colors"
+                onClick={() => handleQuickDemoLogin('nurse@edusmart.ac.ke')}
+                className="px-2.5 py-1 bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-bold rounded-lg border border-rose-700 transition-colors"
               >
-                Librarian
+                Nurse / Sanatorium
+              </button>
+              <button
+                onClick={() => handleQuickDemoLogin('transport@edusmart.ac.ke')}
+                className="px-2.5 py-1 bg-amber-950/80 hover:bg-amber-900 text-amber-300 font-bold rounded-lg border border-amber-700 transition-colors"
+              >
+                Transport Team
+              </button>
+              <button
+                onClick={() => handleQuickDemoLogin('cocurricular@edusmart.ac.ke')}
+                className="px-2.5 py-1 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 font-bold rounded-lg border border-emerald-600 transition-colors shadow-xs"
+              >
+                🎯 Co-Curricular Lead
+              </button>
+              <button
+                onClick={() => handleQuickDemoLogin('patron@edusmart.ac.ke')}
+                className="px-2.5 py-1 bg-teal-950/90 hover:bg-teal-900 text-teal-300 font-bold rounded-lg border border-teal-700 transition-colors"
+              >
+                Debate Patron
               </button>
               <button
                 onClick={() => handleQuickDemoLogin('adminstaff@edusmart.ac.ke')}
@@ -975,6 +1187,406 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       </section>
 
       {/* ========================================================
+          SECTION: SCHOOL SANATORIUM & HEALTHCARE BAY
+          24/7 Campus Clinic, Clinical Attendance & Medical Governance
+          ======================================================== */}
+      <section id="sanatorium-section" className="py-16 bg-gradient-to-b from-white via-rose-50/30 to-slate-50 border-b border-slate-200 scroll-mt-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-100 border border-rose-200 rounded-full text-rose-900 text-xs font-bold uppercase tracking-wider mb-2">
+                <span>🏥</span>
+                <span>Campus Healthcare & Student Wellbeing</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                School Sanatorium & Healthcare Bay
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl font-medium">
+                Comprehensive 24/7 on-campus clinical triage, licensed nursing care, vital signs monitoring, and coordinated medical reporting for learners.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('nurse@edusmart.ac.ke');
+                  setPassword('nurse2026');
+                  setActiveModal('sanatorium');
+                }}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-2 cursor-pointer"
+              >
+                <span>🏥</span>
+                <span>Sanatorium Staff Login</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Clinical Pillars Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold mb-3">
+                  👩‍⚕️
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Qualified Nursing Care</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Led by Sister Grace Wambui, RN (NCK/RN-58921) with licensed pediatric first aid and clinical triage expertise.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-rose-700 font-semibold">
+                NCK Licensed Registered Nurses
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3">
+                  🛏️
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Observation Bay</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Equipped 6-bed resting lounge with dark-room migraine recovery, oxygen concentrators, and temperature stabilization.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-amber-700 font-semibold">
+                6 In-Patient Observation Beds
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3">
+                  📊
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Digital Health Ledger</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Real-time recording of attendance times, symptoms, vital signs, medications given, and PE activity exemptions.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-emerald-700 font-semibold">
+                Cross-Role Stakeholder Access
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3">
+                  📱
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Emergency & Parent Alerts</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Instant SMS dispatch to parents upon admission, seamless gate pass synchronization, and hospital referral escorts.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-blue-700 font-semibold">
+                Immediate Parent Escalation
+              </div>
+            </div>
+
+          </div>
+
+          {/* Multi-Role Stakeholder Transparency Notice */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 font-mono">
+                Transparent Health Governance
+              </span>
+              <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                Who Can Access Sanatorium Information?
+              </h4>
+              <p className="text-xs text-slate-500 max-w-3xl">
+                Class Teachers view health logs for their class learners; Senior Teachers oversee pastoral care; Admin Staff record attendance and export PDF dossiers; Specific Parents view their child's visits privately; Deans monitor academic pacing; Deputy Heads & Head Teachers govern health surveillance.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setErrorMsg('');
+                setEmail('nurse@edusmart.ac.ke');
+                setPassword('nurse2026');
+                setActiveModal('sanatorium');
+              }}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0"
+            >
+              <span>Access Sanatorium Register</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ========================================================
+          SECTION: SCHOOL TRANSPORT & FLEET OPERATIONS BAY
+          Safe Commute, Real-Time Boarding & Route Network
+          ======================================================== */}
+      <section id="transport-section" className="py-16 bg-gradient-to-b from-slate-50 via-amber-50/20 to-white border-b border-slate-200 scroll-mt-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 border border-amber-300 rounded-full text-amber-900 text-xs font-bold uppercase tracking-wider mb-2">
+                <span>🚌</span>
+                <span>Safe Campus Commute & Fleet Operations</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                School Transport & Student Tracking System
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl font-medium">
+                Comprehensive school transport network: licensed PSV coaches, speed governor verified, student boarding/alighting roll call, GPS vehicle tracking, and automated parent SMS notifications.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('transport@edusmart.ac.ke');
+                  setPassword('transport2026');
+                  setActiveModal('transport');
+                }}
+                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-slate-950 text-xs font-black rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer"
+              >
+                <span>🚌</span>
+                <span>Transport Team Login</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Transport Pillars Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  🚌
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Certified School Fleet</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  33-seater and 29-seater school coaches equipped with calibrated 80 km/h speed governors, safety lap belts, and verified NTSA compliance stickers.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-amber-800 font-semibold">
+                NTSA & Speed Governor Verified
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  📡
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Real-Time GPS Tracking</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Continuous satellite telemetry transmitting current bus positions, traffic flow status, and accurate stop arrival estimates directly to parents.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-emerald-700 font-semibold">
+                Active Telemetry & Route Geofencing
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  📋
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Live Boarding Roll Call</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Dedicated bus chaperones register each learner upon boarding at pickup stops and verify handovers to authorized guardians during evening drop-offs.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-blue-700 font-semibold">
+                Chaperone Supervised Commute
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  📱
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Automated Parent Alerts</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Immediate SMS notifications when the bus starts its trip, when your child boards, and when the coach safely arrives on the school campus.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-purple-700 font-semibold">
+                Instant Departure & Arrival SMS
+              </div>
+            </div>
+
+          </div>
+
+          {/* Active Route Circuits Overview */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 font-mono">
+                Fleet Network & Route Coverage
+              </span>
+              <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                Serving Kiambu Road, Ngong Road, South C, Muthaiga, and Thika Highway
+              </h4>
+              <p className="text-xs text-slate-500 max-w-3xl">
+                Our 3 specialized routes cover over 11 primary residential hubs with coordinated morning pickup from 06:15 AM and evening departures from 03:45 PM.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setErrorMsg('');
+                setEmail('transport@edusmart.ac.ke');
+                setPassword('transport2026');
+                setActiveModal('transport');
+              }}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+            >
+              <span>Access Transport Bay</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ========================================================
+          SECTION: CO-CURRICULAR ACTIVITIES & TALENT DEVELOPMENT
+          Sports Academies, Clubs & Societies, Tournaments & Portfolios
+          ======================================================== */}
+      <section id="cocurricular-section" className="py-16 bg-gradient-to-b from-white via-emerald-50/25 to-slate-50 border-b border-slate-200 scroll-mt-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-900 text-xs font-bold uppercase tracking-wider mb-2">
+                <span>🎯</span>
+                <span>CBC Holistic Talent & Co-Curricular Excellence</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                Sports Academies, Clubs & Talent Portfolios
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl font-medium">
+                Developing champions in athletics, soccer, swimming, robotics, debating, and performing arts with certified coaching, inter-school tournaments, and longitudinal learner portfolios.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('cocurricular@edusmart.ac.ke');
+                  setPassword('cocurricular2026');
+                  setActiveModal('cocurricular');
+                }}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-500/20 flex items-center gap-2 cursor-pointer"
+              >
+                <span>🎯</span>
+                <span>Co-Curricular Team Login</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Pillars Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  ⚽
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Competitive Sports Academies</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Simba Soccer (U-11/U-13), Warriors Basketball, heated semi-Olympic swimming squad, and track & field athletics training under licensed coaches.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-blue-800 font-semibold">
+                Weekly Leagues & Inter-County Cups
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  🎙️
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Championship Clubs & Societies</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  National Model UN debaters, NACOSTI science award-winning robotics & AI coders, symphony brass band, drama troupe, and scouts movement.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-purple-700 font-semibold">
+                National Trophy Winners 2026
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  ✨
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Learner Talent Portfolios</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Longitudinal transcript following each learner across years—capturing club leadership, tournament honors, attendance rate, and talent development badges.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-emerald-700 font-semibold">
+                Official Printable CBC Transcript
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3 text-xl">
+                  🚌
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">Tours & Digital Parent Consent</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  Integrated with EduSmart School Transport for safe excursions, Kasarani championships, theatre galas, digital parent consent, and verified supervision.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-amber-800 font-semibold">
+                Direct Transport Fleet Integration
+              </div>
+            </div>
+
+          </div>
+
+          {/* Quick Stats Highlight */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 font-mono">
+                Holistic CBC Co-Curricular Enrollment
+              </span>
+              <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                12 Active Sports Academies & Clubs · 350+ Learners Enrolled · 24 Regional Championship Trophies
+              </h4>
+              <p className="text-xs text-slate-500">
+                Staffed by qualified coaches, patrons, and sports directors with official Kenya national federation affiliations.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setErrorMsg('');
+                  setEmail('cocurricular@edusmart.ac.ke');
+                  setPassword('cocurricular2026');
+                  setActiveModal('cocurricular');
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-colors shadow-xs"
+              >
+                Access Activities Portal →
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* ========================================================
           RECOMMENDED LANDING PAGE FOOTER:
           Contact School • Help & Support • Privacy • Terms
           ======================================================== */}
@@ -1402,6 +2014,253 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 <div className="text-slate-700">Official: <strong>Mrs. Sarah Cherono (Registrar)</strong></div>
                 <div>Email: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-teal-900">adminstaff@edusmart.ac.ke</code></div>
                 <div>Pass: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-teal-900">staff2026</code></div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SCHOOL SANATORIUM & CLINIC ACCESS PORTAL */}
+      {activeModal === 'sanatorium' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border-2 border-rose-400/80 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-5 border-b border-rose-200 bg-gradient-to-r from-rose-900 via-rose-800 to-slate-900 text-white flex items-center justify-between">
+              <div>
+                <div className="bg-white p-1 rounded-xl shadow-2xs inline-block mb-1.5">
+                  <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                </div>
+                <div className="inline-block ml-2 px-2 py-0.5 bg-rose-400 text-slate-950 text-[10px] font-black rounded uppercase tracking-wider mb-1">
+                  Sanatorium Bay
+                </div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <span>🏥</span>
+                  <span>School Sanatorium Staff Login</span>
+                </h3>
+                <p className="text-xs text-rose-100">
+                  Record student clinic visits, vital signs, nursing treatments & medical recommendations.
+                </p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white self-start">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => handleCredentialLogin(e, 'sanatorium')} className="p-5 space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-medium">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Medical Staff / Nursing Officer Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nurse@edusmart.ac.ke"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-rose-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="nurse2026"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-rose-500 font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-700 to-slate-900 hover:from-rose-800 hover:to-slate-950 text-white font-extrabold text-xs rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <span>🏥</span>
+                <span>Access Sanatorium Healthcare Register</span>
+              </button>
+
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-[11px] text-rose-950">
+                <div className="font-extrabold text-rose-900 mb-1">Demo Nursing Staff Account:</div>
+                <div className="text-slate-700">In-Charge: <strong>Sister Grace Wambui, RN (NCK/RN-58921)</strong></div>
+                <div>Email: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-rose-900">nurse@edusmart.ac.ke</code></div>
+                <div>Pass: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-rose-900">nurse2026</code></div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SCHOOL TRANSPORT & FLEET TEAM ACCESS */}
+      {activeModal === 'transport' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border-2 border-amber-400/80 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-5 border-b border-amber-200 bg-gradient-to-r from-amber-900 via-amber-800 to-slate-900 text-white flex items-center justify-between">
+              <div>
+                <div className="bg-white p-1 rounded-xl shadow-2xs inline-block mb-1.5">
+                  <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                </div>
+                <div className="inline-block ml-2 px-2 py-0.5 bg-amber-400 text-slate-950 text-[10px] font-black rounded uppercase tracking-wider mb-1">
+                  Fleet & Safety
+                </div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <span>🚌</span>
+                  <span>School Transport Team Login</span>
+                </h3>
+                <p className="text-xs text-amber-100">
+                  Student boarding & alighting roll call, GPS vehicle tracking, route manifests & safety alerts.
+                </p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white self-start">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => handleCredentialLogin(e, 'transport')} className="p-5 space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-medium">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Driver / Chaperone / Fleet Manager Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="transport@edusmart.ac.ke"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="transport2026"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-600 via-amber-700 to-slate-900 hover:from-amber-700 hover:to-slate-950 text-white font-extrabold text-xs rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>🚌</span>
+                <span>Access School Transport Bay</span>
+              </button>
+
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-950 space-y-1.5">
+                <div className="font-extrabold text-amber-900">Demo Transport Team Accounts:</div>
+                <div className="text-slate-700">
+                  Lead Driver: <strong>Mr. Josephat Kipkoech</strong> (Bus 01)
+                  <br />Email: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-amber-900">transport@edusmart.ac.ke</code> · Pass: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-amber-900">transport2026</code>
+                </div>
+                <div className="text-slate-700 pt-1 border-t border-amber-200/60">
+                  Bus Chaperone: <strong>Ms. Mary Wambui</strong> (Student Roll Officer)
+                  <br />Email: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-amber-900">chaperone@edusmart.ac.ke</code> · Pass: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-amber-900">transport2026</code>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CO-CURRICULUM TEAM ACCESS */}
+      {activeModal === 'cocurricular' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border-2 border-emerald-400/80 overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-5 border-b border-emerald-200 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white flex items-center justify-between">
+              <div>
+                <div className="bg-white p-1 rounded-xl shadow-2xs inline-block mb-1.5">
+                  <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                </div>
+                <div className="inline-block ml-2 px-2 py-0.5 bg-emerald-400 text-slate-950 text-[10px] font-black rounded uppercase tracking-wider mb-1">
+                  Sports & Clubs Hub
+                </div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <span>🎯</span>
+                  <span>Co-Curricular Team Login</span>
+                </h3>
+                <p className="text-xs text-emerald-100">
+                  Sports academy coaching, clubs & societies, talent development matrix, and fixtures.
+                </p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white self-start">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={(e) => handleCredentialLogin(e, 'cocurricular')} className="p-5 space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-medium">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Coach / Patron / Activities Director Email
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="cocurricular@edusmart.ac.ke"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="cocurricular2026"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-slate-900 hover:from-emerald-700 hover:to-slate-950 text-white font-extrabold text-xs rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>🎯</span>
+                <span>Enter Co-Curriculum Hub</span>
+              </button>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-950 space-y-1.5">
+                <div className="font-extrabold text-emerald-900">Demo Co-Curricular Accounts:</div>
+                <div className="text-slate-700">
+                  Director of Sports: <strong>Coach Benjamin Omwenga</strong>
+                  <br />Email: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-emerald-900">cocurricular@edusmart.ac.ke</code> · Pass: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-emerald-900">cocurricular2026</code>
+                </div>
+                <div className="text-slate-700 pt-1 border-t border-emerald-200/60">
+                  Senior Club Patron: <strong>Madame Grace Achieng</strong> (Debate & Drama)
+                  <br />Email: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-emerald-900">patron@edusmart.ac.ke</code> · Pass: <code className="bg-white px-1 py-0.5 rounded text-[10px] font-mono text-emerald-900">cocurricular2026</code>
+                </div>
               </div>
             </form>
           </div>

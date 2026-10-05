@@ -30,7 +30,34 @@ import {
   ExternalTool,
   SchoolCalendarEvent,
   ParentCommunication,
-  ExamTimetableEntry
+  ExamTimetableEntry,
+  SanatoriumRecord,
+  TransportRoute,
+  SchoolBus,
+  StudentTransportProfile,
+  TransportTripRecord,
+  TransportIncident,
+  TransportAlert,
+  TripType,
+  CoCurricularActivity,
+  LearnerCoCurricularProfile,
+  CoCurricularAttendanceRecord,
+  CoCurricularCompetition,
+  CoCurricularEquipment,
+  CoCurricularTrip,
+  CoCurricularAnnouncement,
+  CoCurricularBudgetItem,
+  LibraryReservation,
+  LibraryFine,
+  LibraryAcquisition,
+  LibraryShelfLocation,
+  DigitalLibraryItem,
+  ReadingProgrammeMember,
+  LibraryAttendanceLog,
+  LibraryTimetableSlot,
+  LibraryEvent,
+  LibraryAuditLog,
+  LibraryPolicy
 } from '../types';
 import {
   INITIAL_USERS,
@@ -60,7 +87,33 @@ import {
   INITIAL_SEARCH_AUDIT_LOGS,
   INITIAL_CALENDAR_EVENTS,
   INITIAL_PARENT_COMMUNICATIONS,
-  INITIAL_EXAM_TIMETABLE
+  INITIAL_EXAM_TIMETABLE,
+  INITIAL_SANATORIUM_RECORDS,
+  INITIAL_SCHOOL_BUSES,
+  INITIAL_TRANSPORT_ROUTES,
+  INITIAL_STUDENT_TRANSPORT_PROFILES,
+  INITIAL_TRANSPORT_TRIP_RECORDS,
+  INITIAL_TRANSPORT_INCIDENTS,
+  INITIAL_TRANSPORT_ALERTS,
+  INITIAL_CO_CURRICULAR_ACTIVITIES,
+  INITIAL_LEARNER_CO_CURRICULAR_PROFILES,
+  INITIAL_CO_CURRICULAR_ATTENDANCE,
+  INITIAL_CO_CURRICULAR_COMPETITIONS,
+  INITIAL_CO_CURRICULAR_EQUIPMENT,
+  INITIAL_CO_CURRICULAR_TRIPS,
+  INITIAL_CO_CURRICULAR_ANNOUNCEMENTS,
+  INITIAL_CO_CURRICULAR_BUDGET,
+  INITIAL_LIBRARY_RESERVATIONS,
+  INITIAL_LIBRARY_FINES,
+  INITIAL_LIBRARY_ACQUISITIONS,
+  INITIAL_LIBRARY_SHELVES,
+  INITIAL_DIGITAL_LIBRARY_ITEMS,
+  INITIAL_READING_PROGRAMME_MEMBERS,
+  INITIAL_LIBRARY_ATTENDANCE,
+  INITIAL_LIBRARY_TIMETABLE,
+  INITIAL_LIBRARY_EVENTS,
+  INITIAL_LIBRARY_POLICIES,
+  INITIAL_LIBRARY_AUDIT_LOGS
 } from '../data/initialData';
 
 const KEYS = {
@@ -94,6 +147,32 @@ const KEYS = {
   CALENDAR_EVENTS: 'edusmart_calendar_events_v1',
   PARENT_COMMUNICATIONS: 'edusmart_parent_communications_v1',
   EXAM_TIMETABLE: 'edusmart_exam_timetable_v1',
+  SANATORIUM_RECORDS: 'edusmart_sanatorium_records_v1',
+  TRANSPORT_BUSES: 'edusmart_transport_buses_v1',
+  TRANSPORT_ROUTES: 'edusmart_transport_routes_v1',
+  TRANSPORT_STUDENTS: 'edusmart_transport_students_v1',
+  TRANSPORT_TRIP_RECORDS: 'edusmart_transport_trip_records_v1',
+  TRANSPORT_INCIDENTS: 'edusmart_transport_incidents_v1',
+  TRANSPORT_ALERTS: 'edusmart_transport_alerts_v1',
+  CO_CURRICULAR_ACTIVITIES: 'edusmart_cocurricular_activities_v1',
+  CO_CURRICULAR_PROFILES: 'edusmart_cocurricular_profiles_v1',
+  CO_CURRICULAR_ATTENDANCE: 'edusmart_cocurricular_attendance_v1',
+  CO_CURRICULAR_COMPETITIONS: 'edusmart_cocurricular_competitions_v1',
+  CO_CURRICULAR_EQUIPMENT: 'edusmart_cocurricular_equipment_v1',
+  CO_CURRICULAR_TRIPS: 'edusmart_cocurricular_trips_v1',
+  CO_CURRICULAR_ANNOUNCEMENTS: 'edusmart_cocurricular_announcements_v1',
+  CO_CURRICULAR_BUDGET: 'edusmart_cocurricular_budget_v1',
+  LIBRARY_RESERVATIONS: 'edusmart_library_reservations_v1',
+  LIBRARY_FINES: 'edusmart_library_fines_v1',
+  LIBRARY_ACQUISITIONS: 'edusmart_library_acquisitions_v1',
+  LIBRARY_SHELVES: 'edusmart_library_shelves_v1',
+  LIBRARY_DIGITAL_ITEMS: 'edusmart_library_digital_items_v1',
+  LIBRARY_READING_PROGRAMME: 'edusmart_library_reading_programme_v1',
+  LIBRARY_ATTENDANCE: 'edusmart_library_attendance_v1',
+  LIBRARY_TIMETABLE: 'edusmart_library_timetable_v1',
+  LIBRARY_EVENTS: 'edusmart_library_events_v1',
+  LIBRARY_POLICIES: 'edusmart_library_policies_v1',
+  LIBRARY_AUDIT_LOGS: 'edusmart_library_audit_logs_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -140,6 +219,32 @@ export const Storage = {
     localStorage.setItem(KEYS.CHAT_MESSAGES, JSON.stringify(INITIAL_CHAT_MESSAGES));
     localStorage.setItem(KEYS.LIBRARY_BOOKS, JSON.stringify(INITIAL_LIBRARY_BOOKS));
     localStorage.setItem(KEYS.BORROW_RECORDS, JSON.stringify(INITIAL_BORROW_RECORDS));
+    localStorage.setItem(KEYS.SANATORIUM_RECORDS, JSON.stringify(INITIAL_SANATORIUM_RECORDS));
+    localStorage.setItem(KEYS.TRANSPORT_BUSES, JSON.stringify(INITIAL_SCHOOL_BUSES));
+    localStorage.setItem(KEYS.TRANSPORT_ROUTES, JSON.stringify(INITIAL_TRANSPORT_ROUTES));
+    localStorage.setItem(KEYS.TRANSPORT_STUDENTS, JSON.stringify(INITIAL_STUDENT_TRANSPORT_PROFILES));
+    localStorage.setItem(KEYS.TRANSPORT_TRIP_RECORDS, JSON.stringify(INITIAL_TRANSPORT_TRIP_RECORDS));
+    localStorage.setItem(KEYS.TRANSPORT_INCIDENTS, JSON.stringify(INITIAL_TRANSPORT_INCIDENTS));
+    localStorage.setItem(KEYS.TRANSPORT_ALERTS, JSON.stringify(INITIAL_TRANSPORT_ALERTS));
+    localStorage.setItem(KEYS.CO_CURRICULAR_ACTIVITIES, JSON.stringify(INITIAL_CO_CURRICULAR_ACTIVITIES));
+    localStorage.setItem(KEYS.CO_CURRICULAR_PROFILES, JSON.stringify(INITIAL_LEARNER_CO_CURRICULAR_PROFILES));
+    localStorage.setItem(KEYS.CO_CURRICULAR_ATTENDANCE, JSON.stringify(INITIAL_CO_CURRICULAR_ATTENDANCE));
+    localStorage.setItem(KEYS.CO_CURRICULAR_COMPETITIONS, JSON.stringify(INITIAL_CO_CURRICULAR_COMPETITIONS));
+    localStorage.setItem(KEYS.CO_CURRICULAR_EQUIPMENT, JSON.stringify(INITIAL_CO_CURRICULAR_EQUIPMENT));
+    localStorage.setItem(KEYS.CO_CURRICULAR_TRIPS, JSON.stringify(INITIAL_CO_CURRICULAR_TRIPS));
+    localStorage.setItem(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, JSON.stringify(INITIAL_CO_CURRICULAR_ANNOUNCEMENTS));
+    localStorage.setItem(KEYS.CO_CURRICULAR_BUDGET, JSON.stringify(INITIAL_CO_CURRICULAR_BUDGET));
+    localStorage.setItem(KEYS.LIBRARY_RESERVATIONS, JSON.stringify(INITIAL_LIBRARY_RESERVATIONS));
+    localStorage.setItem(KEYS.LIBRARY_FINES, JSON.stringify(INITIAL_LIBRARY_FINES));
+    localStorage.setItem(KEYS.LIBRARY_ACQUISITIONS, JSON.stringify(INITIAL_LIBRARY_ACQUISITIONS));
+    localStorage.setItem(KEYS.LIBRARY_SHELVES, JSON.stringify(INITIAL_LIBRARY_SHELVES));
+    localStorage.setItem(KEYS.LIBRARY_DIGITAL_ITEMS, JSON.stringify(INITIAL_DIGITAL_LIBRARY_ITEMS));
+    localStorage.setItem(KEYS.LIBRARY_READING_PROGRAMME, JSON.stringify(INITIAL_READING_PROGRAMME_MEMBERS));
+    localStorage.setItem(KEYS.LIBRARY_ATTENDANCE, JSON.stringify(INITIAL_LIBRARY_ATTENDANCE));
+    localStorage.setItem(KEYS.LIBRARY_TIMETABLE, JSON.stringify(INITIAL_LIBRARY_TIMETABLE));
+    localStorage.setItem(KEYS.LIBRARY_EVENTS, JSON.stringify(INITIAL_LIBRARY_EVENTS));
+    localStorage.setItem(KEYS.LIBRARY_POLICIES, JSON.stringify(INITIAL_LIBRARY_POLICIES));
+    localStorage.setItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
   },
 
   // Auth & Session
@@ -341,11 +446,28 @@ export const Storage = {
 
   // Work Entry Logs
   getWorkEntryLogs(teacherId?: string): WorkEntryLog[] {
-    const logs = getFromStorage<WorkEntryLog[]>(KEYS.WORK_ENTRY_LOGS, INITIAL_WORK_ENTRY_LOGS);
+    const rawLogs = getFromStorage<WorkEntryLog[]>(KEYS.WORK_ENTRY_LOGS, INITIAL_WORK_ENTRY_LOGS);
+    const normalizedLogs = rawLogs.map(l => ({
+      ...l,
+      staffNo: l.staffNo || (l.teacherId === 'usr-teach-kiprono' ? 'TSC/44120/ED' : 'TSC/39821/ED'),
+      firstName: l.firstName || (l.teacherName ? l.teacherName.split(' ')[0] : 'Teacher'),
+      lastName: l.lastName || (l.teacherName ? l.teacherName.split(' ').slice(1).join(' ') : 'Educator'),
+      email: l.email || `${(l.teacherId || 'staff').replace('usr-teach-', '')}@edusmart.ac.ke`,
+      signInLocation: l.signInLocation || 'EduSmart Main Campus, Staffroom Block A · Nairobi Grounds',
+      photoUrl: l.photoUrl || 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
+      geoStamp: l.geoStamp || {
+        latitude: -1.2921,
+        longitude: 36.8219,
+        accuracy: 5,
+        address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
+        verifiedCampus: true
+      }
+    }));
+
     if (teacherId) {
-      return logs.filter(l => l.teacherId === teacherId);
+      return normalizedLogs.filter(l => l.teacherId === teacherId);
     }
-    return logs;
+    return normalizedLogs;
   },
   addWorkEntryLog(log: WorkEntryLog): void {
     const logs = this.getWorkEntryLogs();
@@ -553,6 +675,166 @@ export const Storage = {
         setToStorage(KEYS.LIBRARY_BOOKS, books);
       }
     }
+  },
+
+  getLibraryReservations(): LibraryReservation[] {
+    return getFromStorage<LibraryReservation[]>(KEYS.LIBRARY_RESERVATIONS, INITIAL_LIBRARY_RESERVATIONS);
+  },
+  saveLibraryReservations(res: LibraryReservation[]): void {
+    setToStorage(KEYS.LIBRARY_RESERVATIONS, res);
+    window.dispatchEvent(new CustomEvent('library-reservations-updated', { detail: res }));
+  },
+  addLibraryReservation(res: LibraryReservation): void {
+    const list = this.getLibraryReservations();
+    const updated = [res, ...list];
+    this.saveLibraryReservations(updated);
+  },
+  updateLibraryReservation(id: string, updates: Partial<LibraryReservation>): void {
+    const list = this.getLibraryReservations();
+    const updated = list.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveLibraryReservations(updated);
+  },
+
+  getLibraryFines(): LibraryFine[] {
+    return getFromStorage<LibraryFine[]>(KEYS.LIBRARY_FINES, INITIAL_LIBRARY_FINES);
+  },
+  saveLibraryFines(fines: LibraryFine[]): void {
+    setToStorage(KEYS.LIBRARY_FINES, fines);
+    window.dispatchEvent(new CustomEvent('library-fines-updated', { detail: fines }));
+  },
+  addLibraryFine(fine: LibraryFine): void {
+    const list = this.getLibraryFines();
+    const updated = [fine, ...list];
+    this.saveLibraryFines(updated);
+  },
+  updateLibraryFine(id: string, updates: Partial<LibraryFine>): void {
+    const list = this.getLibraryFines();
+    const updated = list.map(f => f.id === id ? { ...f, ...updates } : f);
+    this.saveLibraryFines(updated);
+  },
+
+  getLibraryAcquisitions(): LibraryAcquisition[] {
+    return getFromStorage<LibraryAcquisition[]>(KEYS.LIBRARY_ACQUISITIONS, INITIAL_LIBRARY_ACQUISITIONS);
+  },
+  saveLibraryAcquisitions(acqs: LibraryAcquisition[]): void {
+    setToStorage(KEYS.LIBRARY_ACQUISITIONS, acqs);
+    window.dispatchEvent(new CustomEvent('library-acquisitions-updated', { detail: acqs }));
+  },
+  addLibraryAcquisition(acq: LibraryAcquisition): void {
+    const list = this.getLibraryAcquisitions();
+    const updated = [acq, ...list];
+    this.saveLibraryAcquisitions(updated);
+  },
+  updateLibraryAcquisition(id: string, updates: Partial<LibraryAcquisition>): void {
+    const list = this.getLibraryAcquisitions();
+    const updated = list.map(a => a.id === id ? { ...a, ...updates } : a);
+    this.saveLibraryAcquisitions(updated);
+  },
+
+  getLibraryShelves(): LibraryShelfLocation[] {
+    return getFromStorage<LibraryShelfLocation[]>(KEYS.LIBRARY_SHELVES, INITIAL_LIBRARY_SHELVES);
+  },
+  saveLibraryShelves(shelves: LibraryShelfLocation[]): void {
+    setToStorage(KEYS.LIBRARY_SHELVES, shelves);
+    window.dispatchEvent(new CustomEvent('library-shelves-updated', { detail: shelves }));
+  },
+  addLibraryShelf(shelf: LibraryShelfLocation): void {
+    const list = this.getLibraryShelves();
+    const updated = [...list, shelf];
+    this.saveLibraryShelves(updated);
+  },
+
+  getDigitalLibraryItems(): DigitalLibraryItem[] {
+    return getFromStorage<DigitalLibraryItem[]>(KEYS.LIBRARY_DIGITAL_ITEMS, INITIAL_DIGITAL_LIBRARY_ITEMS);
+  },
+  saveDigitalLibraryItems(items: DigitalLibraryItem[]): void {
+    setToStorage(KEYS.LIBRARY_DIGITAL_ITEMS, items);
+    window.dispatchEvent(new CustomEvent('digital-library-updated', { detail: items }));
+  },
+  addDigitalLibraryItem(item: DigitalLibraryItem): void {
+    const list = this.getDigitalLibraryItems();
+    const updated = [item, ...list];
+    this.saveDigitalLibraryItems(updated);
+  },
+
+  getReadingProgrammeMembers(): ReadingProgrammeMember[] {
+    return getFromStorage<ReadingProgrammeMember[]>(KEYS.LIBRARY_READING_PROGRAMME, INITIAL_READING_PROGRAMME_MEMBERS);
+  },
+  saveReadingProgrammeMembers(members: ReadingProgrammeMember[]): void {
+    setToStorage(KEYS.LIBRARY_READING_PROGRAMME, members);
+    window.dispatchEvent(new CustomEvent('reading-programme-updated', { detail: members }));
+  },
+  addReadingProgrammeMember(member: ReadingProgrammeMember): void {
+    const list = this.getReadingProgrammeMembers();
+    const updated = [member, ...list];
+    this.saveReadingProgrammeMembers(updated);
+  },
+  updateReadingProgrammeMember(id: string, updates: Partial<ReadingProgrammeMember>): void {
+    const list = this.getReadingProgrammeMembers();
+    const updated = list.map(m => m.id === id ? { ...m, ...updates } : m);
+    this.saveReadingProgrammeMembers(updated);
+  },
+
+  getLibraryAttendance(): LibraryAttendanceLog[] {
+    return getFromStorage<LibraryAttendanceLog[]>(KEYS.LIBRARY_ATTENDANCE, INITIAL_LIBRARY_ATTENDANCE);
+  },
+  saveLibraryAttendance(logs: LibraryAttendanceLog[]): void {
+    setToStorage(KEYS.LIBRARY_ATTENDANCE, logs);
+    window.dispatchEvent(new CustomEvent('library-attendance-updated', { detail: logs }));
+  },
+  addLibraryAttendanceLog(log: LibraryAttendanceLog): void {
+    const list = this.getLibraryAttendance();
+    const updated = [log, ...list];
+    this.saveLibraryAttendance(updated);
+  },
+
+  getLibraryTimetable(): LibraryTimetableSlot[] {
+    return getFromStorage<LibraryTimetableSlot[]>(KEYS.LIBRARY_TIMETABLE, INITIAL_LIBRARY_TIMETABLE);
+  },
+  saveLibraryTimetable(slots: LibraryTimetableSlot[]): void {
+    setToStorage(KEYS.LIBRARY_TIMETABLE, slots);
+    window.dispatchEvent(new CustomEvent('library-timetable-updated', { detail: slots }));
+  },
+  addLibraryTimetableSlot(slot: LibraryTimetableSlot): void {
+    const list = this.getLibraryTimetable();
+    const updated = [...list, slot];
+    this.saveLibraryTimetable(updated);
+  },
+
+  getLibraryEvents(): LibraryEvent[] {
+    return getFromStorage<LibraryEvent[]>(KEYS.LIBRARY_EVENTS, INITIAL_LIBRARY_EVENTS);
+  },
+  saveLibraryEvents(events: LibraryEvent[]): void {
+    setToStorage(KEYS.LIBRARY_EVENTS, events);
+    window.dispatchEvent(new CustomEvent('library-events-updated', { detail: events }));
+  },
+  addLibraryEvent(event: LibraryEvent): void {
+    const list = this.getLibraryEvents();
+    const updated = [event, ...list];
+    this.saveLibraryEvents(updated);
+  },
+
+  getLibraryPolicies(): LibraryPolicy[] {
+    return getFromStorage<LibraryPolicy[]>(KEYS.LIBRARY_POLICIES, INITIAL_LIBRARY_POLICIES);
+  },
+  saveLibraryPolicies(policies: LibraryPolicy[]): void {
+    setToStorage(KEYS.LIBRARY_POLICIES, policies);
+    window.dispatchEvent(new CustomEvent('library-policies-updated', { detail: policies }));
+  },
+  updateLibraryPolicy(id: string, updates: Partial<LibraryPolicy>): void {
+    const list = this.getLibraryPolicies();
+    const updated = list.map(p => p.id === id ? { ...p, ...updates } : p);
+    this.saveLibraryPolicies(updated);
+  },
+
+  getLibraryAuditLogs(): LibraryAuditLog[] {
+    return getFromStorage<LibraryAuditLog[]>(KEYS.LIBRARY_AUDIT_LOGS, INITIAL_LIBRARY_AUDIT_LOGS);
+  },
+  addLibraryAuditLog(log: LibraryAuditLog): void {
+    const list = this.getLibraryAuditLogs();
+    const updated = [log, ...list];
+    setToStorage(KEYS.LIBRARY_AUDIT_LOGS, updated);
+    window.dispatchEvent(new CustomEvent('library-audit-updated', { detail: updated }));
   },
 
   // Parent Helpers
@@ -969,6 +1251,346 @@ export const Storage = {
 
   getAllTimetableSlots(): TimetableSlot[] {
     return getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, INITIAL_TIMETABLE);
+  },
+
+  // ========================================================
+  // SCHOOL SANATORIUM & CLINICAL ATTENDANCE METHODS
+  // ========================================================
+
+  getSanatoriumRecords(studentId?: string, grade?: GradeLevel, stream?: StreamName): SanatoriumRecord[] {
+    const records = getFromStorage<SanatoriumRecord[]>(KEYS.SANATORIUM_RECORDS, INITIAL_SANATORIUM_RECORDS);
+    return records.filter(r => {
+      if (studentId && r.studentId !== studentId) return false;
+      if (grade !== undefined && r.grade !== grade) return false;
+      if (stream !== undefined && r.stream !== stream) return false;
+      return true;
+    });
+  },
+
+  saveSanatoriumRecords(records: SanatoriumRecord[]): void {
+    setToStorage(KEYS.SANATORIUM_RECORDS, records);
+    window.dispatchEvent(new CustomEvent('sanatorium-records-updated', { detail: records }));
+  },
+
+  addSanatoriumRecord(record: SanatoriumRecord): void {
+    const records = this.getSanatoriumRecords();
+    const updated = [record, ...records];
+    this.saveSanatoriumRecords(updated);
+  },
+
+  updateSanatoriumRecord(id: string, updates: Partial<SanatoriumRecord>): void {
+    const records = this.getSanatoriumRecords();
+    const updated = records.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveSanatoriumRecords(updated);
+  },
+
+  deleteSanatoriumRecord(id: string): void {
+    const records = this.getSanatoriumRecords();
+    const updated = records.filter(r => r.id !== id);
+    this.saveSanatoriumRecords(updated);
+  },
+
+  // ========================================================
+  // 🚌 SCHOOL TRANSPORT & FLEET TRACKING SYSTEM METHODS
+  // ========================================================
+
+  getSchoolBuses(): SchoolBus[] {
+    return getFromStorage<SchoolBus[]>(KEYS.TRANSPORT_BUSES, INITIAL_SCHOOL_BUSES);
+  },
+
+  saveSchoolBuses(buses: SchoolBus[]): void {
+    setToStorage(KEYS.TRANSPORT_BUSES, buses);
+    window.dispatchEvent(new CustomEvent('transport-buses-updated', { detail: buses }));
+  },
+
+  updateSchoolBus(id: string, updates: Partial<SchoolBus>): void {
+    const buses = this.getSchoolBuses();
+    const updated = buses.map(b => b.id === id ? { ...b, ...updates } : b);
+    this.saveSchoolBuses(updated);
+  },
+
+  getTransportRoutes(): TransportRoute[] {
+    return getFromStorage<TransportRoute[]>(KEYS.TRANSPORT_ROUTES, INITIAL_TRANSPORT_ROUTES);
+  },
+
+  saveTransportRoutes(routes: TransportRoute[]): void {
+    setToStorage(KEYS.TRANSPORT_ROUTES, routes);
+    window.dispatchEvent(new CustomEvent('transport-routes-updated', { detail: routes }));
+  },
+
+  addTransportRoute(route: TransportRoute): void {
+    const routes = this.getTransportRoutes();
+    const updated = [...routes, route];
+    this.saveTransportRoutes(updated);
+  },
+
+  updateTransportRoute(id: string, updates: Partial<TransportRoute>): void {
+    const routes = this.getTransportRoutes();
+    const updated = routes.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveTransportRoutes(updated);
+  },
+
+  getStudentTransportProfiles(studentId?: string, routeId?: string, grade?: GradeLevel): StudentTransportProfile[] {
+    const profiles = getFromStorage<StudentTransportProfile[]>(KEYS.TRANSPORT_STUDENTS, INITIAL_STUDENT_TRANSPORT_PROFILES);
+    return profiles.filter(p => {
+      if (studentId && p.studentId !== studentId) return false;
+      if (routeId && p.routeId !== routeId) return false;
+      if (grade !== undefined && p.grade !== grade) return false;
+      return true;
+    });
+  },
+
+  saveStudentTransportProfiles(profiles: StudentTransportProfile[]): void {
+    setToStorage(KEYS.TRANSPORT_STUDENTS, profiles);
+    window.dispatchEvent(new CustomEvent('transport-students-updated', { detail: profiles }));
+  },
+
+  addStudentTransportProfile(profile: StudentTransportProfile): void {
+    const profiles = this.getStudentTransportProfiles();
+    const updated = [profile, ...profiles];
+    this.saveStudentTransportProfiles(updated);
+  },
+
+  updateStudentTransportProfile(id: string, updates: Partial<StudentTransportProfile>): void {
+    const profiles = this.getStudentTransportProfiles();
+    const updated = profiles.map(p => p.id === id ? { ...p, ...updates } : p);
+    this.saveStudentTransportProfiles(updated);
+  },
+
+  deleteStudentTransportProfile(id: string): void {
+    const profiles = this.getStudentTransportProfiles();
+    const updated = profiles.filter(p => p.id !== id);
+    this.saveStudentTransportProfiles(updated);
+  },
+
+  getTransportTripRecords(date?: string, tripType?: TripType, routeId?: string, studentId?: string): TransportTripRecord[] {
+    const records = getFromStorage<TransportTripRecord[]>(KEYS.TRANSPORT_TRIP_RECORDS, INITIAL_TRANSPORT_TRIP_RECORDS);
+    return records.filter(r => {
+      if (date && r.date !== date) return false;
+      if (tripType && r.tripType !== tripType) return false;
+      if (routeId && r.routeId !== routeId) return false;
+      if (studentId && r.studentId !== studentId) return false;
+      return true;
+    });
+  },
+
+  saveTransportTripRecords(records: TransportTripRecord[]): void {
+    setToStorage(KEYS.TRANSPORT_TRIP_RECORDS, records);
+    window.dispatchEvent(new CustomEvent('transport-trip-records-updated', { detail: records }));
+  },
+
+  addTransportTripRecord(record: TransportTripRecord): void {
+    const records = this.getTransportTripRecords();
+    const updated = [record, ...records];
+    this.saveTransportTripRecords(updated);
+  },
+
+  updateTransportTripRecord(id: string, updates: Partial<TransportTripRecord>): void {
+    const records = this.getTransportTripRecords();
+    const updated = records.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveTransportTripRecords(updated);
+  },
+
+  getTransportIncidents(): TransportIncident[] {
+    return getFromStorage<TransportIncident[]>(KEYS.TRANSPORT_INCIDENTS, INITIAL_TRANSPORT_INCIDENTS);
+  },
+
+  saveTransportIncidents(incidents: TransportIncident[]): void {
+    setToStorage(KEYS.TRANSPORT_INCIDENTS, incidents);
+    window.dispatchEvent(new CustomEvent('transport-incidents-updated', { detail: incidents }));
+  },
+
+  addTransportIncident(incident: TransportIncident): void {
+    const incidents = this.getTransportIncidents();
+    const updated = [incident, ...incidents];
+    this.saveTransportIncidents(updated);
+  },
+
+  updateTransportIncident(id: string, updates: Partial<TransportIncident>): void {
+    const incidents = this.getTransportIncidents();
+    const updated = incidents.map(i => i.id === id ? { ...i, ...updates } : i);
+    this.saveTransportIncidents(updated);
+  },
+
+  getTransportAlerts(): TransportAlert[] {
+    return getFromStorage<TransportAlert[]>(KEYS.TRANSPORT_ALERTS, INITIAL_TRANSPORT_ALERTS);
+  },
+
+  saveTransportAlerts(alerts: TransportAlert[]): void {
+    setToStorage(KEYS.TRANSPORT_ALERTS, alerts);
+    window.dispatchEvent(new CustomEvent('transport-alerts-updated', { detail: alerts }));
+  },
+
+  addTransportAlert(alert: TransportAlert): void {
+    const alerts = this.getTransportAlerts();
+    const updated = [alert, ...alerts];
+    this.saveTransportAlerts(updated);
+  },
+
+  // ========================================================
+  // 🎯 CO-CURRICULAR ACTIVITIES & TALENT METHODS
+  // ========================================================
+
+  getCoCurricularActivities(): CoCurricularActivity[] {
+    return getFromStorage<CoCurricularActivity[]>(KEYS.CO_CURRICULAR_ACTIVITIES, INITIAL_CO_CURRICULAR_ACTIVITIES);
+  },
+
+  saveCoCurricularActivities(activities: CoCurricularActivity[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_ACTIVITIES, activities);
+    window.dispatchEvent(new CustomEvent('cocurricular-activities-updated', { detail: activities }));
+  },
+
+  addCoCurricularActivity(activity: CoCurricularActivity): void {
+    const activities = this.getCoCurricularActivities();
+    const updated = [activity, ...activities];
+    this.saveCoCurricularActivities(updated);
+  },
+
+  updateCoCurricularActivity(id: string, updates: Partial<CoCurricularActivity>): void {
+    const activities = this.getCoCurricularActivities();
+    const updated = activities.map(a => a.id === id ? { ...a, ...updates } : a);
+    this.saveCoCurricularActivities(updated);
+  },
+
+  getLearnerCoCurricularProfiles(): LearnerCoCurricularProfile[] {
+    return getFromStorage<LearnerCoCurricularProfile[]>(KEYS.CO_CURRICULAR_PROFILES, INITIAL_LEARNER_CO_CURRICULAR_PROFILES);
+  },
+
+  saveLearnerCoCurricularProfiles(profiles: LearnerCoCurricularProfile[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_PROFILES, profiles);
+    window.dispatchEvent(new CustomEvent('cocurricular-profiles-updated', { detail: profiles }));
+  },
+
+  addLearnerCoCurricularProfile(profile: LearnerCoCurricularProfile): void {
+    const profiles = this.getLearnerCoCurricularProfiles();
+    const updated = [profile, ...profiles];
+    this.saveLearnerCoCurricularProfiles(updated);
+  },
+
+  updateLearnerCoCurricularProfile(id: string, updates: Partial<LearnerCoCurricularProfile>): void {
+    const profiles = this.getLearnerCoCurricularProfiles();
+    const updated = profiles.map(p => p.id === id ? { ...p, ...updates } : p);
+    this.saveLearnerCoCurricularProfiles(updated);
+  },
+
+  deleteLearnerCoCurricularProfile(id: string): void {
+    const profiles = this.getLearnerCoCurricularProfiles();
+    const updated = profiles.filter(p => p.id !== id);
+    this.saveLearnerCoCurricularProfiles(updated);
+  },
+
+  getCoCurricularAttendance(): CoCurricularAttendanceRecord[] {
+    return getFromStorage<CoCurricularAttendanceRecord[]>(KEYS.CO_CURRICULAR_ATTENDANCE, INITIAL_CO_CURRICULAR_ATTENDANCE);
+  },
+
+  saveCoCurricularAttendance(records: CoCurricularAttendanceRecord[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_ATTENDANCE, records);
+    window.dispatchEvent(new CustomEvent('cocurricular-attendance-updated', { detail: records }));
+  },
+
+  addCoCurricularAttendanceRecords(newRecords: CoCurricularAttendanceRecord[]): void {
+    const current = this.getCoCurricularAttendance();
+    const updated = [...newRecords, ...current];
+    this.saveCoCurricularAttendance(updated);
+  },
+
+  getCoCurricularCompetitions(): CoCurricularCompetition[] {
+    return getFromStorage<CoCurricularCompetition[]>(KEYS.CO_CURRICULAR_COMPETITIONS, INITIAL_CO_CURRICULAR_COMPETITIONS);
+  },
+
+  saveCoCurricularCompetitions(competitions: CoCurricularCompetition[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_COMPETITIONS, competitions);
+    window.dispatchEvent(new CustomEvent('cocurricular-competitions-updated', { detail: competitions }));
+  },
+
+  addCoCurricularCompetition(comp: CoCurricularCompetition): void {
+    const competitions = this.getCoCurricularCompetitions();
+    const updated = [comp, ...competitions];
+    this.saveCoCurricularCompetitions(updated);
+  },
+
+  updateCoCurricularCompetition(id: string, updates: Partial<CoCurricularCompetition>): void {
+    const competitions = this.getCoCurricularCompetitions();
+    const updated = competitions.map(c => c.id === id ? { ...c, ...updates } : c);
+    this.saveCoCurricularCompetitions(updated);
+  },
+
+  getCoCurricularEquipment(): CoCurricularEquipment[] {
+    return getFromStorage<CoCurricularEquipment[]>(KEYS.CO_CURRICULAR_EQUIPMENT, INITIAL_CO_CURRICULAR_EQUIPMENT);
+  },
+
+  saveCoCurricularEquipment(equipment: CoCurricularEquipment[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_EQUIPMENT, equipment);
+    window.dispatchEvent(new CustomEvent('cocurricular-equipment-updated', { detail: equipment }));
+  },
+
+  addCoCurricularEquipment(item: CoCurricularEquipment): void {
+    const equipment = this.getCoCurricularEquipment();
+    const updated = [item, ...equipment];
+    this.saveCoCurricularEquipment(updated);
+  },
+
+  updateCoCurricularEquipment(id: string, updates: Partial<CoCurricularEquipment>): void {
+    const equipment = this.getCoCurricularEquipment();
+    const updated = equipment.map(e => e.id === id ? { ...e, ...updates } : e);
+    this.saveCoCurricularEquipment(updated);
+  },
+
+  getCoCurricularTrips(): CoCurricularTrip[] {
+    return getFromStorage<CoCurricularTrip[]>(KEYS.CO_CURRICULAR_TRIPS, INITIAL_CO_CURRICULAR_TRIPS);
+  },
+
+  saveCoCurricularTrips(trips: CoCurricularTrip[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_TRIPS, trips);
+    window.dispatchEvent(new CustomEvent('cocurricular-trips-updated', { detail: trips }));
+  },
+
+  addCoCurricularTrip(trip: CoCurricularTrip): void {
+    const trips = this.getCoCurricularTrips();
+    const updated = [trip, ...trips];
+    this.saveCoCurricularTrips(updated);
+  },
+
+  updateCoCurricularTrip(id: string, updates: Partial<CoCurricularTrip>): void {
+    const trips = this.getCoCurricularTrips();
+    const updated = trips.map(t => t.id === id ? { ...t, ...updates } : t);
+    this.saveCoCurricularTrips(updated);
+  },
+
+  getCoCurricularAnnouncements(): CoCurricularAnnouncement[] {
+    return getFromStorage<CoCurricularAnnouncement[]>(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, INITIAL_CO_CURRICULAR_ANNOUNCEMENTS);
+  },
+
+  saveCoCurricularAnnouncements(announcements: CoCurricularAnnouncement[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, announcements);
+    window.dispatchEvent(new CustomEvent('cocurricular-announcements-updated', { detail: announcements }));
+  },
+
+  addCoCurricularAnnouncement(announcement: CoCurricularAnnouncement): void {
+    const announcements = this.getCoCurricularAnnouncements();
+    const updated = [announcement, ...announcements];
+    this.saveCoCurricularAnnouncements(updated);
+  },
+
+  getCoCurricularBudgets(): CoCurricularBudgetItem[] {
+    return getFromStorage<CoCurricularBudgetItem[]>(KEYS.CO_CURRICULAR_BUDGET, INITIAL_CO_CURRICULAR_BUDGET);
+  },
+
+  saveCoCurricularBudgets(items: CoCurricularBudgetItem[]): void {
+    setToStorage(KEYS.CO_CURRICULAR_BUDGET, items);
+    window.dispatchEvent(new CustomEvent('cocurricular-budget-updated', { detail: items }));
+  },
+
+  addCoCurricularBudgetItem(item: CoCurricularBudgetItem): void {
+    const items = this.getCoCurricularBudgets();
+    const updated = [item, ...items];
+    this.saveCoCurricularBudgets(updated);
+  },
+
+  updateCoCurricularBudgetItem(id: string, updates: Partial<CoCurricularBudgetItem>): void {
+    const items = this.getCoCurricularBudgets();
+    const updated = items.map(b => b.id === id ? { ...b, ...updates } : b);
+    this.saveCoCurricularBudgets(updated);
   }
 };
 

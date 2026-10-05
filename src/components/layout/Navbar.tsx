@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, AppNotification } from '../../types';
 import { Storage } from '../../utils/storage';
-import { NotificationDrawer } from './NotificationDrawer';
+import { useNotificationLayout } from '../../context/NotificationLayoutContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { 
   GraduationCap, 
@@ -38,20 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome
 }) => {
   const [showSwitchModal, setShowSwitchModal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [unreadCount, setUnreadCount] = useState<number>(() => {
-    if (!currentUser) return 0;
-    return Storage.getUnreadNotificationCount(currentUser);
-  });
-
-  // Re-sync unread count whenever currentUser changes
-  useEffect(() => {
-    if (currentUser) {
-      setUnreadCount(Storage.getUnreadNotificationCount(currentUser));
-    } else {
-      setUnreadCount(0);
-    }
-  }, [currentUser]);
+  const { isNotificationOpen, toggleNotifications, unreadCount } = useNotificationLayout();
 
   const allUsers = Storage.getUsers();
 
@@ -155,13 +142,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: Actions & Quick Switcher */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Centralized Notification Bell with Real-Time Unread Badge */}
+          {/* Centralized Notification Bell with Real-Time Unread Badge & Active Indicator */}
           {currentUser && (
             <button
-              onClick={() => setShowNotifications(true)}
-              className="relative p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              title={`Notifications (${unreadCount} unread)`}
+              onClick={toggleNotifications}
+              className={`relative p-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                isNotificationOpen 
+                  ? 'bg-emerald-100 text-emerald-800 ring-2 ring-emerald-500 shadow-inner'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+              title={
+                isNotificationOpen
+                  ? 'Notifications open · Click to maximize reading view'
+                  : `Notifications (${unreadCount} unread) · Click to open side-by-side`
+              }
               aria-label={`Notifications, ${unreadCount} unread alerts`}
+              aria-pressed={isNotificationOpen}
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
@@ -407,18 +403,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       )}
 
-      {/* Centralized Notification Drawer */}
-      {currentUser && (
-        <NotificationDrawer
-          currentUser={currentUser}
-          isOpen={showNotifications}
-          onClose={() => {
-            setShowNotifications(false);
-            setUnreadCount(Storage.getUnreadNotificationCount(currentUser));
-          }}
-          onNotificationCountChange={(count) => setUnreadCount(count)}
-        />
-      )}
+
     </header>
   );
 };

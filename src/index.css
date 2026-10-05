@@ -7,7 +7,8 @@
   button, 
   .no-print,
   [role="banner"],
-  [aria-label*="Notifications"] {
+  [aria-label*="Notifications"],
+  aside[aria-label*="Notification"] {
     display: none !important;
   }
 

@@ -17,6 +17,7 @@ import { EPortfolioModule } from '../student/EPortfolioModule';
 import { ReportingHub } from '../reports/ReportingHub';
 import { AchievementSystem } from '../student/AchievementSystem';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { 
   Home,
   Users, 
@@ -61,7 +62,8 @@ import {
   ArrowRight,
   HelpCircle,
   ShieldAlert,
-  Info
+  Info,
+  HeartPulse
 } from 'lucide-react';
 
 interface ParentWorkspaceProps {
@@ -83,14 +85,15 @@ export type ParentNavigationTab =
   | 'calendar'              // 10. School Calendar
   | 'transport'             // 11. Transport
   | 'gate_records'          // 12. Gate / Exit Records
-  | 'achievements'          // 13. Achievements
-  | 'discipline'            // 14. Behaviour & Discipline
-  | 'resources'             // 15. Learning Resources
-  | 'reports'               // 16. Reports
-  | 'notifications'         // 17. Notifications
-  | 'profile'               // 18. My Profile
-  | 'settings'              // 19. Settings
-  | 'sign_out';             // 20. Sign Out
+  | 'sanatorium'            // 13. Sanatorium & Clinic Visits
+  | 'achievements'          // 14. Achievements
+  | 'discipline'            // 15. Behaviour & Discipline
+  | 'resources'             // 16. Learning Resources
+  | 'reports'               // 17. Reports
+  | 'notifications'         // 18. Notifications
+  | 'profile'               // 19. My Profile
+  | 'settings'              // 20. Settings
+  | 'sign_out';             // 21. Sign Out
 
 interface AbsenceExplanation {
   id: string;
@@ -141,6 +144,23 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
 
   // Active Main Navigation Tab (defaults to 1. Dashboard)
   const [activeTab, setActiveTab] = useState<ParentNavigationTab>('dashboard');
+
+  // Handle direct tab navigation from notification items
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['dashboard', 'my_children', 'performance', 'attendance', 'assignments', 'timetable', 'fees', 'messages', 'announcements', 'calendar', 'transport', 'gate_records', 'achievements', 'discipline', 'resources', 'reports', 'notifications'].includes(tab)) {
+          setActiveTab(tab as ParentNavigationTab);
+        } else if (tab === 'grades' || tab === 'results') {
+          setActiveTab('performance');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
 
   // Interactive Fee Payment State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -401,14 +421,15 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
     { key: 'calendar', label: '10. School Calendar', icon: <CalendarDays className="w-4 h-4 text-orange-400" /> },
     { key: 'transport', label: '11. Transport', icon: <Bus className="w-4 h-4 text-yellow-400" /> },
     { key: 'gate_records', label: '12. Gate / Exit Records', icon: <DoorOpen className="w-4 h-4 text-rose-400" /> },
-    { key: 'achievements', label: '13. Achievements', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
-    { key: 'discipline', label: '14. Behaviour & Discipline', icon: <ShieldAlert className="w-4 h-4 text-emerald-400" /> },
-    { key: 'resources', label: '15. Learning Resources', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
-    { key: 'reports', label: '16. Reports', icon: <FileSpreadsheet className="w-4 h-4 text-indigo-400" /> },
-    { key: 'notifications', label: '17. Notifications', icon: <Bell className="w-4 h-4 text-red-400" />, badge: `${notifications.filter(n => !n.readByUserIds.includes(currentUser.id)).length || ''}` },
-    { key: 'profile', label: '18. My Profile', icon: <UserIcon className="w-4 h-4 text-slate-400" /> },
-    { key: 'settings', label: '19. Settings', icon: <Settings className="w-4 h-4 text-slate-400" /> },
-    { key: 'sign_out', label: '20. Sign Out', icon: <LogOut className="w-4 h-4 text-rose-400" /> },
+    { key: 'sanatorium', label: '13. Sanatorium Visits', icon: <HeartPulse className="w-4 h-4 text-rose-400" /> },
+    { key: 'achievements', label: '14. Achievements', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
+    { key: 'discipline', label: '15. Behaviour & Discipline', icon: <ShieldAlert className="w-4 h-4 text-emerald-400" /> },
+    { key: 'resources', label: '16. Learning Resources', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
+    { key: 'reports', label: '17. Reports', icon: <FileSpreadsheet className="w-4 h-4 text-indigo-400" /> },
+    { key: 'notifications', label: '18. Notifications', icon: <Bell className="w-4 h-4 text-red-400" />, badge: `${notifications.filter(n => !n.readByUserIds.includes(currentUser.id)).length || ''}` },
+    { key: 'profile', label: '19. My Profile', icon: <UserIcon className="w-4 h-4 text-slate-400" /> },
+    { key: 'settings', label: '20. Settings', icon: <Settings className="w-4 h-4 text-slate-400" /> },
+    { key: 'sign_out', label: '21. Sign Out', icon: <LogOut className="w-4 h-4 text-rose-400" /> },
   ];
 
   return (
@@ -1554,56 +1575,174 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       {/* ========================================================
           11. 🚌 TRANSPORT
           ======================================================== */}
-      {activeTab === 'transport' && (
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900">School Transport & Bus Commute</h2>
-              <p className="text-xs text-slate-500">Route schedule, driver contact details, and student safety supervision.</p>
-            </div>
-            <span className="px-3 py-1 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded-lg text-xs font-bold flex items-center gap-1.5">
-              <Bus className="w-3.5 h-3.5 text-yellow-600" />
-              <span>Route 4: Kilimani - South C</span>
-            </span>
-          </div>
+      {activeTab === 'transport' && (() => {
+        const studentTransport = selectedChild ? Storage.getStudentTransportProfiles(selectedChild.id)[0] : undefined;
+        const todayTrips = selectedChild ? Storage.getTransportTripRecords(undefined, undefined, undefined, selectedChild.id) : [];
+        const latestTrip = todayTrips[0];
+        const route = studentTransport ? Storage.getTransportRoutes().find(r => r.id === studentTransport.routeId) : undefined;
+        const bus = studentTransport ? Storage.getSchoolBuses().find(b => b.registrationNumber === studentTransport.busPlate) : undefined;
+        const routeAlerts = studentTransport ? Storage.getTransportAlerts().filter(a => a.routeId === studentTransport.routeId) : [];
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="text-xs font-extrabold uppercase text-slate-400">Assigned Bus</div>
-              <div className="text-xl font-black text-slate-900 font-mono">KDG 218M</div>
-              <div className="text-xs text-slate-600">33-Seater Isuzu School Coach · Speed Governor Verified</div>
-              <div className="pt-2 border-t border-slate-100 text-xs flex justify-between">
-                <span className="text-slate-500">Current Status:</span>
-                <span className="text-emerald-700 font-bold">Parked on Campus</span>
+        return (
+          <section className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900">School Transport & Bus Commute</h2>
+                <p className="text-xs text-slate-500">
+                  Live boarding status, route schedule, GPS fleet tracking, and driver/chaperone contact details for {selectedChild?.name || 'your child'}.
+                </p>
               </div>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="text-xs font-extrabold uppercase text-slate-400">Driver In Charge</div>
-              <div className="text-base font-extrabold text-slate-900">Mr. Josephat Kipkoech</div>
-              <div className="text-xs text-slate-600">Licensed Professional School Bus Operator (12 yrs exp)</div>
-              <div className="pt-2 border-t border-slate-100 text-xs flex items-center justify-between">
-                <span className="text-slate-500">Direct Phone:</span>
-                <a href="tel:+254712345678" className="text-blue-700 font-mono font-bold hover:underline">
-                  +254 712 345 678
-                </a>
-              </div>
+              {studentTransport ? (
+                <span className="px-3 py-1 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-xs font-bold flex items-center gap-1.5 self-start">
+                  <Bus className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{studentTransport.routeName}</span>
+                </span>
+              ) : (
+                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">
+                  Self / Private Commuter
+                </span>
+              )}
             </div>
 
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <div className="text-xs font-extrabold uppercase text-slate-400">Bus Chaperone</div>
-              <div className="text-base font-extrabold text-slate-900">Ms. Mary Wambui</div>
-              <div className="text-xs text-slate-600">Student Roll Call & Boarding Monitor</div>
-              <div className="pt-2 border-t border-slate-100 text-xs flex items-center justify-between">
-                <span className="text-slate-500">Chaperone Phone:</span>
-                <a href="tel:+254723456789" className="text-blue-700 font-mono font-bold hover:underline">
-                  +254 723 456 789
-                </a>
+            {/* Live Boarding Status Banner */}
+            {studentTransport && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-900 via-slate-900 to-slate-950 text-white shadow-md border border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-2xl shrink-0">
+                    🚌
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold text-amber-300 uppercase tracking-wider">
+                        Today's Live Commute Status
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                        {latestTrip?.status || 'Active & Registered'}
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold mt-0.5 text-white">
+                      {latestTrip 
+                        ? `${selectedChild?.name} was marked ${latestTrip.status} at ${latestTrip.timestamp}`
+                        : `${selectedChild?.name} is registered for daily commuter pickup on ${studentTransport.busNumber}`}
+                    </div>
+                    <div className="text-xs text-slate-300 mt-0.5">
+                      Pickup: <strong>{studentTransport.pickupStop}</strong> ({studentTransport.morningPickupTime}) · Drop-off: <strong>{studentTransport.dropoffStop}</strong> ({studentTransport.afternoonDropoffTime})
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                  <div className="px-3 py-1.5 rounded-xl bg-white/10 text-xs font-mono text-amber-200 border border-white/10">
+                    Seat: <strong>{studentTransport.seatNumber}</strong>
+                  </div>
+                </div>
               </div>
+            )}
+
+            {/* Crew & Bus Details Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold uppercase text-slate-400">Assigned Bus</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      NTSA Certified
+                    </span>
+                  </div>
+                  <div className="text-xl font-black text-slate-900 font-mono mt-2">
+                    {studentTransport?.busPlate || 'KDG 218M'}
+                  </div>
+                  <div className="text-xs text-slate-600 font-medium">
+                    {bus?.model || '33-Seater Isuzu School Coach'} · Speed Governor Verified
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Current GPS Status:</span>
+                    <span className="text-emerald-700 font-bold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>{bus?.gpsTrackingStatus || 'Active & Transmitting'}</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Location:</span>
+                    <span className="text-slate-700 font-medium truncate max-w-[150px]">{bus?.currentLocation || 'Campus Bus Bay'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-extrabold uppercase text-slate-400">Lead Driver In-Charge</div>
+                  <div className="text-base font-extrabold text-slate-900 mt-2">
+                    {route?.driverName || 'Mr. Josephat Kipkoech'}
+                  </div>
+                  <div className="text-xs text-slate-600">Licensed Professional School Bus Operator (12+ yrs experience)</div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-xs flex items-center justify-between">
+                  <span className="text-slate-500">Direct Phone:</span>
+                  <a href={`tel:${route?.driverPhone || '+254712345678'}`} className="text-blue-700 font-mono font-bold hover:underline flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>{route?.driverPhone || '+254 712 345 678'}</span>
+                  </a>
+                </div>
+              </div>
+
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="text-xs font-extrabold uppercase text-slate-400">Bus Chaperone</div>
+                  <div className="text-base font-extrabold text-slate-900 mt-2">
+                    {route?.assistantName || 'Ms. Mary Wambui'}
+                  </div>
+                  <div className="text-xs text-slate-600">Student Roll Call & Boarding Safety Supervisor</div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-xs flex items-center justify-between">
+                  <span className="text-slate-500">Chaperone Phone:</span>
+                  <a href={`tel:${route?.assistantPhone || '+254723456789'}`} className="text-blue-700 font-mono font-bold hover:underline flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>{route?.assistantPhone || '+254 723 456 789'}</span>
+                  </a>
+                </div>
+              </div>
+
             </div>
-          </div>
-        </section>
-      )}
+
+            {/* Special Instructions & Route Alerts */}
+            {studentTransport && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                  <h4 className="font-extrabold text-slate-900 text-sm">Transport Protocols & Authorized Collectors</h4>
+                  <div className="text-xs text-slate-600 space-y-1.5 pt-1">
+                    <div>Authorized for Collection: <strong>{studentTransport.authorizedCollector}</strong></div>
+                    <div>Emergency Contact: <strong className="font-mono text-blue-700">{studentTransport.parentPhone}</strong></div>
+                    {studentTransport.specialInstructions && (
+                      <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 font-medium">
+                        ⚠️ <strong>Special Care Note:</strong> {studentTransport.specialInstructions}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                  <h4 className="font-extrabold text-slate-900 text-sm">Recent Route Alerts & SMS Dispatches</h4>
+                  <div className="space-y-2 pt-1 text-xs">
+                    {routeAlerts.slice(0, 2).map(alt => (
+                      <div key={alt.id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="font-bold text-slate-900">{alt.title}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{alt.message}</div>
+                        <div className="text-[10px] font-mono text-slate-400 mt-1">{alt.timestamp}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* ========================================================
           12. 🚪 GATE / EXIT RECORDS (WITH REQUEST PERMISSION)
@@ -1701,7 +1840,22 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       )}
 
       {/* ========================================================
-          13. 🏆 ACHIEVEMENTS (DIGITAL BADGES)
+          13. 🏥 SANATORIUM & CLINIC VISITS (CONFIDENTIAL FOR CHILD)
+          ======================================================== */}
+      {activeTab === 'sanatorium' && (
+        <section className="space-y-6">
+          <SanatoriumSection
+            currentUser={currentUser}
+            canRecord={false}
+            filterStudentId={selectedChild ? selectedChild.id : undefined}
+            title={selectedChild ? `${selectedChild.name}'s Medical & Sanatorium Visits` : 'Children Sanatorium & Medical History'}
+            subtitle={`Confidential clinical attendance records, vital signs checks, nurse in-charge notes, and recommendations for ${selectedChild ? selectedChild.name : 'your registered child(ren)'}.`}
+          />
+        </section>
+      )}
+
+      {/* ========================================================
+          14. 🏆 ACHIEVEMENTS (DIGITAL BADGES)
           ======================================================== */}
       {activeTab === 'achievements' && (
         <section className="space-y-6">

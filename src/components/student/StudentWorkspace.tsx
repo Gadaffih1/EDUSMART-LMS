@@ -88,6 +88,23 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const [showSafeSearch, setShowSafeSearch] = useState(false);
   const [reportViewType, setReportViewType] = useState<'hub' | 'periodic' | 'termly'>('hub');
 
+  // Handle direct tab navigation from notification items
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['resources', 'browser', 'timetable', 'assignments', 'results', 'eportfolio', 'reports', 'badges', 'chat'].includes(tab)) {
+          setActiveTab(tab as WorkspaceTab);
+        } else if (['notes', 'videos', 'audio', 'quizzes', 'portal'].includes(tab)) {
+          setActiveTab('resources');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Gamification XP
   const learnerTotalXP = Storage.getTotalXP();
   const learnerBadges = Storage.getBadges();

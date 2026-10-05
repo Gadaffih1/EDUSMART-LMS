@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { LessonNote, VideoLesson, AudioLesson } from '../../types';
+import { useNotificationLayout } from '../../context/NotificationLayoutContext';
 import { 
   BookOpen, 
   Video, 
@@ -37,9 +38,10 @@ export const ResourceViewer: React.FC<ResourceViewerProps> = ({
 
   // Video state
   const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+  const { isNotificationOpen } = useNotificationLayout();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-xs select-none">
+    <div className={`fixed inset-y-0 left-0 ${isNotificationOpen ? 'right-0 md:right-80 lg:right-96' : 'right-0'} z-30 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-xs select-none transition-all duration-300`}>
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
         
         {/* Top Header */}

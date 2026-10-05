@@ -31,10 +31,13 @@ import {
   Send,
   Globe,
   Sparkles,
-  BarChart3
+  BarChart3,
+  HeartPulse
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 
 interface DeputyHeadWorkspaceProps {
   currentUser: User;
@@ -67,7 +70,7 @@ interface StaffDutyAssignment {
 }
 
 export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ currentUser }) => {
-  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'work_ledger' | 'reporting_hub';
+  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'work_ledger' | 'sanatorium' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<DeputyTab>('operations');
 
   // Gate passes from storage
@@ -330,6 +333,16 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
         >
           <FileCheck2 className="w-4 h-4 text-purple-400" />
           <span>Staff Work Entry Audit ({workLogs.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sanatorium')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <HeartPulse className="w-4 h-4 text-rose-400" />
+          <span>Sanatorium & Health</span>
         </button>
 
         <button
@@ -899,52 +912,26 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       )}
 
       {/* ========================================================
-          TAB 4: STAFF WORK ENTRY AUDIT
+          TAB 4: STAFF WORK ENTRY AUDIT (STRICTLY READ-ONLY)
           ======================================================== */}
       {activeTab === 'work_ledger' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Staff Daily Work Entry Ledger & Compliance
-            </h2>
-            <p className="text-xs text-slate-500">
-              Complete administrative record of teacher lesson delivery, topic progression, learner headcounts, and daily pedagogical logs.
-            </p>
-          </div>
+        <WorkEntryAuditViewer 
+          currentUser={currentUser} 
+          title="Deputy Head Work Entry Sign-In Register"
+          subtitle="Operational and instructional duty oversight: Real-time clock-in logs, GPS stamps, staff credentials, and verified biometric photos. Strictly non-editable."
+        />
+      )}
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">Staff Member</th>
-                  <th className="py-2.5 px-3">Grade & Stream</th>
-                  <th className="py-2.5 px-3">Subject</th>
-                  <th className="py-2.5 px-3">Topic & Competencies</th>
-                  <th className="py-2.5 px-3 text-center">Learners</th>
-                  <th className="py-2.5 px-3 text-center">Audit Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {workLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50">
-                    <td className="py-2 px-3 font-mono text-slate-500">{log.date}</td>
-                    <td className="py-2 px-3 font-bold text-slate-900">{log.teacherName}</td>
-                    <td className="py-2 px-3 text-slate-600">Grade {log.grade} ({log.stream})</td>
-                    <td className="py-2 px-3 text-blue-700 font-semibold">{log.subject}</td>
-                    <td className="py-2 px-3 text-slate-700">{log.topicTaught}</td>
-                    <td className="py-2 px-3 text-center font-mono font-bold text-slate-900">{log.learnersPresent}</td>
-                    <td className="py-2 px-3 text-center">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-100 text-emerald-800">
-                        Verified
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      {/* ========================================================
+          TAB 5: SANATORIUM & STUDENT HEALTH OVERSIGHT
+          ======================================================== */}
+      {activeTab === 'sanatorium' && (
+        <SanatoriumSection
+          currentUser={currentUser}
+          canRecord={false}
+          title="Deputy Head Sanatorium & Student Health Oversight"
+          subtitle="Campus healthcare surveillance, observation bay logs, nurse in-charge notes, hospital referrals, and emergency gate pass coordination."
+        />
       )}
 
       {/* ========================================================

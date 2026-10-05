@@ -27,17 +27,20 @@ import {
   Lock,
   BarChart3,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  HeartPulse
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
+import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 
 interface SeniorTeacherWorkspaceProps {
   currentUser: User;
 }
 
 export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ currentUser }) => {
-  type SupervisionTab = 'gate_safety' | 'work_entry_audit' | 'attendance_monitor' | 'mentorship' | 'curriculum_coordination' | 'reporting_hub';
+  type SupervisionTab = 'gate_safety' | 'work_entry_audit' | 'sanatorium' | 'attendance_monitor' | 'mentorship' | 'curriculum_coordination' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<SupervisionTab>('gate_safety');
 
   // Mentorship log state
@@ -180,6 +183,25 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
             <div className="font-bold text-xs sm:text-sm">2. Work Logs</div>
             <div className={`text-[10px] mt-0.5 ${activeTab === 'work_entry_audit' ? 'text-emerald-200' : 'text-slate-500'}`}>
               Sign-ins ({allWorkLogs.length})
+            </div>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('sanatorium')}
+          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
+            activeTab === 'sanatorium'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-rose-500'
+              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-rose-100 text-rose-800">
+            <HeartPulse className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-bold text-xs sm:text-sm">3. Sanatorium</div>
+            <div className={`text-[10px] mt-0.5 ${activeTab === 'sanatorium' ? 'text-rose-200' : 'text-slate-500'}`}>
+              Health logs
             </div>
           </div>
         </button>
@@ -335,58 +357,26 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
       )}
 
       {/* ========================================================
-          TAB 2: TEACHER WORK ENTRY COMPLIANCE
+          TAB 2: TEACHER WORK ENTRY COMPLIANCE (STRICTLY READ-ONLY)
           ======================================================== */}
       {activeTab === 'work_entry_audit' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="pb-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                School-Wide Teacher Lesson Delivery Compliance
-              </h2>
-              <p className="text-xs text-slate-500">
-                Verify curriculum compliance across primary and junior school streams.
-              </p>
-            </div>
-            <span className="text-xs font-mono font-bold px-3 py-1.5 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200">
-              {allWorkLogs.length} Total Logs Signed
-            </span>
-          </div>
+        <WorkEntryAuditViewer 
+          currentUser={currentUser} 
+          title="Senior Teacher Work Entry Sign-In Register"
+          subtitle="Learner supervision & instructional delivery oversight: Real-time clock-in logs, GPS stamps, staff credentials, and verified biometric photos. Strictly non-editable."
+        />
+      )}
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-            <table className="w-full text-left">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">Teacher</th>
-                  <th className="py-2.5 px-3">Class</th>
-                  <th className="py-2.5 px-3">Subject / Topic Taught</th>
-                  <th className="py-2.5 px-3 text-center">Roll Call</th>
-                  <th className="py-2.5 px-3">Objectives Covered</th>
-                  <th className="py-2.5 px-3">Remarks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {allWorkLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{log.date}</td>
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{log.teacherName}</td>
-                    <td className="py-2.5 px-3 font-semibold text-emerald-700">Grade {log.grade} {log.stream}</td>
-                    <td className="py-2.5 px-3">
-                      <div className="font-semibold text-slate-900">{log.subject}</div>
-                      <div className="text-[11px] text-slate-600">{log.topicTaught}</div>
-                    </td>
-                    <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-900">{log.learnersPresent}</td>
-                    <td className="py-2.5 px-3 text-slate-600 italic max-w-xs truncate" title={log.objectivesCovered}>
-                      "{log.objectivesCovered}"
-                    </td>
-                    <td className="py-2.5 px-3 text-slate-500 text-[11px]">{log.teacherRemarks}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      {/* ========================================================
+          TAB: SANATORIUM & STUDENT HEALTH OVERSIGHT
+          ======================================================== */}
+      {activeTab === 'sanatorium' && (
+        <SanatoriumSection
+          currentUser={currentUser}
+          canRecord={false}
+          title="Senior Teacher Sanatorium & Student Health Oversight"
+          subtitle="Learner health visits, medical triage records, activity exemptions, and nurse in-charge recommendations across all grades."
+        />
       )}
 
       {/* ========================================================

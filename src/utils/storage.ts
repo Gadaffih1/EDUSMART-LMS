@@ -57,8 +57,14 @@ import {
   LibraryTimetableSlot,
   LibraryEvent,
   LibraryAuditLog,
-  LibraryPolicy
+  LibraryPolicy,
+  FixedLessonCondition,
+  SharedResourceFacility
 } from '../types';
+import {
+  INITIAL_FIXED_LESSON_CONDITIONS,
+  INITIAL_SHARED_FACILITIES
+} from '../data/timetableData';
 import {
   INITIAL_USERS,
   INITIAL_GRADE_PASSWORDS,
@@ -132,6 +138,8 @@ const KEYS = {
   GATE_PASSES: 'edusmart_gate_passes_v1',
   ATTENDANCE: 'edusmart_attendance_v1',
   TIMETABLE: 'edusmart_timetable_v1',
+  FIXED_LESSON_CONDITIONS: 'edusmart_fixed_lessons_v1',
+  SHARED_RESOURCES: 'edusmart_shared_resources_v1',
   REPORT_CARDS: 'edusmart_report_cards_v1',
   CHAT_MESSAGES: 'edusmart_chat_messages_v1',
   LIBRARY_BOOKS: 'edusmart_library_books_v1',
@@ -1295,6 +1303,46 @@ export const Storage = {
       return merged;
     }
     return stored;
+  },
+
+  setAllTimetableSlots(slots: TimetableSlot[]): void {
+    setToStorage(KEYS.TIMETABLE, slots);
+    window.dispatchEvent(new CustomEvent('timetable-updated', { detail: slots }));
+  },
+
+  getFixedLessonConditions(): FixedLessonCondition[] {
+    return getFromStorage<FixedLessonCondition[]>(KEYS.FIXED_LESSON_CONDITIONS, INITIAL_FIXED_LESSON_CONDITIONS);
+  },
+
+  saveFixedLessonCondition(condition: FixedLessonCondition): void {
+    const list = this.getFixedLessonConditions();
+    const idx = list.findIndex(c => c.id === condition.id);
+    let updated: FixedLessonCondition[];
+    if (idx !== -1) {
+      updated = [...list];
+      updated[idx] = condition;
+    } else {
+      updated = [...list, condition];
+    }
+    setToStorage(KEYS.FIXED_LESSON_CONDITIONS, updated);
+    window.dispatchEvent(new CustomEvent('fixed-lessons-updated', { detail: updated }));
+  },
+
+  deleteFixedLessonCondition(id: string): void {
+    const list = this.getFixedLessonConditions();
+    const updated = list.filter(c => c.id !== id);
+    setToStorage(KEYS.FIXED_LESSON_CONDITIONS, updated);
+    window.dispatchEvent(new CustomEvent('fixed-lessons-updated', { detail: updated }));
+  },
+
+  resetFixedLessonConditions(): FixedLessonCondition[] {
+    setToStorage(KEYS.FIXED_LESSON_CONDITIONS, INITIAL_FIXED_LESSON_CONDITIONS);
+    window.dispatchEvent(new CustomEvent('fixed-lessons-updated', { detail: INITIAL_FIXED_LESSON_CONDITIONS }));
+    return INITIAL_FIXED_LESSON_CONDITIONS;
+  },
+
+  getSharedFacilities(): SharedResourceFacility[] {
+    return getFromStorage<SharedResourceFacility[]>(KEYS.SHARED_RESOURCES, INITIAL_SHARED_FACILITIES);
   },
 
   // ========================================================

@@ -355,6 +355,29 @@ export interface TimetableSlot {
   competencies?: string[];
 }
 
+export interface FixedLessonCondition {
+  id: string;
+  title: string;
+  subject: SubjectName | string;
+  dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  period: number;
+  grades: GradeLevel[]; // e.g. [1, 2, 3, 4, 5, 6, 7, 8, 9] or subset
+  streams: 'all' | StreamName[]; // 'all' or specific streams
+  roomName?: string;
+  teacherName?: string;
+  notes?: string;
+  isActive: boolean;
+}
+
+export interface SharedResourceFacility {
+  id: string;
+  name: string;
+  type: 'science_lab' | 'computer_lab' | 'art_studio' | 'sports_field' | 'workshop' | 'agri_plot' | 'library';
+  capacity: number;
+  suitableSubjects: string[];
+  location: string;
+}
+
 export interface ReportCard {
   id: string;
   studentId: string;

@@ -17,6 +17,9 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
+import { FacultyAllocationManager } from '../timetable/FacultyAllocationManager';
+import { FixedLessonsManager } from '../timetable/FixedLessonsManager';
+import { TimetableAutoGeneratorModal } from '../timetable/TimetableAutoGeneratorModal';
 import { 
   BookOpen, 
   BarChart3, 
@@ -38,7 +41,9 @@ import {
   FileSpreadsheet,
   HeartPulse,
   Bus,
-  Trophy
+  Trophy,
+  Users,
+  Lock
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -69,8 +74,22 @@ interface ExamScheduleItem {
 }
 
 export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ currentUser }) => {
-  type DeanTab = 'assessments' | 'analytics' | 'report_cards' | 'curriculum' | 'timetable' | 'work_entries' | 'sanatorium' | 'transport' | 'cocurricular' | 'reporting_hub';
+  type DeanTab = 
+    | 'assessments' 
+    | 'analytics' 
+    | 'report_cards' 
+    | 'curriculum' 
+    | 'timetable' 
+    | 'faculty_allocations' 
+    | 'fixed_lessons' 
+    | 'work_entries' 
+    | 'sanatorium' 
+    | 'transport' 
+    | 'cocurricular' 
+    | 'reporting_hub';
+
   const [activeTab, setActiveTab] = useState<DeanTab>('assessments');
+  const [showAutoGenModal, setShowAutoGenModal] = useState(false);
   const workLogs = Storage.getWorkEntryLogs();
 
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
@@ -294,7 +313,27 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           }`}
         >
           <CalendarDays className="w-4 h-4 text-emerald-400" />
-          <span>Master Timetable & Bell Schedule</span>
+          <span>Master Timetable & Generator</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('faculty_allocations')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'faculty_allocations' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Users className="w-4 h-4 text-blue-400" />
+          <span>Teacher Allocations</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('fixed_lessons')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'fixed_lessons' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Lock className="w-4 h-4 text-amber-400" />
+          <span>Fixed Lessons</span>
         </button>
 
         <button
@@ -603,9 +642,72 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           TAB: MASTER TIMETABLE & BELL SCHEDULE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <TimetablePortal 
-          currentUser={currentUser} 
-          initialGrade={selectedGrade} 
+        <div className="space-y-6">
+          {/* Quick Timetable Operations Hub */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Autonomous Timetable Architecture</span>
+              </div>
+              <h3 className="text-base font-black text-slate-900">
+                Master Timetable & Autonomous Generator
+              </h3>
+              <p className="text-xs text-slate-500">
+                Generate and synchronize conflict-free learning schedules once teacher subject and stream allocations are set.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setActiveTab('faculty_allocations')}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5 text-blue-600" />
+                <span>Teacher Allocations</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('fixed_lessons')}
+                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Fixed Lessons</span>
+              </button>
+
+              <button
+                onClick={() => setShowAutoGenModal(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Auto-Generate Master Timetable</span>
+              </button>
+            </div>
+          </div>
+
+          <TimetablePortal 
+            currentUser={currentUser} 
+            initialGrade={selectedGrade} 
+          />
+        </div>
+      )}
+
+      {/* ========================================================
+          TAB: FACULTY SUBJECT & STREAM ALLOCATIONS (DEAN EDITABLE)
+          ======================================================== */}
+      {activeTab === 'faculty_allocations' && (
+        <FacultyAllocationManager
+          currentUser={currentUser}
+          onTriggerAutoGeneration={() => setShowAutoGenModal(true)}
+        />
+      )}
+
+      {/* ========================================================
+          TAB: FIXED LESSONS & PRE-PUBLICATION CONDITIONS
+          ======================================================== */}
+      {activeTab === 'fixed_lessons' && (
+        <FixedLessonsManager
+          onTriggerAutoGeneration={() => setShowAutoGenModal(true)}
         />
       )}
 
@@ -652,6 +754,16 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
       )}
+
+      {/* Auto-Generator Modal */}
+      <TimetableAutoGeneratorModal
+        currentUser={currentUser}
+        isOpen={showAutoGenModal}
+        onClose={() => setShowAutoGenModal(false)}
+        onTimetablePublished={() => {
+          setActiveTab('timetable');
+        }}
+      />
     </div>
   );
 };

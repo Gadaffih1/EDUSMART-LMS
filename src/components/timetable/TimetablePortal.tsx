@@ -13,6 +13,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
 import { 
   Calendar, 
   Clock, 
@@ -396,6 +397,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [slotToEdit, setSlotToEdit] = useState<TimetableSlot | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [showAutoGenModal, setShowAutoGenModal] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   // Edit / Add form states
@@ -764,6 +766,17 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
           {/* Quick Actions Ribbon */}
           <div className="flex flex-wrap items-center gap-2">
+            {isExecutiveLeadership && (
+              <button
+                onClick={() => setShowAutoGenModal(true)}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl border border-emerald-500 transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
+                title="Automate timetable generation using teacher allocations, fixed conditions, and shared facilities"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Auto-Generate Timetable</span>
+              </button>
+            )}
+
             <button
               onClick={() => setShowPrintModal(true)}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
@@ -2062,6 +2075,19 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
           </div>
         </div>
+      )}
+
+      {/* Auto-Generator Modal */}
+      {isExecutiveLeadership && (
+        <TimetableAutoGeneratorModal
+          currentUser={currentUser}
+          isOpen={showAutoGenModal}
+          onClose={() => setShowAutoGenModal(false)}
+          onTimetablePublished={() => {
+            setNotificationMsg('Master institutional timetable successfully auto-generated and published!');
+            setTimeout(() => setNotificationMsg(null), 4000);
+          }}
+        />
       )}
 
     </div>

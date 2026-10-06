@@ -49,12 +49,13 @@ interface BellPeriodDef {
 const BELL_PERIODS: BellPeriodDef[] = [
   { period: 1, startTime: '08:00', endTime: '08:40' },
   { period: 2, startTime: '08:40', endTime: '09:20' },
-  { period: 3, startTime: '09:40', endTime: '10:20' },
-  { period: 4, startTime: '10:20', endTime: '11:00' },
-  { period: 5, startTime: '11:00', endTime: '11:40' },
-  { period: 6, startTime: '11:40', endTime: '12:20' },
-  { period: 7, startTime: '13:20', endTime: '14:00' },
-  { period: 8, startTime: '14:00', endTime: '14:40' }
+  { period: 3, startTime: '09:20', endTime: '10:00' },
+  { period: 4, startTime: '10:00', endTime: '10:40' },
+  { period: 5, startTime: '11:10', endTime: '11:50' },
+  { period: 6, startTime: '11:50', endTime: '12:30' },
+  { period: 7, startTime: '12:30', endTime: '13:10' },
+  { period: 8, startTime: '14:10', endTime: '14:50' },
+  { period: 9, startTime: '14:50', endTime: '15:30' }
 ];
 
 // Sample CBC Topics generator

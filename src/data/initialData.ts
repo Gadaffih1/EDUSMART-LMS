@@ -1400,8 +1400,20 @@ export const INITIAL_TIMETABLE: TimetableSlot[] = [
   { id: 'tt-8m-f4', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 4, startTime: '10:20', endTime: '11:00', subject: 'Pretechnical Education', teacherName: 'Mr. Peter Mutua', teacherEmail: 'peter.mutua@edusmart.ac.ke', roomName: 'Pre-Tech Workshop B', strandTopic: 'Electrical Safety & Soldering Practice' },
   { id: 'tt-8m-f5', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 5, startTime: '11:00', endTime: '11:40', subject: 'Kiswahili', teacherName: 'Mwalimu Omwamba', teacherEmail: 'omwamba@edusmart.ac.ke', roomName: 'Classroom 8-Mara', strandTopic: 'Majadiliano ya Vikundi: Utunzaji wa Mazingira' },
   { id: 'tt-8m-f6', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 6, startTime: '11:40', endTime: '12:20', subject: 'Agriculture and Nutrition', teacherName: 'Mr. Peter Mutua', teacherEmail: 'peter.mutua@edusmart.ac.ke', roomName: 'Agri Garden', strandTopic: 'Harvesting & Farm Produce Post-Harvest Handling' },
-  { id: 'tt-8m-f7', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 7, startTime: '13:20', endTime: '14:00', subject: 'Creative Arts', teacherName: 'Ms. Achieng', teacherEmail: 'achieng@edusmart.ac.ke', roomName: 'Art Studio', strandTopic: 'Sculptural Exhibition & Portfolio Review' },
-  { id: 'tt-8m-f8', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 8, startTime: '14:00', endTime: '14:40', subject: 'Physical and Health Education', teacherName: 'Coach Benjamin Omwenga', teacherEmail: 'cocurricular@edusmart.ac.ke', roomName: 'Main Sports Complex', strandTopic: 'House Athletic League & Fitness Assessment' }
+  { id: 'tt-8m-f7', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 7, startTime: '12:30', endTime: '13:10', subject: 'Creative Arts', teacherName: 'Ms. Achieng', teacherEmail: 'achieng@edusmart.ac.ke', roomName: 'Art Studio', strandTopic: 'Sculptural Exhibition & Portfolio Review' },
+  { id: 'tt-8m-f8', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 8, startTime: '14:10', endTime: '14:50', subject: 'Physical and Health Education', teacherName: 'Coach Benjamin Omwenga', teacherEmail: 'cocurricular@edusmart.ac.ke', roomName: 'Main Sports Complex', strandTopic: 'House Athletic League & Fitness Assessment' },
+  { id: 'tt-8m-f9', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 9, startTime: '14:50', endTime: '15:30', subject: 'Social Studies', teacherName: 'Mrs. Wanjiru', teacherEmail: 'wanjiru@edusmart.ac.ke', roomName: 'Classroom 8-Mara', strandTopic: 'Current Affairs & Civics Colloquium' },
+
+  // ========================================================
+  // GRADE 8 MARA - ALLOCATED REMEDIAL LESSONS (DEAN & DEPUTY HEAD)
+  // Period 10: Early Morning Session (07:00 - 07:50)
+  // Period 11: Late Evening Remedial Session (15:45 - 16:45)
+  // ========================================================
+  { id: 'tt-8m-rem-mon-p10', grade: 8, stream: 'Mara', dayOfWeek: 'Monday', period: 10, startTime: '07:00', endTime: '07:50', subject: 'Mathematics', teacherName: 'Mr. David Kiprono', teacherEmail: 'mr.kiprono@edusmart.ac.ke', roomName: 'Classroom 8-Mara', strandTopic: 'Early Morning Remedial: Algebraic Factorization Drill', isRemedial: true, notes: 'Allocated by Dean of Studies for Grade 8 Mara mathematics acceleration' },
+  { id: 'tt-8m-rem-wed-p10', grade: 8, stream: 'Mara', dayOfWeek: 'Wednesday', period: 10, startTime: '07:00', endTime: '07:50', subject: 'Integrated Science', teacherName: 'Dr. Arthur Mwangi', teacherEmail: 'headteacher@edusmart.ac.ke', roomName: 'Senior Chemistry Lab', strandTopic: 'Early Morning Remedial: Acids & Bases Practical Revision', isRemedial: true, notes: 'Allocated by Deputy Headteacher for STEM formative strengthening' },
+  { id: 'tt-8m-rem-fri-p10', grade: 8, stream: 'Mara', dayOfWeek: 'Friday', period: 10, startTime: '07:00', endTime: '07:50', subject: 'Pretechnical Education', teacherName: 'Mr. Peter Mutua', teacherEmail: 'peter.mutua@edusmart.ac.ke', roomName: 'Pre-Tech Workshop A', strandTopic: 'Early Morning Remedial: Isometric Projections Coaching', isRemedial: true, notes: 'Dean of Studies approved remedial clinic' },
+  { id: 'tt-8m-rem-tue-p11', grade: 8, stream: 'Mara', dayOfWeek: 'Tuesday', period: 11, startTime: '15:45', endTime: '16:45', subject: 'English', teacherName: 'Mrs. Florence Akinyi', teacherEmail: 'florence.akinyi@edusmart.ac.ke', roomName: 'Classroom 8-Mara', strandTopic: 'Late Evening Remedial: Argumentative Essay Clinic', isRemedial: true, notes: 'Allocated by Deputy Headteacher for language arts remediation' },
+  { id: 'tt-8m-rem-thu-p11', grade: 8, stream: 'Mara', dayOfWeek: 'Thursday', period: 11, startTime: '15:45', endTime: '16:45', subject: 'Kiswahili', teacherName: 'Mwalimu Omwamba', teacherEmail: 'omwamba@edusmart.ac.ke', roomName: 'Classroom 8-Mara', strandTopic: 'Late Evening Remedial: Sarufi & Uchambuzi wa Fasihi', isRemedial: true, notes: 'Allocated by Dean of Studies for language mastery' }
 ];
 
 export const INITIAL_REPORT_CARDS: ReportCard[] = [
@@ -4294,18 +4306,19 @@ export const INITIAL_CO_CURRICULAR_BUDGET: CoCurricularBudgetItem[] = [
 // ========================================================
 
 export const INITIAL_BELL_SCHEDULE: BellPeriodDef[] = [
+  { period: 10, label: 'Period 10 (Early Morning Remedial - Gr 6–9)', startTime: '07:00', endTime: '07:50' },
   { period: 1, label: 'Period 1 (Morning Core)', startTime: '08:00', endTime: '08:40' },
   { period: 2, label: 'Period 2 (Core Instruction)', startTime: '08:40', endTime: '09:20' },
-  { period: 0, label: 'Morning Tea & Health Snack', startTime: '09:20', endTime: '09:40', isBreak: true, breakType: 'morning_tea' },
-  { period: 3, label: 'Period 3 (STEM & Numeracy)', startTime: '09:40', endTime: '10:20' },
-  { period: 4, label: 'Period 4 (Language Arts)', startTime: '10:20', endTime: '11:00' },
-  { period: 5, label: 'Period 5 (Social & Applied Sciences)', startTime: '11:00', endTime: '11:40' },
-  { period: 6, label: 'Period 6 (Creative & Practical)', startTime: '11:40', endTime: '12:20' },
-  { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '12:20', endTime: '13:20', isBreak: true, breakType: 'lunch' },
-  { period: 7, label: 'Period 7 (Afternoon Session)', startTime: '13:20', endTime: '14:00' },
-  { period: 8, label: 'Period 8 (Specialist & Lab)', startTime: '14:00', endTime: '14:40' },
-  { period: 9, label: 'Remedial & Library Study', startTime: '14:40', endTime: '15:20', isBreak: true, breakType: 'remedial' },
-  { period: 10, label: 'Co-Curricular Games & Clubs', startTime: '15:20', endTime: '16:30', isBreak: true, breakType: 'games' },
+  { period: 3, label: 'Period 3 (STEM & Numeracy)', startTime: '09:20', endTime: '10:00' },
+  { period: 4, label: 'Period 4 (Language Arts)', startTime: '10:00', endTime: '10:40' },
+  { period: 0, label: 'Morning Tea & Health Snack Break', startTime: '10:40', endTime: '11:10', isBreak: true, breakType: 'morning_tea' },
+  { period: 5, label: 'Period 5 (Social & Applied Sciences)', startTime: '11:10', endTime: '11:50' },
+  { period: 6, label: 'Period 6 (Creative & Practical)', startTime: '11:50', endTime: '12:30' },
+  { period: 7, label: 'Period 7 (Science & Pre-Technical)', startTime: '12:30', endTime: '13:10' },
+  { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '13:10', endTime: '14:10', isBreak: true, breakType: 'lunch' },
+  { period: 8, label: 'Period 8 (Specialist & Lab)', startTime: '14:10', endTime: '14:50' },
+  { period: 9, label: 'Period 9 (Afternoon Core Study)', startTime: '14:50', endTime: '15:30' },
+  { period: 11, label: 'Period 11 (Late Evening Remedial - Gr 6–9)', startTime: '15:45', endTime: '16:45' },
 ];
 
 // ========================================================

@@ -1324,7 +1324,16 @@ export const Storage = {
   // ========================================================
 
   getBellSchedule(): BellPeriodDef[] {
-    return getFromStorage<BellPeriodDef[]>(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
+    const stored = getFromStorage<BellPeriodDef[]>(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
+    const hasPeriod9Instructional = stored.some(b => b.period === 9 && !b.isBreak);
+    const hasPeriod10 = stored.some(b => b.period === 10);
+    const hasPeriod11 = stored.some(b => b.period === 11);
+    const breakAfter4 = stored.findIndex(b => b.period === 4) < stored.findIndex(b => b.isBreak && b.breakType === 'morning_tea');
+    if (!hasPeriod9Instructional || !hasPeriod10 || !hasPeriod11 || !breakAfter4) {
+      setToStorage(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
+      return INITIAL_BELL_SCHEDULE;
+    }
+    return stored;
   },
 
   saveBellSchedule(schedule: BellPeriodDef[]): void {

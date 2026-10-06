@@ -375,9 +375,11 @@ export const FixedLessonsManager: React.FC<FixedLessonsManagerProps> = ({
                     onChange={(e) => setFormPeriod(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold font-mono"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => (
+                    <option value={10}>Period 10 (Early Morning Remedial 07:00 - Gr 6–9)</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(p => (
                       <option key={p} value={p}>Period {p}</option>
                     ))}
+                    <option value={11}>Period 11 (Late Evening Remedial 15:45 - Gr 6–9)</option>
                   </select>
                 </div>
               </div>

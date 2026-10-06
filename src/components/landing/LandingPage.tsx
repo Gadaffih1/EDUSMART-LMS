@@ -43,7 +43,6 @@ import {
   Trophy,
   ClipboardCheck
 } from 'lucide-react';
-import { TimetablePortal } from '../timetable/TimetablePortal';
 
 interface LandingPageProps {
   onLoginSuccess: (user: User) => void;
@@ -281,33 +280,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <span>School Calendar</span>
             </button>
 
-            {/* 4. 🕒 Timetable Portal */}
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                const el = document.getElementById('timetable-section');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
-            >
-              <span>🕒</span>
-              <span>Master Timetable</span>
-            </button>
-
-            {/* 5. 🏥 Sanatorium */}
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                const el = document.getElementById('sanatorium-section');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
-            >
-              <span>🏥</span>
-              <span>Sanatorium</span>
-            </button>
-
-            {/* 6. 🚌 Transport */}
+            {/* 4. 🚌 Transport */}
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -440,30 +413,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
-                const el = document.getElementById('timetable-section');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
-            >
-              <span className="text-sm">🕒</span>
-              <span>Master Timetable & Bell Cadence</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                const el = document.getElementById('sanatorium-section');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
-            >
-              <span className="text-sm">🏥</span>
-              <span>School Sanatorium & Healthcare Bay</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
                 const el = document.getElementById('transport-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
@@ -565,16 +514,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 <span>🚀</span>
                 <span>Access Portals</span>
               </a>
-              <button
-                onClick={() => {
-                  const el = document.getElementById('timetable-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>📅</span>
-                <span>Master Timetable</span>
-              </button>
               <button
                 onClick={() => {
                   const el = document.getElementById('announcements-section');
@@ -1380,181 +1319,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
 
-          </div>
-
-        </div>
-      </section>
-
-      {/* ========================================================
-          SECTION: MASTER TIMETABLE & BELL CADENCE
-          Public Explorer of CBC routine, bell schedules & labs
-          ======================================================== */}
-      <section id="timetable-section" className="py-16 bg-gradient-to-b from-slate-50 via-blue-50/20 to-white border-b border-slate-200 scroll-mt-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 border border-blue-200 rounded-full text-blue-900 text-xs font-bold uppercase tracking-wider mb-2">
-                <span>📅</span>
-                <span>Synchronized 8-Period Daily Schedule</span>
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                Master Class Timetable & Bell Schedule Portal
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
-                Explore official weekly routines across Grades 1 through 9, live bell cadences, teacher allocations, specialist laboratories, and terminal examination schedules.
-              </p>
-            </div>
-            <div className="text-xs text-slate-500 font-mono bg-white px-3 py-2 rounded-xl border border-slate-200 shrink-0">
-              Interactive Public Demonstration Mode (Read-Only)
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
-            <TimetablePortal 
-              currentUser={{
-                id: 'usr-public-guest',
-                name: 'Public Visitor',
-                email: 'visitor@edusmart.ac.ke',
-                role: 'student',
-                grade: 4,
-                stream: 'Dove'
-              }}
-              initialGrade={4}
-              initialStream="Dove"
-              readOnly={true}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ========================================================
-          SECTION: SCHOOL SANATORIUM & HEALTHCARE BAY
-          24/7 Campus Clinic, Clinical Attendance & Medical Governance
-          ======================================================== */}
-      <section id="sanatorium-section" className="py-16 bg-gradient-to-b from-white via-rose-50/30 to-slate-50 border-b border-slate-200 scroll-mt-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-100 border border-rose-200 rounded-full text-rose-900 text-xs font-bold uppercase tracking-wider mb-2">
-                <span>🏥</span>
-                <span>Campus Healthcare & Student Wellbeing</span>
-              </div>
-              <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                School Sanatorium & Healthcare Bay
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl font-medium">
-                Comprehensive 24/7 on-campus clinical triage, licensed nursing care, vital signs monitoring, and coordinated medical reporting for learners.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setErrorMsg('');
-                  setEmail('nurse@edusmart.ac.ke');
-                  setPassword('nurse2026');
-                  setActiveModal('sanatorium');
-                }}
-                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-rose-600/20 flex items-center gap-2 cursor-pointer"
-              >
-                <span>🏥</span>
-                <span>Sanatorium Staff Login</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Clinical Pillars Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold mb-3">
-                  👩‍⚕️
-                </div>
-                <h4 className="font-bold text-slate-900 text-sm">Qualified Nursing Care</h4>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Led by Sister Grace Wambui, RN (NCK/RN-58921) with licensed pediatric first aid and clinical triage expertise.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-rose-700 font-semibold">
-                NCK Licensed Registered Nurses
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3">
-                  🛏️
-                </div>
-                <h4 className="font-bold text-slate-900 text-sm">Observation Bay</h4>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Equipped 6-bed resting lounge with dark-room migraine recovery, oxygen concentrators, and temperature stabilization.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-amber-700 font-semibold">
-                6 In-Patient Observation Beds
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3">
-                  📊
-                </div>
-                <h4 className="font-bold text-slate-900 text-sm">Digital Health Ledger</h4>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Real-time recording of attendance times, symptoms, vital signs, medications given, and PE activity exemptions.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-emerald-700 font-semibold">
-                Cross-Role Stakeholder Access
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3">
-                  📱
-                </div>
-                <h4 className="font-bold text-slate-900 text-sm">Emergency & Parent Alerts</h4>
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                  Instant SMS dispatch to parents upon admission, seamless gate pass synchronization, and hospital referral escorts.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] font-mono text-blue-700 font-semibold">
-                Immediate Parent Escalation
-              </div>
-            </div>
-
-          </div>
-
-          {/* Multi-Role Stakeholder Transparency Notice */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 font-mono">
-                Transparent Health Governance
-              </span>
-              <h4 className="font-bold text-slate-900 text-sm sm:text-base">
-                Who Can Access Sanatorium Information?
-              </h4>
-              <p className="text-xs text-slate-500 max-w-3xl">
-                Class Teachers view health logs for their class learners; Senior Teachers oversee pastoral care; Admin Staff record attendance and export PDF dossiers; Specific Parents view their child's visits privately; Deans monitor academic pacing; Deputy Heads & Head Teachers govern health surveillance.
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('nurse@edusmart.ac.ke');
-                setPassword('nurse2026');
-                setActiveModal('sanatorium');
-              }}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0"
-            >
-              <span>Access Sanatorium Register</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
 
         </div>

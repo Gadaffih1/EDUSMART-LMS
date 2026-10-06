@@ -400,6 +400,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [formMeetLink, setFormMeetLink] = useState<string>('https://meet.google.com/edu-class');
   const [formStrandTopic, setFormStrandTopic] = useState<string>('');
   const [formNotes, setFormNotes] = useState<string>('');
+  const [formIsRemedial, setFormIsRemedial] = useState<boolean>(false);
   const [formConflictWarning, setFormConflictWarning] = useState<string | null>(null);
 
   // Real-time Bell Schedule & Clock Simulation
@@ -416,9 +417,18 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   // Find currently active bell period
   const activeBellPeriod = useMemo(() => {
-    // Current period is Period 3 (09:40 - 10:20) as baseline representation
     return bellSchedule.find(b => b.period === 3);
   }, [bellSchedule]);
+
+  // Active bell schedule for the selected grade:
+  // Grades 1–5: Standard Periods 1–9, Morning Tea Break, Midday Lunch Break
+  // Grades 6–9: Includes Period 10 (Early Morning Remedial) and Period 11 (Late Evening Remedial)
+  const activeGradeBellSchedule = useMemo(() => {
+    if (selectedGrade < 6) {
+      return bellSchedule.filter(b => b.period !== 10 && b.period !== 11);
+    }
+    return bellSchedule;
+  }, [bellSchedule, selectedGrade]);
 
   // Streams applicable to active grade
   const availableStreams = useMemo(() => {
@@ -587,6 +597,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       setFormMeetLink(slot.roomOrMeetLink || '');
       setFormStrandTopic(slot.strandTopic || '');
       setFormNotes(slot.notes || '');
+      setFormIsRemedial(Boolean(slot.isRemedial) || slot.period === 10 || slot.period === 11);
     } else {
       setSlotToEdit(null);
       setFormDay('Monday');
@@ -597,6 +608,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       setFormMeetLink(`https://meet.google.com/edu-gr${selectedGrade}-${selectedStream.toLowerCase()}`);
       setFormStrandTopic('');
       setFormNotes('');
+      setFormIsRemedial(false);
     }
     setFormConflictWarning(null);
     setShowEditModal(true);
@@ -614,6 +626,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     }
 
     const bell = bellSchedule.find(b => b.period === formPeriod);
+    const isRemedialSession = formPeriod === 10 || formPeriod === 11 || formIsRemedial;
 
     const slotPayload: TimetableSlot = {
       id: slotToEdit?.id || `tt-${selectedGrade}${selectedStream.charAt(0).toLowerCase()}-${Date.now().toString(36)}`,
@@ -621,14 +634,15 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       stream: selectedStream,
       dayOfWeek: formDay,
       period: formPeriod,
-      startTime: bell ? bell.startTime : '08:00',
-      endTime: bell ? bell.endTime : '08:40',
+      startTime: bell ? bell.startTime : (formPeriod === 10 ? '07:00' : formPeriod === 11 ? '15:45' : '08:00'),
+      endTime: bell ? bell.endTime : (formPeriod === 10 ? '07:50' : formPeriod === 11 ? '16:45' : '08:40'),
       subject: formSubject,
       teacherName: formTeacherName,
       roomName: formRoomName,
       roomOrMeetLink: formMeetLink,
       strandTopic: formStrandTopic.trim() || undefined,
       notes: formNotes.trim() || undefined,
+      isRemedial: isRemedialSession,
       teacherEmail: currentUser.email || 'faculty@edusmart.ac.ke'
     };
 
@@ -716,7 +730,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl font-medium">
               {isExecutiveLeadership && 'Institutional Master Timetable · Unrestricted administrative oversight across all 9 grades, streams, specialist laboratory allocations, and faculty workloads.'}
-              {isStudent && 'Student routine view: Synchronized 8-period learning routine, teacher contact allocations, and virtual classroom links for your enrolled class.'}
+              {isStudent && 'Student routine view: Synchronized 9-period learning routine (with Grades 6–9 remedial sessions), teacher contact allocations, and virtual classroom links for your enrolled class.'}
               {isParent && "Parent guardian view: Timetable and daily bell schedule configured strictly as per your child's stream only."}
               {isClassTeacher && `Class teacher official view: Classroom routine, subject allocations, and lesson schedules for your designated class: Grade ${selectedGrade} (${selectedStream}).`}
               {isSubjectTeacher && `Subject teacher view: Instructional schedule, lesson objectives, and laboratory distribution for your assigned teaching stream: Grade ${selectedGrade} (${selectedStream}).`}
@@ -799,6 +813,30 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               >
                 <Clock className="w-3.5 h-3.5 text-amber-400" />
                 <span>Configure Period Timings</span>
+              </button>
+            )}
+
+            {canEdit && selectedGrade >= 6 && isDeanOrDeputy && (
+              <button
+                onClick={() => {
+                  setSlotToEdit(null);
+                  setFormDay('Monday');
+                  setFormPeriod(10);
+                  setFormSubject(availableSubjects[0]);
+                  setFormTeacherName(currentUser.name || 'Mr. David Kiprono');
+                  setFormRoomName(`Classroom ${selectedGrade}-${selectedStream}`);
+                  setFormMeetLink(`https://meet.google.com/edu-gr${selectedGrade}-${selectedStream.toLowerCase()}`);
+                  setFormStrandTopic('Grades 6–9 Early Morning Remedial Clinic');
+                  setFormNotes('Targeted formative intervention and academic coaching');
+                  setFormIsRemedial(true);
+                  setFormConflictWarning(null);
+                  setShowEditModal(true);
+                }}
+                className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1.5 shadow-md shadow-amber-600/30 cursor-pointer"
+                title="Dean of Studies & Deputy Head: Allocate Grade 6–9 Remedial Lesson (Period 10 early morning or Period 11 late evening)"
+              >
+                <span>🌅</span>
+                <span>+ Allocate Gr 6–9 Remedial</span>
               </button>
             )}
 
@@ -1203,16 +1241,16 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-xs">
-                {bellSchedule.map((bell) => {
+                {activeGradeBellSchedule.map((bell) => {
                   // If Break row (Morning Tea or Lunch or Games)
                   if (bell.isBreak) {
                     return (
                       <tr key={`break-${bell.startTime}`} className="bg-slate-50/90 font-medium">
-                        <td className="py-2 px-3 text-center border-r border-slate-200 text-[11px] font-mono text-slate-500">
+                        <td className="py-2.5 px-3 text-center border-r border-slate-200 text-[11px] font-mono text-slate-500 bg-slate-100/60">
                           {bell.startTime} - {bell.endTime}
                         </td>
-                        <td colSpan={5} className="py-2 px-4 text-center">
-                          <div className="inline-flex items-center gap-2 text-slate-600 text-xs font-bold tracking-wide">
+                        <td colSpan={5} className="py-2.5 px-4 text-center">
+                          <div className="inline-flex items-center gap-2 text-slate-700 text-xs font-black tracking-wide">
                             {bell.breakType === 'morning_tea' && <span>☕ {bell.label}</span>}
                             {bell.breakType === 'lunch' && <span>🍱 {bell.label}</span>}
                             {bell.breakType === 'remedial' && <span>📖 {bell.label}</span>}
@@ -1223,13 +1261,47 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                     );
                   }
 
+                  const isPeriod10 = bell.period === 10;
+                  const isPeriod11 = bell.period === 11;
+
                   // Academic Period Row
                   return (
-                    <tr key={`period-${bell.period}`} className="hover:bg-slate-50/40">
+                    <tr 
+                      key={`period-${bell.period}`} 
+                      className={`hover:bg-slate-50/50 ${isPeriod10 ? 'bg-amber-50/20' : isPeriod11 ? 'bg-indigo-50/20' : ''}`}
+                    >
                       {/* Period Time Column */}
-                      <td className="py-3 px-3 text-center border-r border-slate-200 bg-slate-50/40 align-middle">
-                        <div className="font-extrabold text-slate-900 text-xs">Period {bell.period}</div>
-                        <div className="font-mono text-[10px] text-slate-500 mt-0.5">{bell.startTime} – {bell.endTime}</div>
+                      <td className={`py-3 px-3 text-center border-r border-slate-200 align-middle ${
+                        isPeriod10 ? 'bg-amber-50/80 border-r-amber-200' : 
+                        isPeriod11 ? 'bg-indigo-50/80 border-r-indigo-200' : 
+                        'bg-slate-50/40'
+                      }`}>
+                        {isPeriod10 ? (
+                          <div>
+                            <div className="font-black text-amber-950 text-xs flex items-center justify-center gap-1">
+                              <span>🌅</span>
+                              <span>Period 10</span>
+                            </div>
+                            <div className="text-[10px] font-black text-amber-700 uppercase tracking-tighter mt-0.5">Early Remedial</div>
+                            <div className="font-mono text-[10px] text-amber-900/90 mt-0.5 font-bold">{bell.startTime} – {bell.endTime}</div>
+                            <span className="inline-block mt-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-200/90 text-amber-950 border border-amber-300">Gr 6–9</span>
+                          </div>
+                        ) : isPeriod11 ? (
+                          <div>
+                            <div className="font-black text-indigo-950 text-xs flex items-center justify-center gap-1">
+                              <span>🌙</span>
+                              <span>Period 11</span>
+                            </div>
+                            <div className="text-[10px] font-black text-indigo-700 uppercase tracking-tighter mt-0.5">Late Remedial</div>
+                            <div className="font-mono text-[10px] text-indigo-900/90 mt-0.5 font-bold">{bell.startTime} – {bell.endTime}</div>
+                            <span className="inline-block mt-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-200/90 text-indigo-950 border border-indigo-300">Gr 6–9</span>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="font-extrabold text-slate-900 text-xs">Period {bell.period}</div>
+                            <div className="font-mono text-[10px] text-slate-500 mt-0.5">{bell.startTime} – {bell.endTime}</div>
+                          </div>
+                        )}
                       </td>
 
                       {/* Day Columns */}
@@ -1251,11 +1323,21 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                                     setFormSubject(availableSubjects[0]);
                                     setFormTeacherName(currentUser.name || 'Mr. David Kiprono');
                                     setFormRoomName(`Classroom ${selectedGrade}-${selectedStream}`);
+                                    setFormIsRemedial(isPeriod10 || isPeriod11);
+                                    setFormStrandTopic(isPeriod10 ? 'Early Morning Remedial Session' : isPeriod11 ? 'Late Evening Remedial Session' : '');
+                                    setFormNotes(isPeriod10 ? 'Grades 6–9 Early Morning Remedial Clinic' : isPeriod11 ? 'Grades 6–9 Late Evening Remedial Clinic' : '');
+                                    setFormConflictWarning(null);
                                     setShowEditModal(true);
                                   }}
-                                  className="w-full h-14 border border-dashed border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 rounded-xl flex items-center justify-center text-slate-400 hover:text-emerald-700 transition-colors text-xs font-semibold"
+                                  className={`w-full h-14 border border-dashed rounded-xl flex items-center justify-center transition-colors text-xs font-semibold ${
+                                    isPeriod10 
+                                      ? 'border-amber-300 bg-amber-50/30 hover:border-amber-500 hover:bg-amber-100/50 text-amber-700' 
+                                      : isPeriod11 
+                                        ? 'border-indigo-300 bg-indigo-50/30 hover:border-indigo-500 hover:bg-indigo-100/50 text-indigo-700' 
+                                        : 'border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 text-slate-400 hover:text-emerald-700'
+                                  }`}
                                 >
-                                  + Add Slot
+                                  {isPeriod10 ? '+ Allocate Early Remedial' : isPeriod11 ? '+ Allocate Evening Remedial' : '+ Add Slot'}
                                 </button>
                               ) : (
                                 <div className="h-14 flex items-center justify-center text-slate-300 text-xs italic">
@@ -1267,6 +1349,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                         }
 
                         const theme = getSubjectTheme(slot.subject);
+                        const isSlotRemedial = slot.isRemedial || slot.period === 10 || slot.period === 11;
 
                         return (
                           <td 
@@ -1286,6 +1369,27 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                                     <Video className="w-3 h-3 text-blue-600 shrink-0 mt-0.5" />
                                   )}
                                 </div>
+
+                                {isSlotRemedial && (
+                                  <div className="mt-1">
+                                    {slot.period === 10 ? (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                        <span>🌅</span>
+                                        <span>Early Remedial</span>
+                                      </span>
+                                    ) : slot.period === 11 ? (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-300">
+                                        <span>🌙</span>
+                                        <span>Late Remedial</span>
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300">
+                                        <span>⭐</span>
+                                        <span>Remedial</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
 
                                 <div className="text-[10px] text-slate-600 font-medium mt-1 truncate">
                                   {slot.teacherName}
@@ -1330,7 +1434,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             </div>
 
             <div className="space-y-3">
-              {bellSchedule.map((bell) => {
+              {activeGradeBellSchedule.map((bell) => {
                 if (bell.isBreak) {
                   return (
                     <div key={`agenda-break-${bell.startTime}`} className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
@@ -1855,19 +1959,69 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   <label className="block font-bold text-slate-700 mb-1">Period Number</label>
                   <select
                     value={formPeriod}
-                    onChange={(e) => setFormPeriod(Number(e.target.value))}
+                    onChange={(e) => {
+                      const p = Number(e.target.value);
+                      setFormPeriod(p);
+                      if (p === 10 || p === 11) {
+                        setFormIsRemedial(true);
+                      }
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold font-mono"
                   >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
+                    {selectedGrade >= 6 && isDeanOrDeputy && (
+                      <option value={10}>
+                        🌅 Period 10 (Early Morning Remedial: 07:00 – 07:50)
+                      </option>
+                    )}
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(p => {
                       const b = bellSchedule.find(bell => bell.period === p);
                       return (
                         <option key={p} value={p}>
-                          Period {p} ({b?.startTime} - {b?.endTime})
+                          Period {p} ({b?.startTime || '08:00'} - {b?.endTime || '08:40'})
                         </option>
                       );
                     })}
+                    {selectedGrade >= 6 && isDeanOrDeputy && (
+                      <option value={11}>
+                        🌙 Period 11 (Late Evening Remedial: 15:45 – 16:45)
+                      </option>
+                    )}
                   </select>
                 </div>
+              </div>
+
+              {/* Remedial Info Callout Banner for Period 10 or 11 */}
+              {(formPeriod === 10 || formPeriod === 11) && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
+                  <span className="text-lg">{formPeriod === 10 ? '🌅' : '🌙'}</span>
+                  <div>
+                    <div className="font-extrabold">
+                      {formPeriod === 10 
+                        ? `Grade ${selectedGrade} Early Morning Remedial Session (Period 10)`
+                        : `Grade ${selectedGrade} Late Evening Remedial Session (Period 11)`}
+                    </div>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      Dean of Studies & Deputy Head privilege: Dedicated academic remedial clinic for upper primary / junior school learners (Grades 6–9).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1 pb-1">
+                <input
+                  type="checkbox"
+                  id="formRemedialCheckbox"
+                  checked={formIsRemedial || formPeriod === 10 || formPeriod === 11}
+                  onChange={(e) => setFormIsRemedial(e.target.checked)}
+                  disabled={formPeriod === 10 || formPeriod === 11}
+                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                />
+                <label htmlFor="formRemedialCheckbox" className="text-xs font-bold text-slate-700 cursor-pointer flex items-center gap-1.5">
+                  <span>Mark as Remedial Lesson / Subject Coaching Clinic</span>
+                  {(formPeriod === 10 || formPeriod === 11) && (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300">Required</span>
+                  )}
+                </label>
               </div>
 
               <div>
@@ -2054,7 +2208,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900">
-                  {bellSchedule.map(bell => {
+                  {activeGradeBellSchedule.map(bell => {
                     if (bell.isBreak) {
                       return (
                         <tr key={`print-break-${bell.startTime}`} className="bg-slate-100 font-bold border-b border-slate-900">
@@ -2068,11 +2222,30 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                       );
                     }
 
+                    const isPeriod10 = bell.period === 10;
+                    const isPeriod11 = bell.period === 11;
+
                     return (
-                      <tr key={`print-period-${bell.period}`} className="border-b border-slate-900">
+                      <tr key={`print-period-${bell.period}`} className={`border-b border-slate-900 ${isPeriod10 ? 'bg-amber-50/50' : isPeriod11 ? 'bg-indigo-50/50' : ''}`}>
                         <td className="p-2 text-center border-r border-slate-900 font-black">
-                          <div>Period {bell.period}</div>
-                          <div className="text-[10px] font-mono font-normal">{bell.startTime} - {bell.endTime}</div>
+                          {isPeriod10 ? (
+                            <div>
+                              <div className="text-amber-900 font-black">Period 10</div>
+                              <div className="text-[9px] uppercase font-bold text-amber-700">Early Remedial</div>
+                              <div className="text-[10px] font-mono font-normal">{bell.startTime} - {bell.endTime}</div>
+                            </div>
+                          ) : isPeriod11 ? (
+                            <div>
+                              <div className="text-indigo-900 font-black">Period 11</div>
+                              <div className="text-[9px] uppercase font-bold text-indigo-700">Late Remedial</div>
+                              <div className="text-[10px] font-mono font-normal">{bell.startTime} - {bell.endTime}</div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div>Period {bell.period}</div>
+                              <div className="text-[10px] font-mono font-normal">{bell.startTime} - {bell.endTime}</div>
+                            </div>
+                          )}
                         </td>
                         {DAYS_OF_WEEK.map(day => {
                           const slot = displayedSlots.find(s => s.dayOfWeek === day && s.period === bell.period);
@@ -2168,24 +2341,25 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                     type="button"
                     onClick={() => {
                       setTempBellSchedule([
+                        { period: 10, label: 'Period 10 (Early Morning Remedial - Gr 6–9)', startTime: '07:00', endTime: '07:50' },
                         { period: 1, label: 'Period 1 (Morning Core)', startTime: '08:00', endTime: '08:40' },
                         { period: 2, label: 'Period 2 (Core Instruction)', startTime: '08:40', endTime: '09:20' },
-                        { period: 0, label: 'Morning Tea & Health Snack', startTime: '09:20', endTime: '09:40', isBreak: true, breakType: 'morning_tea' },
-                        { period: 3, label: 'Period 3 (STEM & Numeracy)', startTime: '09:40', endTime: '10:20' },
-                        { period: 4, label: 'Period 4 (Language Arts)', startTime: '10:20', endTime: '11:00' },
-                        { period: 5, label: 'Period 5 (Social & Applied Sciences)', startTime: '11:00', endTime: '11:40' },
-                        { period: 6, label: 'Period 6 (Creative & Practical)', startTime: '11:40', endTime: '12:20' },
-                        { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '12:20', endTime: '13:20', isBreak: true, breakType: 'lunch' },
-                        { period: 7, label: 'Period 7 (Afternoon Session)', startTime: '13:20', endTime: '14:00' },
-                        { period: 8, label: 'Period 8 (Specialist & Lab)', startTime: '14:00', endTime: '14:40' },
-                        { period: 9, label: 'Remedial & Library Study', startTime: '14:40', endTime: '15:20', isBreak: true, breakType: 'remedial' },
-                        { period: 10, label: 'Co-Curricular Games & Clubs', startTime: '15:20', endTime: '16:30', isBreak: true, breakType: 'games' },
+                        { period: 3, label: 'Period 3 (STEM & Numeracy)', startTime: '09:20', endTime: '10:00' },
+                        { period: 4, label: 'Period 4 (Language Arts)', startTime: '10:00', endTime: '10:40' },
+                        { period: 0, label: 'Morning Tea & Health Snack Break', startTime: '10:40', endTime: '11:10', isBreak: true, breakType: 'morning_tea' },
+                        { period: 5, label: 'Period 5 (Social & Applied Sciences)', startTime: '11:10', endTime: '11:50' },
+                        { period: 6, label: 'Period 6 (Creative & Practical)', startTime: '11:50', endTime: '12:30' },
+                        { period: 7, label: 'Period 7 (Science & Pre-Technical)', startTime: '12:30', endTime: '13:10' },
+                        { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '13:10', endTime: '14:10', isBreak: true, breakType: 'lunch' },
+                        { period: 8, label: 'Period 8 (Specialist & Lab)', startTime: '14:10', endTime: '14:50' },
+                        { period: 9, label: 'Period 9 (Afternoon Core Study)', startTime: '14:50', endTime: '15:30' },
+                        { period: 11, label: 'Period 11 (Late Evening Remedial - Gr 6–9)', startTime: '15:45', endTime: '16:45' },
                       ]);
-                      setNotificationMsg('Standard CBC 40-Min preset loaded.');
+                      setNotificationMsg('Standard CBC 9-Period routine loaded (with Gr 6-9 remedial sessions).');
                     }}
                     className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 cursor-pointer"
                   >
-                    Standard CBC (40-Min)
+                    Standard CBC (9 Periods + Remedial)
                   </button>
                   <button
                     type="button"
@@ -2251,6 +2425,14 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                           {item.isBreak ? (
                             <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-100 text-amber-900 border border-amber-300">
                               {item.breakType === 'lunch' ? '🍱 Midday Lunch' : item.breakType === 'morning_tea' ? '☕ Morning Tea' : '⚽ Co-Curricular'}
+                            </span>
+                          ) : item.period === 10 ? (
+                            <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-100 text-amber-900 border border-amber-400">
+                              🌅 Period 10 (Early Remedial)
+                            </span>
+                          ) : item.period === 11 ? (
+                            <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-indigo-100 text-indigo-900 border border-indigo-400">
+                              🌙 Period 11 (Late Remedial)
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300">

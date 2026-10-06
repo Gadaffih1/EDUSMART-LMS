@@ -35,7 +35,13 @@ import {
   Library,
   ShieldCheck,
   FileText,
-  CalendarDays
+  CalendarDays,
+  Menu,
+  Utensils,
+  Bus,
+  HeartPulse,
+  Trophy,
+  ClipboardCheck
 } from 'lucide-react';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 
@@ -77,6 +83,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [contactSubmitted, setContactSubmitted] = useState(false);
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', message: '', role: 'Parent' });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Listen to navigation events from Navbar
   useEffect(() => {
@@ -225,20 +232,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-emerald-500 selection:text-white w-full max-w-full overflow-x-hidden">
       
       {/* ========================================================
-          EXACT VISIBLE BUTTONS: IN-PAGE HEADER BAR
-          1. Home, 2. Announcements, 3. School Calendar, 4. Contact School, 5. Sign In
+          RESPONSIVE IN-PAGE HEADER BAR & MOBILE HAMBURGER NAVIGATION
+          Desktop: Full Horizontal Bar · Mobile & Tablet: Hamburger Menu + Vertical Drawer
           ======================================================== */}
-      <nav className="bg-slate-900 border-b border-slate-800 text-white sticky top-16 z-20 shadow-xs">
+      <nav className="bg-slate-900 border-b border-slate-800 text-white sticky top-16 z-30 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between text-xs">
           
-          <div className="flex items-center gap-1 sm:gap-2">
+          {/* DESKTOP FULL NAVIGATION (≥1024px) */}
+          <div className="hidden lg:flex items-center gap-1.5 xl:gap-2">
             {/* 1. 🏠 Home */}
             <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/90 text-white font-bold hover:bg-emerald-500 transition-colors"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/90 text-white font-bold hover:bg-emerald-500 transition-colors cursor-pointer"
             >
               <span>🏠</span>
               <span>Home</span>
@@ -247,10 +258,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             {/* 2. 📢 Announcements */}
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('announcements-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>📢</span>
               <span>Announcements</span>
@@ -259,10 +271,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             {/* 3. 📅 School Calendar */}
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('calendar-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>📅</span>
               <span>School Calendar</span>
@@ -271,76 +284,233 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             {/* 4. 🕒 Timetable Portal */}
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('timetable-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>🕒</span>
               <span>Master Timetable</span>
             </button>
 
-            {/* 4. 🏥 Sanatorium */}
+            {/* 5. 🏥 Sanatorium */}
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('sanatorium-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden md:flex"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>🏥</span>
               <span>Sanatorium</span>
             </button>
 
-            {/* 5. 🚌 Transport */}
+            {/* 6. 🚌 Transport */}
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('transport-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden md:flex"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>🚌</span>
               <span>Transport</span>
             </button>
 
-            {/* 6. 🎯 Co-Curriculum */}
+            {/* 7. 🎯 Co-Curriculum */}
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('cocurricular-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden md:flex"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>🎯</span>
               <span>Co-Curriculum</span>
             </button>
 
-            {/* 6. 📞 Contact School */}
+            {/* 8. 📞 Contact School */}
             <button
-              onClick={() => setActiveModal('contact_us')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors hidden sm:flex"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setActiveModal('contact_us');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 font-semibold transition-colors cursor-pointer"
             >
               <span>📞</span>
               <span>Contact School</span>
             </button>
           </div>
 
-          <div>
-            {/* 6. 🔐 Sign In */}
+          {/* MOBILE & TABLET HAMBURGER BAR (<1024px) */}
+          <div className="flex lg:hidden items-center justify-between w-full">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-700 transition-colors font-bold text-xs cursor-pointer"
+              aria-label="Toggle navigation menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? (
+                <X className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Menu className="w-4 h-4 text-emerald-400" />
+              )}
+              <span>{mobileMenuOpen ? 'Close Menu' : '☰ Menu'}</span>
+            </button>
+
+            <span className="font-extrabold text-xs text-slate-200 tracking-wider">
+              Edu-Smart LMS
+            </span>
+
             <button
               onClick={() => {
+                setMobileMenuOpen(false);
                 const el = document.getElementById('portal-login-section');
                 if (el) el.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 transition-colors shadow-xs"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-extrabold text-xs hover:bg-emerald-500 transition-colors shadow-xs cursor-pointer"
             >
               <span>🔐</span>
               <span>Sign In</span>
             </button>
           </div>
 
+          {/* DESKTOP SIGN IN BUTTON */}
+          <div className="hidden lg:block">
+            <button
+              onClick={() => {
+                const el = document.getElementById('portal-login-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 text-white font-extrabold hover:bg-emerald-500 transition-colors shadow-xs cursor-pointer"
+            >
+              <span>🔐</span>
+              <span>Sign In to Portal</span>
+            </button>
+          </div>
+
         </div>
+
+        {/* MOBILE VERTICAL DROPDOWN DRAWER */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-slate-800 bg-slate-900/98 px-4 py-3 space-y-1 shadow-2xl animate-in fade-in slide-in-from-top-2">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+              EduSmart LMS Navigation:
+            </div>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">🏠</span>
+              <span>Home & Portal Overview</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                const el = document.getElementById('announcements-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">📢</span>
+              <span>Institutional Announcements</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                const el = document.getElementById('calendar-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">📅</span>
+              <span>Academic School Calendar</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                const el = document.getElementById('timetable-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">🕒</span>
+              <span>Master Timetable & Bell Cadence</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                const el = document.getElementById('sanatorium-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">🏥</span>
+              <span>School Sanatorium & Healthcare Bay</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                const el = document.getElementById('transport-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">🚌</span>
+              <span>School Transport & Fleet Commuter GPS</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                const el = document.getElementById('cocurricular-section');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">🎯</span>
+              <span>Co-Curricular & Sports Academies</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setActiveModal('contact_us');
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-200 hover:text-white hover:bg-slate-800 text-left text-xs font-semibold"
+            >
+              <span className="text-sm">📞</span>
+              <span>Contact Administration</span>
+            </button>
+
+            <div className="pt-2 border-t border-slate-800 mt-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  const el = document.getElementById('portal-login-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <span>🔐</span>
+                <span>Access Student, Staff & Parent Portals</span>
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* ========================================================
@@ -364,10 +534,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
           <div className="absolute inset-0 bg-gradient-to-b from-slate-950/90 via-slate-900/95 to-slate-900" />
         </div>
 
-        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
           
-          {/* OFFICIAL SCHOOL LOGO + SCHOOL NAME: Edu-Smart PORTAL By Gadsa Systems (Reduced by 70% as requested) */}
-          <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-4 max-w-[140px] w-full mx-auto flex flex-col items-center hover:scale-[1.02] transition-transform">
+          {/* OFFICIAL SCHOOL LOGO + SCHOOL NAME: Edu-Smart PORTAL By Gadsa Systems */}
+          <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[140px] w-full mx-auto flex flex-col items-center hover:scale-[1.02] transition-transform">
             <EduSmartGadsaLogo variant="full" size="sm" />
           </div>
 
@@ -377,25 +547,74 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             </p>
           </div>
 
-          {/* Subtitle Blockquote */}
-          <div className="max-w-2xl mt-3 mb-8">
-            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 tracking-tight uppercase">
+          {/* Subtitle & Responsive Hero Heading */}
+          <div className="max-w-3xl mt-2 mb-6 sm:mb-8 text-center">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-100 tracking-tight uppercase leading-tight">
               Welcome to the School Portal
-            </h2>
-            <p className="text-slate-300 text-sm sm:text-base mt-2 font-medium italic">
+            </h1>
+            <p className="text-slate-300 text-xs sm:text-sm md:text-base mt-2 max-w-2xl mx-auto font-medium italic">
               "A secure digital platform connecting learners, teachers, parents and school leadership."
             </p>
+
+            {/* Quick Hero Call-To-Action Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4 sm:mt-5">
+              <a
+                href="#portal-cards-grid"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>🚀</span>
+                <span>Access Portals</span>
+              </a>
+              <button
+                onClick={() => {
+                  const el = document.getElementById('timetable-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>📅</span>
+                <span>Master Timetable</span>
+              </button>
+              <button
+                onClick={() => {
+                  const el = document.getElementById('announcements-section');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>📢</span>
+                <span>Announcements</span>
+              </button>
+            </div>
+
+            {/* Live Campus Metrics Badges Strip */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px] text-slate-300">
+              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
+                🎓 Grades 1–9 CBC
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
+                👨‍🎓 1,240 Enrolled Learners
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
+                👩‍🏫 48 TSC Faculty
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
+                🚌 8 Commuter Routes
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
+                🏥 24/7 Sanatorium Bay
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
+                🍽️ Daily Meals Register
+              </span>
+            </div>
           </div>
 
           {/* ========================================================
-              MAIN PORTAL ACCESS (EXACT PROMINENT LOGIN BUTTONS)
-              [ 👨🎓 STUDENT LOGIN ]
-              [ 👩🏫 TEACHER LOGIN ]
-              [ 👨👩👧 PARENT LOGIN ] (Distinctive!)
-              [ 📖 LIBRARIAN LOGIN ] (Distinctive!)
-              [ 🏫 ADMINISTRATION LOGIN ]
+              MAIN PORTAL ACCESS (RESPONSIVE 4-COLUMN / 2-COLUMN / 1-COLUMN GRID)
+              Desktop ≥1024px: 4 Columns · Tablet 768–1023px: 2–3 Columns · Phone ≤767px: 1–2 Columns
               ======================================================== */}
-          <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4 text-left">
+          <div id="portal-cards-grid" className="w-full max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 text-left">
             
             {/* 1. STUDENT LOGIN */}
             <button
@@ -405,13 +624,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 setPassword('GR4@2026');
                 setActiveModal('student');
               }}
-              className="p-4 sm:p-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-emerald-400/30 group"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-emerald-400/30 group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
                   👨‍🎓
                 </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-700/80 text-emerald-100">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-800/80 text-emerald-100">
                   Grades 1-9
                 </span>
               </div>
@@ -420,7 +639,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <span>STUDENT LOGIN</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
-                <p className="text-xs text-emerald-100 mt-1 font-medium">
+                <p className="text-xs text-emerald-100 mt-1 font-medium leading-relaxed">
                   Curriculum notes, quizzes, Safe Browser, virtual classes & e-portfolio.
                 </p>
               </div>
@@ -434,14 +653,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 setPassword('teach2026');
                 setActiveModal('teacher');
               }}
-              className="p-4 sm:p-5 rounded-2xl bg-blue-700 hover:bg-blue-600 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-blue-500/30 group"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-blue-500/30 group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
                   👩‍🏫
                 </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-800/80 text-blue-100">
-                  Staff
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-900/80 text-blue-100">
+                  TSC Faculty
                 </span>
               </div>
               <div className="mt-4">
@@ -449,8 +668,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <span>TEACHER LOGIN</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
-                <p className="text-xs text-blue-100 mt-1 font-medium">
-                  Class attendance roll, work entries, syllabus notes & quiz grading.
+                <p className="text-xs text-blue-100 mt-1 font-medium leading-relaxed">
+                  Class attendance roll, work entries, lunch register, syllabus & quiz grading.
                 </p>
               </div>
             </button>
@@ -463,13 +682,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 setPassword('parent2026');
                 setActiveModal('parent');
               }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-300/40 ring-2 ring-amber-400/20 group"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-300/40 ring-2 ring-amber-400/20 group cursor-pointer"
             >
               <div className="flex items-center justify-between">
                 <div className="w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-xl shadow-xs">
                   👨‍👩‍👧
                 </div>
-                <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-white text-rose-800 shadow-2xs">
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-white text-rose-800 shadow-2xs">
                   Distinctive Portal
                 </span>
               </div>
@@ -478,8 +697,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <span>PARENT LOGIN</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
-                <p className="text-xs text-amber-100 mt-1 font-medium">
-                  Child selector, academic reports, attendance, fees & teacher messaging.
+                <p className="text-xs text-amber-100 mt-1 font-medium leading-relaxed">
+                  Child selector, academic reports, attendance, lunch logs, fees & teacher messaging.
                 </p>
               </div>
             </button>
@@ -492,13 +711,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 setPassword('lib2026');
                 setActiveModal('librarian');
               }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-purple-700 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-purple-400/40 ring-2 ring-purple-400/20 group"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-purple-700 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-purple-400/40 ring-2 ring-purple-400/20 group cursor-pointer"
             >
               <div className="flex items-center justify-between">
                 <div className="w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-xl shadow-xs">
                   📖
                 </div>
-                <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-white text-purple-900 shadow-2xs">
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-white text-purple-900 shadow-2xs">
                   Distinctive Portal
                 </span>
               </div>
@@ -507,7 +726,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <span>LIBRARIAN LOGIN</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
-                <p className="text-xs text-purple-100 mt-1 font-medium">
+                <p className="text-xs text-purple-100 mt-1 font-medium leading-relaxed">
                   Digital cataloging, book issuance, circulation desk & reading logs.
                 </p>
               </div>
@@ -521,13 +740,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 setPassword('staff2026');
                 setActiveModal('school_admin_staff');
               }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-teal-800 to-slate-900 hover:from-teal-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-teal-400/50 ring-2 ring-teal-400/20 group"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-teal-800 to-slate-900 hover:from-teal-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-teal-400/50 ring-2 ring-teal-400/20 group cursor-pointer"
             >
               <div className="flex items-center justify-between">
                 <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
                   🏛️
                 </div>
-                <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-teal-400 text-slate-950 shadow-2xs">
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-teal-400 text-slate-950 shadow-2xs">
                   Registrar & Secretariat
                 </span>
               </div>
@@ -536,8 +755,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <span>SCHOOL ADMIN STAFF</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-teal-300" />
                 </div>
-                <p className="text-xs text-teal-100 mt-1 font-medium">
-                  Work entry analysis, gate exits, marked registers, calendar & printables.
+                <p className="text-xs text-teal-100 mt-1 font-medium leading-relaxed">
+                  Work entry analysis, gate exits, lunch register audits, calendar & printables.
                 </p>
               </div>
             </button>
@@ -550,13 +769,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 setPassword('head2026');
                 setActiveModal('administration');
               }}
-              className="p-4 sm:p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-slate-600 group"
+              className="p-4 sm:p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-slate-600 group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl shadow-xs">
                   🏫
                 </div>
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-700 text-slate-200">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-700 text-slate-200">
                   Leadership
                 </span>
               </div>
@@ -565,151 +784,104 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <span>EXECUTIVE LEADERSHIP</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-400" />
                 </div>
-                <p className="text-xs text-slate-300 mt-1 font-medium">
+                <p className="text-xs text-slate-300 mt-1 font-medium leading-relaxed">
                   Head Teacher, Deputy Head, Senior Teacher, Dean of Studies, HOD & System Admin.
                 </p>
               </div>
             </button>
 
-            {/* DUAL FEATURED SPECIALIZED PORTALS: SANATORIUM & TRANSPORT TEAM */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 col-span-1 sm:col-span-2 lg:col-span-3">
-              
-              {/* 7. SCHOOL SANATORIUM & HEALTHCARE BAY LOGIN */}
-              <button
-                onClick={() => {
-                  setErrorMsg('');
-                  setEmail('nurse@edusmart.ac.ke');
-                  setPassword('nurse2026');
-                  setActiveModal('sanatorium');
-                }}
-                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-800 via-rose-900 to-slate-900 hover:from-rose-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-rose-400/60 ring-2 ring-rose-400/20 group text-left cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                      🏥
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-400 text-slate-950 shadow-2xs uppercase tracking-wider">
-                        School Sanatorium & Clinic
-                      </span>
-                      <div className="text-[11px] text-rose-200 font-mono mt-0.5">
-                        24/7 Campus Healthcare & Bay
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-white/10 rounded-lg text-[10px] font-semibold text-rose-200">
-                    <span>Sister Grace, RN</span>
-                  </div>
+            {/* 7. SCHOOL SANATORIUM & HEALTHCARE BAY LOGIN */}
+            <button
+              onClick={() => {
+                setErrorMsg('');
+                setEmail('nurse@edusmart.ac.ke');
+                setPassword('nurse2026');
+                setActiveModal('sanatorium');
+              }}
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-800 via-rose-900 to-slate-900 hover:from-rose-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-rose-400/60 ring-2 ring-rose-400/20 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
+                  🏥
                 </div>
-                <div className="mt-4 flex flex-col justify-between gap-2">
-                  <div>
-                    <div className="font-black text-base sm:text-lg tracking-wide flex items-center gap-1.5 text-white">
-                      <span>SCHOOL SANATORIUM LOGIN</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-rose-300" />
-                    </div>
-                    <p className="text-xs text-rose-100 mt-1 font-medium">
-                      Student clinic visits, nurse notes, vital signs check, treatments, and medical recommendations.
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-300 group-hover:text-white pt-2 border-t border-rose-500/20">
-                    <span>Enter Clinic Bay</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-400 text-slate-950 shadow-2xs uppercase tracking-wider">
+                  Clinic & Health
+                </span>
+              </div>
+              <div className="mt-4">
+                <div className="font-black text-base tracking-wide flex items-center gap-1.5 text-white">
+                  <span>SCHOOL SANATORIUM</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-rose-300" />
                 </div>
-              </button>
+                <p className="text-xs text-rose-100 mt-1 font-medium leading-relaxed">
+                  Student clinic visits, nurse notes, vital signs check, observation bay & medical records.
+                </p>
+              </div>
+            </button>
 
-              {/* 8. SCHOOL TRANSPORT & FLEET TEAM LOGIN */}
-              <button
-                onClick={() => {
-                  setErrorMsg('');
-                  setEmail('transport@edusmart.ac.ke');
-                  setPassword('transport2026');
-                  setActiveModal('transport');
-                }}
-                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-700 via-amber-800 to-slate-900 hover:from-amber-600 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-400/60 ring-2 ring-amber-400/20 group text-left cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                      🚌
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-2xs uppercase tracking-wider">
-                        School Transport & Fleet
-                      </span>
-                      <div className="text-[11px] text-amber-200 font-mono mt-0.5">
-                        Live Commuter GPS & Safety
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-white/10 rounded-lg text-[10px] font-semibold text-amber-200">
-                    <span>Mr. Kipkoech · Lead Driver</span>
-                  </div>
+            {/* 8. SCHOOL TRANSPORT & FLEET TEAM LOGIN */}
+            <button
+              onClick={() => {
+                setErrorMsg('');
+                setEmail('transport@edusmart.ac.ke');
+                setPassword('transport2026');
+                setActiveModal('transport');
+              }}
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-700 via-amber-800 to-slate-900 hover:from-amber-600 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-400/60 ring-2 ring-amber-400/20 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
+                  🚌
                 </div>
-                <div className="mt-4 flex flex-col justify-between gap-2">
-                  <div>
-                    <div className="font-black text-base sm:text-lg tracking-wide flex items-center gap-1.5 text-white">
-                      <span>TRANSPORT TEAM LOGIN</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-amber-300" />
-                    </div>
-                    <p className="text-xs text-amber-100 mt-1 font-medium">
-                      Student boarding & alighting roll call, GPS tracking, routes & stops, parent safety alerts, and fleet compliance.
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-300 group-hover:text-white pt-2 border-t border-amber-500/20">
-                    <span>Enter Transport Bay</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-2xs uppercase tracking-wider">
+                  Transport & Fleet
+                </span>
+              </div>
+              <div className="mt-4">
+                <div className="font-black text-base tracking-wide flex items-center gap-1.5 text-white">
+                  <span>TRANSPORT TEAM</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-amber-300" />
                 </div>
-              </button>
+                <p className="text-xs text-amber-100 mt-1 font-medium leading-relaxed">
+                  Boarding roll call, live commuter GPS tracking, 8 routes, safety alerts & fleet logs.
+                </p>
+              </div>
+            </button>
 
-              {/* 9. CO-CURRICULUM TEAM LOGIN */}
-              <button
-                onClick={() => {
-                  setErrorMsg('');
-                  setEmail('cocurricular@edusmart.ac.ke');
-                  setPassword('cocurricular2026');
-                  setActiveModal('cocurricular');
-                }}
-                className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-950 hover:from-emerald-700 hover:to-slate-900 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-emerald-400/60 ring-2 ring-emerald-400/20 group text-left cursor-pointer sm:col-span-2 lg:col-span-2"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                      🎯
-                    </div>
-                    <div>
-                      <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 shadow-2xs uppercase tracking-wider">
-                        Sports Academies & Clubs Team
-                      </span>
-                      <div className="text-[11px] text-emerald-200 font-mono mt-0.5">
-                        CBC Talent Matrix & Tournaments
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-white/10 rounded-lg text-[10px] font-semibold text-emerald-200">
-                    <span>Coach Benjamin · Sports Director</span>
-                  </div>
+            {/* 9. CO-CURRICULUM TEAM LOGIN */}
+            <button
+              onClick={() => {
+                setErrorMsg('');
+                setEmail('cocurricular@edusmart.ac.ke');
+                setPassword('cocurricular2026');
+                setActiveModal('cocurricular');
+              }}
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-950 hover:from-emerald-700 hover:to-slate-900 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-emerald-400/60 ring-2 ring-emerald-400/20 group cursor-pointer sm:col-span-2 md:col-span-1 lg:col-span-1 xl:col-span-4 xl:flex-row xl:items-center xl:gap-6"
+            >
+              <div className="flex items-center justify-between xl:justify-start xl:gap-4">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs shrink-0">
+                  🎯
                 </div>
-                <div className="mt-4 flex flex-col justify-between gap-2">
-                  <div>
-                    <div className="font-black text-base sm:text-lg tracking-wide flex items-center gap-1.5 text-white">
-                      <span>CO-CURRICULUM TEAM LOGIN</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-300" />
-                    </div>
-                    <p className="text-xs text-emerald-100 mt-1 font-medium">
-                      Sports academy coaching, clubs & societies, talent development matrix, inter-school tournaments & tours, equipment & parent consent.
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300 group-hover:text-white pt-2 border-t border-emerald-500/20">
-                    <span>Enter Co-Curriculum Hub</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
+                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 shadow-2xs uppercase tracking-wider">
+                  Sports & Clubs
+                </span>
+              </div>
+              <div className="mt-4 xl:mt-0 xl:flex-1">
+                <div className="font-black text-base tracking-wide flex items-center gap-1.5 text-white">
+                  <span>CO-CURRICULUM TEAM LOGIN</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-300" />
                 </div>
-              </button>
-
-            </div>
+                <p className="text-xs text-emerald-100 mt-1 font-medium leading-relaxed">
+                  Sports academy coaching, clubs & societies, talent development matrix, inter-school tournaments & tours.
+                </p>
+              </div>
+              <div className="mt-3 xl:mt-0 shrink-0">
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300 group-hover:text-white px-3 py-1.5 rounded-lg bg-white/10">
+                  <span>Enter Co-Curriculum Hub</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
+            </button>
 
           </div>
 

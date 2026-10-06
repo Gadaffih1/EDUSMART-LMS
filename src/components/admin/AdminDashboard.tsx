@@ -16,6 +16,7 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   Users, 
   UserPlus, 
@@ -33,7 +34,8 @@ import {
   HeartPulse,
   Bus,
   Trophy,
-  CalendarDays
+  CalendarDays,
+  Utensils
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -50,7 +52,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
     ? 'oversight'
     : 'users';
-  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'timetable' | 'sanatorium' | 'transport' | 'cocurricular' | 'oversight'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'timetable' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'oversight'>(defaultTab);
 
   // Create User Form
   const [newName, setNewName] = useState('');
@@ -252,6 +254,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <HeartPulse className="w-3.5 h-3.5 text-rose-400" />
           <span>Sanatorium Logs</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lunch_register')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Utensils className="w-3.5 h-3.5 text-amber-400" />
+          <span>Learner Lunch Register</span>
         </button>
 
         <button
@@ -716,6 +728,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           canRecord={false}
           title="System Administration Sanatorium & Medical Audit"
           subtitle="System-wide clinic attendance records, nurse in-charge notes, vital signs, and institutional recommendations. Print/Export PDF dossiers. (Read-Only Audit Mode)"
+        />
+      )}
+
+      {/* ========================================================
+          TAB: SYSTEM LEARNER LUNCH REGISTER & DINING AUDIT
+          ======================================================== */}
+      {activeTab === 'lunch_register' && (
+        <LearnerLunchRegister
+          currentUser={currentUser}
+          viewMode="executive"
+          title="System Administration Learner Lunch Register & Dining Audit"
+          subtitle="System-wide dining audit: Student attendance records, meal type statistics, and class teacher register verification across all 9 grades and streams."
         />
       )}
 

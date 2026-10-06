@@ -9,7 +9,8 @@ import {
   JUNIOR_STREAMS,
   PRIMARY_SUBJECTS,
   JUNIOR_SUBJECTS,
-  ExamTimetableEntry
+  ExamTimetableEntry,
+  BellPeriodDef
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
@@ -43,7 +44,9 @@ import {
   Eye,
   Info,
   Shield,
-  Lock
+  Lock,
+  Save,
+  RotateCcw
 } from 'lucide-react';
 
 interface TimetablePortalProps {
@@ -63,29 +66,7 @@ const DAYS_OF_WEEK: Array<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Fri
   'Friday'
 ];
 
-interface BellPeriod {
-  period: number;
-  label: string;
-  startTime: string;
-  endTime: string;
-  isBreak?: boolean;
-  breakType?: 'morning_tea' | 'lunch' | 'remedial' | 'games';
-}
-
-const BELL_SCHEDULE: BellPeriod[] = [
-  { period: 1, label: 'Period 1', startTime: '08:00', endTime: '08:40' },
-  { period: 2, label: 'Period 2', startTime: '08:40', endTime: '09:20' },
-  { period: 0, label: 'Morning Tea & Health Snack', startTime: '09:20', endTime: '09:40', isBreak: true, breakType: 'morning_tea' },
-  { period: 3, label: 'Period 3', startTime: '09:40', endTime: '10:20' },
-  { period: 4, label: 'Period 4', startTime: '10:20', endTime: '11:00' },
-  { period: 5, label: 'Period 5', startTime: '11:00', endTime: '11:40' },
-  { period: 6, label: 'Period 6', startTime: '11:40', endTime: '12:20' },
-  { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '12:20', endTime: '13:20', isBreak: true, breakType: 'lunch' },
-  { period: 7, label: 'Period 7', startTime: '13:20', endTime: '14:00' },
-  { period: 8, label: 'Period 8', startTime: '14:00', endTime: '14:40' },
-  { period: 9, label: 'Remedial & Library Study', startTime: '14:40', endTime: '15:20', isBreak: true, breakType: 'remedial' },
-  { period: 10, label: 'Co-Curricular Games & Clubs', startTime: '15:20', endTime: '16:30', isBreak: true, breakType: 'games' },
-];
+export type BellPeriod = BellPeriodDef;
 
 export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   currentUser,
@@ -96,6 +77,9 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Timetable slots & exams state from Storage (placed early for RBAC lookup)
   const [allSlots, setAllSlots] = useState<TimetableSlot[]>(() => Storage.getAllTimetableSlots());
   const [examTimetables, setExamTimetables] = useState<ExamTimetableEntry[]>(() => Storage.getExamTimetables());
+  const [bellSchedule, setBellSchedule] = useState<BellPeriodDef[]>(() => Storage.getBellSchedule());
+  const [showPeriodTimingsModal, setShowPeriodTimingsModal] = useState(false);
+  const [tempBellSchedule, setTempBellSchedule] = useState<BellPeriodDef[]>([]);
 
   // Listen for storage updates
   useEffect(() => {
@@ -103,8 +87,15 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       setAllSlots(Storage.getAllTimetableSlots());
       setExamTimetables(Storage.getExamTimetables());
     };
+    const handleBellUpdate = () => {
+      setBellSchedule(Storage.getBellSchedule());
+    };
     window.addEventListener('timetable-updated', handleTimetableUpdate);
-    return () => window.removeEventListener('timetable-updated', handleTimetableUpdate);
+    window.addEventListener('bell-schedule-updated', handleBellUpdate);
+    return () => {
+      window.removeEventListener('timetable-updated', handleTimetableUpdate);
+      window.removeEventListener('bell-schedule-updated', handleBellUpdate);
+    };
   }, []);
 
   // Role-Based Access Control Classification
@@ -426,8 +417,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Find currently active bell period
   const activeBellPeriod = useMemo(() => {
     // Current period is Period 3 (09:40 - 10:20) as baseline representation
-    return BELL_SCHEDULE.find(b => b.period === 3);
-  }, []);
+    return bellSchedule.find(b => b.period === 3);
+  }, [bellSchedule]);
 
   // Streams applicable to active grade
   const availableStreams = useMemo(() => {
@@ -622,7 +613,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       return;
     }
 
-    const bell = BELL_SCHEDULE.find(b => b.period === formPeriod);
+    const bell = bellSchedule.find(b => b.period === formPeriod);
 
     const slotPayload: TimetableSlot = {
       id: slotToEdit?.id || `tt-${selectedGrade}${selectedStream.charAt(0).toLowerCase()}-${Date.now().toString(36)}`,
@@ -683,8 +674,10 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const isFacultyOrAdmin = ['teacher', 'class_teacher', 'hod', 'dean_of_studies', 'head_teacher', 'school_admin_staff', 'admin'].includes(currentUser.role);
-  const canEdit = !readOnly && isFacultyOrAdmin;
+  const isDeanOrDeputy = ['dean_of_studies', 'deputy_head', 'head_teacher', 'admin'].includes(currentUser.role);
+  const canEdit = !readOnly && isDeanOrDeputy;
+  const canEditPeriodTimings = !readOnly && isDeanOrDeputy;
+  const canEditAllocations = !readOnly && isDeanOrDeputy;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -795,13 +788,27 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               <span>Export .ICS</span>
             </button>
 
+            {canEditPeriodTimings && (
+              <button
+                onClick={() => {
+                  setTempBellSchedule(bellSchedule);
+                  setShowPeriodTimingsModal(true);
+                }}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                title="Dean of Studies & Deputy Head: Configure period timings and bell schedule"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Configure Period Timings</span>
+              </button>
+            )}
+
             {canEdit && (
               <button
                 onClick={() => handleOpenAddModal()}
                 className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl transition-colors flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Add / Reschedule Period</span>
+                <span>{isDeanOrDeputy ? 'Add / Reallocate Period' : 'Add / Reschedule Period'}</span>
               </button>
             )}
           </div>
@@ -1196,7 +1203,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-xs">
-                {BELL_SCHEDULE.map((bell) => {
+                {bellSchedule.map((bell) => {
                   // If Break row (Morning Tea or Lunch or Games)
                   if (bell.isBreak) {
                     return (
@@ -1323,7 +1330,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             </div>
 
             <div className="space-y-3">
-              {BELL_SCHEDULE.map((bell) => {
+              {bellSchedule.map((bell) => {
                 if (bell.isBreak) {
                   return (
                     <div key={`agenda-break-${bell.startTime}`} className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
@@ -1852,7 +1859,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold font-mono"
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(p => {
-                      const b = BELL_SCHEDULE.find(bell => bell.period === p);
+                      const b = bellSchedule.find(bell => bell.period === p);
                       return (
                         <option key={p} value={p}>
                           Period {p} ({b?.startTime} - {b?.endTime})
@@ -1877,27 +1884,66 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Instructor / Teacher Name</label>
-                <input
-                  type="text"
-                  required
-                  value={formTeacherName}
-                  onChange={(e) => setFormTeacherName(e.target.value)}
-                  placeholder="e.g. Mr. David Kiprono"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg font-medium"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">Instructor / Teacher Name</label>
+                  {isDeanOrDeputy && (
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Dean / Deputy Reallocation Enabled
+                    </span>
+                  )}
+                </div>
+                {isDeanOrDeputy ? (
+                  <div className="space-y-1.5">
+                    <select
+                      value={formTeacherName}
+                      onChange={(e) => setFormTeacherName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-900"
+                    >
+                      {distinctTeachers.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                      {!distinctTeachers.includes(formTeacherName) && (
+                        <option value={formTeacherName}>{formTeacherName}</option>
+                      )}
+                    </select>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    required
+                    value={formTeacherName}
+                    onChange={(e) => setFormTeacherName(e.target.value)}
+                    placeholder="e.g. Mr. David Kiprono"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg font-medium"
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Room / Lab Facility</label>
-                  <input
-                    type="text"
-                    value={formRoomName}
-                    onChange={(e) => setFormRoomName(e.target.value)}
-                    placeholder="e.g. Science Lab 1"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                  />
+                  {isDeanOrDeputy ? (
+                    <select
+                      value={formRoomName}
+                      onChange={(e) => setFormRoomName(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-medium"
+                    >
+                      {distinctRooms.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                      {!distinctRooms.includes(formRoomName) && formRoomName && (
+                        <option value={formRoomName}>{formRoomName}</option>
+                      )}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formRoomName}
+                      onChange={(e) => setFormRoomName(e.target.value)}
+                      placeholder="e.g. Science Lab 1"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -2008,7 +2054,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-900">
-                  {BELL_SCHEDULE.map(bell => {
+                  {bellSchedule.map(bell => {
                     if (bell.isBreak) {
                       return (
                         <tr key={`print-break-${bell.startTime}`} className="bg-slate-100 font-bold border-b border-slate-900">
@@ -2071,6 +2117,249 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 </div>
               </div>
 
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: CONFIGURE PERIOD TIMINGS & BELL SCHEDULE
+          (FOR DEAN OF STUDIES & DEPUTY HEADTEACHER)
+          ======================================================== */}
+      {showPeriodTimingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="p-5 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Institutional Period Timings & Bell Schedule</span>
+                    <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded-full uppercase">
+                      Dean & Deputy Head Authority
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Modify official start times, end times, and break durations. Master timetable slots automatically synchronize to these timings.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPeriodTimingsModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Timings Table / Editor */}
+            <div className="p-6 overflow-y-auto space-y-5 text-xs">
+              
+              {/* Presets Toolbar */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-slate-700">Quick Institutional Routine Presets:</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempBellSchedule([
+                        { period: 1, label: 'Period 1 (Morning Core)', startTime: '08:00', endTime: '08:40' },
+                        { period: 2, label: 'Period 2 (Core Instruction)', startTime: '08:40', endTime: '09:20' },
+                        { period: 0, label: 'Morning Tea & Health Snack', startTime: '09:20', endTime: '09:40', isBreak: true, breakType: 'morning_tea' },
+                        { period: 3, label: 'Period 3 (STEM & Numeracy)', startTime: '09:40', endTime: '10:20' },
+                        { period: 4, label: 'Period 4 (Language Arts)', startTime: '10:20', endTime: '11:00' },
+                        { period: 5, label: 'Period 5 (Social & Applied Sciences)', startTime: '11:00', endTime: '11:40' },
+                        { period: 6, label: 'Period 6 (Creative & Practical)', startTime: '11:40', endTime: '12:20' },
+                        { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '12:20', endTime: '13:20', isBreak: true, breakType: 'lunch' },
+                        { period: 7, label: 'Period 7 (Afternoon Session)', startTime: '13:20', endTime: '14:00' },
+                        { period: 8, label: 'Period 8 (Specialist & Lab)', startTime: '14:00', endTime: '14:40' },
+                        { period: 9, label: 'Remedial & Library Study', startTime: '14:40', endTime: '15:20', isBreak: true, breakType: 'remedial' },
+                        { period: 10, label: 'Co-Curricular Games & Clubs', startTime: '15:20', endTime: '16:30', isBreak: true, breakType: 'games' },
+                      ]);
+                      setNotificationMsg('Standard CBC 40-Min preset loaded.');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 cursor-pointer"
+                  >
+                    Standard CBC (40-Min)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempBellSchedule([
+                        { period: 1, label: 'Exam Session 1 (Paper 1)', startTime: '08:00', endTime: '09:00' },
+                        { period: 2, label: 'Exam Session 2 (Review)', startTime: '09:00', endTime: '10:00' },
+                        { period: 0, label: 'Morning Tea & Health Snack', startTime: '10:00', endTime: '10:30', isBreak: true, breakType: 'morning_tea' },
+                        { period: 3, label: 'Exam Session 3 (Paper 2)', startTime: '10:30', endTime: '11:30' },
+                        { period: 4, label: 'Exam Session 4 (Practical)', startTime: '11:30', endTime: '12:30' },
+                        { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '12:30', endTime: '13:30', isBreak: true, breakType: 'lunch' },
+                        { period: 7, label: 'Afternoon Revision Lab', startTime: '13:30', endTime: '14:30' },
+                        { period: 8, label: 'Supervised Library Prep', startTime: '14:30', endTime: '15:30' },
+                        { period: 10, label: 'Evening Games & Leisure', startTime: '15:30', endTime: '16:30', isBreak: true, breakType: 'games' },
+                      ]);
+                      setNotificationMsg('Examination 60-Min routine loaded.');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 cursor-pointer"
+                  >
+                    Examination Schedule (60-Min)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempBellSchedule([
+                        { period: 1, label: 'Period 1 (Fast-Track)', startTime: '08:00', endTime: '08:35' },
+                        { period: 2, label: 'Period 2 (Fast-Track)', startTime: '08:35', endTime: '09:10' },
+                        { period: 0, label: 'Morning Tea & Health Snack', startTime: '09:10', endTime: '09:30', isBreak: true, breakType: 'morning_tea' },
+                        { period: 3, label: 'Period 3 (Fast-Track)', startTime: '09:30', endTime: '10:05' },
+                        { period: 4, label: 'Period 4 (Fast-Track)', startTime: '10:05', endTime: '10:40' },
+                        { period: 5, label: 'Period 5 (Fast-Track)', startTime: '10:40', endTime: '11:15' },
+                        { period: 6, label: 'Period 6 (Fast-Track)', startTime: '11:15', endTime: '11:50' },
+                        { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '11:50', endTime: '12:50', isBreak: true, breakType: 'lunch' },
+                        { period: 7, label: 'Period 7 (Clubs/Society)', startTime: '12:50', endTime: '13:30' },
+                        { period: 10, label: 'All-School Friday Assembly', startTime: '13:30', endTime: '15:00', isBreak: true, breakType: 'games' },
+                      ]);
+                      setNotificationMsg('Friday compressed routine loaded.');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold hover:bg-slate-100 cursor-pointer"
+                  >
+                    Friday Compressed (35-Min)
+                  </button>
+                </div>
+              </div>
+
+              {/* Editable Periods List */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Session Type</th>
+                      <th className="py-2.5 px-3">Period Label / Designation</th>
+                      <th className="py-2.5 px-3">Start Time</th>
+                      <th className="py-2.5 px-3">End Time</th>
+                      <th className="py-2.5 px-3">Duration</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {tempBellSchedule.map((item, idx) => (
+                      <tr key={idx} className={item.isBreak ? 'bg-amber-50/30' : 'hover:bg-slate-50'}>
+                        <td className="py-2.5 px-3">
+                          {item.isBreak ? (
+                            <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-100 text-amber-900 border border-amber-300">
+                              {item.breakType === 'lunch' ? '🍱 Midday Lunch' : item.breakType === 'morning_tea' ? '☕ Morning Tea' : '⚽ Co-Curricular'}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300">
+                              Period {item.period}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={item.label}
+                            onChange={(e) => {
+                              const updated = [...tempBellSchedule];
+                              updated[idx] = { ...updated[idx], label: e.target.value };
+                              setTempBellSchedule(updated);
+                            }}
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:ring-1 focus:ring-amber-500"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="time"
+                            value={item.startTime}
+                            onChange={(e) => {
+                              const updated = [...tempBellSchedule];
+                              updated[idx] = { ...updated[idx], startTime: e.target.value };
+                              setTempBellSchedule(updated);
+                            }}
+                            className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold focus:outline-hidden"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="time"
+                            value={item.endTime}
+                            onChange={(e) => {
+                              const updated = [...tempBellSchedule];
+                              updated[idx] = { ...updated[idx], endTime: e.target.value };
+                              setTempBellSchedule(updated);
+                            }}
+                            className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold focus:outline-hidden"
+                          />
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
+                          {(() => {
+                            const [sh, sm] = item.startTime.split(':').map(Number);
+                            const [eh, em] = item.endTime.split(':').map(Number);
+                            const diff = (eh * 60 + em) - (sh * 60 + sm);
+                            return `${diff > 0 ? diff : 0} mins`;
+                          })()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = tempBellSchedule.filter((_, i) => i !== idx);
+                              setTempBellSchedule(updated);
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                            title="Remove period"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const def = Storage.resetBellSchedule();
+                  setTempBellSchedule(def);
+                  setNotificationMsg('Bell schedule reset to default institutional timetable.');
+                }}
+                className="px-3.5 py-2 text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer text-xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset to Default</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPeriodTimingsModal(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    Storage.saveBellSchedule(tempBellSchedule);
+                    setShowPeriodTimingsModal(false);
+                    setNotificationMsg('Institutional period timings saved and master slots synchronized!');
+                    setTimeout(() => setNotificationMsg(null), 4000);
+                  }}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-extrabold shadow-md shadow-emerald-600/20 text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Timings & Sync Timetable Slots</span>
+                </button>
+              </div>
             </div>
 
           </div>

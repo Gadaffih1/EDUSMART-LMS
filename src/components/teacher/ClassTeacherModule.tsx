@@ -11,6 +11,7 @@ import {
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   ClipboardCheck, 
   BarChart3, 
@@ -31,7 +32,8 @@ import {
   AlertTriangle,
   RotateCcw,
   Sparkles,
-  HeartPulse
+  HeartPulse,
+  Utensils
 } from 'lucide-react';
 
 interface ClassTeacherModuleProps {
@@ -43,8 +45,8 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(currentUser.grade || 4);
   const [selectedStream, setSelectedStream] = useState<StreamName>(currentUser.stream || 'Dove');
 
-  // Sub-tabs: Attendance Register, Multi-Day Matrix, Graphical Analysis, Print Report Cards, Sanatorium Records
-  const [activeSubTab, setActiveSubTab] = useState<'daily_register' | 'history_matrix' | 'graphics' | 'reports' | 'sanatorium'>('daily_register');
+  // Sub-tabs: Attendance Register, Multi-Day Matrix, Graphical Analysis, Print Report Cards, Sanatorium Records, Lunch Register
+  const [activeSubTab, setActiveSubTab] = useState<'daily_register' | 'history_matrix' | 'graphics' | 'reports' | 'sanatorium' | 'lunch_register'>('daily_register');
 
   // Attendance Date (default to today: 2026-10-01)
   const todayDateString = '2026-10-01';
@@ -301,6 +303,18 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
           >
             <HeartPulse className="w-3.5 h-3.5 text-rose-300" />
             <span>Sanatorium Records</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('lunch_register')}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+              activeSubTab === 'lunch_register'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Utensils className="w-3.5 h-3.5 text-amber-300" />
+            <span>Learner Lunch Register</span>
           </button>
         </div>
       </div>
@@ -980,6 +994,20 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
             filterStream={selectedStream}
             title={`Grade ${selectedGrade} (${selectedStream}) Class Sanatorium & Health Register`}
             subtitle="Learner medical visits, attendance details, nurse recommendations, and activity exemptions for your assigned stream."
+          />
+        </div>
+      )}
+
+      {/* ========================================================
+          SUB-TAB 6: LEARNER LUNCH REGISTER & MEAL MARKING
+          ======================================================== */}
+      {activeSubTab === 'lunch_register' && (
+        <div className="space-y-4">
+          <LearnerLunchRegister
+            currentUser={currentUser}
+            initialGrade={selectedGrade}
+            initialStream={selectedStream}
+            viewMode="class_teacher"
           />
         </div>
       )}

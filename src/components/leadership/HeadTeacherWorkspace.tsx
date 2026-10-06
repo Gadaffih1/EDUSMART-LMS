@@ -14,6 +14,7 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   School, 
   Users, 
@@ -34,7 +35,8 @@ import {
   HeartPulse,
   Bus,
   Trophy,
-  CalendarDays
+  CalendarDays,
+  Utensils
 } from 'lucide-react';
 
 interface HeadTeacherWorkspaceProps {
@@ -42,7 +44,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
+  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
 
   const allUsers = Storage.getUsers();
@@ -217,6 +219,16 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         >
           <HeartPulse className="w-4 h-4 text-rose-400" />
           <span>Sanatorium & Clinic</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lunch_register')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Utensils className="w-4 h-4 text-amber-400" />
+          <span>Learner Lunch Register</span>
         </button>
 
         <button
@@ -476,6 +488,18 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           canRecord={false}
           title="Head Teacher Sanatorium & Campus Clinic Surveillance"
           subtitle="Institutional healthcare oversight: Student illness logs, observation bay admissions, emergency hospital transfers, and outbreak prevention. (Read-Only Audit Mode)"
+        />
+      )}
+
+      {/* ========================================================
+          TAB: LEARNER LUNCH REGISTER & DINING SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'lunch_register' && (
+        <LearnerLunchRegister
+          currentUser={currentUser}
+          viewMode="executive"
+          title="Head Teacher Executive Learner Lunch & Dining Surveillance"
+          subtitle="Institutional dining oversight: Real-time student lunch attendance, daily uptake percentages, special dietary notes, and class teacher registers across all grades and streams."
         />
       )}
 

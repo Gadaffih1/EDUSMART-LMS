@@ -19,6 +19,7 @@ import { AchievementSystem } from '../student/AchievementSystem';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TimetablePortal } from '../timetable/TimetablePortal';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   Home,
   Users, 
@@ -64,7 +65,8 @@ import {
   HelpCircle,
   ShieldAlert,
   Info,
-  HeartPulse
+  HeartPulse,
+  Utensils
 } from 'lucide-react';
 
 interface ParentWorkspaceProps {
@@ -87,14 +89,15 @@ export type ParentNavigationTab =
   | 'transport'             // 11. Transport
   | 'gate_records'          // 12. Gate / Exit Records
   | 'sanatorium'            // 13. Sanatorium & Clinic Visits
-  | 'achievements'          // 14. Achievements
-  | 'discipline'            // 15. Behaviour & Discipline
-  | 'resources'             // 16. Learning Resources
-  | 'reports'               // 17. Reports
-  | 'notifications'         // 18. Notifications
-  | 'profile'               // 19. My Profile
-  | 'settings'              // 20. Settings
-  | 'sign_out';             // 21. Sign Out
+  | 'lunch'                 // 14. Learner Lunch & Meals
+  | 'achievements'          // 15. Achievements
+  | 'discipline'            // 16. Behaviour & Discipline
+  | 'resources'             // 17. Learning Resources
+  | 'reports'               // 18. Reports
+  | 'notifications'         // 19. Notifications
+  | 'profile'               // 20. My Profile
+  | 'settings'              // 21. Settings
+  | 'sign_out';             // 22. Sign Out
 
 interface AbsenceExplanation {
   id: string;
@@ -423,14 +426,15 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
     { key: 'transport', label: '11. Transport', icon: <Bus className="w-4 h-4 text-yellow-400" /> },
     { key: 'gate_records', label: '12. Gate / Exit Records', icon: <DoorOpen className="w-4 h-4 text-rose-400" /> },
     { key: 'sanatorium', label: '13. Sanatorium Visits', icon: <HeartPulse className="w-4 h-4 text-rose-400" /> },
-    { key: 'achievements', label: '14. Achievements', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
-    { key: 'discipline', label: '15. Behaviour & Discipline', icon: <ShieldAlert className="w-4 h-4 text-emerald-400" /> },
-    { key: 'resources', label: '16. Learning Resources', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
-    { key: 'reports', label: '17. Reports', icon: <FileSpreadsheet className="w-4 h-4 text-indigo-400" /> },
-    { key: 'notifications', label: '18. Notifications', icon: <Bell className="w-4 h-4 text-red-400" />, badge: `${notifications.filter(n => !n.readByUserIds.includes(currentUser.id)).length || ''}` },
-    { key: 'profile', label: '19. My Profile', icon: <UserIcon className="w-4 h-4 text-slate-400" /> },
-    { key: 'settings', label: '20. Settings', icon: <Settings className="w-4 h-4 text-slate-400" /> },
-    { key: 'sign_out', label: '21. Sign Out', icon: <LogOut className="w-4 h-4 text-rose-400" /> },
+    { key: 'lunch', label: '14. Lunch & Meals', icon: <Utensils className="w-4 h-4 text-amber-400" /> },
+    { key: 'achievements', label: '15. Achievements', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
+    { key: 'discipline', label: '16. Behaviour & Discipline', icon: <ShieldAlert className="w-4 h-4 text-emerald-400" /> },
+    { key: 'resources', label: '17. Learning Resources', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
+    { key: 'reports', label: '18. Reports', icon: <FileSpreadsheet className="w-4 h-4 text-indigo-400" /> },
+    { key: 'notifications', label: '19. Notifications', icon: <Bell className="w-4 h-4 text-red-400" />, badge: `${notifications.filter(n => !n.readByUserIds.includes(currentUser.id)).length || ''}` },
+    { key: 'profile', label: '20. My Profile', icon: <UserIcon className="w-4 h-4 text-slate-400" /> },
+    { key: 'settings', label: '21. Settings', icon: <Settings className="w-4 h-4 text-slate-400" /> },
+    { key: 'sign_out', label: '22. Sign Out', icon: <LogOut className="w-4 h-4 text-rose-400" /> },
   ];
 
   return (
@@ -881,6 +885,23 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
                     CBC report cards & PDF downloads
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('lunch')}
+                className="p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
+              >
+                <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-amber-900">
+                    [ Lunch & Meals ]
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    Hot meals taken & special diet logs
                   </div>
                 </div>
               </button>
@@ -1867,6 +1888,64 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
             allowedStudentIds={myChildren.map(c => c.id)}
             title={selectedChild ? `${selectedChild.name}'s Medical & Sanatorium Visits` : 'Children Sanatorium & Medical History'}
             subtitle={`Confidential clinical attendance records, vital signs checks, nurse in-charge notes, and recommendations strictly linked to ${selectedChild ? selectedChild.name : 'your registered child(ren)'}.`}
+          />
+        </section>
+      )}
+
+      {/* ========================================================
+          14. 🍽️ LEARNER LUNCH & MEALS ATTENDANCE (CONFIDENTIAL)
+          ======================================================== */}
+      {activeTab === 'lunch' && (
+        <section className="space-y-6">
+          {/* Child-Specific Linking Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">Filter Lunch Records by Child:</span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setSelectedChildId('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedChildId === 'all'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  All Registered Children ({myChildren.length})
+                </button>
+                {myChildren.map(child => (
+                  <button
+                    key={child.id}
+                    onClick={() => setSelectedChildId(child.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      selectedChildId === child.id
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{child.name}</span>
+                    <span className="text-[10px] opacity-80">(Gr {child.grade} {child.stream})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedChild ? (
+              <div className="text-xs text-slate-600">
+                Child Link: <strong className="text-slate-900">{selectedChild.name}</strong> · Admission: <span className="font-mono font-bold text-amber-700">{selectedChild.admissionNumber}</span>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">
+                Showing dining logs for <strong className="text-slate-800">all {myChildren.length} registered children</strong>
+              </div>
+            )}
+          </div>
+
+          <LearnerLunchRegister
+            currentUser={currentUser}
+            viewMode="parent"
+            filterStudentId={selectedChild ? selectedChild.id : undefined}
+            title={selectedChild ? `${selectedChild.name}'s Lunch & Dining Register` : "Children's Lunch & Dining Register"}
+            subtitle={`Confidential daily hot meal attendance, meal type served, and special dietary notes strictly linked to ${selectedChild ? selectedChild.name : 'your registered child(ren)'}.`}
           />
         </section>
       )}

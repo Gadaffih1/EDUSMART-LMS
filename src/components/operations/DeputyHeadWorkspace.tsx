@@ -41,10 +41,12 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   Bus,
   Trophy,
-  CalendarDays
+  CalendarDays,
+  Utensils
 } from 'lucide-react';
 
 interface DeputyHeadWorkspaceProps {
@@ -78,7 +80,7 @@ interface StaffDutyAssignment {
 }
 
 export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ currentUser }) => {
-  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'transport' | 'cocurricular' | 'reporting_hub';
+  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<DeputyTab>('operations');
 
   // Gate passes from storage
@@ -361,6 +363,16 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
         >
           <HeartPulse className="w-4 h-4 text-rose-400" />
           <span>Sanatorium & Health</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lunch_register')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Utensils className="w-4 h-4 text-amber-400" />
+          <span>Learner Lunch Register</span>
         </button>
 
         <button
@@ -978,6 +990,18 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           canRecord={false}
           title="Deputy Head Sanatorium & Student Health Oversight"
           subtitle="Campus healthcare surveillance, observation bay logs, nurse in-charge notes, hospital referrals, and emergency gate pass coordination. (Read-Only Audit Mode)"
+        />
+      )}
+
+      {/* ========================================================
+          TAB: LEARNER LUNCH REGISTER & DINING SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'lunch_register' && (
+        <LearnerLunchRegister
+          currentUser={currentUser}
+          viewMode="executive"
+          title="Deputy Head Learner Lunch & Dining Surveillance"
+          subtitle="Operational dining oversight: Real-time learner meal uptake, special dietary tracking, and class teacher attendance registers across all grades and streams."
         />
       )}
 

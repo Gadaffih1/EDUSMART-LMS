@@ -335,6 +335,15 @@ export interface AttendanceRecord {
   };
 }
 
+export interface BellPeriodDef {
+  period: number;
+  label: string;
+  startTime: string; // HH:MM
+  endTime: string;   // HH:MM
+  isBreak?: boolean;
+  breakType?: 'morning_tea' | 'lunch' | 'remedial' | 'games';
+}
+
 export interface TimetableSlot {
   id: string;
   grade: GradeLevel;
@@ -353,6 +362,25 @@ export interface TimetableSlot {
   notes?: string;
   materialsNeeded?: string[];
   competencies?: string[];
+}
+
+export type LunchStatus = 'taken' | 'not_taken' | 'special_diet' | 'absent';
+
+export interface LearnerLunchRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  date: string; // YYYY-MM-DD
+  status: LunchStatus;
+  takenAt?: string; // e.g. "12:45 PM"
+  mealType?: string; // e.g. "Standard Balanced Hot Meal", "Vegetarian", "Special Medical Diet"
+  dietaryNotes?: string;
+  markedBy: string; // Teacher or staff name
+  markedByRole?: string;
+  updatedAt: string;
 }
 
 export interface FixedLessonCondition {

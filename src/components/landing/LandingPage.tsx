@@ -167,7 +167,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (expectedRoleCategory === 'administration' && !['head_teacher', 'deputy_head', 'senior_teacher', 'dean_of_studies', 'hod', 'librarian', 'school_admin_staff', 'admin'].includes(user.role)) {
+    if (expectedRoleCategory === 'administration' && !['head_teacher', 'deputy_head', 'senior_teacher', 'dean_of_studies', 'hod', 'school_admin_staff', 'admin'].includes(user.role)) {
       setErrorMsg('This portal is strictly restricted to School Administrative Leadership.');
       return;
     }
@@ -2467,17 +2467,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                       <div className="text-[10px] text-slate-500">Department curriculum</div>
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('librarian@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-purple-50 hover:border-purple-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-purple-800">Librarian</div>
-                      <div className="text-[10px] text-slate-500">Library & cataloging</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600" />
                   </button>
 
                   <button

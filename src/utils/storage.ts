@@ -59,7 +59,10 @@ import {
   LibraryAuditLog,
   LibraryPolicy,
   FixedLessonCondition,
-  SharedResourceFacility
+  SharedResourceFacility,
+  BellPeriodDef,
+  LunchStatus,
+  LearnerLunchRecord
 } from '../types';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
@@ -119,7 +122,9 @@ import {
   INITIAL_LIBRARY_TIMETABLE,
   INITIAL_LIBRARY_EVENTS,
   INITIAL_LIBRARY_POLICIES,
-  INITIAL_LIBRARY_AUDIT_LOGS
+  INITIAL_LIBRARY_AUDIT_LOGS,
+  INITIAL_BELL_SCHEDULE,
+  INITIAL_LUNCH_RECORDS
 } from '../data/initialData';
 
 const KEYS = {
@@ -138,8 +143,10 @@ const KEYS = {
   GATE_PASSES: 'edusmart_gate_passes_v1',
   ATTENDANCE: 'edusmart_attendance_v1',
   TIMETABLE: 'edusmart_timetable_v1',
+  BELL_SCHEDULE: 'edusmart_bell_schedule_v1',
   FIXED_LESSON_CONDITIONS: 'edusmart_fixed_lessons_v1',
   SHARED_RESOURCES: 'edusmart_shared_resources_v1',
+  LUNCH_RECORDS: 'edusmart_learner_lunch_records_v1',
   REPORT_CARDS: 'edusmart_report_cards_v1',
   CHAT_MESSAGES: 'edusmart_chat_messages_v1',
   LIBRARY_BOOKS: 'edusmart_library_books_v1',
@@ -223,6 +230,8 @@ export const Storage = {
     localStorage.setItem(KEYS.GATE_PASSES, JSON.stringify(INITIAL_GATE_EXIT_PASSES));
     localStorage.setItem(KEYS.ATTENDANCE, JSON.stringify(INITIAL_ATTENDANCE));
     localStorage.setItem(KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
+    localStorage.setItem(KEYS.BELL_SCHEDULE, JSON.stringify(INITIAL_BELL_SCHEDULE));
+    localStorage.setItem(KEYS.LUNCH_RECORDS, JSON.stringify(INITIAL_LUNCH_RECORDS));
     localStorage.setItem(KEYS.REPORT_CARDS, JSON.stringify(INITIAL_REPORT_CARDS));
     localStorage.setItem(KEYS.CHAT_MESSAGES, JSON.stringify(INITIAL_CHAT_MESSAGES));
     localStorage.setItem(KEYS.LIBRARY_BOOKS, JSON.stringify(INITIAL_LIBRARY_BOOKS));
@@ -1310,6 +1319,50 @@ export const Storage = {
     window.dispatchEvent(new CustomEvent('timetable-updated', { detail: slots }));
   },
 
+  // ========================================================
+  // 🔔 BELL SCHEDULE & PERIOD TIMINGS METHODS
+  // ========================================================
+
+  getBellSchedule(): BellPeriodDef[] {
+    return getFromStorage<BellPeriodDef[]>(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
+  },
+
+  saveBellSchedule(schedule: BellPeriodDef[]): void {
+    setToStorage(KEYS.BELL_SCHEDULE, schedule);
+    window.dispatchEvent(new CustomEvent('bell-schedule-updated', { detail: schedule }));
+
+    // Synchronize timetable slot start and end times to the updated bell timings
+    try {
+      const allSlots = this.getAllTimetableSlots();
+      let hasChanges = false;
+      const updatedSlots = allSlots.map(slot => {
+        const bell = schedule.find(b => b.period === slot.period);
+        if (bell && (slot.startTime !== bell.startTime || slot.endTime !== bell.endTime)) {
+          hasChanges = true;
+          return {
+            ...slot,
+            startTime: bell.startTime,
+            endTime: bell.endTime
+          };
+        }
+        return slot;
+      });
+
+      if (hasChanges) {
+        setToStorage(KEYS.TIMETABLE, updatedSlots);
+        window.dispatchEvent(new CustomEvent('timetable-updated', { detail: updatedSlots }));
+      }
+    } catch {
+      // Ignore sync error if timetable slots not loaded
+    }
+  },
+
+  resetBellSchedule(): BellPeriodDef[] {
+    setToStorage(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
+    window.dispatchEvent(new CustomEvent('bell-schedule-updated', { detail: INITIAL_BELL_SCHEDULE }));
+    return INITIAL_BELL_SCHEDULE;
+  },
+
   getFixedLessonConditions(): FixedLessonCondition[] {
     return getFromStorage<FixedLessonCondition[]>(KEYS.FIXED_LESSON_CONDITIONS, INITIAL_FIXED_LESSON_CONDITIONS);
   },
@@ -1380,6 +1433,91 @@ export const Storage = {
     const records = this.getSanatoriumRecords();
     const updated = records.filter(r => r.id !== id);
     this.saveSanatoriumRecords(updated);
+  },
+
+  // ========================================================
+  // 🍱 LEARNER LUNCH ATTENDANCE & MEAL REGISTRY METHODS
+  // ========================================================
+
+  getLunchRecords(date?: string, grade?: GradeLevel, stream?: StreamName, studentId?: string): LearnerLunchRecord[] {
+    const records = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    return records.filter(r => {
+      if (date && r.date !== date) return false;
+      if (grade !== undefined && r.grade !== grade) return false;
+      if (stream !== undefined && r.stream !== stream) return false;
+      if (studentId && r.studentId !== studentId) return false;
+      return true;
+    });
+  },
+
+  saveLunchRecord(record: LearnerLunchRecord): void {
+    const records = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const idx = records.findIndex(r => r.id === record.id || (r.studentId === record.studentId && r.date === record.date));
+    let updated: LearnerLunchRecord[];
+    if (idx !== -1) {
+      updated = [...records];
+      updated[idx] = { ...updated[idx], ...record };
+    } else {
+      updated = [record, ...records];
+    }
+    setToStorage(KEYS.LUNCH_RECORDS, updated);
+    window.dispatchEvent(new CustomEvent('lunch-records-updated', { detail: updated }));
+  },
+
+  batchSaveLunchRecords(newRecords: LearnerLunchRecord[]): void {
+    const existing = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const map = new Map<string, LearnerLunchRecord>();
+    existing.forEach(r => map.set(`${r.studentId}-${r.date}`, r));
+    newRecords.forEach(r => map.set(`${r.studentId}-${r.date}`, r));
+    const merged = Array.from(map.values());
+    setToStorage(KEYS.LUNCH_RECORDS, merged);
+    window.dispatchEvent(new CustomEvent('lunch-records-updated', { detail: merged }));
+  },
+
+  markLearnerLunch(
+    studentId: string, 
+    status: LunchStatus, 
+    details?: Partial<LearnerLunchRecord>
+  ): LearnerLunchRecord {
+    const today = details?.date || new Date().toISOString().split('T')[0];
+    const existingList = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const existing = existingList.find(r => r.studentId === studentId && r.date === today);
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let updatedRecord: LearnerLunchRecord;
+    if (existing) {
+      updatedRecord = {
+        ...existing,
+        status,
+        takenAt: status === 'taken' || status === 'special_diet' ? (details?.takenAt || timeStr) : undefined,
+        ...details,
+        updatedAt: now.toISOString()
+      };
+    } else {
+      // Find student details
+      const user = this.getUsers().find(u => u.id === studentId);
+      updatedRecord = {
+        id: `lnch-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        studentId,
+        studentName: user?.name || details?.studentName || 'Learner',
+        admissionNumber: user?.admissionNumber || details?.admissionNumber || 'ADM/2026/001',
+        grade: user?.grade || details?.grade || 4,
+        stream: user?.stream || details?.stream || 'Dove',
+        date: today,
+        status,
+        takenAt: status === 'taken' || status === 'special_diet' ? (details?.takenAt || timeStr) : undefined,
+        mealType: details?.mealType || (status === 'special_diet' ? 'Special Medical Diet' : 'Standard Balanced Hot Meal'),
+        dietaryNotes: details?.dietaryNotes || '',
+        markedBy: details?.markedBy || 'Class Teacher',
+        markedByRole: details?.markedByRole || 'Class Teacher',
+        updatedAt: now.toISOString()
+      };
+    }
+
+    this.saveLunchRecord(updatedRecord);
+    return updatedRecord;
   },
 
   // ========================================================

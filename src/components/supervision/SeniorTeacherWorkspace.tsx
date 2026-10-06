@@ -416,8 +416,9 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
         <SanatoriumSection
           currentUser={currentUser}
           canRecord={false}
-          title="Senior Teacher Sanatorium & Student Health Oversight"
-          subtitle="Learner health visits, medical triage records, activity exemptions, and nurse in-charge recommendations across all grades. (Read-Only Audit Mode)"
+          filterGrade={currentUser.grade || 8}
+          title={`Senior Teacher Sanatorium Oversight · Grade ${currentUser.grade || 8}`}
+          subtitle={`Learner health visits, triage records, and medical recommendations strictly for your supervised Grade ${currentUser.grade || 8} cohort.`}
         />
       )}
 

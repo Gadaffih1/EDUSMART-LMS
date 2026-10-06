@@ -77,36 +77,86 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
   title = "School Sanatorium & Health Bay",
   subtitle = "Official medical register: Student clinic attendance logs, nurse in-charge notes, vital signs, and clinical recommendations."
 }) => {
-  // Executive leadership & admin staff have strict read-only access (no editing rights)
+  // Executive leadership (Head Teacher, Deputy Head, Dean of Studies) & Nurse Officer have full school-wide view
   const isNurseOfficer = currentUser.email === 'nurse@edusmart.ac.ke' || 
     (Boolean(currentUser.designation) && currentUser.designation!.toLowerCase().includes('nurse'));
   const effectiveCanRecord = canRecord && isNurseOfficer;
+
+  // Strict Role-Based Privacy Scoping:
+  // 1. Executive Full View: Head Teacher, Deputy Head, Dean of Studies (and Clinic Nurse / Admin)
+  // 2. Class Teacher: Restricted strictly to their class/stream
+  // 3. Senior Teacher: Restricted strictly to his or her grade
+  // 4. Parent: Restricted strictly to specific child
+  const isExecutiveFullView = ['head_teacher', 'deputy_head', 'dean_of_studies', 'admin'].includes(currentUser.role) || isNurseOfficer;
+  const isSeniorTeacher = currentUser.role === 'senior_teacher';
+  const isClassTeacher = !isExecutiveFullView && !isSeniorTeacher && (currentUser.role === 'class_teacher' || Boolean(currentUser.stream) || Boolean(filterStream));
+  const isParentUser = currentUser.role === 'parent';
+
+  const effectiveScopeGrade = isClassTeacher 
+    ? (filterGrade || currentUser.grade || 4)
+    : isSeniorTeacher 
+      ? (filterGrade || currentUser.grade || 8)
+      : undefined;
+
+  const effectiveScopeStream = isClassTeacher 
+    ? (filterStream || currentUser.stream || 'Dove')
+    : undefined;
+
   const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher', 'hod', 'school_admin_staff', 'admin'].includes(currentUser.role);
   const isReadOnlyAudit = isExecutiveOrAdmin && !isNurseOfficer;
 
   // For parent accounts: strictly link records to parent's registered children
   const parentChildren = useMemo(() => {
-    if (currentUser.role === 'parent') {
+    if (isParentUser) {
       return Storage.getParentChildren(currentUser);
     }
     return [];
-  }, [currentUser]);
+  }, [isParentUser, currentUser]);
 
   const parentRestrictedIds = useMemo(() => {
-    if (currentUser.role === 'parent') {
+    if (isParentUser) {
       return parentChildren.map(c => c.id);
     }
     return allowedStudentIds || null;
-  }, [currentUser.role, parentChildren, allowedStudentIds]);
+  }, [isParentUser, parentChildren, allowedStudentIds]);
 
-  // Load records scoped by permissions
+  // Load records scoped strictly by role permissions
   const loadScopedRecords = useCallback(() => {
-    const raw = Storage.getSanatoriumRecords(filterStudentId, filterGrade, filterStream);
-    if (parentRestrictedIds) {
-      return raw.filter(r => parentRestrictedIds.includes(r.studentId));
+    let raw = Storage.getSanatoriumRecords();
+
+    // 1. Parent restriction: strictly specific child (or children if multiple)
+    if (isParentUser) {
+      if (filterStudentId) {
+        return raw.filter(r => r.studentId === filterStudentId);
+      }
+      if (parentRestrictedIds && parentRestrictedIds.length > 0) {
+        return raw.filter(r => parentRestrictedIds.includes(r.studentId));
+      }
+      return [];
+    }
+
+    // 2. Class Teacher restriction: strictly restricted to their stream
+    if (isClassTeacher) {
+      return raw.filter(r => r.grade === effectiveScopeGrade && r.stream === effectiveScopeStream);
+    }
+
+    // 3. Senior Teacher restriction: strictly restricted to their grade
+    if (isSeniorTeacher) {
+      return raw.filter(r => r.grade === effectiveScopeGrade);
+    }
+
+    // 4. Executive Leadership (Head Teacher, Deputy Head, Dean of Studies) & Nurse: Full institutional view
+    if (filterGrade !== undefined) {
+      raw = raw.filter(r => r.grade === filterGrade);
+    }
+    if (filterStream !== undefined) {
+      raw = raw.filter(r => r.stream === filterStream);
+    }
+    if (filterStudentId !== undefined) {
+      raw = raw.filter(r => r.studentId === filterStudentId);
     }
     return raw;
-  }, [filterStudentId, filterGrade, filterStream, parentRestrictedIds]);
+  }, [isParentUser, filterStudentId, parentRestrictedIds, isClassTeacher, effectiveScopeGrade, effectiveScopeStream, isSeniorTeacher, filterGrade, filterStream]);
 
   // All records state
   const [records, setRecords] = useState<SanatoriumRecord[]>(loadScopedRecords);
@@ -400,30 +450,52 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
         </div>
       </div>
 
-      {/* Read-Only Surveillance Notice for Executive Leadership and Admin Staff */}
-      {isReadOnlyAudit && (
-        <div className="bg-rose-50/90 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-950 shadow-2xs">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
-              <Eye className="w-4 h-4 text-rose-700" />
-            </div>
-            <div>
-              <div className="font-bold text-rose-900 flex items-center gap-2">
-                <span>Read-Only Sanatorium & Health Bay Surveillance</span>
-                <span className="px-2 py-0.5 rounded-full bg-rose-200 text-rose-800 text-[10px] font-black uppercase tracking-wider">
-                  No Editing Rights
-                </span>
-              </div>
-              <div className="text-[11px] text-rose-800 mt-0.5">
-                Executive Leadership & Administration Staff view. Student triage logs, clinical assessments, and patient sign-outs are maintained exclusively by Sister Mary Wanjiku (School Nursing Officer).
-              </div>
-            </div>
+      {/* Role-Based Privacy & Access Notice */}
+      <div className={`rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs ${
+        isExecutiveFullView 
+          ? 'bg-slate-900 text-white border border-slate-800' 
+          : isClassTeacher
+            ? 'bg-emerald-50 text-emerald-950 border border-emerald-200'
+            : isSeniorTeacher
+              ? 'bg-blue-50 text-blue-950 border border-blue-200'
+              : 'bg-rose-50 text-rose-950 border border-rose-200'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+            isExecutiveFullView ? 'bg-white/10 text-emerald-400' : 'bg-white shadow-2xs'
+          }`}>
+            {isExecutiveFullView ? <Eye className="w-4 h-4 text-emerald-400" /> : <ShieldCheck className="w-4 h-4 text-emerald-600" />}
           </div>
-          <div className="text-[10px] font-mono font-bold text-rose-700 bg-white/80 border border-rose-200 px-2.5 py-1 rounded-lg shrink-0">
-            AUDIT & SURVEILLANCE
+          <div>
+            <div className="font-bold flex items-center gap-2">
+              <span>
+                {isExecutiveFullView && 'Executive Surveillance & Audit Authority'}
+                {isClassTeacher && `Class Teacher Confidential Scope · Grade ${effectiveScopeGrade} (${effectiveScopeStream})`}
+                {isSeniorTeacher && `Senior Teacher Academic Oversight · Grade ${effectiveScopeGrade} Health Records`}
+                {isParentUser && "Confidential Healthcare Record · Child Privacy Protection"}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                isExecutiveFullView 
+                  ? 'bg-emerald-400 text-slate-950' 
+                  : 'bg-white border text-slate-800'
+              }`}>
+                {isExecutiveFullView ? 'FULL INSTITUTIONAL VIEW' : 'STRICTLY SCOPED'}
+              </span>
+            </div>
+            <div className={`text-[11px] mt-0.5 ${isExecutiveFullView ? 'text-slate-300' : 'opacity-80'}`}>
+              {isExecutiveFullView && 'Full institutional access authorized for Head Teacher, Deputy Head, Dean of Studies, and School Nursing Officer across all grades and streams.'}
+              {isClassTeacher && `Medical privacy enforced: You are authorized to access clinical records strictly for learners enrolled in your designated stream: Grade ${effectiveScopeGrade} (${effectiveScopeStream}).`}
+              {isSeniorTeacher && `Medical privacy enforced: Authorized to access clinical visit logs strictly for your supervised cohort: Grade ${effectiveScopeGrade}.`}
+              {isParentUser && "Medical privacy enforced: Health records, treatments, and triage notes are strictly restricted to your registered child."}
+            </div>
           </div>
         </div>
-      )}
+        <div className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg shrink-0 ${
+          isExecutiveFullView ? 'bg-white/10 text-emerald-300 border border-white/20' : 'bg-white border border-slate-300 text-slate-700'
+        }`}>
+          {isExecutiveFullView ? 'EXECUTIVE CLEARANCE' : 'CONFIDENTIAL RBAC'}
+        </div>
+      </div>
 
       {/* ========================================================
           KEY HEALTH & CLINIC METRICS
@@ -525,18 +597,61 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
             ))}
           </select>
 
-          {/* Grade Filter (if not locked by parent/class teacher) */}
-          {!filterGrade && (
-            <select
-              value={gradeFilter}
-              onChange={(e) => setGradeFilter(e.target.value)}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-rose-500"
-            >
-              <option value="all">All Grades</option>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(g => (
-                <option key={g} value={g}>Grade {g}</option>
-              ))}
-            </select>
+          {/* Grade & Stream Selectors / Locked Scopes */}
+          {isExecutiveFullView && (
+            <>
+              <select
+                value={gradeFilter}
+                onChange={(e) => setGradeFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+              >
+                <option value="all">All Grades (1–9)</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(g => (
+                  <option key={g} value={g}>Grade {g}</option>
+                ))}
+              </select>
+
+              <select
+                value={streamFilter}
+                onChange={(e) => setStreamFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+              >
+                <option value="all">All Streams</option>
+                {[...PRIMARY_STREAMS, ...JUNIOR_STREAMS].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </>
+          )}
+
+          {isSeniorTeacher && (
+            <div className="flex items-center gap-1.5">
+              <span className="px-3 py-2 bg-blue-50 border border-blue-200 text-blue-900 rounded-lg font-bold text-xs">
+                🔒 Grade {effectiveScopeGrade} Only
+              </span>
+              <select
+                value={streamFilter}
+                onChange={(e) => setStreamFilter(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-rose-500"
+              >
+                <option value="all">All Grade {effectiveScopeGrade} Streams</option>
+                {((effectiveScopeGrade || 8) <= 6 ? PRIMARY_STREAMS : JUNIOR_STREAMS).map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {isClassTeacher && (
+            <span className="px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg font-bold text-xs flex items-center gap-1">
+              <span>🔒 Grade {effectiveScopeGrade} ({effectiveScopeStream})</span>
+            </span>
+          )}
+
+          {isParentUser && (
+            <span className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-900 rounded-lg font-bold text-xs flex items-center gap-1">
+              <span>🔒 Registered Child Only</span>
+            </span>
           )}
 
           {/* Clear Filters Button */}

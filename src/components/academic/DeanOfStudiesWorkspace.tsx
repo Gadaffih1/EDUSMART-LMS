@@ -20,6 +20,7 @@ import { TimetablePortal } from '../timetable/TimetablePortal';
 import { FacultyAllocationManager } from '../timetable/FacultyAllocationManager';
 import { FixedLessonsManager } from '../timetable/FixedLessonsManager';
 import { TimetableAutoGeneratorModal } from '../timetable/TimetableAutoGeneratorModal';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   BookOpen, 
   BarChart3, 
@@ -43,7 +44,8 @@ import {
   Bus,
   Trophy,
   Users,
-  Lock
+  Lock,
+  Utensils
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -84,6 +86,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     | 'fixed_lessons' 
     | 'work_entries' 
     | 'sanatorium' 
+    | 'lunch_register'
     | 'transport' 
     | 'cocurricular' 
     | 'reporting_hub';
@@ -355,6 +358,16 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
         >
           <HeartPulse className="w-4 h-4 text-rose-400" />
           <span>Sanatorium & Health Logs</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('lunch_register')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <Utensils className="w-4 h-4 text-amber-400" />
+          <span>Learner Lunch Register</span>
         </button>
 
         <button
@@ -731,6 +744,18 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           canRecord={false}
           title="Dean of Studies Sanatorium & Medical Logs"
           subtitle="Monitor learner clinical attendances, assessment exemptions, exam medical leaves, and doctor recommendations. (Read-Only Audit Mode)"
+        />
+      )}
+
+      {/* ========================================================
+          TAB: LEARNER LUNCH REGISTER & DINING SURVEILLANCE
+          ======================================================== */}
+      {activeTab === 'lunch_register' && (
+        <LearnerLunchRegister
+          currentUser={currentUser}
+          viewMode="executive"
+          title="Dean of Studies Learner Lunch & Dining Surveillance"
+          subtitle="Academic leadership dining oversight: Monitor daily student meal participation, verify class teacher lunch markings, and inspect special diet accommodation."
         />
       )}
 

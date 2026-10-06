@@ -20,6 +20,7 @@ import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
   Calendar, 
   Clock, 
@@ -38,6 +39,7 @@ import {
   Lock, 
   ShieldCheck, 
   Eye, 
+  Utensils, 
   Check, 
   X, 
   ArrowRight, 
@@ -67,6 +69,7 @@ interface SchoolAdminStaffWorkspaceProps {
 type AdminTab = 
   | 'work_entries'
   | 'sanatorium'
+  | 'lunch_register'
   | 'transport'
   | 'cocurricular'
   | 'gate_exits'
@@ -433,6 +436,19 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               </button>
 
               <button
+                onClick={() => setActiveTab('lunch_register')}
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === 'lunch_register'
+                    ? 'border-amber-400 text-amber-400 font-bold'
+                    : 'border-transparent text-slate-300 hover:text-white'
+                }`}
+              >
+                <Utensils className="w-4 h-4 text-amber-400" />
+                <span>3. Learner Lunch Register</span>
+                <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">Dining</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('transport')}
                 className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
                   activeTab === 'transport'
@@ -566,6 +582,18 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             subtitle={currentUser.email === 'nurse@edusmart.ac.ke' || (Boolean(currentUser.designation) && currentUser.designation!.toLowerCase().includes('nurse'))
               ? "Official medical register: Student clinic attendance logs, nurse in-charge notes, vital signs, and clinical recommendations."
               : "View student clinic attendance, nurse in-charge notes, symptoms, vital signs, and clinical recommendations. Export PDF reports. Read-only access for Admin Staff."}
+          />
+        )}
+
+        {/* ========================================================
+            TAB: LEARNER LUNCH REGISTER & DINING SURVEILLANCE
+            ======================================================== */}
+        {activeTab === 'lunch_register' && (
+          <LearnerLunchRegister
+            currentUser={currentUser}
+            viewMode="executive"
+            title="School Administration Learner Lunch & Dining Register"
+            subtitle="Campus-wide learner dining surveillance: Monitor headcount, daily meal uptake %, and verify class teacher lunch logs across all grades and streams."
           />
         )}
 

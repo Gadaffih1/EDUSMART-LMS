@@ -52,7 +52,9 @@ import {
   CoCurricularEquipment,
   CoCurricularTrip,
   CoCurricularAnnouncement,
-  CoCurricularBudgetItem
+  CoCurricularBudgetItem,
+  BellPeriodDef,
+  LearnerLunchRecord
 } from '../types';
 
 export const INITIAL_GRADE_PASSWORDS: GradePassword[] = [
@@ -4284,6 +4286,175 @@ export const INITIAL_CO_CURRICULAR_BUDGET: CoCurricularBudgetItem[] = [
     academicYear: 2026,
     approvedBy: 'Mrs. Lydia Cherono (Deputy Head)',
     status: 'Approved'
+  }
+];
+
+// ========================================================
+// 🔔 INSTITUTIONAL BELL SCHEDULE & PERIOD TIMINGS
+// ========================================================
+
+export const INITIAL_BELL_SCHEDULE: BellPeriodDef[] = [
+  { period: 1, label: 'Period 1 (Morning Core)', startTime: '08:00', endTime: '08:40' },
+  { period: 2, label: 'Period 2 (Core Instruction)', startTime: '08:40', endTime: '09:20' },
+  { period: 0, label: 'Morning Tea & Health Snack', startTime: '09:20', endTime: '09:40', isBreak: true, breakType: 'morning_tea' },
+  { period: 3, label: 'Period 3 (STEM & Numeracy)', startTime: '09:40', endTime: '10:20' },
+  { period: 4, label: 'Period 4 (Language Arts)', startTime: '10:20', endTime: '11:00' },
+  { period: 5, label: 'Period 5 (Social & Applied Sciences)', startTime: '11:00', endTime: '11:40' },
+  { period: 6, label: 'Period 6 (Creative & Practical)', startTime: '11:40', endTime: '12:20' },
+  { period: 0, label: 'Midday Lunch & Pastoral Rest', startTime: '12:20', endTime: '13:20', isBreak: true, breakType: 'lunch' },
+  { period: 7, label: 'Period 7 (Afternoon Session)', startTime: '13:20', endTime: '14:00' },
+  { period: 8, label: 'Period 8 (Specialist & Lab)', startTime: '14:00', endTime: '14:40' },
+  { period: 9, label: 'Remedial & Library Study', startTime: '14:40', endTime: '15:20', isBreak: true, breakType: 'remedial' },
+  { period: 10, label: 'Co-Curricular Games & Clubs', startTime: '15:20', endTime: '16:30', isBreak: true, breakType: 'games' },
+];
+
+// ========================================================
+// 🍱 LEARNER LUNCH ATTENDANCE & MEAL REGISTRY
+// ========================================================
+
+export const INITIAL_LUNCH_RECORDS: LearnerLunchRecord[] = [
+  {
+    id: 'lnch-001',
+    studentId: 'usr-stu-brian',
+    studentName: 'Brian Otieno',
+    admissionNumber: 'ADM/2023/0412',
+    grade: 4,
+    stream: 'Dove',
+    date: '2026-10-06',
+    status: 'taken',
+    takenAt: '12:45 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full meal consumed, hydrated.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:45:00.000Z'
+  },
+  {
+    id: 'lnch-002',
+    studentId: 'usr-stu-amina',
+    studentName: 'Amina Hassan',
+    admissionNumber: 'ADM/2023/0413',
+    grade: 4,
+    stream: 'Dove',
+    date: '2026-10-06',
+    status: 'special_diet',
+    takenAt: '12:50 PM',
+    mealType: 'Special Medical Diet',
+    dietaryNotes: 'Halal preparation, mild seasoning as advised by Sanatorium.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:50:00.000Z'
+  },
+  {
+    id: 'lnch-003',
+    studentId: 'usr-stu-kevin',
+    studentName: 'Kevin Mutua',
+    admissionNumber: 'ADM/2023/0414',
+    grade: 4,
+    stream: 'Dove',
+    date: '2026-10-06',
+    status: 'taken',
+    takenAt: '12:40 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full meal consumed.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:40:00.000Z'
+  },
+  {
+    id: 'lnch-004',
+    studentId: 'usr-stu-grace',
+    studentName: 'Grace Njeri',
+    admissionNumber: 'ADM/2023/0415',
+    grade: 4,
+    stream: 'Dove',
+    date: '2026-10-06',
+    status: 'taken',
+    takenAt: '12:44 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full meal consumed.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:44:00.000Z'
+  },
+  {
+    id: 'lnch-005',
+    studentId: 'usr-stu-emmanuel',
+    studentName: 'Emmanuel Kipchumba',
+    admissionNumber: 'ADM/2023/0416',
+    grade: 4,
+    stream: 'Dove',
+    date: '2026-10-06',
+    status: 'not_taken',
+    dietaryNotes: 'In Sanatorium observation bay during lunchtime.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:55:00.000Z'
+  },
+  {
+    id: 'lnch-006',
+    studentId: 'usr-stu-faith',
+    studentName: 'Faith Wanjiru',
+    admissionNumber: 'ADM/2021/0819',
+    grade: 8,
+    stream: 'Mara',
+    date: '2026-10-06',
+    status: 'taken',
+    takenAt: '12:35 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full meal consumed, hot soup included.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:35:00.000Z'
+  },
+  {
+    id: 'lnch-007',
+    studentId: 'usr-stu-peter',
+    studentName: 'Peter Omondi',
+    admissionNumber: 'ADM/2021/0820',
+    grade: 8,
+    stream: 'Mara',
+    date: '2026-10-06',
+    status: 'taken',
+    takenAt: '12:38 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full meal consumed.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-06T12:38:00.000Z'
+  },
+  // Yesterday records (2026-10-05) for history
+  {
+    id: 'lnch-008',
+    studentId: 'usr-stu-brian',
+    studentName: 'Brian Otieno',
+    admissionNumber: 'ADM/2023/0412',
+    grade: 4,
+    stream: 'Dove',
+    date: '2026-10-05',
+    status: 'taken',
+    takenAt: '12:41 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full hot lunch consumed.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-05T12:41:00.000Z'
+  },
+  {
+    id: 'lnch-009',
+    studentId: 'usr-stu-faith',
+    studentName: 'Faith Wanjiru',
+    admissionNumber: 'ADM/2021/0819',
+    grade: 8,
+    stream: 'Mara',
+    date: '2026-10-05',
+    status: 'taken',
+    takenAt: '12:39 PM',
+    mealType: 'Standard Balanced Hot Meal',
+    dietaryNotes: 'Full lunch consumed.',
+    markedBy: 'Mr. David Kiprono',
+    markedByRole: 'Class Teacher',
+    updatedAt: '2026-10-05T12:39:00.000Z'
   }
 ];
 

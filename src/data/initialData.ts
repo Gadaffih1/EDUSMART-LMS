@@ -54,7 +54,9 @@ import {
   CoCurricularAnnouncement,
   CoCurricularBudgetItem,
   BellPeriodDef,
-  LearnerLunchRecord
+  LearnerLunchRecord,
+  StaffDutyAssignment,
+  TransportDropoffVerification
 } from '../types';
 
 export const INITIAL_GRADE_PASSWORDS: GradePassword[] = [
@@ -4471,7 +4473,81 @@ export const INITIAL_LUNCH_RECORDS: LearnerLunchRecord[] = [
   }
 ];
 
+// ========================================================
+// 📋 INITIAL STAFF DUTY ROSTERS (WEEKLY TEACHERS ON DUTY)
+// ========================================================
+export const INITIAL_STAFF_DUTY_ROSTER: StaffDutyAssignment[] = [
+  {
+    id: 'duty-w5',
+    weekNumber: 5,
+    startDate: '2026-09-28',
+    endDate: '2026-10-02',
+    leadTeacher: 'Mr. Peter Ochieng',
+    seniorTeacherName: 'Mr. Peter Ochieng (Senior Teacher)',
+    assistantTeacher: 'Mrs. Mary Wambui',
+    gateDutyTeacher: 'Mr. Peter Mutua',
+    diningSupervision: 'Mr. David Kiprono',
+    focusTheme: 'Punctuality, Smart Attire & Assembly Decorum',
+    status: 'Current',
+    assignedBy: 'Mrs. Lydia Cherono (Deputy Head)',
+    assignedAt: '2026-09-26',
+    notes: 'Morning gate supervision starting strictly at 6:45 AM. Senior teacher leads Monday assembly.'
+  },
+  {
+    id: 'duty-w6',
+    weekNumber: 6,
+    startDate: '2026-10-05',
+    endDate: '2026-10-09',
+    leadTeacher: 'Mr. Peter Ochieng',
+    seniorTeacherName: 'Mr. Peter Ochieng (Senior Teacher)',
+    assistantTeacher: 'Mr. Charles Omondi',
+    gateDutyTeacher: 'Mrs. Jane Njeri',
+    diningSupervision: 'Mrs. Grace Muthoni',
+    focusTheme: 'Academic Excellence & Zero Truancy',
+    status: 'Upcoming',
+    assignedBy: 'Mrs. Lydia Cherono (Deputy Head)',
+    assignedAt: '2026-10-02',
+    notes: 'All TODs to synchronize watches and monitor dining hall queues during morning tea and lunch breaks.'
+  },
+  {
+    id: 'duty-w4',
+    weekNumber: 4,
+    startDate: '2026-09-21',
+    endDate: '2026-09-25',
+    leadTeacher: 'Mr. Peter Ochieng',
+    seniorTeacherName: 'Mr. Peter Ochieng (Senior Teacher)',
+    assistantTeacher: 'Mr. David Kiprono',
+    gateDutyTeacher: 'Mr. Vincent Kipruto',
+    diningSupervision: 'Mrs. Mary Wambui',
+    focusTheme: 'Health & Environmental Sanitation',
+    status: 'Completed',
+    assignedBy: 'Mrs. Lydia Cherono (Deputy Head)',
+    assignedAt: '2026-09-19',
+    notes: 'Handover report filed and commended by Head Teacher.'
+  }
+];
 
-
-
+// ========================================================
+// 🚌 INITIAL TRANSPORT AFTERNOON DROPOFF VERIFICATIONS
+// ========================================================
+export const INITIAL_DROPOFF_VERIFICATIONS: TransportDropoffVerification[] = [
+  {
+    id: 'tdv-demo-01',
+    studentId: 'usr-stu-brian',
+    studentName: 'Brian Otieno',
+    admissionNumber: 'ADM/2023/0412',
+    grade: 4,
+    stream: 'Dove',
+    stopName: 'Kilimani Shopping Center Gate',
+    busPlate: 'KDG 218M',
+    busNumber: 'Bus 01',
+    parentName: 'Mrs. Grace Otieno',
+    parentPhone: '+254 722 123 456',
+    verificationCode: '8492',
+    status: 'pending_code',
+    requestedAt: '16:15',
+    verifiedBy: 'Ms. Alice Wanjiru (Bus Chaperone)',
+    parentConsentConfirmed: false
+  }
+];
 

@@ -6,7 +6,8 @@ import {
   GradeLevel, 
   StreamName,
   SearchAuditLog,
-  AppNotification
+  AppNotification,
+  StaffDutyAssignment
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { 
@@ -32,7 +33,12 @@ import {
   Globe,
   Sparkles,
   BarChart3,
-  HeartPulse
+  HeartPulse,
+  Edit3,
+  Trash2,
+  X,
+  PlusCircle,
+  CheckCircle2
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
@@ -67,18 +73,6 @@ interface DisciplineCase {
   reportedBy: string;
 }
 
-interface StaffDutyAssignment {
-  id: string;
-  weekNumber: number;
-  startDate: string;
-  endDate: string;
-  leadTeacher: string;
-  assistantTeacher: string;
-  gateDutyTeacher: string;
-  diningSupervision: string;
-  status: 'Current' | 'Upcoming' | 'Completed';
-}
-
 export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ currentUser }) => {
   type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<DeputyTab>('operations');
@@ -88,6 +82,104 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
   const workLogs = Storage.getWorkEntryLogs();
   const allUsers = Storage.getUsers();
   const teachersList = allUsers.filter(u => ['teacher', 'class_teacher', 'hod', 'senior_teacher'].includes(u.role));
+  const seniorTeachers = allUsers.filter(u => u.role === 'senior_teacher');
+
+  // Staff duty rosters from Storage (Editable & Assignable by Deputy Head)
+  const [dutyRosters, setDutyRosters] = useState<StaffDutyAssignment[]>(() => Storage.getStaffDutyRosters());
+  const [showDutyModal, setShowDutyModal] = useState(false);
+  const [editingDutyId, setEditingDutyId] = useState<string | null>(null);
+  const [dutyWeek, setDutyWeek] = useState<number>(7);
+  const [dutyStartDate, setDutyStartDate] = useState('2026-10-12');
+  const [dutyEndDate, setDutyEndDate] = useState('2026-10-16');
+  const [dutyLeadTeacher, setDutyLeadTeacher] = useState('Mr. Peter Ochieng');
+  const [dutyAssistantTeacher, setDutyAssistantTeacher] = useState('Mr. David Kiprono');
+  const [dutyGateTeacher, setDutyGateTeacher] = useState('Mrs. Jane Njeri');
+  const [dutyDiningSupervisor, setDutyDiningSupervisor] = useState('Mrs. Grace Muthoni');
+  const [dutyFocusTheme, setDutyFocusTheme] = useState('Morning Assembly Discipline & Compound Order');
+  const [dutyStatus, setDutyStatus] = useState<StaffDutyAssignment['status']>('Upcoming');
+  const [dutyNotes, setDutyNotes] = useState('');
+  const [dutyFeedback, setDutyFeedback] = useState<string | null>(null);
+
+  // Sync duty rosters on storage updates
+  React.useEffect(() => {
+    const handleDutyUpdate = () => {
+      setDutyRosters(Storage.getStaffDutyRosters());
+    };
+    window.addEventListener('staff-duty-rosters-updated', handleDutyUpdate);
+    return () => window.removeEventListener('staff-duty-rosters-updated', handleDutyUpdate);
+  }, []);
+
+  const handleOpenNewDutyModal = () => {
+    setEditingDutyId(null);
+    const nextWeek = dutyRosters.length > 0 ? Math.max(...dutyRosters.map(d => d.weekNumber)) + 1 : 7;
+    setDutyWeek(nextWeek);
+    setDutyStartDate('2026-10-12');
+    setDutyEndDate('2026-10-16');
+    setDutyLeadTeacher(seniorTeachers[0]?.name || 'Mr. Peter Ochieng');
+    setDutyAssistantTeacher(teachersList[0]?.name || 'Mr. David Kiprono');
+    setDutyGateTeacher(teachersList[1]?.name || 'Mrs. Jane Njeri');
+    setDutyDiningSupervisor(teachersList[2]?.name || 'Mrs. Grace Muthoni');
+    setDutyFocusTheme('Punctuality, Smart Attire & Assembly Decorum');
+    setDutyStatus('Upcoming');
+    setDutyNotes('');
+    setShowDutyModal(true);
+  };
+
+  const handleEditDuty = (duty: StaffDutyAssignment) => {
+    setEditingDutyId(duty.id);
+    setDutyWeek(duty.weekNumber);
+    setDutyStartDate(duty.startDate);
+    setDutyEndDate(duty.endDate);
+    setDutyLeadTeacher(duty.leadTeacher);
+    setDutyAssistantTeacher(duty.assistantTeacher);
+    setDutyGateTeacher(duty.gateDutyTeacher);
+    setDutyDiningSupervisor(duty.diningSupervision);
+    setDutyFocusTheme(duty.focusTheme || '');
+    setDutyStatus(duty.status);
+    setDutyNotes(duty.notes || '');
+    setShowDutyModal(true);
+  };
+
+  const handleSaveDuty = (e: React.FormEvent) => {
+    e.preventDefault();
+    const dutyPayload: StaffDutyAssignment = {
+      id: editingDutyId || `duty-w${dutyWeek}-${Date.now()}`,
+      weekNumber: Number(dutyWeek),
+      startDate: dutyStartDate,
+      endDate: dutyEndDate,
+      leadTeacher: dutyLeadTeacher,
+      seniorTeacherName: dutyLeadTeacher.includes('Peter Ochieng') || dutyLeadTeacher.includes('Senior')
+        ? `${dutyLeadTeacher} (Senior Teacher)`
+        : dutyLeadTeacher,
+      assistantTeacher: dutyAssistantTeacher,
+      gateDutyTeacher: dutyGateTeacher,
+      diningSupervision: dutyDiningSupervisor,
+      focusTheme: dutyFocusTheme,
+      status: dutyStatus,
+      assignedBy: `${currentUser.name} (Deputy Head)`,
+      assignedAt: new Date().toISOString().split('T')[0],
+      notes: dutyNotes
+    };
+
+    if (editingDutyId) {
+      Storage.updateStaffDutyRoster(editingDutyId, dutyPayload);
+      setDutyFeedback(`Weekly Duty Roster for Week ${dutyWeek} successfully updated!`);
+    } else {
+      Storage.addStaffDutyRoster(dutyPayload);
+      setDutyFeedback(`Weekly Duty Roster for Week ${dutyWeek} assigned and broadcast to staff!`);
+    }
+
+    setShowDutyModal(false);
+    setTimeout(() => setDutyFeedback(null), 3500);
+  };
+
+  const handleDeleteDuty = (id: string, week: number) => {
+    if (confirm(`Remove duty roster assignment for Week ${week}?`)) {
+      Storage.deleteStaffDutyRoster(id);
+      setDutyFeedback(`Week ${week} duty assignment removed.`);
+      setTimeout(() => setDutyFeedback(null), 3000);
+    }
+  };
 
   // Online Search Discipline & Filtration state
   const [searchLogs, setSearchLogs] = useState<SearchAuditLog[]>(() => Storage.getSearchAuditLogs());
@@ -162,32 +254,6 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
   const [dispCategory, setDispCategory] = useState<DisciplineCase['category']>('Lateness/Truancy');
   const [dispDescription, setDispDescription] = useState('');
   const [dispAction, setDispAction] = useState('');
-
-  // Staff duty rosters
-  const [dutyRosters, setDutyRosters] = useState<StaffDutyAssignment[]>([
-    {
-      id: 'duty-w5',
-      weekNumber: 5,
-      startDate: '2026-09-28',
-      endDate: '2026-10-02',
-      leadTeacher: 'Mr. David Kiprono',
-      assistantTeacher: 'Mrs. Florence Akinyi',
-      gateDutyTeacher: 'Mr. Peter Mutua',
-      diningSupervision: 'Mrs. Esther Kamau',
-      status: 'Current'
-    },
-    {
-      id: 'duty-w6',
-      weekNumber: 6,
-      startDate: '2026-10-05',
-      endDate: '2026-10-09',
-      leadTeacher: 'Mr. Peter Ochieng',
-      assistantTeacher: 'Dr. Mercy Mwangi',
-      gateDutyTeacher: 'Mr. Charles Omondi',
-      diningSupervision: 'Mr. David Kiprono',
-      status: 'Upcoming'
-    }
-  ]);
 
   // Handle Mark Gate Pass Returned
   const handleUpdatePassStatus = (id: string, newStatus: GateExitPass['status']) => {
@@ -905,59 +971,302 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       )}
 
       {/* ========================================================
-          TAB 3: STAFF DUTY ROSTER
+          TAB 3: STAFF DUTY ROSTER (DEPUTY HEAD ASSIGNMENT & EDIT RIGHTS)
           ======================================================== */}
       {activeTab === 'staff_duty' && (
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Staff Weekly Duty Master Roster
-              </h2>
-              <p className="text-xs text-slate-500">
-                Coordination of weekly teachers on duty (TOD), campus perimeter supervision, morning assembly, and dining hall monitoring.
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900">
+                  Staff Weekly Duty Master Roster
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider border border-emerald-300">
+                  Deputy Head Assignment Rights Active
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Deputy Head operational administration: Edit and assign teachers and senior teachers on weekly duty (TOD), gate surveillance, morning assembly, and dining supervision.
               </p>
             </div>
-            <div className="text-xs font-mono bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200">
-              Active Term: Term 3 · 2026 Academic Year
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleOpenNewDutyModal}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4 text-emerald-400" />
+                <span>Assign Weekly Duty Roster</span>
+              </button>
+              <div className="text-xs font-mono bg-blue-50 text-blue-800 px-3 py-1.5 rounded-lg border border-blue-200">
+                Active Term: Term 3 · 2026 Academic Year
+              </div>
             </div>
           </div>
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
+          {dutyFeedback && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 shadow-xs animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{dutyFeedback}</span>
+            </div>
+          )}
+
+          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3">Week</th>
                   <th className="py-2.5 px-3">Dates</th>
-                  <th className="py-2.5 px-3">Lead Teacher (Assembly)</th>
+                  <th className="py-2.5 px-3">Lead / Senior Teacher (Assembly)</th>
                   <th className="py-2.5 px-3">Assistant TOD</th>
                   <th className="py-2.5 px-3">Security & Gate TOD</th>
                   <th className="py-2.5 px-3">Dining & Recess</th>
+                  <th className="py-2.5 px-3">Weekly Theme</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
+                  <th className="py-2.5 px-3 text-right">Deputy Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {dutyRosters.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-3 font-bold font-mono text-slate-900">Week {d.weekNumber}</td>
-                    <td className="py-2.5 px-3 font-mono text-slate-500">{d.startDate} - {d.endDate}</td>
-                    <td className="py-2.5 px-3 font-semibold text-blue-900">{d.leadTeacher}</td>
+                  <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-2.5 px-3 font-bold font-mono text-slate-900 whitespace-nowrap">Week {d.weekNumber}</td>
+                    <td className="py-2.5 px-3 font-mono text-slate-500 whitespace-nowrap">{d.startDate} - {d.endDate}</td>
+                    <td className="py-2.5 px-3">
+                      <div className="font-semibold text-blue-900">{d.leadTeacher}</div>
+                      {d.seniorTeacherName && (
+                        <div className="text-[10px] text-indigo-700 font-medium">Senior Teacher Lead</div>
+                      )}
+                    </td>
                     <td className="py-2.5 px-3 text-slate-700">{d.assistantTeacher}</td>
                     <td className="py-2.5 px-3 text-slate-700">{d.gateDutyTeacher}</td>
                     <td className="py-2.5 px-3 text-slate-700">{d.diningSupervision}</td>
+                    <td className="py-2.5 px-3 text-slate-600 max-w-[180px] truncate" title={d.focusTheme || d.notes}>
+                      {d.focusTheme || 'General Campus Supervision'}
+                    </td>
                     <td className="py-2.5 px-3 text-center">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
                         d.status === 'Current' ? 'bg-emerald-100 text-emerald-800' :
-                        d.status === 'Upcoming' ? 'bg-slate-100 text-slate-700' : 'bg-slate-200 text-slate-500'
+                        d.status === 'Upcoming' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
                       }`}>
                         {d.status}
                       </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleEditDuty(d)}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Edit Duty Assignment"
+                        >
+                          <Edit3 className="w-3 h-3 text-slate-600" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDuty(d.id, d.weekNumber)}
+                          className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-700 rounded-lg transition-colors cursor-pointer"
+                          title="Remove Assignment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* DEPUTY HEAD ASSIGNMENT & EDIT MODAL */}
+          {showDutyModal && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl p-6 space-y-5 animate-in zoom-in-95">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900">
+                        {editingDutyId ? `Edit Weekly Duty Assignment (Week ${dutyWeek})` : 'Assign Teachers & Senior Teachers on Weekly Duty'}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Deputy Head authority to allocate staff supervision responsibilities.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowDutyModal(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveDuty} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Term Week #</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="15"
+                        required
+                        value={dutyWeek}
+                        onChange={(e) => setDutyWeek(Number(e.target.value))}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Start Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={dutyStartDate}
+                        onChange={(e) => setDutyStartDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">End Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={dutyEndDate}
+                        onChange={(e) => setDutyEndDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Duty Teachers Selection */}
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3.5">
+                    <div>
+                      <label className="block font-bold text-slate-800 mb-1 flex items-center justify-between">
+                        <span>Lead Teacher / Senior Teacher (Assembly & Pastoral)</span>
+                        <span className="text-[10px] text-blue-700 font-normal">Supervisory Tier</span>
+                      </label>
+                      <select
+                        value={dutyLeadTeacher}
+                        onChange={(e) => setDutyLeadTeacher(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium text-slate-800 focus:ring-2 focus:ring-blue-600 focus:outline-hidden"
+                      >
+                        <optgroup label="⭐ Senior Teachers (Curriculum & Assembly Lead)">
+                          {seniorTeachers.map(t => (
+                            <option key={t.id} value={t.name}>
+                              {t.name} (Senior Teacher - {t.tscNumber || 'TSC'})
+                            </option>
+                          ))}
+                          {seniorTeachers.length === 0 && (
+                            <option value="Mr. Peter Ochieng">Mr. Peter Ochieng (Senior Teacher)</option>
+                          )}
+                        </optgroup>
+                        <optgroup label="👨‍🏫 Teaching Staff & HODs">
+                          {teachersList.filter(t => t.role !== 'senior_teacher').map(t => (
+                            <option key={t.id} value={t.name}>
+                              {t.name} ({t.role === 'hod' ? 'HOD' : t.role === 'class_teacher' ? 'Class Teacher' : 'Teacher'})
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Assistant TOD</label>
+                        <select
+                          value={dutyAssistantTeacher}
+                          onChange={(e) => setDutyAssistantTeacher(e.target.value)}
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                        >
+                          {teachersList.map(t => (
+                            <option key={t.id} value={t.name}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Security & Gate TOD</label>
+                        <select
+                          value={dutyGateTeacher}
+                          onChange={(e) => setDutyGateTeacher(e.target.value)}
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                        >
+                          {teachersList.map(t => (
+                            <option key={t.id} value={t.name}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Dining & Recess TOD</label>
+                        <select
+                          value={dutyDiningSupervisor}
+                          onChange={(e) => setDutyDiningSupervisor(e.target.value)}
+                          className="w-full px-2.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                        >
+                          {teachersList.map(t => (
+                            <option key={t.id} value={t.name}>{t.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Weekly Theme / Focus</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Punctuality, Smart Attire & Assembly Decorum"
+                        value={dutyFocusTheme}
+                        onChange={(e) => setDutyFocusTheme(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Duty Status</label>
+                      <select
+                        value={dutyStatus}
+                        onChange={(e) => setDutyStatus(e.target.value as StaffDutyAssignment['status'])}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium focus:ring-2 focus:ring-slate-900 focus:outline-hidden"
+                      >
+                        <option value="Current">Current Active Week</option>
+                        <option value="Upcoming">Upcoming Scheduled Week</option>
+                        <option value="Completed">Completed Archive</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Operational Directives & Notes</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Special instructions for gate opening, parade inspection, or dining crowd control..."
+                      value={dutyNotes}
+                      onChange={(e) => setDutyNotes(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-slate-900 focus:outline-hidden text-xs"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowDutyModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold flex items-center gap-1.5 shadow-md shadow-slate-900/20 transition-all cursor-pointer"
+                    >
+                      <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />
+                      <span>{editingDutyId ? 'Save Duty Changes' : 'Confirm & Assign Duty Roster'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

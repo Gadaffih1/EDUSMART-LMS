@@ -62,7 +62,9 @@ import {
   SharedResourceFacility,
   BellPeriodDef,
   LunchStatus,
-  LearnerLunchRecord
+  LearnerLunchRecord,
+  StaffDutyAssignment,
+  TransportDropoffVerification
 } from '../types';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
@@ -124,7 +126,9 @@ import {
   INITIAL_LIBRARY_POLICIES,
   INITIAL_LIBRARY_AUDIT_LOGS,
   INITIAL_BELL_SCHEDULE,
-  INITIAL_LUNCH_RECORDS
+  INITIAL_LUNCH_RECORDS,
+  INITIAL_STAFF_DUTY_ROSTER,
+  INITIAL_DROPOFF_VERIFICATIONS
 } from '../data/initialData';
 
 const KEYS = {
@@ -188,6 +192,8 @@ const KEYS = {
   LIBRARY_EVENTS: 'edusmart_library_events_v1',
   LIBRARY_POLICIES: 'edusmart_library_policies_v1',
   LIBRARY_AUDIT_LOGS: 'edusmart_library_audit_logs_v1',
+  STAFF_DUTY_ROSTER: 'edusmart_staff_duty_rosters_v1',
+  DROPOFF_VERIFICATIONS: 'edusmart_transport_dropoff_verifications_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -1830,6 +1836,58 @@ export const Storage = {
     const items = this.getCoCurricularBudgets();
     const updated = items.map(b => b.id === id ? { ...b, ...updates } : b);
     this.saveCoCurricularBudgets(updated);
+  },
+
+  // Staff Weekly Duty Rosters
+  getStaffDutyRosters(): StaffDutyAssignment[] {
+    return getFromStorage<StaffDutyAssignment[]>(KEYS.STAFF_DUTY_ROSTER, INITIAL_STAFF_DUTY_ROSTER);
+  },
+
+  saveStaffDutyRosters(rosters: StaffDutyAssignment[]): void {
+    setToStorage(KEYS.STAFF_DUTY_ROSTER, rosters);
+    window.dispatchEvent(new CustomEvent('staff-duty-rosters-updated', { detail: rosters }));
+  },
+
+  addStaffDutyRoster(roster: StaffDutyAssignment): void {
+    const rosters = this.getStaffDutyRosters();
+    const updated = [roster, ...rosters];
+    this.saveStaffDutyRosters(updated);
+  },
+
+  updateStaffDutyRoster(id: string, updates: Partial<StaffDutyAssignment>): void {
+    const rosters = this.getStaffDutyRosters();
+    const updated = rosters.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveStaffDutyRosters(updated);
+  },
+
+  deleteStaffDutyRoster(id: string): void {
+    const rosters = this.getStaffDutyRosters();
+    const updated = rosters.filter(r => r.id !== id);
+    this.saveStaffDutyRosters(updated);
+  },
+
+  // Transport Dropoff Verifications (Afternoon Drop-off Parent Consent OTP)
+  getDropoffVerifications(): TransportDropoffVerification[] {
+    return getFromStorage<TransportDropoffVerification[]>(KEYS.DROPOFF_VERIFICATIONS, INITIAL_DROPOFF_VERIFICATIONS);
+  },
+
+  saveDropoffVerifications(verifs: TransportDropoffVerification[]): void {
+    setToStorage(KEYS.DROPOFF_VERIFICATIONS, verifs);
+    window.dispatchEvent(new CustomEvent('dropoff-verifications-updated', { detail: verifs }));
+  },
+
+  addDropoffVerification(verif: TransportDropoffVerification): void {
+    const verifs = this.getDropoffVerifications();
+    // Replace any existing pending verification for this student or add new
+    const filtered = verifs.filter(v => !(v.studentId === verif.studentId && v.status === 'pending_code'));
+    const updated = [verif, ...filtered];
+    this.saveDropoffVerifications(updated);
+  },
+
+  updateDropoffVerification(id: string, updates: Partial<TransportDropoffVerification>): void {
+    const verifs = this.getDropoffVerifications();
+    const updated = verifs.map(v => v.id === id ? { ...v, ...updates } : v);
+    this.saveDropoffVerifications(updated);
   }
 };
 

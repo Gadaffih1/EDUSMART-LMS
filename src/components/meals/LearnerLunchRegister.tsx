@@ -31,7 +31,8 @@ import {
   Edit3,
   Award,
   Layers,
-  Baby
+  Baby,
+  Lock
 } from 'lucide-react';
 
 interface LearnerLunchRegisterProps {
@@ -66,6 +67,10 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     (currentUser.role === 'teacher' && currentUser.stream && viewMode !== 'executive');
   const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'school_admin_staff', 'admin'].includes(currentUser.role);
   
+  // Strict School Protocol: Only designated Class Teachers can mark daily attendance & lunch register
+  const canMarkLunch = (currentUser.role === 'class_teacher' || 
+    (currentUser.role === 'teacher' && !!currentUser.stream && viewMode === 'class_teacher')) && !isParent;
+
   // Date State (Defaults to current date YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
@@ -203,11 +208,14 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
 
   // Quick Action: Mark Individual Learner
   const handleMarkLunch = (student: User, newStatus: LunchStatus, customMealType?: string, notes?: string) => {
+    if (!canMarkLunch) {
+      setNotificationMsg('Access Restricted: In accordance with school protocol, only the assigned Class Teacher can mark the lunch register.');
+      setTimeout(() => setNotificationMsg(null), 3500);
+      return;
+    }
+
     const teacherName = currentUser.name;
-    const teacherRole = currentUser.role === 'class_teacher' ? 'Class Teacher' : 
-      currentUser.role === 'dean_of_studies' ? 'Dean of Studies' :
-      currentUser.role === 'deputy_head' ? 'Deputy Head' :
-      currentUser.role === 'head_teacher' ? 'Head Teacher' : 'Faculty';
+    const teacherRole = 'Class Teacher';
 
     Storage.markLearnerLunch(student.id, newStatus, {
       studentName: student.name,
@@ -230,8 +238,14 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
 
   // Bulk Action: Mark All in Stream as Taken
   const handleMarkAllTaken = () => {
+    if (!canMarkLunch) {
+      setNotificationMsg('Access Restricted: Only the assigned Class Teacher is authorized to perform roll calls.');
+      setTimeout(() => setNotificationMsg(null), 3500);
+      return;
+    }
+
     const teacherName = currentUser.name;
-    const teacherRole = currentUser.role === 'class_teacher' ? 'Class Teacher' : 'Faculty';
+    const teacherRole = 'Class Teacher';
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const newRecords: LearnerLunchRecord[] = activeStudents.map(student => {
@@ -263,6 +277,11 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
 
   // Open Edit Details Modal
   const handleOpenEditModal = (record: LearnerLunchRecord) => {
+    if (!canMarkLunch) {
+      setNotificationMsg('Access Restricted: Only the assigned Class Teacher can modify lunch records.');
+      setTimeout(() => setNotificationMsg(null), 3000);
+      return;
+    }
     setEditingRecord(record);
     setEditMealType(record.mealType || 'Standard Balanced Hot Meal');
     setEditDietaryNotes(record.dietaryNotes || '');
@@ -271,14 +290,14 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
   // Save Modal Edit
   const handleSaveModalEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRecord) return;
+    if (!editingRecord || !canMarkLunch) return;
 
     Storage.saveLunchRecord({
       ...editingRecord,
       mealType: editMealType,
       dietaryNotes: editDietaryNotes,
       markedBy: currentUser.name,
-      markedByRole: currentUser.role === 'class_teacher' ? 'Class Teacher' : 'Faculty',
+      markedByRole: 'Class Teacher',
       updatedAt: new Date().toISOString()
     });
 
@@ -384,8 +403,8 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
             <span>Print Catering Register</span>
           </button>
 
-          {/* Mark All Taken (Class Teacher Action) */}
-          {(isClassTeacher || isExecutiveOrAdmin) && !isParent && (
+          {/* Mark All Taken (Class Teacher Action Only) */}
+          {canMarkLunch ? (
             <button
               onClick={handleMarkAllTaken}
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
@@ -393,22 +412,31 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
               <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
               <span>Mark All Stream As Taken</span>
             </button>
-          )}
+          ) : !isParent ? (
+            <div className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-slate-500" />
+              <span>Read-Only Audit: Only Class Teacher Can Mark</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
       {/* Role-Specific Privacy / Scope Badge */}
       <div className="p-3.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs bg-slate-50 border-slate-200">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+          {canMarkLunch ? (
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+          )}
           <span className="font-semibold text-slate-800">
             {isParent && `Parent View: Strictly monitoring registered child (${parentChildren.map(c => `${c.name} - Grade ${c.grade} ${c.stream}`).join(', ')})`}
-            {isClassTeacher && !isExecutiveOrAdmin && `Class Teacher View: Enforcing Grade ${selectedGrade} (${selectedStream}) stream marking with live sync.`}
-            {isExecutiveOrAdmin && "Executive Leadership & Admin Staff View: Full institutional dining surveillance and multi-stream audit enabled."}
+            {canMarkLunch && `Class Teacher Authorization Active: Marking daily attendance & lunch register for Grade ${selectedGrade} (${selectedStream}).`}
+            {!canMarkLunch && !isParent && "Read-Only Surveillance Mode: Per institutional protocol, only the assigned Class Teacher is authorized to mark daily attendance and learner lunch registers."}
           </span>
         </div>
         <div className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 self-start sm:self-auto">
-          {isParent ? 'CHILD CONFIDENTIAL' : isClassTeacher && !isExecutiveOrAdmin ? 'STREAM ALLOCATED' : 'INSTITUTIONAL MASTER'}
+          {isParent ? 'CHILD CONFIDENTIAL' : canMarkLunch ? 'CLASS TEACHER AUTHORIZED' : 'READ-ONLY AUDIT'}
         </div>
       </div>
 
@@ -654,46 +682,56 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
                         </div>
                       </td>
 
-                      {/* Actions (Only for Class Teacher, Admin, or Executive) */}
+                      {/* Actions (Only for Class Teacher) */}
                       {!isParent && (
                         <td className="py-3 px-4 text-right">
-                          <div className="inline-flex items-center gap-1.5">
-                            {/* Toggle Taken */}
-                            <button
-                              onClick={() => handleMarkLunch(student, isTaken ? 'not_taken' : 'taken')}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                                isTaken
-                                  ? 'bg-emerald-700 text-white shadow-xs hover:bg-emerald-800'
-                                  : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                              }`}
-                              title={isTaken ? 'Mark as Not Taken' : 'Mark as Lunch Taken'}
-                            >
-                              <Check className="w-3.5 h-3.5 stroke-[3]" />
-                              <span>{isTaken ? 'Taken ✓' : 'Mark Taken'}</span>
-                            </button>
+                          {canMarkLunch ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              {/* Toggle Taken */}
+                              <button
+                                onClick={() => handleMarkLunch(student, isTaken ? 'not_taken' : 'taken')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                  isTaken
+                                    ? 'bg-emerald-700 text-white shadow-xs hover:bg-emerald-800'
+                                    : 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                }`}
+                                title={isTaken ? 'Mark as Not Taken' : 'Mark as Lunch Taken'}
+                              >
+                                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                <span>{isTaken ? 'Taken ✓' : 'Mark Taken'}</span>
+                              </button>
 
-                            {/* Special Diet Option */}
-                            <button
-                              onClick={() => handleMarkLunch(student, 'special_diet', 'Special Medical Diet')}
-                              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                isSpecial
-                                  ? 'bg-blue-700 text-white shadow-xs hover:bg-blue-800'
-                                  : 'bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100'
-                              }`}
-                              title="Mark Special Medical or Dietary Meal"
-                            >
-                              <span>🥗 Special</span>
-                            </button>
+                              {/* Special Diet Option */}
+                              <button
+                                onClick={() => handleMarkLunch(student, 'special_diet', 'Special Medical Diet')}
+                                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                  isSpecial
+                                    ? 'bg-blue-700 text-white shadow-xs hover:bg-blue-800'
+                                    : 'bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100'
+                                }`}
+                                title="Mark Special Medical or Dietary Meal"
+                              >
+                                <span>🥗 Special</span>
+                              </button>
 
-                            {/* Edit Notes */}
-                            <button
-                              onClick={() => handleOpenEditModal(record)}
-                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                              title="Add dietary notes or customize meal"
+                              {/* Edit Notes */}
+                              <button
+                                onClick={() => handleOpenEditModal(record)}
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                                title="Add dietary notes or customize meal"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span 
+                              className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200"
+                              title="Strict Protocol: Only the assigned Class Teacher can mark learner lunch register"
                             >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                              <Lock className="w-3 h-3 text-slate-400" />
+                              <span>Class Teacher Only</span>
+                            </span>
+                          )}
                         </td>
                       )}
                     </tr>

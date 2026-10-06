@@ -41,6 +41,9 @@ interface ClassTeacherModuleProps {
 }
 
 export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentUser }) => {
+  // Strict School Protocol: Only designated Class Teachers can mark daily attendance
+  const canMarkAttendance = currentUser.role === 'class_teacher' || (currentUser.role === 'teacher' && !!currentUser.stream);
+
   // Assigned Grade and Stream from currentUser
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(currentUser.grade || 4);
   const [selectedStream, setSelectedStream] = useState<StreamName>(currentUser.stream || 'Dove');

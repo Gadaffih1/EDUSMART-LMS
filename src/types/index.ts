@@ -1132,6 +1132,45 @@ export interface CoCurricularBudgetItem {
   status: 'Approved' | 'Pending Review' | 'Disbursed';
 }
 
+// ========================================================
+// 📋 STAFF WEEKLY DUTY ROSTER ASSIGNMENTS
+// ========================================================
+export interface StaffDutyAssignment {
+  id: string;
+  weekNumber: number;
+  startDate: string;
+  endDate: string;
+  leadTeacher: string;          // Assembly & Senior Teacher / Lead
+  seniorTeacherName?: string;   // Assigned Senior Teacher
+  assistantTeacher: string;     // Assistant TOD
+  gateDutyTeacher: string;      // Gate & Security TOD
+  diningSupervision: string;    // Dining & Recess Supervision
+  focusTheme?: string;          // Theme of the Week
+  status: 'Current' | 'Upcoming' | 'Completed';
+  assignedBy?: string;          // Deputy Head stamp
+  assignedAt?: string;
+  notes?: string;
+}
 
-
-
+// ========================================================
+// 🚌 TRANSPORT AFTERNOON DROP-OFF OFFBOARDING VERIFICATION
+// ========================================================
+export interface TransportDropoffVerification {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber?: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  stopName: string;
+  busPlate: string;
+  busNumber: string;
+  parentName: string;
+  parentPhone: string;
+  verificationCode: string;     // One-time security authorization code
+  status: 'pending_code' | 'verified_released' | 'cancelled';
+  requestedAt: string;
+  releasedAt?: string;
+  verifiedBy?: string;          // Chaperone name
+  parentConsentConfirmed?: boolean;
+}

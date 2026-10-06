@@ -154,7 +154,7 @@ export const PRIMARY_CURRICULUM_DEMAND: SubjectCurriculumDemand[] = [
   { subject: 'Mathematics', periodsPerWeek: 5 },
   { subject: 'English', periodsPerWeek: 5 },
   { subject: 'Kiswahili', periodsPerWeek: 4 },
-  { subject: 'Science and Technology', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'science_lab' },
+  { subject: 'Integrated Science', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'science_lab' },
   { subject: 'Social Studies', periodsPerWeek: 3 },
   { subject: 'Religious Education', periodsPerWeek: 3 },
   { subject: 'Creative Arts', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
@@ -171,8 +171,8 @@ export const JUNIOR_CURRICULUM_DEMAND: SubjectCurriculumDemand[] = [
   { subject: 'Religious Education', periodsPerWeek: 3 },
   { subject: 'Pretechnical Education', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'computer_lab' },
   { subject: 'Agriculture and Nutrition', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'agri_plot' },
-  { subject: 'Creative Arts & Sports', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
-  { subject: 'Health Education', periodsPerWeek: 2 }
+  { subject: 'Creative Arts', periodsPerWeek: 4, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
+  { subject: 'Physical and Health Education', periodsPerWeek: 3, requiresSpecialistFacility: true, preferredFacilityType: 'sports_field' }
 ];
 
 export function getCurriculumDemandForGrade(grade: GradeLevel): SubjectCurriculumDemand[] {

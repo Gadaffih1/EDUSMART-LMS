@@ -196,7 +196,7 @@ export function generateAutomatedTimetable(
       gradeStreamsMap.set(g, options.activeStreamsOverride[g]);
     } else if (g >= 7) {
       // Focus on active demonstration streams
-      gradeStreamsMap.set(g, ['Mara', 'Serengeti', 'Amboseli']);
+      gradeStreamsMap.set(g, ['Mara', 'Athi', 'Chania']);
     } else {
       gradeStreamsMap.set(g, ['Dove', 'Eagle']);
     }

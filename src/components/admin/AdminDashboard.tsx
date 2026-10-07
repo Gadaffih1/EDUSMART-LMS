@@ -17,6 +17,7 @@ import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { ReportingHub } from '../reports/ReportingHub';
 import { 
   Users, 
   UserPlus, 
@@ -35,7 +36,8 @@ import {
   Bus,
   Trophy,
   CalendarDays,
-  Utensils
+  Utensils,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -52,7 +54,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
     ? 'oversight'
     : 'users';
-  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'timetable' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'oversight'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'passwords' | 'virtual_rooms' | 'work_entry_audit' | 'timetable' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'oversight' | 'reports'>(defaultTab);
 
   // Create User Form
   const [newName, setNewName] = useState('');
@@ -294,6 +296,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <BarChart3 className="w-3.5 h-3.5" />
           <span>Executive Oversight & Logs</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reports')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'reports' ? 'bg-slate-900 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+          }`}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Reports & Dossiers (Print / PDF)</span>
         </button>
       </div>
 
@@ -866,6 +878,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB 12: REPORTING HUB (PRINT / SAVE PDF)
+          ======================================================== */}
+      {activeTab === 'reports' && (
+        <ReportingHub currentUser={currentUser} />
       )}
     </div>
   );

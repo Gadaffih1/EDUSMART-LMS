@@ -111,6 +111,11 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
 
   // Status Toggles
   const handleSetStatus = (studentId: string, status: 'present' | 'absent' | 'late' | 'excused') => {
+    if (!canMarkAttendance) {
+      setAttendanceSavedMessage('Protocol Error: Only the assigned Class Teacher is authorized to mark daily attendance.');
+      setTimeout(() => setAttendanceSavedMessage(null), 3500);
+      return;
+    }
     setStudentStatuses(prev => ({
       ...prev,
       [studentId]: status
@@ -118,6 +123,7 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
   };
 
   const handleSetRemark = (studentId: string, remark: string) => {
+    if (!canMarkAttendance) return;
     setStudentRemarks(prev => ({
       ...prev,
       [studentId]: remark
@@ -125,6 +131,11 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
   };
 
   const handleMarkAll = (status: 'present' | 'absent') => {
+    if (!canMarkAttendance) {
+      setAttendanceSavedMessage('Protocol Error: Only the assigned Class Teacher can mark attendance.');
+      setTimeout(() => setAttendanceSavedMessage(null), 3500);
+      return;
+    }
     const updated: Record<string, 'present' | 'absent' | 'late' | 'excused'> = {};
     streamStudents.forEach(stu => {
       updated[stu.id] = status;
@@ -134,6 +145,12 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
 
   // Save the register for the selected date
   const handleSaveAttendance = () => {
+    if (!canMarkAttendance) {
+      setAttendanceSavedMessage('Access Denied: Only the designated Class Teacher is authorized to save daily attendance registers.');
+      setTimeout(() => setAttendanceSavedMessage(null), 3500);
+      return;
+    }
+
     let present = 0;
     let absent = 0;
     let late = 0;

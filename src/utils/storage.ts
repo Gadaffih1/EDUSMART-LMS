@@ -64,7 +64,9 @@ import {
   LunchStatus,
   LearnerLunchRecord,
   StaffDutyAssignment,
-  TransportDropoffVerification
+  TransportDropoffVerification,
+  LessonImage,
+  ELink
 } from '../types';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
@@ -128,7 +130,9 @@ import {
   INITIAL_BELL_SCHEDULE,
   INITIAL_LUNCH_RECORDS,
   INITIAL_STAFF_DUTY_ROSTER,
-  INITIAL_DROPOFF_VERIFICATIONS
+  INITIAL_DROPOFF_VERIFICATIONS,
+  INITIAL_LESSON_IMAGES,
+  INITIAL_E_LINKS
 } from '../data/initialData';
 
 const KEYS = {
@@ -194,6 +198,8 @@ const KEYS = {
   LIBRARY_AUDIT_LOGS: 'edusmart_library_audit_logs_v1',
   STAFF_DUTY_ROSTER: 'edusmart_staff_duty_rosters_v1',
   DROPOFF_VERIFICATIONS: 'edusmart_transport_dropoff_verifications_v1',
+  LESSON_IMAGES: 'edusmart_lesson_images_v1',
+  E_LINKS: 'edusmart_e_links_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -268,6 +274,8 @@ export const Storage = {
     localStorage.setItem(KEYS.LIBRARY_EVENTS, JSON.stringify(INITIAL_LIBRARY_EVENTS));
     localStorage.setItem(KEYS.LIBRARY_POLICIES, JSON.stringify(INITIAL_LIBRARY_POLICIES));
     localStorage.setItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
+    localStorage.setItem(KEYS.LESSON_IMAGES, JSON.stringify(INITIAL_LESSON_IMAGES));
+    localStorage.setItem(KEYS.E_LINKS, JSON.stringify(INITIAL_E_LINKS));
   },
 
   // Auth & Session
@@ -399,6 +407,12 @@ export const Storage = {
     const videos = this.getVideos();
     videos.push(video);
     setToStorage(KEYS.VIDEOS, videos);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+  },
+  deleteVideo(id: string): void {
+    const videos = this.getVideos().filter(v => v.id !== id);
+    setToStorage(KEYS.VIDEOS, videos);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
 
   // Audios
@@ -413,6 +427,57 @@ export const Storage = {
     const audios = this.getAudios();
     audios.push(audio);
     setToStorage(KEYS.AUDIOS, audios);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+  },
+  deleteAudio(id: string): void {
+    const audios = this.getAudios().filter(a => a.id !== id);
+    setToStorage(KEYS.AUDIOS, audios);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+  },
+
+  // Lesson Images (Diagrams, Charts, Visual Resources)
+  getLessonImages(grade?: GradeLevel): LessonImage[] {
+    const images = getFromStorage<LessonImage[]>(KEYS.LESSON_IMAGES, INITIAL_LESSON_IMAGES);
+    if (grade) {
+      return images.filter(img => img.grade === grade);
+    }
+    return images;
+  },
+  saveLessonImages(images: LessonImage[]): void {
+    setToStorage(KEYS.LESSON_IMAGES, images);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+  },
+  addLessonImage(image: LessonImage): void {
+    const images = this.getLessonImages();
+    images.unshift(image);
+    this.saveLessonImages(images);
+  },
+  deleteLessonImage(id: string): void {
+    const images = this.getLessonImages().filter(img => img.id !== id);
+    this.saveLessonImages(images);
+  },
+
+  // E-Links (Curated Digital Web Links for Library & Subject Teachers)
+  getELinks(): ELink[] {
+    return getFromStorage<ELink[]>(KEYS.E_LINKS, INITIAL_E_LINKS);
+  },
+  saveELinks(links: ELink[]): void {
+    setToStorage(KEYS.E_LINKS, links);
+    window.dispatchEvent(new CustomEvent('elinks-updated', { detail: links }));
+  },
+  addELink(link: ELink): void {
+    const links = this.getELinks();
+    const updated = [link, ...links];
+    this.saveELinks(updated);
+  },
+  updateELink(id: string, updates: Partial<ELink>): void {
+    const links = this.getELinks();
+    const updated = links.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString().split('T')[0] } : l);
+    this.saveELinks(updated);
+  },
+  deleteELink(id: string): void {
+    const links = this.getELinks().filter(l => l.id !== id);
+    this.saveELinks(links);
   },
 
   // Quizzes

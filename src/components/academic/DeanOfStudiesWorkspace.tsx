@@ -11,6 +11,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
+import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
@@ -92,6 +93,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     | 'reporting_hub';
 
   const [activeTab, setActiveTab] = useState<DeanTab>('assessments');
+  const [analyticsSubView, setAnalyticsSubView] = useState<'school_health' | 'exam_means'>('school_health');
   const [showAutoGenModal, setShowAutoGenModal] = useState(false);
   const workLogs = Storage.getWorkEntryLogs();
 
@@ -468,81 +470,115 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       )}
 
       {/* ========================================================
-          TAB 2: INSTITUTIONAL EXAM ANALYTICS
+          TAB 2: INSTITUTIONAL EXAM & SCHOOL HEALTH ANALYTICS
           ======================================================== */}
       {activeTab === 'analytics' && (
-        <section className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Mean Performance Index Across Grades (Term 3)
-                  </h3>
-                  <p className="text-xs text-slate-500">Actual performance mean vs institutional target benchmark (80%)</p>
+        <div className="space-y-6">
+          {/* Sub-view switcher */}
+          <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200 w-fit">
+            <button
+              onClick={() => setAnalyticsSubView('school_health')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                analyticsSubView === 'school_health'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <span>School Health, Attendance & Library Usage (Recharts)</span>
+            </button>
+            <button
+              onClick={() => setAnalyticsSubView('exam_means')}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                analyticsSubView === 'exam_means'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
+              <span>Curriculum Exam Performance & Mastery Bands</span>
+            </button>
+          </div>
+
+          {analyticsSubView === 'school_health' ? (
+            <ExecutiveAnalyticsDashboard
+              currentUser={currentUser}
+              title="Dean of Studies Academic Health, Attendance & Library Analytics"
+              subtitle="Executive Recharts surveillance: Attendance trends, longitudinal subject CBC mastery, and library foot-traffic for academic oversight."
+            />
+          ) : (
+            <section className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        Mean Performance Index Across Grades (Term 3)
+                      </h3>
+                      <p className="text-xs text-slate-500">Actual performance mean vs institutional target benchmark (80%)</p>
+                    </div>
+                  </div>
+
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={gradePerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="grade" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                        <Tooltip 
+                          formatter={(val: any) => [`${val}%`, 'Mean Score']} 
+                          contentStyle={{ backgroundColor: '#0f172a', color: '#fff', borderRadius: '8px', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="mean" fill="#059669" radius={[4, 4, 0, 0]} name="Actual Mean" />
+                        <Bar dataKey="target" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Target (80%)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      CBC Mastery Distribution
+                    </h3>
+                    <p className="text-xs text-slate-500">Student competency banding</p>
+                  </div>
+
+                  <div className="h-48 w-full flex items-center justify-center">
+                    <PieChart width={200} height={190}>
+                      <Pie
+                        data={masteryPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={70}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {masteryPieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(val: any) => [`${val}% of Students`, 'Cohort']} />
+                    </PieChart>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    {masteryPieData.map(m => (
+                      <div key={m.name} className="flex items-center justify-between text-slate-600">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: m.color }} />
+                          <span className="text-[11px] truncate max-w-[170px]">{m.name}</span>
+                        </span>
+                        <span className="font-mono font-bold text-slate-900">{m.value}%</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={gradePerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="grade" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                    <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                    <Tooltip 
-                      formatter={(val: any) => [`${val}%`, 'Mean Score']} 
-                      contentStyle={{ backgroundColor: '#0f172a', color: '#fff', borderRadius: '8px', fontSize: '12px' }}
-                    />
-                    <Bar dataKey="mean" fill="#059669" radius={[4, 4, 0, 0]} name="Actual Mean" />
-                    <Bar dataKey="target" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Target (80%)" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  CBC Mastery Distribution
-                </h3>
-                <p className="text-xs text-slate-500">Student competency banding</p>
-              </div>
-
-              <div className="h-48 w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={masteryPieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={70}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {masteryPieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(val: any) => [`${val}% of Students`, 'Cohort']} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="space-y-1 text-xs">
-                {masteryPieData.map(m => (
-                  <div key={m.name} className="flex items-center justify-between text-slate-600">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: m.color }} />
-                      <span className="text-[11px] truncate max-w-[170px]">{m.name}</span>
-                    </span>
-                    <span className="font-mono font-bold text-slate-900">{m.value}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+            </section>
+          )}
+        </div>
       )}
 
       {/* ========================================================

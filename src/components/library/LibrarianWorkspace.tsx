@@ -325,6 +325,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
 
           {isCollection && (
             <CollectionViews
+              currentUser={currentUser}
               section={currentSection}
               books={books}
               acquisitions={acquisitions}

@@ -16,17 +16,21 @@ import {
   Bookmark,
   Sparkles,
   ExternalLink,
-  Tag
+  Tag,
+  Globe
 } from 'lucide-react';
 import { 
   LibraryBook, 
   LibraryAcquisition, 
   LibraryShelfLocation, 
-  DigitalLibraryItem 
+  DigitalLibraryItem,
+  User
 } from '../../types';
+import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { LibraryPortalSection } from './types';
 
 interface CollectionViewsProps {
+  currentUser?: User;
   section: LibraryPortalSection;
   books: LibraryBook[];
   acquisitions: LibraryAcquisition[];
@@ -38,6 +42,7 @@ interface CollectionViewsProps {
 }
 
 export const CollectionViews: React.FC<CollectionViewsProps> = ({
+  currentUser,
   section,
   books,
   acquisitions,
@@ -47,6 +52,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   onAddAcquisition,
   onAddDigitalItem
 }) => {
+  const [digitalSubTab, setDigitalSubTab] = useState<'elinks' | 'ebooks'>('elinks');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
@@ -516,37 +522,72 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
               <span>Digital Library & E-Resource Repository</span>
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Curated e-books, multimedia audiobooks, KICD digital compendiums, and STEM manuals.
+              Curated educational E-Links, e-books, multimedia audiobooks, KICD digital compendiums, and STEM manuals.
             </p>
+          </div>
+
+          {/* Sub-tab Switcher */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 self-start sm:self-center">
+            <button
+              onClick={() => setDigitalSubTab('elinks')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                digitalSubTab === 'elinks'
+                  ? 'bg-blue-700 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>E-Links Directory</span>
+            </button>
+            <button
+              onClick={() => setDigitalSubTab('ebooks')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                digitalSubTab === 'ebooks'
+                  ? 'bg-blue-700 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>E-Books & Compendiums ({digitalItems.length})</span>
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {digitalItems.map((dig) => (
-            <div key={dig.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between">
-              <div className={`p-6 bg-gradient-to-br ${dig.coverColor} text-white`}>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
-                  {dig.fileType} · {dig.fileSize}
-                </span>
-                <h4 className="font-black text-base mt-3 leading-snug line-clamp-2">
-                  {dig.title}
-                </h4>
-                <div className="text-xs text-white/80 mt-1">By {dig.author}</div>
-              </div>
+        {digitalSubTab === 'elinks' ? (
+          <ELinksDirectory
+            currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)}
+            canManage={true}
+            title="Librarian Digital E-Links Directory"
+            subtitle="Librarian administrative rights: Add, edit, or remove national curriculum portals, interactive labs, and research databases for learners and subject teachers."
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {digitalItems.map((dig) => (
+              <div key={dig.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between">
+                <div className={`p-6 bg-gradient-to-br ${dig.coverColor} text-white`}>
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                    {dig.fileType} · {dig.fileSize}
+                  </span>
+                  <h4 className="font-black text-base mt-3 leading-snug line-clamp-2">
+                    {dig.title}
+                  </h4>
+                  <div className="text-xs text-white/80 mt-1">By {dig.author}</div>
+                </div>
 
-              <div className="p-4 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-mono text-[11px]">{dig.downloadCount} Reads</span>
-                <button
-                  onClick={() => alert(`Opening digital viewer for "${dig.title}"`)}
-                  className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Access E-Book</span>
-                </button>
+                <div className="p-4 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-mono text-[11px]">{dig.downloadCount} Reads</span>
+                  <button
+                    onClick={() => alert(`Opening digital viewer for "${dig.title}"`)}
+                    className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Access E-Book</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   }

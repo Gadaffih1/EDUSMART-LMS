@@ -12,6 +12,7 @@ import {
   PRIMARY_STREAMS
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { exportToPdf } from '../../utils/pdfExport';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { 
   FileText, 
@@ -446,8 +447,16 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
         {/* Global Hub Export Actions */}
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+            onClick={() => {
+              const docTitle = aggregatedStudentData 
+                ? `EduSmart_${aggregatedStudentData.student.name.replace(/\s+/g, '_')}_Progress_Dossier`
+                : `EduSmart_Grade${selectedGrade}_Class_Performance_Report`;
+              exportToPdf({
+                title: docTitle,
+                orientation: reportScope === 'individual' ? 'portrait' : 'landscape'
+              });
+            }}
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
             title="Print or Save as PDF"
           >
             <Printer className="w-3.5 h-3.5 text-emerald-400" />

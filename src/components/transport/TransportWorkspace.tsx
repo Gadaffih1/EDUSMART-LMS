@@ -10,7 +10,9 @@ import {
   TripType,
   BoardingStatus,
   GradeLevel,
-  StreamName
+  StreamName,
+  TransportDropoffVerification,
+  AppNotification
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
@@ -45,7 +47,10 @@ import {
   ExternalLink,
   ChevronRight,
   TrendingUp,
-  Download
+  Download,
+  KeyRound,
+  Lock,
+  CheckCircle
 } from 'lucide-react';
 
 interface TransportWorkspaceProps {
@@ -75,6 +80,14 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
   const [tripRecords, setTripRecords] = useState<TransportTripRecord[]>(() => Storage.getTransportTripRecords());
   const [incidents, setIncidents] = useState<TransportIncident[]>(() => Storage.getTransportIncidents());
   const [alerts, setAlerts] = useState<TransportAlert[]>(() => Storage.getTransportAlerts());
+  
+  // Afternoon Drop-Off Verification & Parent Consent OTP State
+  const [dropoffVerifications, setDropoffVerifications] = useState<TransportDropoffVerification[]>(() => Storage.getDropoffVerifications());
+  const [activeVerifyStudent, setActiveVerifyStudent] = useState<StudentTransportProfile | null>(null);
+  const [activeVerificationRecord, setActiveVerificationRecord] = useState<TransportDropoffVerification | null>(null);
+  const [enteredVerificationCode, setEnteredVerificationCode] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  const [verifySuccessMsg, setVerifySuccessMsg] = useState<string | null>(null);
 
   // Listen for storage updates
   useEffect(() => {
@@ -84,6 +97,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
     const handleTrips = () => setTripRecords(Storage.getTransportTripRecords());
     const handleIncidents = () => setIncidents(Storage.getTransportIncidents());
     const handleAlerts = () => setAlerts(Storage.getTransportAlerts());
+    const handleVerifs = () => setDropoffVerifications(Storage.getDropoffVerifications());
 
     window.addEventListener('transport-buses-updated', handleBuses);
     window.addEventListener('transport-routes-updated', handleRoutes);
@@ -91,6 +105,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
     window.addEventListener('transport-trip-records-updated', handleTrips);
     window.addEventListener('transport-incidents-updated', handleIncidents);
     window.addEventListener('transport-alerts-updated', handleAlerts);
+    window.addEventListener('dropoff-verifications-updated', handleVerifs);
 
     return () => {
       window.removeEventListener('transport-buses-updated', handleBuses);
@@ -99,6 +114,7 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
       window.removeEventListener('transport-trip-records-updated', handleTrips);
       window.removeEventListener('transport-incidents-updated', handleIncidents);
       window.removeEventListener('transport-alerts-updated', handleAlerts);
+      window.removeEventListener('dropoff-verifications-updated', handleVerifs);
     };
   }, []);
 
@@ -217,6 +233,133 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
       };
       Storage.addTransportAlert(alertItem);
     }
+  };
+
+  // Afternoon Drop-Off Verification: Initiate Chaperone Consent & Parent OTP Code
+  const handleInitiateAlightVerification = (student: StudentTransportProfile) => {
+    // Check if there is an existing pending verification for this student
+    let verif = dropoffVerifications.find(v => v.studentId === student.studentId && v.status === 'pending_code');
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (!verif) {
+      // Generate secure 4-digit code
+      const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
+      
+      verif = {
+        id: `tdv-${Date.now()}-${student.studentId}`,
+        studentId: student.studentId,
+        studentName: student.studentName,
+        admissionNumber: student.admissionNumber,
+        grade: student.grade,
+        stream: student.stream,
+        stopName: student.dropoffStop,
+        busPlate: student.busPlate,
+        busNumber: student.busNumber,
+        parentName: student.parentName,
+        parentPhone: student.parentPhone,
+        verificationCode: generatedCode,
+        status: 'pending_code',
+        requestedAt: nowTime,
+        verifiedBy: currentUser.name
+      };
+
+      Storage.addDropoffVerification(verif);
+
+      // Instant notification to Parent Portal
+      const notif: AppNotification = {
+        id: `notif-drop-${Date.now()}`,
+        title: `🚌 Afternoon Drop-off Security Code: ${student.studentName}`,
+        message: `Your child ${student.studentName} has arrived at ${student.dropoffStop} on Bus ${student.busPlate}. Release Authorization Code: [${generatedCode}]. Provide this code to the bus chaperone to authorize student offboarding with consent.`,
+        category: 'transport',
+        targetRole: 'parent',
+        targetGrade: student.grade,
+        urgency: 'high',
+        createdAt: new Date().toISOString().split('T')[0],
+        readByUserIds: []
+      };
+      Storage.addNotification(notif);
+
+      // Alert to transport system
+      const alertItem: TransportAlert = {
+        id: `alt-${Date.now()}`,
+        timestamp: `${activeTripDate} ${nowTime}`,
+        routeId: activeManifestRouteId,
+        busPlate: student.busPlate,
+        type: 'alighted',
+        title: `Drop-off OTP Dispatched: ${student.studentName}`,
+        message: `Security Code ${generatedCode} dispatched to ${student.parentName} (${student.parentPhone}) for drop-off at ${student.dropoffStop}. Chaperone roll call release initiated.`,
+        targetAudience: 'route_parents'
+      };
+      Storage.addTransportAlert(alertItem);
+    }
+
+    setActiveVerifyStudent(student);
+    setActiveVerificationRecord(verif);
+    setEnteredVerificationCode('');
+    setVerifyError('');
+  };
+
+  // Confirm Verification Code & Release Learner to Offboard with Consent
+  const handleConfirmAlightConsent = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeVerifyStudent || !activeVerificationRecord) return;
+
+    if (enteredVerificationCode.trim() !== activeVerificationRecord.verificationCode.trim()) {
+      setVerifyError(`Invalid Code: "${enteredVerificationCode}". The code must match the security PIN received by ${activeVerifyStudent.parentName}.`);
+      return;
+    }
+
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Mark verification as verified and released
+    Storage.updateDropoffVerification(activeVerificationRecord.id, {
+      status: 'verified_released',
+      releasedAt: nowTime,
+      parentConsentConfirmed: true,
+      verifiedBy: `${currentUser.name} (Assigned Chaperone)`
+    });
+
+    // Update boarding status to Safely Alighted with verified consent
+    const currentRoute = routes.find(r => r.id === activeManifestRouteId);
+    const existingIndex = tripRecords.findIndex(
+      r => r.studentId === activeVerifyStudent.studentId && 
+           r.date === activeTripDate && 
+           r.tripType === activeTripType
+    );
+
+    if (existingIndex >= 0) {
+      Storage.updateTransportTripRecord(tripRecords[existingIndex].id, {
+        status: 'Safely Alighted',
+        timestamp: nowTime,
+        notes: `Safely Alighted with verified Parent Consent (PIN: ${activeVerificationRecord.verificationCode} confirmed at ${activeVerifyStudent.dropoffStop}).`
+      });
+    } else {
+      const newRec: TransportTripRecord = {
+        id: `ttr-${Date.now()}-${activeVerifyStudent.studentId}`,
+        date: activeTripDate,
+        tripType: activeTripType,
+        routeId: activeManifestRouteId,
+        routeName: currentRoute?.name || activeVerifyStudent.routeName,
+        busPlate: activeVerifyStudent.busPlate,
+        driverName: currentRoute?.driverName || 'Lead Driver',
+        assistantName: currentRoute?.assistantName || currentUser.name,
+        studentId: activeVerifyStudent.studentId,
+        studentName: activeVerifyStudent.studentName,
+        grade: activeVerifyStudent.grade,
+        stream: activeVerifyStudent.stream,
+        stopName: activeVerifyStudent.dropoffStop,
+        status: 'Safely Alighted',
+        timestamp: nowTime,
+        recordedBy: `${currentUser.name} (Transport Chaperone)`,
+        notes: `Safely Alighted with verified Parent Consent (PIN: ${activeVerificationRecord.verificationCode} confirmed at ${activeVerifyStudent.dropoffStop}).`
+      };
+      Storage.addTransportTripRecord(newRec);
+    }
+
+    setVerifySuccessMsg(`Parent Consent Verified: ${activeVerifyStudent.studentName} has been safely offboarded to parent/guardian.`);
+    setActiveVerifyStudent(null);
+    setActiveVerificationRecord(null);
+    setTimeout(() => setVerifySuccessMsg(null), 3500);
   };
 
   // Submit Add Student Form
@@ -929,17 +1072,59 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
                                 >
                                   On Bus
                                 </button>
-                                <button
-                                  onClick={() => handleUpdateBoardingStatus(student, 'Safely Alighted')}
-                                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
-                                    currentStatus === 'Safely Alighted'
-                                      ? 'bg-blue-600 text-white'
-                                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                                  }`}
-                                  title="Handed over to authorized collector"
-                                >
-                                  Alighted
-                                </button>
+                                {activeTripType === 'Afternoon Drop-off' ? (
+                                  (() => {
+                                    const pendingVerif = dropoffVerifications.find(
+                                      v => v.studentId === student.studentId && v.status === 'pending_code'
+                                    );
+                                    const isVerifiedAlighted = currentStatus === 'Safely Alighted';
+
+                                    if (isVerifiedAlighted) {
+                                      return (
+                                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 flex items-center gap-1">
+                                          <CheckCircle className="w-3.5 h-3.5 text-blue-600" />
+                                          <span>Alighted ✓ (Verified)</span>
+                                        </span>
+                                      );
+                                    }
+
+                                    if (pendingVerif) {
+                                      return (
+                                        <button
+                                          onClick={() => handleInitiateAlightVerification(student)}
+                                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 flex items-center gap-1 shadow-xs animate-pulse cursor-pointer"
+                                          title="Parent notified. Click to enter release code."
+                                        >
+                                          <KeyRound className="w-3.5 h-3.5 text-slate-950" />
+                                          <span>Enter Code ({pendingVerif.verificationCode})</span>
+                                        </button>
+                                      );
+                                    }
+
+                                    return (
+                                      <button
+                                        onClick={() => handleInitiateAlightVerification(student)}
+                                        className="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+                                        title="Trigger parent notification code & consent verification"
+                                      >
+                                        <Lock className="w-3 h-3 text-blue-200" />
+                                        <span>Alighted (Verify)</span>
+                                      </button>
+                                    );
+                                  })()
+                                ) : (
+                                  <button
+                                    onClick={() => handleUpdateBoardingStatus(student, 'Safely Alighted')}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                                      currentStatus === 'Safely Alighted'
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                    }`}
+                                    title="Handed over to authorized collector"
+                                  >
+                                    Alighted
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -952,6 +1137,126 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
               </table>
             </div>
           </div>
+
+          {verifySuccessMsg && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-2 shadow-xs animate-in fade-in">
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{verifySuccessMsg}</span>
+            </div>
+          )}
+
+          {/* AFTERNOON DROP-OFF OFFBOARDING VERIFICATION MODAL */}
+          {activeVerifyStudent && activeVerificationRecord && (
+            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl p-6 space-y-4 animate-in zoom-in-95">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                      <KeyRound className="w-5 h-5 text-blue-700" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900">
+                        Afternoon Drop-Off Learner Offboarding Verification
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Consent Verification & Parent Release PIN Authorization
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setActiveVerifyStudent(null);
+                      setActiveVerificationRecord(null);
+                    }}
+                    className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Learner & Drop-Off Info Card */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-900 text-sm">{activeVerifyStudent.studentName}</span>
+                      <span className="text-[10px] text-slate-500 font-mono ml-2">Grade {activeVerifyStudent.grade} {activeVerifyStudent.stream}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-blue-100 text-blue-800">
+                      {activeVerifyStudent.busNumber} ({activeVerifyStudent.busPlate})
+                    </span>
+                  </div>
+                  <div className="text-slate-600 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>Drop-Off Stop: <strong>{activeVerifyStudent.dropoffStop}</strong></span>
+                  </div>
+                  <div className="text-slate-600 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>Parent/Guardian: <strong>{activeVerifyStudent.parentName}</strong> ({activeVerifyStudent.parentPhone})</span>
+                  </div>
+                </div>
+
+                {/* Parent Alert Status */}
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">Notification Dispatched to Parent</div>
+                    <div className="text-[11px] text-emerald-800 mt-0.5">
+                      A unique one-time release PIN was sent to {activeVerifyStudent.parentName}'s Parent Portal and phone. Obtain this PIN from the guardian to authorize student offboarding.
+                    </div>
+                    <div className="mt-1.5 inline-block font-mono font-extrabold text-[11px] bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded border border-emerald-300">
+                      Parent Portal Sync (Demo Hint): Security PIN is [{activeVerificationRecord.verificationCode}]
+                    </div>
+                  </div>
+                </div>
+
+                {verifyError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{verifyError}</span>
+                  </div>
+                )}
+
+                {/* Form to enter code */}
+                <form onSubmit={handleConfirmAlightConsent} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      Enter Parent/Guardian Release Code
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      placeholder="e.g. 8492"
+                      value={enteredVerificationCode}
+                      onChange={(e) => setEnteredVerificationCode(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-lg font-mono font-black text-center tracking-widest text-slate-900 focus:ring-2 focus:ring-blue-600 focus:outline-hidden"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveVerifyStudent(null);
+                        setActiveVerificationRecord(null);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-700/20 transition-all cursor-pointer"
+                    >
+                      <Check className="w-4 h-4 text-white stroke-[3]" />
+                      <span>Verify & Release with Consent</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
         </div>
       )}

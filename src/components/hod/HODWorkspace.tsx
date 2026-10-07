@@ -652,6 +652,13 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
       {activeTab === 'cocurricular' && (
         <CoCurricularWorkspace currentUser={currentUser} isEmbedded={true} readOnly={true} />
       )}
+
+      {/* ========================================================
+          TAB 6: REPORTING HUB (PRINT / SAVE PDF)
+          ======================================================== */}
+      {activeTab === 'reporting_hub' && (
+        <ReportingHub currentUser={currentUser} />
+      )}
     </div>
   );
 };

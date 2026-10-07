@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LessonNote, VideoLesson, AudioLesson } from '../../types';
+import { LessonNote, VideoLesson, AudioLesson, LessonImage } from '../../types';
 import { useNotificationLayout } from '../../context/NotificationLayoutContext';
 import { 
   BookOpen, 
@@ -13,13 +13,16 @@ import {
   Clock,
   User,
   Sparkles,
-  Maximize2
+  Maximize2,
+  Image as ImageIcon,
+  Tag
 } from 'lucide-react';
 
 interface ResourceViewerProps {
   note?: LessonNote | null;
   video?: VideoLesson | null;
   audio?: AudioLesson | null;
+  image?: LessonImage | null;
   onClose: () => void;
   onLaunchQuiz?: () => void;
 }
@@ -28,6 +31,7 @@ export const ResourceViewer: React.FC<ResourceViewerProps> = ({
   note,
   video,
   audio,
+  image,
   onClose,
   onLaunchQuiz
 }) => {
@@ -51,13 +55,14 @@ export const ResourceViewer: React.FC<ResourceViewerProps> = ({
               {note && <BookOpen className="w-4 h-4" />}
               {video && <Video className="w-4 h-4" />}
               {audio && <Volume2 className="w-4 h-4" />}
+              {image && <ImageIcon className="w-4 h-4" />}
             </div>
             <div>
               <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <span>Grade {note?.grade || video?.grade || audio?.grade}</span>
+                <span>Grade {note?.grade || video?.grade || audio?.grade || image?.grade}</span>
                 <span aria-hidden="true">·</span>
                 <span className="font-semibold text-emerald-700">
-                  {note?.subject || video?.subject || audio?.subject}
+                  {note?.subject || video?.subject || audio?.subject || image?.subject}
                 </span>
                 <span aria-hidden="true">·</span>
                 <span className="flex items-center gap-1 text-slate-400">
@@ -66,7 +71,7 @@ export const ResourceViewer: React.FC<ResourceViewerProps> = ({
                 </span>
               </div>
               <h3 className="text-base font-bold text-slate-900 line-clamp-1">
-                {note?.title || video?.title || audio?.title}
+                {note?.title || video?.title || audio?.title || image?.title}
               </h3>
             </div>
           </div>
@@ -372,6 +377,86 @@ export const ResourceViewer: React.FC<ResourceViewerProps> = ({
                     </li>
                   ))}
                 </ul>
+              </div>
+            </div>
+          )}
+
+          {/* === LESSON IMAGE / DIAGRAM VIEW === */}
+          {image && (
+            <div className="space-y-6 max-w-3xl mx-auto">
+              {/* Anti-download Security Header */}
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-lg flex items-center justify-between text-xs text-amber-900">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    <strong>Anti-Download Mode Active:</strong> High-resolution pedagogical diagram. Right-click save and export restricted.
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-700 font-mono hidden sm:inline">
+                  VISUAL ASSET · CBC KENYA
+                </span>
+              </div>
+
+              {/* Author & Category Meta */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Uploaded by: <strong>{image.teacherName}</strong></span>
+                  </div>
+                  {image.category && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
+                      {image.category}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-400">
+                  <Clock className="w-3 h-3" />
+                  <span>{image.createdAt}</span>
+                </div>
+              </div>
+
+              {/* Secure Image Container */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-950 p-2 sm:p-4 overflow-hidden flex flex-col items-center justify-center relative select-none">
+                <div 
+                  className="w-full relative flex items-center justify-center min-h-[260px] sm:min-h-[380px]"
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  <img
+                    src={image.imageUrl}
+                    alt={image.title}
+                    className="max-h-[500px] w-auto max-w-full rounded-xl object-contain shadow-lg pointer-events-none"
+                    draggable={false}
+                  />
+                  {/* Subtle watermark overlay to prevent screen scraping */}
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10">
+                    <span className="text-white text-3xl font-black uppercase rotate-[-25deg] tracking-widest">
+                      EDUSMART CBC PROTECTED
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Caption & Explanatory Details */}
+              <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Diagram Caption & Visual Concept Explanation</span>
+                </h4>
+                <p className="text-xs text-slate-800 leading-relaxed font-medium">
+                  {image.caption}
+                </p>
+
+                {image.tags && image.tags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200">
+                    <Tag className="w-3 h-3 text-slate-400" />
+                    {image.tags.map((tag, tIdx) => (
+                      <span key={tIdx} className="px-2 py-0.5 rounded bg-white text-slate-600 border border-slate-200 text-[10px] font-semibold">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

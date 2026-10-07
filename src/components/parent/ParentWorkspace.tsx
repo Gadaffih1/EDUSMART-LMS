@@ -8,7 +8,8 @@ import {
   Announcement, 
   ChatMessage,
   GradeLevel,
-  StreamName
+  StreamName,
+  TransportDropoffVerification
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { PerformanceCharts } from '../student/PerformanceCharts';
@@ -66,7 +67,8 @@ import {
   ShieldAlert,
   Info,
   HeartPulse,
-  Utensils
+  Utensils,
+  KeyRound
 } from 'lucide-react';
 
 interface ParentWorkspaceProps {
@@ -216,6 +218,17 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
     }
   ]);
   const [gateReqSuccessMessage, setGateReqSuccessMessage] = useState<string | null>(null);
+
+  // Afternoon Drop-Off Verification & Parent Consent OTP State
+  const [dropoffVerifications, setDropoffVerifications] = useState<TransportDropoffVerification[]>(() => Storage.getDropoffVerifications());
+
+  React.useEffect(() => {
+    const handleVerifUpdate = () => {
+      setDropoffVerifications(Storage.getDropoffVerifications());
+    };
+    window.addEventListener('dropoff-verifications-updated', handleVerifUpdate);
+    return () => window.removeEventListener('dropoff-verifications-updated', handleVerifUpdate);
+  }, []);
 
   // Acknowledged Announcements State
   const [acknowledgedAnnouncements, setAcknowledgedAnnouncements] = useState<Record<string, string>>({
@@ -645,10 +658,61 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       </div>
 
       {/* ========================================================
-          1. 🏠 DASHBOARD (WITH ⭐ DASHBOARD QUICK ACTIONS)
+          1. 🏠 DASHBOARD
           ======================================================== */}
       {activeTab === 'dashboard' && (
         <section className="space-y-6">
+
+          {/* AFTERNOON DROP-OFF PARENT RELEASE CODE NOTIFICATION BANNER */}
+          {(() => {
+            const myChildIds = myChildren.map(c => c.id);
+            const pendingVerifs = dropoffVerifications.filter(v => myChildIds.includes(v.studentId) && v.status === 'pending_code');
+            if (pendingVerifs.length === 0) return null;
+            return (
+              <div className="space-y-3">
+                {pendingVerifs.map(v => (
+                  <div key={v.id} className="p-5 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 text-white shadow-lg border border-blue-400/40 animate-in fade-in">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center shrink-0 text-amber-400">
+                          <KeyRound className="w-6 h-6 animate-pulse" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-400/30">
+                              Drop-off Consent Required
+                            </span>
+                            <span className="text-xs text-slate-300 font-mono">
+                              {v.requestedAt}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-extrabold text-white mt-1">
+                            Afternoon Drop-Off Release PIN: {v.studentName}
+                          </h3>
+                          <p className="text-xs text-slate-300 mt-0.5">
+                            Arrived at <strong>{v.stopName}</strong> on <strong>{v.busNumber} ({v.busPlate})</strong>. Provide this code to chaperone <strong>{v.verifiedBy}</strong> to authorize offboarding with parental consent.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 self-start md:self-center bg-white/10 px-4 py-3 rounded-xl border border-white/20">
+                        <div className="text-right">
+                          <span className="block text-[10px] uppercase font-bold text-slate-300">Authorization Code</span>
+                          <span className="font-mono font-black text-2xl text-amber-300 tracking-wider">[{v.verificationCode}]</span>
+                        </div>
+                        <button
+                          onClick={() => setActiveTab('transport')}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                        >
+                          View Transport
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -676,252 +740,6 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
                 {relevantAnnouncements.length - Object.keys(acknowledgedAnnouncements).length}
               </div>
               <div className="text-xs text-slate-500 mt-0.5">Notices requiring review</div>
-            </div>
-          </div>
-
-          {/* ⭐ EXACT DASHBOARD QUICK ACTIONS REQUESTED BY USER */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <div>
-                <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-500" />
-                  <span>⭐ Dashboard Quick Actions</span>
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Direct shortcuts to frequently accessed student records, communications, and administrative services.
-                </p>
-              </div>
-              <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                12 Priority Shortcuts
-              </span>
-            </div>
-
-            {/* The 12 Quick Action Cards Arranged Exactly as Specified */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
-              
-              {/* Row 1 */}
-              <button
-                onClick={() => setActiveTab('my_children')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ My Children ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Profiles, classes, & admission details
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('attendance')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <ClipboardCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Attendance ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Daily roll call logs & absence forms
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('performance')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Academic Performance ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    CBC strand metrics & topical quizzes
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('assignments')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Assignments ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Active homework tasks & deadlines
-                  </div>
-                </div>
-              </button>
-
-              {/* Row 2 */}
-              <button
-                onClick={() => setActiveTab('fees')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Fees & Payments ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Invoices, statements & M-Pesa pay
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('timetable')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Timetable ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Daily class schedule & period slots
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('gate_records')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <DoorOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Gate / Exit Records ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Departure passes & security codes
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('messages')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-cyan-100 text-cyan-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <MessageSquare className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Messages ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Direct teacher messaging channel
-                  </div>
-                </div>
-              </button>
-
-              {/* Row 3 */}
-              <button
-                onClick={() => setActiveTab('announcements')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-red-100 text-red-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <Bell className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Announcements ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    School circulars & formal notices
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('calendar')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-orange-100 text-orange-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <CalendarDays className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ School Calendar ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Term dates, exams & school events
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('reports')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <FileSpreadsheet className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Reports ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    CBC report cards & PDF downloads
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('lunch')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <Utensils className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-amber-900">
-                    [ Lunch & Meals ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Hot meals taken & special diet logs
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('notifications')}
-                className="p-4 rounded-xl border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40 text-left transition-all shadow-2xs group flex flex-col justify-between"
-              >
-                <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
-                  <Bell className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-900">
-                    [ Notifications ]
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    SMS and app alerts from school
-                  </div>
-                </div>
-              </button>
             </div>
           </div>
 
@@ -1597,6 +1415,72 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
                 </span>
               )}
             </div>
+
+            {/* Afternoon Drop-off Security Code & Parent Consent Card */}
+            {(() => {
+              const targetChildId = selectedChild ? selectedChild.id : myChildren[0]?.id;
+              const childVerif = dropoffVerifications.find(v => v.studentId === targetChildId);
+              if (!childVerif) return null;
+
+              const isPending = childVerif.status === 'pending_code';
+              return (
+                <div className={`p-5 rounded-2xl border transition-all ${
+                  isPending
+                    ? 'bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white border-blue-400/50 shadow-md animate-in fade-in'
+                    : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                        isPending ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' : 'bg-emerald-200 text-emerald-800'
+                      }`}>
+                        <KeyRound className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            isPending ? 'bg-amber-400/30 text-amber-200 border border-amber-400/40' : 'bg-emerald-200 text-emerald-800'
+                          }`}>
+                            {isPending ? 'Release PIN Pending Chaperone Input' : 'Offboard Consent Verified ✓'}
+                          </span>
+                          <span className={`text-xs font-mono ${isPending ? 'text-slate-300' : 'text-slate-500'}`}>
+                            {childVerif.requestedAt}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold mt-1">
+                          Afternoon Drop-off Handover Verification ({childVerif.studentName})
+                        </h4>
+                        <p className={`text-xs mt-0.5 ${isPending ? 'text-slate-300' : 'text-emerald-800'}`}>
+                          {isPending ? (
+                            <>The bus chaperone has signaled arrival at <strong>{childVerif.stopName}</strong>. Release Code must be verified before student offboards.</>
+                          ) : (
+                            <>Parent consent code was verified at {childVerif.releasedAt || 'drop-off'}. {childVerif.studentName} was released safely to guardian.</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className={`px-4 py-3 rounded-xl border flex flex-col items-center justify-center shrink-0 ${
+                      isPending ? 'bg-white/10 border-white/20' : 'bg-white border-emerald-300'
+                    }`}>
+                      <span className={`text-[10px] uppercase font-bold ${isPending ? 'text-slate-300' : 'text-slate-500'}`}>
+                        Drop-Off Code
+                      </span>
+                      <span className={`text-2xl font-black font-mono tracking-wider ${
+                        isPending ? 'text-amber-300' : 'text-emerald-700'
+                      }`}>
+                        [{childVerif.verificationCode}]
+                      </span>
+                      {isPending && (
+                        <span className="text-[10px] text-amber-200 mt-0.5 font-medium">
+                          Share with chaperone
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Live Boarding Status Banner */}
             {studentTransport && (

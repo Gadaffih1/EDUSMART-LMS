@@ -162,6 +162,35 @@ export interface AudioLesson {
   createdAt: string;
 }
 
+export interface LessonImage {
+  id: string;
+  topicId: string;
+  grade: GradeLevel;
+  subject: SubjectName;
+  title: string;
+  imageUrl: string;
+  caption: string;
+  category?: 'diagram' | 'chart' | 'infographic' | 'illustration';
+  tags?: string[];
+  teacherName: string;
+  createdAt: string;
+}
+
+export interface ELink {
+  id: string;
+  title: string;
+  url: string;
+  description: string;
+  category: 'Curriculum & Reference' | 'Science & STEM' | 'KICD & Open Access' | 'Literature & Languages' | 'Digital Library & Research' | 'General Learning';
+  gradeLevel?: GradeLevel | 'All Grades';
+  subject?: SubjectName | 'Cross-Curricular';
+  addedBy: string;
+  addedByRole: 'Librarian' | 'Teacher' | 'Admin';
+  createdAt: string;
+  updatedAt?: string;
+  clicksCount?: number;
+}
+
 export interface QuizQuestion {
   id: string;
   questionText: string;
@@ -631,7 +660,7 @@ export interface LibraryPolicy {
   description: string;
 }
 
-export type NotificationCategory = 'assignment' | 'grade' | 'announcement' | 'system' | 'safety';
+export type NotificationCategory = 'assignment' | 'grade' | 'announcement' | 'system' | 'safety' | 'transport';
 
 export interface AppNotification {
   id: string;

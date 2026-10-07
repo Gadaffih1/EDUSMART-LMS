@@ -56,7 +56,9 @@ import {
   BellPeriodDef,
   LearnerLunchRecord,
   StaffDutyAssignment,
-  TransportDropoffVerification
+  TransportDropoffVerification,
+  LessonImage,
+  ELink
 } from '../types';
 
 export const INITIAL_GRADE_PASSWORDS: GradePassword[] = [
@@ -4550,4 +4552,147 @@ export const INITIAL_DROPOFF_VERIFICATIONS: TransportDropoffVerification[] = [
     parentConsentConfirmed: false
   }
 ];
+
+// ========================================================
+// 🖼️ INITIAL LESSON IMAGES (SUBJECT TEACHER VISUAL RESOURCES)
+// ========================================================
+export const INITIAL_LESSON_IMAGES: LessonImage[] = [
+  {
+    id: 'img-res-01',
+    topicId: 'top-math-decimals',
+    grade: 4,
+    subject: 'Mathematics',
+    title: 'Visual Representation of Decimal Tenths and Hundredths Grid',
+    imageUrl: 'https://images.unsplash.com/photo-1596495578065-6e0763fa1178?auto=format&fit=crop&w=1000&q=80',
+    caption: '10x10 Hundredths Grid: 37 shaded squares represents 37/100 or 0.37.',
+    category: 'diagram',
+    tags: ['Fractions', 'Decimals', 'Tenths Grid'],
+    teacherName: 'Mr. David Kiprono',
+    createdAt: '2026-09-22'
+  },
+  {
+    id: 'img-res-02',
+    topicId: 'top-sci-digestive',
+    grade: 4,
+    subject: 'Integrated Science',
+    title: 'Human Digestive Tract Organs & Functional Flowchart',
+    imageUrl: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1000&q=80',
+    caption: 'Mouth -> Oesophagus -> Stomach -> Small Intestine -> Large Intestine -> Rectum.',
+    category: 'diagram',
+    tags: ['Biology', 'Digestive System', 'CBC Science'],
+    teacherName: 'Mrs. Jane Njeri',
+    createdAt: '2026-09-24'
+  },
+  {
+    id: 'img-res-03',
+    topicId: 'top-soc-kenya-map',
+    grade: 4,
+    subject: 'Social Studies',
+    title: 'Physical Topography and Rift Valley Drainage Basins of Kenya',
+    imageUrl: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1000&q=80',
+    caption: 'Physical features: Great Rift Valley, Mt. Kenya, Aberdares, and Indian Ocean drainage.',
+    category: 'illustration',
+    tags: ['Geography', 'Kenya', 'Topography'],
+    teacherName: 'Mr. Charles Omondi',
+    createdAt: '2026-09-26'
+  },
+  {
+    id: 'img-res-04',
+    topicId: 'top-agri-soil',
+    grade: 4,
+    subject: 'Agriculture and Nutrition',
+    title: 'Soil Profile Layers: Topsoil, Subsoil and Bedrock Horizons',
+    imageUrl: 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&w=1000&q=80',
+    caption: 'Horizons O, A (Topsoil), B (Subsoil), and C (Parent rock). Soil conservation and organic humus.',
+    category: 'chart',
+    tags: ['Soil', 'Humus', 'Agriculture'],
+    teacherName: 'Mr. Peter Mutua',
+    createdAt: '2026-09-28'
+  }
+];
+
+// ========================================================
+// 🔗 INITIAL CURATED E-LINKS (LIBRARIAN & TEACHER SHARED PORTALS)
+// ========================================================
+export const INITIAL_E_LINKS: ELink[] = [
+  {
+    id: 'elink-01',
+    title: 'KICD EduTV Kenya Digital Learning Broadcasting Portal',
+    url: 'https://www.kicd.ac.ke/edutv',
+    description: 'Official Kenya Institute of Curriculum Development (KICD) CBC video lessons, audio archives, and syllabus radio lessons broadcast.',
+    category: 'KICD & Open Access',
+    gradeLevel: 'All Grades',
+    subject: 'Cross-Curricular',
+    addedBy: 'Mrs. Florence Muthoni (Librarian)',
+    addedByRole: 'Librarian',
+    createdAt: '2026-09-15',
+    clicksCount: 342
+  },
+  {
+    id: 'elink-02',
+    title: 'Kenya National Library Service (KNLS) Virtual National Library',
+    url: 'https://vnl.knls.ac.ke',
+    description: 'National digital lending library with over 200,000 Kenyan e-books, CBC supplementary readers, and academic journals.',
+    category: 'Digital Library & Research',
+    gradeLevel: 'All Grades',
+    subject: 'English',
+    addedBy: 'Mrs. Florence Muthoni (Librarian)',
+    addedByRole: 'Librarian',
+    createdAt: '2026-09-16',
+    clicksCount: 289
+  },
+  {
+    id: 'elink-03',
+    title: 'PhET Interactive CBC STEM Simulations (Physics & Math)',
+    url: 'https://phet.colorado.edu',
+    description: 'Interactive STEM laboratory simulations for fraction visualizers, electrical circuits, gravity, and states of matter.',
+    category: 'Science & STEM',
+    gradeLevel: 4,
+    subject: 'Mathematics',
+    addedBy: 'Mr. David Kiprono (Subject Teacher)',
+    addedByRole: 'Teacher',
+    createdAt: '2026-09-18',
+    clicksCount: 415
+  },
+  {
+    id: 'elink-04',
+    title: 'African Storybook Early Literacy & Indigenous Languages Project',
+    url: 'https://www.africanstorybook.org',
+    description: 'Open-access illustrated storybooks published in English, Kiswahili, and mother-tongue languages for CBC Grade 1-6 readers.',
+    category: 'Literature & Languages',
+    gradeLevel: 4,
+    subject: 'English',
+    addedBy: 'Mrs. Mary Wambui (Subject Teacher)',
+    addedByRole: 'Teacher',
+    createdAt: '2026-09-20',
+    clicksCount: 198
+  },
+  {
+    id: 'elink-05',
+    title: 'UNESCO Open Educational Resources (OER) Africa Global Commons',
+    url: 'https://www.oerafrica.org',
+    description: 'Curated curriculum support materials, pedagogical frameworks, and teacher continuous development modules.',
+    category: 'Curriculum & Reference',
+    gradeLevel: 'All Grades',
+    subject: 'Cross-Curricular',
+    addedBy: 'Mrs. Florence Muthoni (Librarian)',
+    addedByRole: 'Librarian',
+    createdAt: '2026-09-22',
+    clicksCount: 156
+  },
+  {
+    id: 'elink-06',
+    title: 'National Geographic Education Interactive World Atlas & Bio-Explorer',
+    url: 'https://education.nationalgeographic.org',
+    description: 'High-resolution cartography, wildlife habitats, environmental conservation studies, and climate science modules.',
+    category: 'Curriculum & Reference',
+    gradeLevel: 4,
+    subject: 'Social Studies',
+    addedBy: 'Mr. Charles Omondi (Subject Teacher)',
+    addedByRole: 'Teacher',
+    createdAt: '2026-09-25',
+    clicksCount: 227
+  }
+];
+
 

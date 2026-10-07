@@ -10,6 +10,7 @@ import {
   LessonNote, 
   VideoLesson, 
   AudioLesson, 
+  LessonImage,
   Quiz, 
   QuizQuestion,
   VirtualClassRoom,
@@ -26,6 +27,7 @@ import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
 import { ReportingHub } from '../reports/ReportingHub';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -46,7 +48,14 @@ import {
   Search,
   ChevronRight,
   FileSpreadsheet,
-  Printer
+  Printer,
+  Volume2,
+  Image as ImageIcon,
+  Globe,
+  Trash2,
+  Play,
+  Sparkles,
+  Tag
 } from 'lucide-react';
 
 interface TeacherWorkspaceProps {
@@ -103,6 +112,9 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
   const [asgMaxScore, setAsgMaxScore] = useState<number>(20);
   const [asgSuccess, setAsgSuccess] = useState(false);
 
+  // Resource Sub-Tab (Notes, Audios, Videos, Images, E-Links)
+  const [resourceSubTab, setResourceSubTab] = useState<'notes' | 'audios' | 'videos' | 'images' | 'elinks'>('notes');
+
   // Lesson Note Creation Form State
   const [noteTitle, setNoteTitle] = useState('');
   const [noteGrade, setNoteGrade] = useState<GradeLevel>(defaultGrade);
@@ -111,6 +123,53 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
   const [noteContent, setNoteContent] = useState('');
   const [noteKeyTakeaway, setNoteKeyTakeaway] = useState('');
   const [noteSuccess, setNoteSuccess] = useState(false);
+
+  // Audio Lesson Form State
+  const [audioTitle, setAudioTitle] = useState('');
+  const [audioGrade, setAudioGrade] = useState<GradeLevel>(defaultGrade);
+  const [audioSubject, setAudioSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
+  const [audioDuration, setAudioDuration] = useState<number>(10);
+  const [audioUrl, setAudioUrl] = useState('https://actions.google.com/sounds/v1/science/digital_computer_sounds.ogg');
+  const [audioTranscript, setAudioTranscript] = useState('');
+  const [audioKeyPoint, setAudioKeyPoint] = useState('');
+  const [audioSuccess, setAudioSuccess] = useState(false);
+
+  // Video Lesson Form State
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoGrade, setVideoGrade] = useState<GradeLevel>(defaultGrade);
+  const [videoSubject, setVideoSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
+  const [videoDuration, setVideoDuration] = useState<number>(15);
+  const [videoUrl, setVideoUrl] = useState('https://www.youtube.com/embed/dQw4w9WgXcQ');
+  const [videoThumbnail, setVideoThumbnail] = useState('https://images.unsplash.com/photo-1596495578065-6e0763fa1178?auto=format&fit=crop&w=600&q=80');
+  const [videoKeyPoint, setVideoKeyPoint] = useState('');
+  const [videoSuccess, setVideoSuccess] = useState(false);
+
+  // Lesson Image / Pedagogical Diagram Form State
+  const [imgTitle, setImgTitle] = useState('');
+  const [imgGrade, setImgGrade] = useState<GradeLevel>(defaultGrade);
+  const [imgSubject, setImgSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
+  const [imgUrl, setImgUrl] = useState('https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1000&q=80');
+  const [imgCaption, setImgCaption] = useState('');
+  const [imgCategory, setImgCategory] = useState<'diagram' | 'chart' | 'infographic' | 'illustration'>('diagram');
+  const [imgTags, setImgTags] = useState('CBC, Revision, Curriculum');
+  const [imgSuccess, setImgSuccess] = useState(false);
+
+  // Existing Resources Lists for Teacher Management
+  const [existingNotes, setExistingNotes] = useState<LessonNote[]>(() => Storage.getNotes());
+  const [existingAudios, setExistingAudios] = useState<AudioLesson[]>(() => Storage.getAudios());
+  const [existingVideos, setExistingVideos] = useState<VideoLesson[]>(() => Storage.getVideos());
+  const [existingImages, setExistingImages] = useState<LessonImage[]>(() => Storage.getLessonImages());
+
+  React.useEffect(() => {
+    const refreshResources = () => {
+      setExistingNotes(Storage.getNotes());
+      setExistingAudios(Storage.getAudios());
+      setExistingVideos(Storage.getVideos());
+      setExistingImages(Storage.getLessonImages());
+    };
+    window.addEventListener('lesson-resources-updated', refreshResources);
+    return () => window.removeEventListener('lesson-resources-updated', refreshResources);
+  }, []);
 
   // Quiz Builder State
   const [quizTitle, setQuizTitle] = useState('');
@@ -199,11 +258,112 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
     };
 
     Storage.addNote(newNote);
+    setExistingNotes(Storage.getNotes());
     setNoteSuccess(true);
     setNoteTitle('');
     setNoteSummary('');
     setNoteContent('');
     setTimeout(() => setNoteSuccess(false), 2500);
+  };
+
+  const handleDeleteNote = (id: string) => {
+    Storage.deleteNote(id);
+    setExistingNotes(Storage.getNotes());
+  };
+
+  const handleCreateAudio = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!audioTitle) return;
+
+    const newAudio: AudioLesson = {
+      id: `aud-${Date.now()}`,
+      topicId: `top-custom-${Date.now()}`,
+      grade: audioGrade,
+      subject: audioSubject,
+      title: audioTitle,
+      durationMinutes: Number(audioDuration) || 10,
+      audioUrl: audioUrl || 'https://actions.google.com/sounds/v1/science/digital_computer_sounds.ogg',
+      transcript: audioTranscript || 'Comprehensive CBC audio lesson for student mental revision.',
+      keyPoints: audioKeyPoint ? [audioKeyPoint] : ['Listen attentively and note down key curriculum concepts.'],
+      teacherName: currentUser.name,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    Storage.addAudio(newAudio);
+    setExistingAudios(Storage.getAudios());
+    setAudioSuccess(true);
+    setAudioTitle('');
+    setAudioTranscript('');
+    setAudioKeyPoint('');
+    setTimeout(() => setAudioSuccess(false), 2500);
+  };
+
+  const handleDeleteAudio = (id: string) => {
+    Storage.deleteAudio(id);
+    setExistingAudios(Storage.getAudios());
+  };
+
+  const handleCreateVideo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!videoTitle) return;
+
+    const newVideo: VideoLesson = {
+      id: `vid-${Date.now()}`,
+      topicId: `top-custom-${Date.now()}`,
+      grade: videoGrade,
+      subject: videoSubject,
+      title: videoTitle,
+      durationMinutes: Number(videoDuration) || 15,
+      videoUrl: videoUrl,
+      videoThumbnail: videoThumbnail,
+      keyPoints: videoKeyPoint ? [videoKeyPoint] : ['Observe the demonstrated steps and apply in your homework exercise.'],
+      teacherName: currentUser.name,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    Storage.addVideo(newVideo);
+    setExistingVideos(Storage.getVideos());
+    setVideoSuccess(true);
+    setVideoTitle('');
+    setVideoKeyPoint('');
+    setTimeout(() => setVideoSuccess(false), 2500);
+  };
+
+  const handleDeleteVideo = (id: string) => {
+    Storage.deleteVideo(id);
+    setExistingVideos(Storage.getVideos());
+  };
+
+  const handleCreateImage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!imgTitle || !imgUrl) return;
+
+    const tagsArray = imgTags.split(',').map(t => t.trim()).filter(Boolean);
+    const newImg: LessonImage = {
+      id: `img-${Date.now()}`,
+      topicId: `top-custom-${Date.now()}`,
+      grade: imgGrade,
+      subject: imgSubject,
+      title: imgTitle,
+      imageUrl: imgUrl,
+      caption: imgCaption || 'Visual pedagogical demonstration diagram for CBC curriculum learners.',
+      category: imgCategory,
+      tags: tagsArray.length > 0 ? tagsArray : ['Diagram', 'Visuals'],
+      teacherName: currentUser.name,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    Storage.addLessonImage(newImg);
+    setExistingImages(Storage.getLessonImages());
+    setImgSuccess(true);
+    setImgTitle('');
+    setImgCaption('');
+    setTimeout(() => setImgSuccess(false), 2500);
+  };
+
+  const handleDeleteImage = (id: string) => {
+    Storage.deleteLessonImage(id);
+    setExistingImages(Storage.getLessonImages());
   };
 
   const handleAddQuestionToQuiz = () => {
@@ -411,12 +571,12 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
           </div>
         </button>
 
-        {/* Button 4: Lesson Resources */}
+        {/* Button 4: E-Resources & E-Links */}
         <button
           onClick={() => setActiveTab('resources')}
           className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
             activeTab === 'resources'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400'
+              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-purple-400'
               : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
           }`}
         >
@@ -424,9 +584,9 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             <BookOpen className="w-4 h-4" />
           </div>
           <div>
-            <div className="font-bold text-xs sm:text-sm">4. Lesson Resources</div>
+            <div className="font-bold text-xs sm:text-sm">4. E-Resources & E-Links</div>
             <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'resources' ? 'text-slate-300' : 'text-slate-500'}`}>
-              Prepare notes, audios, video
+              Notes, Audio, Video, Images & E-Links
             </div>
           </div>
         </button>
@@ -735,113 +895,744 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          TAB 4: LESSON RESOURCES (PREPARE NOTES, AUDIOS, VIDEOS)
+          TAB 4: E-RESOURCES & E-LINKS (NOTES, AUDIOS, VIDEOS, IMAGES, E-LINKS)
           ======================================================== */}
       {activeTab === 'resources' && (
         <section className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">
-              Prepare & Publish Lesson Notes (Anti-Download Protected)
-            </h2>
-            <p className="text-xs text-slate-500 mb-6">
-              Notes uploaded here are automatically embedded in the student workspace with download prevention.
-            </p>
-
-            {noteSuccess && (
-              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600" />
-                <span>Lesson note saved and immediately available to Grade {noteGrade} learners!</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateNote} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
-                  <select
-                    value={noteGrade}
-                    onChange={(e) => {
-                      const g = Number(e.target.value) as GradeLevel;
-                      setNoteGrade(g);
-                      setNoteSubject(getSubjectsForGrade(g)[0]);
-                    }}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                  >
-                    {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
-                      <option key={g} value={g}>Grade {g}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
-                  <select
-                    value={noteSubject}
-                    onChange={(e) => setNoteSubject(e.target.value as SubjectName)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                  >
-                    {getSubjectsForGrade(noteGrade).map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
+          {/* Header & Sub-Tab Switcher */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Note Title</label>
-                <input
-                  type="text"
-                  required
-                  value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
-                  placeholder="e.g. Decimals: Conversion from Tenths and Hundredths"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                />
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-purple-600" />
+                  <span>Subject Teacher E-Resources & Curated E-Links</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                  Publish and manage multimodal curriculum content (Lesson Notes, Audio Podcasts, Video Lessons, Pedagogical Diagrams & Images, and Curated E-Links) immediately accessible to CBC learners.
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Executive Summary</label>
-                <input
-                  type="text"
-                  value={noteSummary}
-                  onChange={(e) => setNoteSummary(e.target.value)}
-                  placeholder="Brief 1-sentence overview of the concept"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
-                />
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold font-mono">
+                  Grade {defaultGrade} Teacher Rights
+                </span>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Lesson Content (Markdown formatted, headings with ###)
-                </label>
-                <textarea
-                  rows={6}
-                  required
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  placeholder="### 1. Introduction to Decimals&#10;A decimal number has a whole number part and a fractional part separated by a decimal point..."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Key Revision Takeaway</label>
-                <input
-                  type="text"
-                  value={noteKeyTakeaway}
-                  onChange={(e) => setNoteKeyTakeaway(e.target.value)}
-                  placeholder="e.g. 1/10 is written as 0.1 and represents 1 part out of 10 equal parts."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
-                />
-              </div>
+            {/* 5-Channel Sub-tab Ribbon */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setResourceSubTab('notes')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  resourceSubTab === 'notes'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>1. Lesson Notes ({existingNotes.length})</span>
+              </button>
 
               <button
-                type="submit"
-                className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                type="button"
+                onClick={() => setResourceSubTab('audios')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  resourceSubTab === 'audios'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                Publish Lesson Note
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>2. Audio Lessons ({existingAudios.length})</span>
               </button>
-            </form>
+
+              <button
+                type="button"
+                onClick={() => setResourceSubTab('videos')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  resourceSubTab === 'videos'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                <span>3. Video Lessons ({existingVideos.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setResourceSubTab('images')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  resourceSubTab === 'images'
+                    ? 'bg-purple-700 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>4. Diagrams & Images ({existingImages.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setResourceSubTab('elinks')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  resourceSubTab === 'elinks'
+                    ? 'bg-blue-700 text-white shadow-2xs ring-1 ring-blue-400'
+                    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5 text-blue-600" />
+                <span>5. Curated E-Links</span>
+              </button>
+            </div>
           </div>
+
+          {/* CHANNEL 1: LESSON NOTES */}
+          {resourceSubTab === 'notes' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+                <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-purple-600" />
+                  <span>Prepare & Publish Lesson Notes (Anti-Download Protected)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Notes are securely stored in the learner workspace with copy/download prevention.
+                </p>
+
+                {noteSuccess && (
+                  <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Lesson note saved and immediately available to Grade {noteGrade} learners!</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateNote} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
+                      <select
+                        value={noteGrade}
+                        onChange={(e) => {
+                          const g = Number(e.target.value) as GradeLevel;
+                          setNoteGrade(g);
+                          setNoteSubject(getSubjectsForGrade(g)[0]);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
+                          <option key={g} value={g}>Grade {g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                      <select
+                        value={noteSubject}
+                        onChange={(e) => setNoteSubject(e.target.value as SubjectName)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {getSubjectsForGrade(noteGrade).map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Note Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={noteTitle}
+                      onChange={(e) => setNoteTitle(e.target.value)}
+                      placeholder="e.g. Decimals: Conversion from Tenths and Hundredths"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Executive Summary</label>
+                    <input
+                      type="text"
+                      value={noteSummary}
+                      onChange={(e) => setNoteSummary(e.target.value)}
+                      placeholder="Brief 1-sentence overview of the concept"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Full Lesson Content (Markdown formatted, headings with ###)
+                    </label>
+                    <textarea
+                      rows={6}
+                      required
+                      value={noteContent}
+                      onChange={(e) => setNoteContent(e.target.value)}
+                      placeholder="### 1. Introduction to Decimals&#10;A decimal number has a whole number part and a fractional part separated by a decimal point..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Key Revision Takeaway</label>
+                    <input
+                      type="text"
+                      value={noteKeyTakeaway}
+                      onChange={(e) => setNoteKeyTakeaway(e.target.value)}
+                      placeholder="e.g. 1/10 is written as 0.1 and represents 1 part out of 10 equal parts."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Publish Lesson Note
+                  </button>
+                </form>
+              </div>
+
+              {/* Published Notes Roster */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                  Published Lesson Notes ({existingNotes.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {existingNotes.map((n) => (
+                    <div key={n.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                            Grade {n.grade} · {n.subject}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">{n.createdAt}</span>
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-900 mt-2 line-clamp-1">{n.title}</h5>
+                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-1">{n.summary}</p>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400">By {n.author}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteNote(n.id)}
+                          className="text-rose-600 hover:text-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CHANNEL 2: AUDIO LESSONS */}
+          {resourceSubTab === 'audios' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+                <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+                  <Volume2 className="w-4 h-4 text-purple-600" />
+                  <span>Publish Audio Lesson & Mental Math Podcast</span>
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Streamable audio podcasts with accompanying transcripts and key revision checkpoints.
+                </p>
+
+                {audioSuccess && (
+                  <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Audio lesson saved and published for Grade {audioGrade} learners!</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateAudio} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
+                      <select
+                        value={audioGrade}
+                        onChange={(e) => {
+                          const g = Number(e.target.value) as GradeLevel;
+                          setAudioGrade(g);
+                          setAudioSubject(getSubjectsForGrade(g)[0]);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
+                          <option key={g} value={g}>Grade {g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                      <select
+                        value={audioSubject}
+                        onChange={(e) => setAudioSubject(e.target.value as SubjectName)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {getSubjectsForGrade(audioGrade).map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Duration (Minutes)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={audioDuration}
+                        onChange={(e) => setAudioDuration(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Audio Lesson Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={audioTitle}
+                      onChange={(e) => setAudioTitle(e.target.value)}
+                      placeholder="e.g. Oral Pronunciation & Word Stress in Kiswahili Mashairi"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Audio Stream / MP3 URL</label>
+                    <input
+                      type="url"
+                      required
+                      value={audioUrl}
+                      onChange={(e) => setAudioUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Key Listening Checkpoint</label>
+                    <input
+                      type="text"
+                      value={audioKeyPoint}
+                      onChange={(e) => setAudioKeyPoint(e.target.value)}
+                      placeholder="e.g. Pay special attention to the syllable cadence at minute 03:15."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Full Audio Script / Transcript</label>
+                    <textarea
+                      rows={4}
+                      value={audioTranscript}
+                      onChange={(e) => setAudioTranscript(e.target.value)}
+                      placeholder="Enter script text so learners can follow along as they listen..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Publish Audio Lesson
+                  </button>
+                </form>
+              </div>
+
+              {/* Published Audios Roster */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                  Published Audio Lessons ({existingAudios.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {existingAudios.map((a) => (
+                    <div key={a.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-800">
+                            Grade {a.grade} · {a.subject}
+                          </span>
+                          <span className="text-[10px] text-teal-700 font-mono font-bold">{a.durationMinutes} mins</span>
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-900 mt-2 line-clamp-1">{a.title}</h5>
+                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-1 italic">"{a.transcript}"</p>
+                      </div>
+                      <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400">By {a.teacherName}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAudio(a.id)}
+                          className="text-rose-600 hover:text-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CHANNEL 3: VIDEO LESSONS */}
+          {resourceSubTab === 'videos' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+                <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+                  <Video className="w-4 h-4 text-purple-600" />
+                  <span>Publish Video Lesson & Whiteboard Stream</span>
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Curate video demonstrations, KICD EduTV recordings, and animated concept explanations.
+                </p>
+
+                {videoSuccess && (
+                  <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Video lesson published for Grade {videoGrade} learners!</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateVideo} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
+                      <select
+                        value={videoGrade}
+                        onChange={(e) => {
+                          const g = Number(e.target.value) as GradeLevel;
+                          setVideoGrade(g);
+                          setVideoSubject(getSubjectsForGrade(g)[0]);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
+                          <option key={g} value={g}>Grade {g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                      <select
+                        value={videoSubject}
+                        onChange={(e) => setVideoSubject(e.target.value as SubjectName)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {getSubjectsForGrade(videoGrade).map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Duration (Minutes)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={videoDuration}
+                        onChange={(e) => setVideoDuration(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Video Lesson Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={videoTitle}
+                      onChange={(e) => setVideoTitle(e.target.value)}
+                      placeholder="e.g. Science Experiment: Separation of Insoluble Solids by Filtration"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Video Stream / Embed URL</label>
+                      <input
+                        type="url"
+                        required
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Thumbnail Cover Image URL</label>
+                      <input
+                        type="url"
+                        value={videoThumbnail}
+                        onChange={(e) => setVideoThumbnail(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Key Focus Point</label>
+                    <input
+                      type="text"
+                      value={videoKeyPoint}
+                      onChange={(e) => setVideoKeyPoint(e.target.value)}
+                      placeholder="e.g. Note the cone angle and filter paper folding steps."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Publish Video Lesson
+                  </button>
+                </form>
+              </div>
+
+              {/* Published Videos Roster */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                  Published Video Lessons ({existingVideos.length})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {existingVideos.map((v) => (
+                    <div key={v.id} className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex flex-col justify-between">
+                      {v.videoThumbnail && (
+                        <div className="h-32 w-full bg-slate-900 relative overflow-hidden">
+                          <img src={v.videoThumbnail} alt={v.title} className="w-full h-full object-cover opacity-80" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md">
+                              <Play className="w-4 h-4 fill-current ml-0.5" />
+                            </div>
+                          </div>
+                          <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/70 text-white text-[10px] font-mono font-bold">
+                            {v.durationMinutes}m
+                          </span>
+                        </div>
+                      )}
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
+                            Grade {v.grade} · {v.subject}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">{v.createdAt}</span>
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-900 line-clamp-1">{v.title}</h5>
+                        {v.keyPoints && v.keyPoints[0] && (
+                          <p className="text-[11px] text-slate-500 line-clamp-1">Focus: {v.keyPoints[0]}</p>
+                        )}
+                        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">By {v.teacherName}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteVideo(v.id)}
+                            className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CHANNEL 4: DIAGRAMS & IMAGES */}
+          {resourceSubTab === 'images' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+                <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-purple-600" />
+                  <span>Publish Pedagogical Diagram, Chart or Infographic</span>
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  Visual learning materials, anatomical diagrams, maps, and flowchart infographics for CBC learners.
+                </p>
+
+                {imgSuccess && (
+                  <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Diagram asset published and available to Grade {imgGrade} learners!</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateImage} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
+                      <select
+                        value={imgGrade}
+                        onChange={(e) => {
+                          const g = Number(e.target.value) as GradeLevel;
+                          setImgGrade(g);
+                          setImgSubject(getSubjectsForGrade(g)[0]);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
+                          <option key={g} value={g}>Grade {g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                      <select
+                        value={imgSubject}
+                        onChange={(e) => setImgSubject(e.target.value as SubjectName)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        {getSubjectsForGrade(imgGrade).map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+                      <select
+                        value={imgCategory}
+                        onChange={(e) => setImgCategory(e.target.value as any)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                      >
+                        <option value="diagram">Anatomical / Technical Diagram</option>
+                        <option value="chart">Data Chart / Graph</option>
+                        <option value="infographic">Infographic Flowchart</option>
+                        <option value="illustration">Curriculum Illustration</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Image / Diagram Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={imgTitle}
+                      onChange={(e) => setImgTitle(e.target.value)}
+                      placeholder="e.g. Photosynthesis Light and Dark Phase Cycle Diagram"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Image Asset URL (Direct HTTPS)</label>
+                    <input
+                      type="url"
+                      required
+                      value={imgUrl}
+                      onChange={(e) => setImgUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Caption & Concept Explanation</label>
+                    <textarea
+                      rows={3}
+                      value={imgCaption}
+                      onChange={(e) => setImgCaption(e.target.value)}
+                      placeholder="Explain the diagram components and instructions for the learner..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Tags (Comma-separated)</label>
+                    <input
+                      type="text"
+                      value={imgTags}
+                      onChange={(e) => setImgTags(e.target.value)}
+                      placeholder="Biology, Chloroplast, Sunlight, CBC"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  {imgUrl && (
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Asset Live Preview</div>
+                      <div className="h-40 max-w-sm rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center">
+                        <img src={imgUrl} alt="Preview" className="h-full w-auto object-contain" />
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Publish Pedagogical Diagram
+                  </button>
+                </form>
+              </div>
+
+              {/* Published Images Roster */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                  Published Diagrams & Visual Assets ({existingImages.length})
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {existingImages.map((img) => (
+                    <div key={img.id} className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex flex-col justify-between">
+                      <div className="h-44 bg-slate-950 flex items-center justify-center p-2">
+                        <img src={img.imageUrl} alt={img.title} className="max-h-full max-w-full object-contain rounded" />
+                      </div>
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                            {img.category || 'diagram'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">Grade {img.grade}</span>
+                        </div>
+                        <h5 className="font-bold text-xs text-slate-900 line-clamp-1">{img.title}</h5>
+                        <p className="text-[11px] text-slate-500 line-clamp-2">{img.caption}</p>
+                        <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400">By {img.teacherName}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteImage(img.id)}
+                            className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* CHANNEL 5: CURATED E-LINKS DIRECTORY (TEACHER RIGHTS: ADD, EDIT, REMOVE) */}
+          {resourceSubTab === 'elinks' && (
+            <div className="space-y-4">
+              <ELinksDirectory
+                currentUser={currentUser}
+                canManage={true}
+                title="Subject Teacher Curated E-Links Directory"
+                subtitle="Teacher administrative rights: Add, edit, or remove verified online repositories, PhET simulations, KICD portals, and reference URLs directly accessible to learners."
+                defaultFilterGrade={currentUser.grade}
+              />
+            </div>
+          )}
         </section>
       )}
 

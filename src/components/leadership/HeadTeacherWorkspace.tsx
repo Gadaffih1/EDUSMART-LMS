@@ -8,6 +8,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
+import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
@@ -44,7 +45,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
+  type HeadTab = 'executive' | 'analytics' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
 
   const allUsers = Storage.getUsers();
@@ -168,6 +169,16 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         >
           <BarChart3 className="w-4 h-4 text-emerald-400" />
           <span>Executive Overview & Governance</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'analytics' ? 'bg-slate-900 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 text-emerald-600" />
+          <span>School-Wide Analytics (Recharts)</span>
         </button>
 
         <button
@@ -567,6 +578,17 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
             </div>
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB 1B: EXECUTIVE ANALYTICS DASHBOARD (RECHARTS)
+          ======================================================== */}
+      {activeTab === 'analytics' && (
+        <ExecutiveAnalyticsDashboard 
+          currentUser={currentUser}
+          title="Head Teacher Executive Health, Attendance & Academic Analytics"
+          subtitle="Real-time Recharts surveillance: Campus attendance rates, longitudinal CBC mastery, library foot-traffic, and student wellbeing indicators."
+        />
       )}
 
       {/* ========================================================

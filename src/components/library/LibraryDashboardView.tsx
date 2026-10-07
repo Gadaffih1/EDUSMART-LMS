@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
-  Bookmark
+  Bookmark,
+  Globe
 } from 'lucide-react';
 import { 
   LibraryBook, 
@@ -72,6 +73,13 @@ export const LibraryDashboardView: React.FC<LibraryDashboardViewProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onNavigate('digital_library')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Globe className="w-4 h-4 text-blue-200" />
+              <span>Digital E-Links & Library</span>
+            </button>
             <button
               onClick={onOpenIssueModal}
               className="px-4 py-2 bg-purple-500 hover:bg-purple-400 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { GradeLevel, User, PRIMARY_STREAMS, JUNIOR_STREAMS } from '../../types';
+import { GradeLevel, User, PRIMARY_STREAMS, JUNIOR_STREAMS, SchoolCalendarEvent } from '../../types';
 import { Storage } from '../../utils/storage';
 import { INITIAL_USERS } from '../../data/initialData';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { EventTicketModal } from '../events/EventTicketModal';
+import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { 
   GraduationCap, 
   Lock, 
@@ -41,7 +43,9 @@ import {
   Bus,
   HeartPulse,
   Trophy,
-  ClipboardCheck
+  ClipboardCheck,
+  Ticket,
+  CreditCard
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -83,6 +87,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   const [contactSubmitted, setContactSubmitted] = useState(false);
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '', message: '', role: 'Parent' });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedTicketEvent, setSelectedTicketEvent] = useState<SchoolCalendarEvent | null>(null);
+  const [landingEvents, setLandingEvents] = useState<SchoolCalendarEvent[]>(() => Storage.getCalendarEvents());
+
+  useEffect(() => {
+    const handleEventsUpdate = () => {
+      setLandingEvents(Storage.getCalendarEvents());
+    };
+    window.addEventListener('calendar-events-updated', handleEventsUpdate);
+    return () => window.removeEventListener('calendar-events-updated', handleEventsUpdate);
+  }, []);
 
   // Listen to navigation events from Navbar
   useEffect(() => {
@@ -1131,84 +1145,110 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       </section>
 
       {/* ========================================================
-          INTERACTIVE CONTENT SECTION 2: UPCOMING EVENTS
+          INTERACTIVE CONTENT SECTION 2: UPCOMING EVENTS & TICKETING
           ======================================================== */}
       <section id="events-section" className="py-12 bg-white border-b border-slate-200 scroll-mt-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 pb-3 border-b border-slate-200">
             <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-blue-600 uppercase tracking-wide">
-                <span>🗓️ Campus Happenings</span>
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 uppercase tracking-wide">
+                <span>🗓️ Campus Happenings & Ticketing</span>
                 <span>·</span>
-                <span>Term 1 & 2 2026</span>
+                <span>JotForm Integration</span>
               </div>
               <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight mt-1">
-                Upcoming School Events
+                Upcoming School Events & Ticket Passes
               </h3>
             </div>
             <button
               onClick={() => setActiveModal('events')}
-              className="text-xs text-emerald-700 font-bold hover:underline mt-2 sm:mt-0"
+              className="text-xs text-indigo-700 font-bold hover:underline mt-2 sm:mt-0 flex items-center gap-1 cursor-pointer"
             >
-              View Full Events Directory →
+              <span>View Full Events Directory & Tickets →</span>
             </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 flex gap-4">
-              <div className="w-14 h-14 rounded-xl bg-emerald-600 text-white flex flex-col items-center justify-center shrink-0">
-                <span className="text-[10px] uppercase font-bold tracking-wider">APR</span>
-                <span className="text-xl font-black leading-none">12</span>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded">
-                  Science & Innovation
-                </span>
-                <h4 className="font-bold text-slate-900 text-sm mt-1.5 mb-1">
-                  Annual CBC Science Fair & Robotics Expo
-                </h4>
-                <p className="text-xs text-slate-600">
-                  Venue: Main Assembly Hall · Grades 4 to 9 interactive student innovation exhibits.
-                </p>
-              </div>
-            </div>
+            {landingEvents.slice(0, 6).map((evt) => {
+              const isPaid = evt.ticketType === 'paid' && (evt.ticketPrice || 0) > 0;
+              const dateObj = new Date(evt.startDate);
+              const monthStr = isNaN(dateObj.getTime()) ? '2026' : dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+              const dayStr = isNaN(dateObj.getTime()) ? '15' : dateObj.getDate().toString().padStart(2, '0');
 
-            <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 flex gap-4">
-              <div className="w-14 h-14 rounded-xl bg-blue-600 text-white flex flex-col items-center justify-center shrink-0">
-                <span className="text-[10px] uppercase font-bold tracking-wider">APR</span>
-                <span className="text-xl font-black leading-none">24</span>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded">
-                  Athletics
-                </span>
-                <h4 className="font-bold text-slate-900 text-sm mt-1.5 mb-1">
-                  Inter-Stream Track & Field Championship
-                </h4>
-                <p className="text-xs text-slate-600">
-                  Venue: School Sports Grounds · Primary 8 streams & Junior 7 streams championship.
-                </p>
-              </div>
-            </div>
+              return (
+                <div 
+                  key={evt.id} 
+                  className="bg-slate-50 hover:bg-white rounded-2xl p-5 border border-slate-200 hover:border-indigo-300 transition-all shadow-2xs hover:shadow-md flex flex-col justify-between group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className={`w-14 h-14 rounded-2xl text-white flex flex-col items-center justify-center shrink-0 shadow-xs ${
+                        isPaid ? 'bg-amber-600' : 'bg-emerald-600'
+                      }`}>
+                        <span className="text-[10px] uppercase font-bold tracking-wider">{monthStr}</span>
+                        <span className="text-xl font-black leading-none">{dayStr}</span>
+                      </div>
 
-            <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 flex gap-4">
-              <div className="w-14 h-14 rounded-xl bg-amber-600 text-white flex flex-col items-center justify-center shrink-0">
-                <span className="text-[10px] uppercase font-bold tracking-wider">MAY</span>
-                <span className="text-xl font-black leading-none">08</span>
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded">
-                  Parent Assembly
-                </span>
-                <h4 className="font-bold text-slate-900 text-sm mt-1.5 mb-1">
-                  Term 1 Parents-Teachers Conference (PTC)
-                </h4>
-                <p className="text-xs text-slate-600">
-                  Venue: Grade Classrooms & Virtual Google Meet · Individual student dossiers review.
-                </p>
-              </div>
-            </div>
+                      <div className="text-right">
+                        {isPaid ? (
+                          <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
+                            <CreditCard className="w-3 h-3" />
+                            <span>KES {(evt.ticketPrice || 0).toLocaleString()}</span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
+                            <Ticket className="w-3 h-3" />
+                            <span>FREE PASS</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded">
+                          {evt.category.replace('_', ' ')}
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-500">Term {evt.term}</span>
+                      </div>
+
+                      <h4 className="font-extrabold text-slate-900 text-sm mt-1 leading-snug group-hover:text-indigo-600 transition-colors">
+                        {evt.title}
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+                        {evt.description}
+                      </p>
+                    </div>
+
+                    {evt.venue && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{evt.venue}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-4 mt-3 border-t border-slate-200/80 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {isPaid ? 'JotForm Checkout' : 'Free Entry Pass'}
+                    </span>
+
+                    <button
+                      onClick={() => setSelectedTicketEvent(evt)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isPaid 
+                          ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black' 
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`}
+                    >
+                      <Ticket className="w-3.5 h-3.5" />
+                      <span>{isPaid ? 'Buy Ticket (Jotform)' : 'Get Free Ticket'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
         </div>
@@ -2930,6 +2970,49 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL: Full Events Directory & JotForm Ticketing */}
+      {activeModal === 'events' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-indigo-950 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                  <span>🗓️</span>
+                  <span>EduSmart School Events & Ticket Booking Directory</span>
+                </h3>
+                <p className="text-xs text-indigo-200 mt-0.5">
+                  Browse official events, check Free/Paid ticket status, and purchase tickets via JotForm.
+                </p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="text-indigo-200 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-50">
+              <SchoolEventsManager readOnly={true} />
+            </div>
+
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setActiveModal(null)}
+                className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
+              >
+                Close Events Portal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TICKET PURCHASE MODAL (When clicking Buy Ticket directly) */}
+      {selectedTicketEvent && (
+        <EventTicketModal
+          event={selectedTicketEvent}
+          onClose={() => setSelectedTicketEvent(null)}
+        />
       )}
 
     </div>

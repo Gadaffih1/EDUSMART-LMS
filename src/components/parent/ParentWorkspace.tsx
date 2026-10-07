@@ -21,6 +21,7 @@ import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { 
   Home,
   Users, 
@@ -1341,47 +1342,10 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       )}
 
       {/* ========================================================
-          10. 📆 SCHOOL CALENDAR
+          10. 📆 SCHOOL CALENDAR & EVENT TICKETS
           ======================================================== */}
       {activeTab === 'calendar' && (
-        <section className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-extrabold text-slate-900">Term 3 2026 Academic Calendar</h2>
-              <p className="text-xs text-slate-500">Ministry of Education term dates, exams, and parent consultation days.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
-              <div className="text-[10px] font-bold uppercase text-emerald-700">Term Commencement</div>
-              <div className="font-extrabold text-slate-900 text-sm">Term 3 Opening Day</div>
-              <div className="text-xs text-slate-500 font-mono">August 25, 2026</div>
-              <p className="text-xs text-slate-600">All primary and junior secondary students resumed full classes.</p>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
-              <div className="text-[10px] font-bold uppercase text-blue-700">Academic Midterm</div>
-              <div className="font-extrabold text-slate-900 text-sm">Midterm Break</div>
-              <div className="text-xs text-slate-500 font-mono">Sept 21 - Sept 25, 2026</div>
-              <p className="text-xs text-slate-600">Short breather for all learners before KPSEA rehearsals.</p>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
-              <div className="text-[10px] font-bold uppercase text-purple-700">Parent Engagement</div>
-              <div className="font-extrabold text-slate-900 text-sm">Parent Consultation Day</div>
-              <div className="text-xs text-slate-500 font-mono">October 14, 2026</div>
-              <p className="text-xs text-slate-600">One-on-one academic conferencing with class teachers.</p>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
-              <div className="text-[10px] font-bold uppercase text-amber-700">National Summative</div>
-              <div className="font-extrabold text-slate-900 text-sm">KPSEA & End-Term Exams</div>
-              <div className="text-xs text-slate-500 font-mono">Oct 28 - Nov 05, 2026</div>
-              <p className="text-xs text-slate-600">Grade 6 National assessments and school-wide finals.</p>
-            </div>
-          </div>
-        </section>
+        <SchoolEventsManager currentUser={currentUser} readOnly={true} />
       )}
 
       {/* ========================================================

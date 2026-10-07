@@ -21,6 +21,7 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { 
   Calendar, 
   Clock, 
@@ -140,7 +141,10 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
     targetAudience: 'All School' as SchoolCalendarEvent['targetAudience'],
     venue: '',
     isImportant: false,
-    status: 'upcoming' as SchoolCalendarEvent['status']
+    status: 'upcoming' as SchoolCalendarEvent['status'],
+    ticketType: 'free' as 'free' | 'paid',
+    ticketPrice: 0,
+    ticketPurchaseUrl: 'https://form.jotform.com/262730415844053'
   });
 
   // Form state for Parent Communication
@@ -175,7 +179,10 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       targetAudience: 'All School',
       venue: 'School Grounds / Main Hall',
       isImportant: false,
-      status: 'upcoming'
+      status: 'upcoming',
+      ticketType: 'free',
+      ticketPrice: 0,
+      ticketPurchaseUrl: 'https://form.jotform.com/262730415844053'
     });
     setShowNewCalendarModal(true);
   };
@@ -193,7 +200,10 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       targetAudience: evt.targetAudience,
       venue: evt.venue || '',
       isImportant: evt.isImportant,
-      status: evt.status
+      status: evt.status,
+      ticketType: evt.ticketType || 'free',
+      ticketPrice: evt.ticketPrice || 0,
+      ticketPurchaseUrl: evt.ticketPurchaseUrl || 'https://form.jotform.com/262730415844053'
     });
     setShowNewCalendarModal(true);
   };
@@ -1049,157 +1059,11 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
         )}
 
         {/* ========================================================
-            TAB 5: SCHOOL CALENDAR & TERM PLANNER WINDOW
-            (Admin staff is in charge of updating the calendar)
+            TAB 5: SCHOOL CALENDAR & EVENT TICKETING HUB
+            (Admin staff has rights to post, edit, assign Free/Paid tickets)
             ======================================================== */}
         {activeTab === 'calendar' && (
-          <div className="space-y-6">
-            
-            {/* Header with Authority Notice */}
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800 uppercase tracking-wide">
-                    Administrative Custody
-                  </span>
-                  <span className="text-xs text-slate-500">Official Term Dates, Exams & School Events</span>
-                </div>
-                <h3 className="text-lg font-black text-slate-900 mt-1">
-                  School Academic Calendar & Term Scheduler
-                </h3>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  As School Admin Staff, you are authorized to add, reschedule, update, and publish events to the school community.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPrintModalType('calendar')}
-                  className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Calendar</span>
-                </button>
-
-                <button
-                  onClick={handleOpenAddEvent}
-                  className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Add Calendar Event</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Filter Bar */}
-            <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3 text-xs">
-              <span className="text-slate-500 font-bold">Filter By:</span>
-              <select
-                value={calendarTermFilter}
-                onChange={(e) => setCalendarTermFilter(e.target.value)}
-                className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
-              >
-                <option value="all">All Terms (Term 1, 2, 3)</option>
-                <option value="1">Term 1 2026</option>
-                <option value="2">Term 2 2026</option>
-                <option value="3">Term 3 2026</option>
-              </select>
-
-              <select
-                value={calendarCategoryFilter}
-                onChange={(e) => setCalendarCategoryFilter(e.target.value)}
-                className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white"
-              >
-                <option value="all">All Categories</option>
-                <option value="term_dates">Term Dates & Opening/Closing</option>
-                <option value="exams">Exams & National Assessments</option>
-                <option value="academic">Continuous Assessment (CATs)</option>
-                <option value="parents">Parents Consultation</option>
-                <option value="co_curricular">Sports & Gala</option>
-                <option value="holiday">Midterm Break / Holiday</option>
-              </select>
-
-              <div className="ml-auto text-slate-500 font-mono text-[11px]">
-                Showing {filteredCalendarEvents.length} scheduled events
-              </div>
-            </div>
-
-            {/* Events Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredCalendarEvents.map(event => (
-                <div 
-                  key={event.id}
-                  className={`bg-white rounded-xl border p-5 shadow-xs flex flex-col justify-between transition-all hover:shadow-md ${
-                    event.isImportant ? 'border-amber-300 ring-1 ring-amber-300/40' : 'border-slate-200'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-2">
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                        event.category === 'term_dates'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : event.category === 'exams'
-                          ? 'bg-rose-100 text-rose-800'
-                          : event.category === 'parents'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {event.category.replace('_', ' ')}
-                      </span>
-
-                      <span className="font-mono text-[11px] text-slate-500">
-                        Term {event.term} {event.academicYear}
-                      </span>
-                    </div>
-
-                    <h4 className="font-black text-sm text-slate-900 leading-snug">
-                      {event.title}
-                    </h4>
-
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-2 font-mono">
-                      <Calendar className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                      <span>{event.startDate} {event.endDate !== event.startDate ? `— ${event.endDate}` : ''}</span>
-                    </div>
-
-                    {event.venue && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1">
-                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>{event.venue}</span>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-slate-600 mt-3 leading-relaxed">
-                      {event.description}
-                    </p>
-                  </div>
-
-                  <div className="border-t border-slate-100 pt-3 mt-4 flex items-center justify-between">
-                    <div className="text-[10px] text-slate-400">
-                      Audience: <strong className="text-slate-600">{event.targetAudience}</strong>
-                    </div>
-
-                    {/* Edit & Delete Controls (Only admin staff can update) */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleOpenEditEvent(event)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Edit Event"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCalendarEvent(event.id, event.title)}
-                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
-                        title="Delete Event"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <SchoolEventsManager currentUser={currentUser} />
         )}
 
         {/* ========================================================

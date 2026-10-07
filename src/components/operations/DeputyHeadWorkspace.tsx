@@ -48,6 +48,7 @@ import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { 
   Bus,
   Trophy,
@@ -74,7 +75,7 @@ interface DisciplineCase {
 }
 
 export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ currentUser }) => {
-  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'reporting_hub';
+  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'reporting_hub' | 'events';
   const [activeTab, setActiveTab] = useState<DeputyTab>('operations');
 
   // Gate passes from storage
@@ -469,6 +470,17 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
         >
           <BarChart3 className="w-4 h-4 text-emerald-400" />
           <span>Reporting Hub (Monthly, Termly & Annual)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'events' ? 'bg-slate-900 text-white' : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4 text-rose-500" />
+          <span>School Events & Tickets</span>
+          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">Posting Authority</span>
         </button>
       </div>
 
@@ -1333,6 +1345,14 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           ======================================================== */}
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB 7: SCHOOL EVENTS & EVENT TICKETING HUB
+          (Deputy Head has official posting & logistics rights)
+          ======================================================== */}
+      {activeTab === 'events' && (
+        <SchoolEventsManager currentUser={currentUser} />
       )}
     </div>
   );

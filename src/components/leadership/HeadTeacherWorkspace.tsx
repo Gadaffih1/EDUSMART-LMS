@@ -8,6 +8,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
+import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
@@ -45,7 +46,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'analytics' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub';
+  type HeadTab = 'executive' | 'analytics' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
 
   const allUsers = Storage.getUsers();
@@ -280,6 +281,17 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         >
           <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
           <span>Reporting Hub (Monthly, Termly, Annual PDF)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'events' ? 'bg-slate-900 text-white' : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4 text-rose-500" />
+          <span>School Events & Tickets</span>
+          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">Executive Authority</span>
         </button>
       </div>
 
@@ -596,6 +608,14 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           ======================================================== */}
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB 6: SCHOOL EVENTS & EVENT TICKETING HUB
+          (Head Teacher executive event posting & governance)
+          ======================================================== */}
+      {activeTab === 'events' && (
+        <SchoolEventsManager currentUser={currentUser} />
       )}
     </div>
   );

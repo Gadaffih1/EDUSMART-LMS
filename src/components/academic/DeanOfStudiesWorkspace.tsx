@@ -22,6 +22,7 @@ import { FacultyAllocationManager } from '../timetable/FacultyAllocationManager'
 import { FixedLessonsManager } from '../timetable/FixedLessonsManager';
 import { TimetableAutoGeneratorModal } from '../timetable/TimetableAutoGeneratorModal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { 
   BookOpen, 
   BarChart3, 
@@ -90,7 +91,8 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     | 'lunch_register'
     | 'transport' 
     | 'cocurricular' 
-    | 'reporting_hub';
+    | 'reporting_hub'
+    | 'events';
 
   const [activeTab, setActiveTab] = useState<DeanTab>('assessments');
   const [analyticsSubView, setAnalyticsSubView] = useState<'school_health' | 'exam_means'>('school_health');
@@ -400,6 +402,17 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
         >
           <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
           <span>Reporting Hub (Monthly, Termly, Annual PDF)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'events' ? 'bg-slate-900 text-white' : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4 text-rose-500" />
+          <span>School Events & Tickets</span>
+          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">Posting Authority</span>
         </button>
       </div>
 
@@ -814,6 +827,14 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           ======================================================== */}
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB 7: SCHOOL EVENTS & EVENT TICKETING HUB
+          (Dean of Studies has official posting rights)
+          ======================================================== */}
+      {activeTab === 'events' && (
+        <SchoolEventsManager currentUser={currentUser} />
       )}
 
       {/* Auto-Generator Modal */}

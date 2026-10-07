@@ -66,7 +66,8 @@ import {
   StaffDutyAssignment,
   TransportDropoffVerification,
   LessonImage,
-  ELink
+  ELink,
+  EventTicketPurchase
 } from '../types';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
@@ -99,6 +100,7 @@ import {
   INITIAL_EXTERNAL_TOOLS,
   INITIAL_SEARCH_AUDIT_LOGS,
   INITIAL_CALENDAR_EVENTS,
+  INITIAL_EVENT_TICKETS,
   INITIAL_PARENT_COMMUNICATIONS,
   INITIAL_EXAM_TIMETABLE,
   INITIAL_SANATORIUM_RECORDS,
@@ -200,6 +202,7 @@ const KEYS = {
   DROPOFF_VERIFICATIONS: 'edusmart_transport_dropoff_verifications_v1',
   LESSON_IMAGES: 'edusmart_lesson_images_v1',
   E_LINKS: 'edusmart_e_links_v1',
+  EVENT_TICKETS: 'edusmart_event_tickets_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -1303,6 +1306,7 @@ export const Storage = {
 
   saveCalendarEvents(events: SchoolCalendarEvent[]): void {
     setToStorage(KEYS.CALENDAR_EVENTS, events);
+    window.dispatchEvent(new CustomEvent('calendar-events-updated', { detail: events }));
   },
 
   addCalendarEvent(event: Omit<SchoolCalendarEvent, 'id'>): SchoolCalendarEvent {
@@ -1330,6 +1334,52 @@ export const Storage = {
     const filtered = events.filter(e => e.id !== id);
     if (filtered.length === events.length) return false;
     this.saveCalendarEvents(filtered);
+    return true;
+  },
+
+  // Event Ticketing & Jotform Purchase Management
+  getEventTicketPurchases(): EventTicketPurchase[] {
+    return getFromStorage<EventTicketPurchase[]>(KEYS.EVENT_TICKETS, INITIAL_EVENT_TICKETS);
+  },
+
+  saveEventTicketPurchases(tickets: EventTicketPurchase[]): void {
+    setToStorage(KEYS.EVENT_TICKETS, tickets);
+    window.dispatchEvent(new CustomEvent('event-tickets-updated', { detail: tickets }));
+  },
+
+  bookEventTicket(ticketData: Omit<EventTicketPurchase, 'id' | 'ticketCode' | 'purchasedAt'>): EventTicketPurchase {
+    const tickets = this.getEventTicketPurchases();
+    const randomCode = Math.floor(1000 + Math.random() * 9000);
+    const newTicket: EventTicketPurchase = {
+      ...ticketData,
+      id: `tkt-${Date.now()}`,
+      ticketCode: `TKT-2026-${randomCode}`,
+      purchasedAt: new Date().toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    tickets.unshift(newTicket);
+    this.saveEventTicketPurchases(tickets);
+
+    // Also increment ticketsSold on the calendar event
+    const events = this.getCalendarEvents();
+    const eventIndex = events.findIndex(e => e.id === ticketData.eventId);
+    if (eventIndex !== -1) {
+      const currentSold = events[eventIndex].ticketsSold || 0;
+      events[eventIndex] = {
+        ...events[eventIndex],
+        ticketsSold: currentSold + (ticketData.quantity || 1)
+      };
+      this.saveCalendarEvents(events);
+    }
+
+    return newTicket;
+  },
+
+  deleteEventTicket(id: string): boolean {
+    const tickets = this.getEventTicketPurchases();
+    const filtered = tickets.filter(t => t.id !== id);
+    if (filtered.length === tickets.length) return false;
+    this.saveEventTicketPurchases(filtered);
     return true;
   },
 

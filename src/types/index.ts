@@ -466,6 +466,90 @@ export interface ReportCard {
   nextTermBegins: string;
 }
 
+export type AssessmentCycle = 
+  | 'CAT 1' 
+  | 'CAT 2' 
+  | 'Mid-Term Evaluation' 
+  | 'End-Term Summative' 
+  | 'Continuous Assessment (CATs)';
+
+export type CBCAttainmentLevel = 
+  | 'Exceeding Expectations'   // EE - 4 points (80-100%)
+  | 'Meeting Expectations'     // ME - 3 points (65-79%)
+  | 'Approaching Expectations' // AE - 2 points (50-64%)
+  | 'Below Expectations';      // BE - 1 point (0-49%)
+
+export interface SubjectResultEntry {
+  subject: SubjectName;
+  score: number; // 0 - 100
+  attainmentLevel: CBCAttainmentLevel;
+  cbcPoints: 1 | 2 | 3 | 4; // 4=EE, 3=ME, 2=AE, 1=BE
+  remarks?: string;
+  teacherId?: string;
+  teacherName?: string;
+}
+
+export interface StudentAssessmentRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  admissionNumber: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  term: 1 | 2 | 3;
+  academicYear: number;
+  assessmentCycle: AssessmentCycle;
+  subjectResults: SubjectResultEntry[];
+  totalScore: number;
+  averageScore: number;
+  totalCbcPoints: number;
+  averageCbcPoints: number;
+  overallAttainmentLevel: CBCAttainmentLevel;
+  rankInStream?: number;
+  totalInStream?: number;
+  deanPublished: boolean;
+  publishedAt?: string;
+  publishedBy?: string;
+  classTeacherRemarks?: string;
+  deanRemarks?: string;
+}
+
+export interface TeacherResultUploadAssignment {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  grade: GradeLevel;
+  stream?: StreamName | 'all';
+  subject?: SubjectName | 'all';
+  assessmentCycle: AssessmentCycle;
+  term: 1 | 2 | 3;
+  academicYear: number;
+  assignedBy: string;
+  assignedByRole: 'dean_of_studies' | 'deputy_head';
+  assignedDate: string;
+  dueDate: string;
+  status: 'assigned' | 'in_progress' | 'submitted' | 'published';
+  instructions?: string;
+  submissionDate?: string;
+}
+
+export function getCbcAttainmentFromScore(score: number): {
+  level: CBCAttainmentLevel;
+  points: 1 | 2 | 3 | 4;
+  code: 'EE' | 'ME' | 'AE' | 'BE';
+  color: string;
+} {
+  if (score >= 80) {
+    return { level: 'Exceeding Expectations', points: 4, code: 'EE', color: 'emerald' };
+  } else if (score >= 65) {
+    return { level: 'Meeting Expectations', points: 3, code: 'ME', color: 'blue' };
+  } else if (score >= 50) {
+    return { level: 'Approaching Expectations', points: 2, code: 'AE', color: 'amber' };
+  } else {
+    return { level: 'Below Expectations', points: 1, code: 'BE', color: 'rose' };
+  }
+}
+
 export interface GradePassword {
   grade: GradeLevel;
   password: string;
@@ -757,21 +841,59 @@ export interface ExternalTool {
   badge: string;
 }
 
+export type EventTicketType = 'free' | 'paid';
+
 export interface SchoolCalendarEvent {
   id: string;
   title: string;
   description: string;
-  category: 'term_dates' | 'academic' | 'exams' | 'co_curricular' | 'parents' | 'holiday';
+  category: 'term_dates' | 'academic' | 'exams' | 'co_curricular' | 'parents' | 'holiday' | 'special_event';
   term: 1 | 2 | 3;
   academicYear: number;
   startDate: string;
   endDate: string;
-  targetAudience: 'All School' | 'Primary (Grades 1-6)' | 'Junior School (Grades 7-9)' | 'Parents' | 'Teachers & Staff';
+  startTime?: string;
+  endTime?: string;
+  targetAudience: 'All School' | 'Primary (Grades 1-6)' | 'Junior School (Grades 7-9)' | 'Parents' | 'Teachers & Staff' | 'Public & Community';
   venue?: string;
   isImportant: boolean;
   status: 'upcoming' | 'ongoing' | 'completed' | 'rescheduled';
   updatedBy?: string;
   updatedAt?: string;
+  // --- Event Ticketing & Jotform Integration ---
+  ticketType: EventTicketType; // 'free' (Free Ticket) or 'paid' (Paid Event)
+  ticketPrice?: number; // In KES, e.g. 0 for free, 500, 1000 for paid
+  ticketCurrency?: string; // Default 'KES'
+  ticketPurchaseUrl?: string; // Default 'https://form.jotform.com/262730415844053'
+  totalCapacity?: number; // e.g. 350
+  ticketsSold?: number; // e.g. 120
+  ticketPerks?: string[]; // e.g. ['VIP Seating', 'Program Booklet']
+  authorRole?: 'school_admin_staff' | 'dean_of_studies' | 'deputy_head' | 'head_teacher' | string;
+  authorName?: string;
+}
+
+export interface EventTicketPurchase {
+  id: string;
+  ticketCode: string;
+  eventId: string;
+  eventTitle: string;
+  eventDate: string;
+  eventVenue?: string;
+  purchaserName: string;
+  purchaserEmail?: string;
+  purchaserPhone?: string;
+  purchaserRole?: string;
+  quantity: number;
+  ticketType: EventTicketType;
+  unitPrice: number;
+  totalAmount: number;
+  currency: string;
+  paymentStatus: 'completed' | 'pending' | 'free_granted';
+  paymentMethod: 'JotForm Portal' | 'M-Pesa Express' | 'School Cash Desk' | 'Free Pass Voucher';
+  mpesaReference?: string;
+  purchasedAt: string;
+  jotformUrl?: string;
+  notes?: string;
 }
 
 export interface ParentCommunication {

@@ -23,6 +23,7 @@ import { FixedLessonsManager } from '../timetable/FixedLessonsManager';
 import { TimetableAutoGeneratorModal } from '../timetable/TimetableAutoGeneratorModal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
+import { ResultUploadManager } from './ResultUploadManager';
 import { 
   BookOpen, 
   BarChart3, 
@@ -47,7 +48,12 @@ import {
   Trophy,
   Users,
   Lock,
-  Utensils
+  Utensils,
+  Menu,
+  X,
+  Upload,
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -79,6 +85,7 @@ interface ExamScheduleItem {
 
 export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ currentUser }) => {
   type DeanTab = 
+    | 'results_upload'
     | 'assessments' 
     | 'analytics' 
     | 'report_cards' 
@@ -94,7 +101,8 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     | 'reporting_hub'
     | 'events';
 
-  const [activeTab, setActiveTab] = useState<DeanTab>('assessments');
+  const [activeTab, setActiveTab] = useState<DeanTab>('results_upload');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [analyticsSubView, setAnalyticsSubView] = useState<'school_health' | 'exam_means'>('school_health');
   const [showAutoGenModal, setShowAutoGenModal] = useState(false);
   const workLogs = Storage.getWorkEntryLogs();
@@ -175,7 +183,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
         gradeLetter: 'B' as const,
         rubricLevel: 'Meeting Expectations' as const,
         remarks: 'Consistent conceptual grasp and active class contribution.',
-        teacherName: 'Staff Faculty'
+        teacherName: 'Academic Dept Staff'
       })),
       overallAverage: 80,
       overallRubric: 'Meeting Expectations' as const,
@@ -209,212 +217,213 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     { name: 'Below Expectations (BE)', value: 4, color: '#ef4444' },
   ];
 
+  const sidebarGroups = [
+    {
+      title: 'OVERVIEW & CBC ASSESSMENTS',
+      items: [
+        { id: 'results_upload' as DeanTab, label: 'CBC Assessment Results Hub', icon: Upload, badge: 'Upload & Publish', badgeColor: 'bg-emerald-500' },
+        { id: 'assessments' as DeanTab, label: 'Assessment Schedules & Rosters', icon: Calendar },
+        { id: 'report_cards' as DeanTab, label: 'Term Report Card Authorization', icon: FileText, badge: `${gradeStudents.length}` },
+        { id: 'analytics' as DeanTab, label: 'Institutional Exam Analytics', icon: BarChart3 },
+        { id: 'curriculum' as DeanTab, label: 'Curriculum Strands & KPSEA Pacing', icon: BookOpen },
+      ]
+    },
+    {
+      title: 'TIMETABLE & ACADEMIC DEPT',
+      items: [
+        { id: 'timetable' as DeanTab, label: 'Master School Timetable', icon: CalendarDays },
+        { id: 'faculty_allocations' as DeanTab, label: 'Academic Dept Allocations', icon: Users },
+        { id: 'fixed_lessons' as DeanTab, label: 'Fixed Lesson Parameters', icon: Lock },
+        { id: 'work_entries' as DeanTab, label: 'Teacher Work Entry Sign-Ins', icon: FileCheck, badge: `${workLogs.length}` },
+      ]
+    },
+    {
+      title: 'OPERATIONS & STUDENT WELFARE',
+      items: [
+        { id: 'sanatorium' as DeanTab, label: 'Sanatorium & Health Logs', icon: HeartPulse },
+        { id: 'lunch_register' as DeanTab, label: 'Learner Lunch Register', icon: Utensils },
+        { id: 'transport' as DeanTab, label: 'School Transport Fleet', icon: Bus },
+        { id: 'cocurricular' as DeanTab, label: 'Co-Curricular Directorate', icon: Trophy },
+        { id: 'reporting_hub' as DeanTab, label: 'Comprehensive Reporting Hub', icon: FileSpreadsheet },
+        { id: 'events' as DeanTab, label: 'School Events & Calendar', icon: CalendarDays, badge: 'Post', badgeColor: 'bg-indigo-500' },
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 tracking-wider uppercase">
-              <span>Academic Affairs & Assessment Directorate</span>
-              <span aria-hidden="true">·</span>
-              <span>Academic Directorate</span>
-            </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Dean of Studies Workspace
-          </h1>
-          <p className="text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Institutional coordination of Competency-Based Curriculum assessment schedules, examination analytics, report card standardization, and academic target monitoring across Grades 1 through 9.
-          </p>
-        </div>
 
-        <div className="bg-white/10 backdrop-blur p-4 rounded-xl border border-white/20 shrink-0 text-xs">
-          <div className="text-[10px] uppercase font-bold text-emerald-300 mb-1">Dean of Studies</div>
-          <div className="font-extrabold text-base">{currentUser.name}</div>
-          <div className="text-slate-300 font-mono text-[11px]">{currentUser.tscNumber || 'TSC/38910/ED'}</div>
-          <div className="mt-2 pt-2 border-t border-white/20 flex gap-3 text-[11px]">
-            <span className="text-emerald-300 font-bold">80.1% School Mean</span>
-            <span>·</span>
-            <span className="text-blue-300 font-bold">{students.length} Total Enrolled</span>
+          <div>
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>Dean of Studies Workspace</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Academic Directorate
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 hidden sm:block">
+              CBC Examination Schedules, Whole Grade Results Upload & Academic Quality Assurance
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Upcoming Assessments</div>
-          <div className="text-2xl font-extrabold font-mono text-emerald-700 mt-1">3</div>
-          <div className="text-xs text-slate-500 mt-0.5">Term 3 Assessment Windows</div>
+        <div className="flex items-center gap-3">
+          {/* Quick Result Upload Action Button */}
+          <button
+            onClick={() => setActiveTab('results_upload')}
+            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Upload Grade Results</span>
+            <span className="sm:hidden">Upload</span>
+          </button>
+
+          <div className="text-right text-xs hidden md:block">
+            <div className="font-bold text-white">{currentUser.name}</div>
+            <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/38910/ED'}</div>
+          </div>
         </div>
+      </header>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">School-Wide Mastery Rate</div>
-          <div className="text-2xl font-extrabold font-mono text-blue-700 mt-1">80.0%</div>
-          <div className="text-xs text-slate-500 mt-0.5">Meeting or Exceeding (EE + ME)</div>
-        </div>
+      {/* Main Workspace Layout with Sidebar Buttons on the Left */}
+      <div className="flex-1 flex w-full">
+        
+        {/* Mobile Backdrop */}
+        {isMobileSidebarOpen && (
+          <div 
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 lg:hidden"
+          />
+        )}
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Report Cards Pending Approval</div>
-          <div className="text-2xl font-extrabold font-mono text-amber-600 mt-1">{gradeStudents.length}</div>
-          <div className="text-xs text-slate-500 mt-0.5">Grade {selectedGrade} cohort</div>
-        </div>
+        {/* Left Sidebar */}
+        <aside className={`
+          fixed lg:static top-14 bottom-0 left-0 z-40
+          w-64 bg-slate-900 border-r border-slate-800 text-slate-300
+          flex flex-col shrink-0 transition-transform duration-200 ease-in-out
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}>
+          {/* Sidebar Portal Title */}
+          <div className="p-4 border-b border-slate-800/80 bg-slate-950/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🎓</span>
+              <div>
+                <div className="text-xs font-black text-white uppercase tracking-wider">ACADEMIC PORTAL</div>
+                <div className="text-[10px] text-slate-400 font-mono">Dean of Studies Hub</div>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+              v3.2
+            </span>
+          </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Syllabus Completion Index</div>
-          <div className="text-2xl font-extrabold font-mono text-purple-700 mt-1">92.4%</div>
-          <div className="text-xs text-slate-500 mt-0.5">Tracking ahead of schedule</div>
-        </div>
-      </div>
+          {/* Scrollable Navigation Tree with Buttons on the Left */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-5 no-scrollbar text-xs">
+            {sidebarGroups.map((group, gIdx) => (
+              <div key={gIdx} className="space-y-1">
+                <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  {group.title}
+                </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <button
-          onClick={() => setActiveTab('assessments')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'assessments' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Calendar className="w-4 h-4 text-emerald-400" />
-          <span>Assessment Calendar & Schedules</span>
-        </button>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
 
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'analytics' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-blue-400" />
-          <span>Institutional Exam Analytics</span>
-        </button>
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileSidebarOpen(false);
+                        }}
+                        className={`
+                          w-full flex items-center justify-between px-3 py-2 rounded-xl font-bold transition-all text-left cursor-pointer
+                          ${isActive 
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-xs' 
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }
+                        `}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                          <span className="truncate">{item.label}</span>
+                        </div>
 
-        <button
-          onClick={() => setActiveTab('report_cards')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'report_cards' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileText className="w-4 h-4 text-purple-400" />
-          <span>Term Report Card Authorization</span>
-        </button>
+                        {item.badge && (
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black text-white ${item.badgeColor || 'bg-slate-700'}`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <button
-          onClick={() => setActiveTab('curriculum')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'curriculum' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BookOpen className="w-4 h-4 text-amber-400" />
-          <span>Curriculum Strands & KPSEA Pacing</span>
-        </button>
+          {/* Bottom Footer Stamp */}
+          <div className="p-3 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-400 flex items-center justify-between">
+            <span>Academic Directorate</span>
+            <span className="text-emerald-400 font-bold">● Online</span>
+          </div>
+        </aside>
 
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'timetable' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-emerald-400" />
-          <span>Master Timetable & Generator</span>
-        </button>
+        {/* Content View Area on the Right */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+          
+          {/* Top KPI Cards (Always visible in Dean Overview) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] uppercase font-bold text-slate-500">Upcoming Assessments</div>
+              <div className="text-2xl font-extrabold font-mono text-emerald-700 mt-1">3</div>
+              <div className="text-xs text-slate-500 mt-0.5">Term 3 Assessment Windows</div>
+            </div>
 
-        <button
-          onClick={() => setActiveTab('faculty_allocations')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'faculty_allocations' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Users className="w-4 h-4 text-blue-400" />
-          <span>Teacher Allocations</span>
-        </button>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] uppercase font-bold text-slate-500">School-Wide Mastery Rate</div>
+              <div className="text-2xl font-extrabold font-mono text-blue-700 mt-1">80.0%</div>
+              <div className="text-xs text-slate-500 mt-0.5">Meeting or Exceeding (EE + ME)</div>
+            </div>
 
-        <button
-          onClick={() => setActiveTab('fixed_lessons')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'fixed_lessons' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Lock className="w-4 h-4 text-amber-400" />
-          <span>Fixed Lessons</span>
-        </button>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] uppercase font-bold text-slate-500">Report Cards Pending Approval</div>
+              <div className="text-2xl font-extrabold font-mono text-amber-600 mt-1">{gradeStudents.length}</div>
+              <div className="text-xs text-slate-500 mt-0.5">Grade {selectedGrade} cohort</div>
+            </div>
 
-        <button
-          onClick={() => setActiveTab('work_entries')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'work_entries' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileText className="w-4 h-4 text-emerald-400" />
-          <span>Faculty Work Entry Sign-Ins ({workLogs.length})</span>
-          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
-        </button>
+            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[10px] uppercase font-bold text-slate-500">Syllabus Completion Index</div>
+              <div className="text-2xl font-extrabold font-mono text-purple-700 mt-1">92.4%</div>
+              <div className="text-xs text-slate-500 mt-0.5">Tracking ahead of schedule</div>
+            </div>
+          </div>
 
-        <button
-          onClick={() => setActiveTab('sanatorium')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <HeartPulse className="w-4 h-4 text-rose-400" />
-          <span>Sanatorium & Health Logs</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lunch_register')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Utensils className="w-4 h-4 text-amber-400" />
-          <span>Learner Lunch Register</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transport')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Bus className="w-4 h-4 text-amber-400" />
-          <span>School Transport</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cocurricular')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Trophy className="w-4 h-4 text-purple-400" />
-          <span>Co-Curriculum & Sports</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reporting_hub')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'reporting_hub' ? 'bg-slate-900 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-          <span>Reporting Hub (Monthly, Termly, Annual PDF)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('events')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'events' ? 'bg-slate-900 text-white' : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-rose-500" />
-          <span>School Events & Tickets</span>
-          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">Posting Authority</span>
-        </button>
-      </div>
+          {/* ========================================================
+              TAB 0: CBC ASSESSMENT RESULTS & WHOLE GRADE UPLOAD HUB
+              ======================================================== */}
+          {activeTab === 'results_upload' && (
+            <ResultUploadManager
+              currentUser={currentUser}
+              viewMode="dean"
+              defaultGrade={selectedGrade}
+            />
+          )}
 
       {/* ========================================================
           TAB 1: ASSESSMENT CALENDAR & SCHEDULES
@@ -836,6 +845,9 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       {activeTab === 'events' && (
         <SchoolEventsManager currentUser={currentUser} />
       )}
+
+        </main>
+      </div>
 
       {/* Auto-Generator Modal */}
       <TimetableAutoGeneratorModal

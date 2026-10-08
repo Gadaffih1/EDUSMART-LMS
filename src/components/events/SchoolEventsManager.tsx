@@ -33,7 +33,8 @@ import {
   Layers,
   ChevronRight,
   TrendingUp,
-  Receipt
+  Receipt,
+  Info
 } from 'lucide-react';
 
 interface SchoolEventsManagerProps {
@@ -95,7 +96,7 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
   const initialFormState = {
     title: '',
     description: '',
-    category: 'academic' as SchoolCalendarEvent['category'],
+    category: 'co_curricular' as SchoolCalendarEvent['category'],
     term: 1 as 1 | 2 | 3,
     academicYear: 2026,
     startDate: new Date().toISOString().split('T')[0],
@@ -103,13 +104,12 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
     startTime: '09:00',
     endTime: '15:30',
     targetAudience: 'All School' as SchoolCalendarEvent['targetAudience'],
-    venue: 'Main School Hall',
+    venue: 'School Sports Pavilion & Grounds',
     isImportant: false,
     status: 'upcoming' as SchoolCalendarEvent['status'],
-    ticketType: 'paid' as EventTicketType, // Every event assigned Free Ticket or Paid Event
+    ticketType: 'paid' as EventTicketType,
     ticketPrice: 500,
     ticketCurrency: 'KES',
-    ticketPurchaseUrl: 'https://form.jotform.com/262730415844053',
     totalCapacity: 400,
     ticketPerks: 'General Admission, Event Programme, Refreshment Voucher'
   };
@@ -144,9 +144,9 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
     setEditingEvent(null);
     setFormState({
       ...initialFormState,
+      category: 'co_curricular',
       ticketType: 'paid',
-      ticketPrice: 500,
-      ticketPurchaseUrl: 'https://form.jotform.com/262730415844053'
+      ticketPrice: 500
     });
     setShowEventModal(true);
   };
@@ -171,7 +171,6 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
       ticketType: evt.ticketType || 'free',
       ticketPrice: evt.ticketPrice || 0,
       ticketCurrency: evt.ticketCurrency || 'KES',
-      ticketPurchaseUrl: evt.ticketPurchaseUrl || 'https://form.jotform.com/262730415844053',
       totalCapacity: evt.totalCapacity || 400,
       ticketPerks: (evt.ticketPerks || []).join(', ')
     });
@@ -183,6 +182,7 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
     e.preventDefault();
     if (!formState.title.trim() || !formState.startDate) return;
 
+    const isCoCurricular = formState.category === 'co_curricular';
     const parsedPerks = formState.ticketPerks
       ? formState.ticketPerks.split(',').map(p => p.trim()).filter(Boolean)
       : [];
@@ -201,12 +201,11 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
       venue: formState.venue.trim(),
       isImportant: formState.isImportant,
       status: formState.status,
-      ticketType: formState.ticketType,
-      ticketPrice: formState.ticketType === 'paid' ? Number(formState.ticketPrice) : 0,
-      ticketCurrency: formState.ticketCurrency,
-      ticketPurchaseUrl: formState.ticketPurchaseUrl.trim() || 'https://form.jotform.com/262730415844053',
-      totalCapacity: Number(formState.totalCapacity) || 0,
-      ticketPerks: parsedPerks,
+      ticketType: isCoCurricular ? formState.ticketType : undefined,
+      ticketPrice: isCoCurricular && formState.ticketType === 'paid' ? Number(formState.ticketPrice) : undefined,
+      ticketCurrency: isCoCurricular ? formState.ticketCurrency : undefined,
+      totalCapacity: isCoCurricular ? (Number(formState.totalCapacity) || 0) : undefined,
+      ticketPerks: isCoCurricular ? parsedPerks : undefined,
       authorRole: currentUser?.role || 'authorized_staff',
       authorName: currentUser?.name || 'School Authority',
       updatedBy: `${currentUser?.name || 'Administrator'} (${rolePostingTitle})`,
@@ -247,7 +246,9 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
 
       const matchTerm = selectedTerm === 'all' || evt.term.toString() === selectedTerm;
       const matchCategory = selectedCategory === 'all' || evt.category === selectedCategory;
-      const matchTicket = selectedTicketType === 'all' || evt.ticketType === selectedTicketType;
+      const matchTicket = selectedTicketType === 'all' 
+        ? true 
+        : (evt.category === 'co_curricular' && evt.ticketType === selectedTicketType);
 
       return matchSearch && matchTerm && matchCategory && matchTicket;
     });
@@ -256,9 +257,10 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
   // Analytics Metrics
   const metrics = useMemo(() => {
     const total = events.length;
-    const paidEvents = events.filter(e => e.ticketType === 'paid');
-    const freeEvents = events.filter(e => e.ticketType === 'free');
-    const totalTicketsSold = events.reduce((acc, curr) => acc + (curr.ticketsSold || 0), 0);
+    const coCurricularEvents = events.filter(e => e.category === 'co_curricular');
+    const paidEvents = coCurricularEvents.filter(e => e.ticketType === 'paid');
+    const freeEvents = coCurricularEvents.filter(e => e.ticketType === 'free');
+    const totalTicketsSold = coCurricularEvents.reduce((acc, curr) => acc + (curr.ticketsSold || 0), 0);
     const totalRevenue = tickets
       .filter(t => t.paymentStatus === 'completed')
       .reduce((acc, curr) => acc + curr.totalAmount, 0);
@@ -298,7 +300,7 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
               <Ticket className="w-3 h-3 text-indigo-600" />
-              <span>Event Ticketing & JotForm Integration</span>
+              <span>Co-Curricular Event Passes & Academic Schedules</span>
             </span>
 
             {canPostEvents ? (
@@ -314,10 +316,10 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
           </div>
 
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-            School Events & Ticket Booking Hub
+            School Events & Co-Curricular Pass Hub
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Manage, schedule, and purchase tickets for school galas, academic clinics, sports tournaments, and student exhibitions.
+            Manage school calendars and reserve admission passes for co-curricular tournaments, galas, and exhibitions. Academic dates are open schedules without tickets.
           </p>
         </div>
 
@@ -504,9 +506,11 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
                     <div>
                       {/* Top Header Card Bar */}
                       <div className={`p-4 border-b flex items-start justify-between gap-3 ${
-                        isPaid 
-                          ? 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white border-amber-200/60' 
-                          : 'bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-white border-emerald-200/60'
+                        evt.category === 'co_curricular'
+                          ? isPaid 
+                            ? 'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white border-amber-200/60' 
+                            : 'bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-white border-emerald-200/60'
+                          : 'bg-gradient-to-r from-slate-100 via-slate-50 to-white border-slate-200'
                       }`}>
                         <div>
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -522,15 +526,22 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
                           </h3>
                         </div>
 
-                        {/* Ticket Badge */}
+                        {/* Ticket Badge (Co-Curricular Only) */}
                         <div className="shrink-0 text-right">
-                          {isPaid ? (
-                            <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
-                              <span>KES {(evt.ticketPrice || 0).toLocaleString()}</span>
-                            </span>
+                          {evt.category === 'co_curricular' ? (
+                            isPaid ? (
+                              <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
+                                <span>KES {(evt.ticketPrice || 0).toLocaleString()}</span>
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
+                                <span>FREE PASS</span>
+                              </span>
+                            )
                           ) : (
-                            <span className="px-2.5 py-1 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
-                              <span>FREE</span>
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 inline-flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-500" />
+                              <span>Academic Schedule</span>
                             </span>
                           )}
                         </div>
@@ -565,8 +576,8 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
                           </div>
                         </div>
 
-                        {/* Capacity meter */}
-                        {capacity > 0 && (
+                        {/* Capacity meter (Co-Curricular Only) */}
+                        {evt.category === 'co_curricular' && capacity > 0 && (
                           <div className="pt-2 border-t border-slate-100 space-y-1">
                             <div className="flex items-center justify-between text-[10px] font-mono text-slate-500">
                               <span>Booked: {sold} / {capacity} Passes</span>
@@ -611,18 +622,24 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
                         </span>
                       )}
 
-                      {/* Primary Ticket Purchase / RSVP Button */}
-                      <button
-                        onClick={() => setTicketingEvent(evt)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                          isPaid 
-                            ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' 
-                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                        }`}
-                      >
-                        <Ticket className="w-3.5 h-3.5" />
-                        <span>{isPaid ? 'Buy Ticket (JotForm)' : 'Get Free Ticket'}</span>
-                      </button>
+                      {/* Primary Ticket Purchase / RSVP Button (Co-Curricular Only) */}
+                      {evt.category === 'co_curricular' ? (
+                        <button
+                          onClick={() => setTicketingEvent(evt)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isPaid 
+                              ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' 
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }`}
+                        >
+                          <Ticket className="w-3.5 h-3.5" />
+                          <span>{isPaid ? `Get Pass (KES ${(evt.ticketPrice || 0).toLocaleString()})` : 'Get Free Pass'}</span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-500 font-semibold bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                          Open Academic Date · No Ticket Needed
+                        </span>
+                      )}
                     </div>
 
                   </div>
@@ -714,7 +731,7 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
                           id: tkt.eventId,
                           title: tkt.eventTitle,
                           description: '',
-                          category: 'academic' as const,
+                          category: 'co_curricular' as const,
                           term: 1 as const,
                           academicYear: 2026,
                           startDate: tkt.eventDate,
@@ -724,8 +741,7 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
                           isImportant: false,
                           status: 'upcoming' as const,
                           ticketType: tkt.ticketType,
-                          ticketPrice: tkt.unitPrice,
-                          ticketPurchaseUrl: tkt.jotformUrl || 'https://form.jotform.com/262730415844053'
+                          ticketPrice: tkt.unitPrice
                         };
                         setTicketingEvent(targetEvent);
                       }}
@@ -896,150 +912,145 @@ export const SchoolEventsManager: React.FC<SchoolEventsManagerProps> = ({
               </div>
 
               {/* ========================================================
-                  TICKETING CONFIGURATION SECTION (Free Ticket vs Paid Event)
+                  TICKETING CONFIGURATION SECTION (Co-Curricular Only)
                   ======================================================== */}
-              <div className="p-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
-                    <Ticket className="w-4 h-4 text-indigo-600" />
-                    <span>Ticketing Configuration *</span>
-                  </span>
-                  <span className="text-[10px] text-indigo-800 font-semibold">
-                    Assign as Free Ticket or Paid Event
-                  </span>
-                </div>
+              {formState.category === 'co_curricular' ? (
+                <div className="p-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-indigo-950 flex items-center gap-1.5">
+                      <Ticket className="w-4 h-4 text-indigo-600" />
+                      <span>Co-Curricular Ticketing Configuration *</span>
+                    </span>
+                    <span className="text-[10px] text-indigo-800 font-semibold">
+                      Assign as Free Pass or Paid Event
+                    </span>
+                  </div>
 
-                {/* Ticket Type Toggle */}
-                <div className="grid grid-cols-2 gap-3">
-                  <label className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
-                    formState.ticketType === 'free' 
-                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm font-bold' 
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="ticketType"
-                      checked={formState.ticketType === 'free'}
-                      onChange={() => setFormState({ ...formState, ticketType: 'free', ticketPrice: 0 })}
-                      className="sr-only"
-                    />
-                    <Ticket className="w-4 h-4" />
-                    <div>
-                      <div className="text-xs font-black">🎟️ Free Ticket</div>
-                      <div className={`text-[10px] ${formState.ticketType === 'free' ? 'text-emerald-100' : 'text-slate-500'}`}>
-                        Complimentary RSVP
-                      </div>
-                    </div>
-                  </label>
-
-                  <label className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
-                    formState.ticketType === 'paid' 
-                      ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm font-black' 
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="ticketType"
-                      checked={formState.ticketType === 'paid'}
-                      onChange={() => setFormState({ ...formState, ticketType: 'paid', ticketPrice: formState.ticketPrice || 500 })}
-                      className="sr-only"
-                    />
-                    <CreditCard className="w-4 h-4" />
-                    <div>
-                      <div className="text-xs font-black">💳 Paid Event</div>
-                      <div className={`text-[10px] ${formState.ticketType === 'paid' ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
-                        JotForm purchase link
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Conditional Pricing & JotForm Link Inputs */}
-                {formState.ticketType === 'paid' ? (
-                  <div className="space-y-3 pt-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Ticket Type Toggle */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                      formState.ticketType === 'free' 
+                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-sm font-bold' 
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="ticketType"
+                        checked={formState.ticketType === 'free'}
+                        onChange={() => setFormState({ ...formState, ticketType: 'free', ticketPrice: 0 })}
+                        className="sr-only"
+                      />
+                      <Ticket className="w-4 h-4" />
                       <div>
-                        <label className="block text-slate-800 font-bold mb-1">Ticket Price (KES) *</label>
+                        <div className="text-xs font-black">🎟️ Free Pass</div>
+                        <div className={`text-[10px] ${formState.ticketType === 'free' ? 'text-emerald-100' : 'text-slate-500'}`}>
+                          Complimentary RSVP
+                        </div>
+                      </div>
+                    </label>
+
+                    <label className={`p-3 rounded-xl border flex items-center gap-2.5 cursor-pointer transition-all ${
+                      formState.ticketType === 'paid' 
+                        ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm font-black' 
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="ticketType"
+                        checked={formState.ticketType === 'paid'}
+                        onChange={() => setFormState({ ...formState, ticketType: 'paid', ticketPrice: formState.ticketPrice || 500 })}
+                        className="sr-only"
+                      />
+                      <CreditCard className="w-4 h-4" />
+                      <div>
+                        <div className="text-xs font-black">💳 Paid Pass</div>
+                        <div className={`text-[10px] ${formState.ticketType === 'paid' ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
+                          M-Pesa / Gate Entry
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Conditional Pricing & Capacity Inputs */}
+                  {formState.ticketType === 'paid' ? (
+                    <div className="space-y-3 pt-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-slate-800 font-bold mb-1">Pass Price (KES) *</label>
+                          <input
+                            type="number"
+                            required
+                            min={50}
+                            step={50}
+                            value={formState.ticketPrice}
+                            onChange={(e) => setFormState({ ...formState, ticketPrice: Number(e.target.value) })}
+                            placeholder="e.g. 500"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-800 font-bold mb-1">Pass Capacity (Seats)</label>
+                          <input
+                            type="number"
+                            min={10}
+                            value={formState.totalCapacity}
+                            onChange={(e) => setFormState({ ...formState, totalCapacity: Number(e.target.value) })}
+                            placeholder="e.g. 400"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono bg-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-800 font-bold mb-1">Pass Inclusions / Perks</label>
                         <input
-                          type="number"
-                          required
-                          min={50}
-                          step={50}
-                          value={formState.ticketPrice}
-                          onChange={(e) => setFormState({ ...formState, ticketPrice: Number(e.target.value) })}
-                          placeholder="e.g. 500"
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold bg-white"
+                          type="text"
+                          value={formState.ticketPerks}
+                          onChange={(e) => setFormState({ ...formState, ticketPerks: e.target.value })}
+                          placeholder="e.g. Pavilion Seating, Gala Programme, Refreshments Voucher"
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white"
                         />
                       </div>
-
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pt-2">
                       <div>
-                        <label className="block text-slate-800 font-bold mb-1">Ticket Capacity (Seats)</label>
+                        <label className="block text-slate-800 font-bold mb-1">Free Admission Capacity</label>
                         <input
                           type="number"
-                          min={10}
+                          min={0}
                           value={formState.totalCapacity}
                           onChange={(e) => setFormState({ ...formState, totalCapacity: Number(e.target.value) })}
-                          placeholder="e.g. 400"
+                          placeholder="e.g. 680"
                           className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono bg-white"
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-slate-800 font-bold mb-1">
-                        JotForm Ticket Purchase URL *
-                      </label>
-                      <input
-                        type="url"
-                        required
-                        value={formState.ticketPurchaseUrl}
-                        onChange={(e) => setFormState({ ...formState, ticketPurchaseUrl: e.target.value })}
-                        placeholder="https://form.jotform.com/262730415844053"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono bg-white text-indigo-700 font-semibold"
-                      />
-                      <p className="text-[10px] text-indigo-900 mt-1">
-                        Default: <code>https://form.jotform.com/262730415844053</code> (EVENT TICKET PURCHASE Form)
-                      </p>
+                      <div>
+                        <label className="block text-slate-800 font-bold mb-1">Free Pass Inclusions</label>
+                        <input
+                          type="text"
+                          value={formState.ticketPerks}
+                          onChange={(e) => setFormState({ ...formState, ticketPerks: e.target.value })}
+                          placeholder="e.g. Free Campus Admission, Cheering Squad Seat"
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white"
+                        />
+                      </div>
                     </div>
-
-                    <div>
-                      <label className="block text-slate-800 font-bold mb-1">Ticket Inclusions / Perks</label>
-                      <input
-                        type="text"
-                        value={formState.ticketPerks}
-                        onChange={(e) => setFormState({ ...formState, ticketPerks: e.target.value })}
-                        placeholder="e.g. Reserved Seating, Event Booklet, Refreshments Voucher"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white"
-                      />
-                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 flex items-start gap-2.5 text-xs text-blue-900">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-extrabold">Open Academic Calendar Schedule</div>
+                    <p className="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
+                      Event ticketing passes apply exclusively to <strong>Co-Curricular & Sports/Talent</strong> activities. Academic dates, examinations, and parent clinics are open schedules without admission tickets.
+                    </p>
                   </div>
-                ) : (
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <label className="block text-slate-800 font-bold mb-1">Free Admission Capacity</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={formState.totalCapacity}
-                        onChange={(e) => setFormState({ ...formState, totalCapacity: Number(e.target.value) })}
-                        placeholder="e.g. 680"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono bg-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-800 font-bold mb-1">Free Pass Inclusions</label>
-                      <input
-                        type="text"
-                        value={formState.ticketPerks}
-                        onChange={(e) => setFormState({ ...formState, ticketPerks: e.target.value })}
-                        placeholder="e.g. Free Campus Admission, Consultation Session Slot"
-                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-700 font-bold mb-1">Description & Guidelines</label>

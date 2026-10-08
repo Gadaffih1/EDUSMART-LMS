@@ -67,10 +67,6 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     (currentUser.role === 'teacher' && currentUser.stream && viewMode !== 'executive');
   const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'school_admin_staff', 'admin'].includes(currentUser.role);
   
-  // Strict School Protocol: Only designated Class Teachers can mark daily attendance & lunch register
-  const canMarkLunch = (currentUser.role === 'class_teacher' || 
-    (currentUser.role === 'teacher' && !!currentUser.stream && viewMode === 'class_teacher')) && !isParent;
-
   // Date State (Defaults to current date YYYY-MM-DD)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
@@ -104,6 +100,50 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
   // Storage data
   const [lunchRecords, setLunchRecords] = useState<LearnerLunchRecord[]>(() => Storage.getLunchRecords());
   const allUsers = useMemo(() => Storage.getUsers(), []);
+
+  // Find the designated class teacher from system users for any specific grade & stream
+  const getAssignedClassTeacher = (grade: GradeLevel, stream: StreamName): User | undefined => {
+    return allUsers.find(u => 
+      (u.role === 'class_teacher' || (u.role === 'teacher' && !!u.stream)) &&
+      (
+        (u.grade === grade && u.stream === stream) ||
+        (u.assignedStreams && u.assignedStreams.some(as => as.grade === grade && as.stream === stream))
+      )
+    );
+  };
+
+  // Check if currentUser is the officially assigned respective Class Teacher for a given Grade and Stream
+  const isUserRespectiveClassTeacher = (grade?: GradeLevel, stream?: StreamName): boolean => {
+    if (isParent || currentUser.role === 'student' || isExecutiveOrAdmin) return false;
+
+    const hasClassTeacherDesignation = currentUser.role === 'class_teacher' || 
+      (currentUser.role === 'teacher' && (!!currentUser.stream || (currentUser.assignedStreams && currentUser.assignedStreams.length > 0)));
+
+    if (!hasClassTeacherDesignation) return false;
+
+    const targetGrade = grade ?? selectedGrade;
+    const targetStream = stream ?? selectedStream;
+
+    // Direct match on primary assigned grade and stream
+    if (currentUser.grade === targetGrade && currentUser.stream === targetStream) {
+      return true;
+    }
+
+    // Match on assignedStreams
+    if (currentUser.assignedStreams && currentUser.assignedStreams.some(as => as.grade === targetGrade && as.stream === targetStream)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Respective Class Teacher for the currently selected class
+  const assignedTeacherForSelectedClass = useMemo(() => {
+    return getAssignedClassTeacher(selectedGrade, selectedStream);
+  }, [allUsers, selectedGrade, selectedStream]);
+
+  // Strict School Protocol: Only the respective Class Teacher can mark this class lunch register
+  const canMarkLunch = isUserRespectiveClassTeacher(selectedGrade, selectedStream);
 
   // Listen for storage updates
   useEffect(() => {
@@ -206,11 +246,13 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     return { total, taken, specialDiet, notTaken, totalFed, percentage };
   }, [activeStudents, lunchRecords, selectedDate]);
 
-  // Quick Action: Mark Individual Learner
+  // Quick Action: Mark Individual Learner (Strictly Respective Class Teacher Only)
   const handleMarkLunch = (student: User, newStatus: LunchStatus, customMealType?: string, notes?: string) => {
-    if (!canMarkLunch) {
-      setNotificationMsg('Access Restricted: In accordance with school protocol, only the assigned Class Teacher can mark the lunch register.');
-      setTimeout(() => setNotificationMsg(null), 3500);
+    const isAuthorized = isUserRespectiveClassTeacher(student.grade, student.stream);
+    if (!isAuthorized) {
+      const assignedTeacher = getAssignedClassTeacher(student.grade || selectedGrade, student.stream || selectedStream);
+      setNotificationMsg(`Access Restricted: Per institutional protocol, only the respective Class Teacher (${assignedTeacher ? assignedTeacher.name : `Grade ${student.grade || selectedGrade} ${student.stream || selectedStream} Class Teacher`}) is authorized to mark this lunch register.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
       return;
     }
 
@@ -220,8 +262,8 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     Storage.markLearnerLunch(student.id, newStatus, {
       studentName: student.name,
       admissionNumber: student.admissionNumber,
-      grade: student.grade,
-      stream: student.stream,
+      grade: student.grade || selectedGrade,
+      stream: student.stream || selectedStream,
       date: selectedDate,
       mealType: customMealType || (newStatus === 'special_diet' ? 'Special Medical Diet' : 'Standard Balanced Hot Meal'),
       dietaryNotes: notes,
@@ -236,11 +278,11 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     setTimeout(() => setNotificationMsg(null), 3000);
   };
 
-  // Bulk Action: Mark All in Stream as Taken
+  // Bulk Action: Mark All in Stream as Taken (Respective Class Teacher Only)
   const handleMarkAllTaken = () => {
     if (!canMarkLunch) {
-      setNotificationMsg('Access Restricted: Only the assigned Class Teacher is authorized to perform roll calls.');
-      setTimeout(() => setNotificationMsg(null), 3500);
+      setNotificationMsg(`Access Restricted: Only the respective Class Teacher (${assignedTeacherForSelectedClass ? assignedTeacherForSelectedClass.name : `Grade ${selectedGrade} ${selectedStream} Class Teacher`}) is authorized to mark this class lunch register.`);
+      setTimeout(() => setNotificationMsg(null), 4000);
       return;
     }
 
@@ -248,7 +290,12 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     const teacherRole = 'Class Teacher';
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const newRecords: LearnerLunchRecord[] = activeStudents.map(student => {
+    // Target only students strictly belonging to this teacher's assigned class
+    const targetLearners = activeStudents.filter(s => 
+      s.grade === selectedGrade && s.stream === selectedStream
+    );
+
+    const newRecords: LearnerLunchRecord[] = targetLearners.map(student => {
       const existing = lunchRecords.find(r => r.studentId === student.id && r.date === selectedDate);
       return {
         id: existing?.id || `lnch-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -261,7 +308,7 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
         status: 'taken',
         takenAt: existing?.takenAt || timeStr,
         mealType: existing?.mealType || 'Standard Balanced Hot Meal',
-        dietaryNotes: existing?.dietaryNotes || 'Batch confirmed by class teacher',
+        dietaryNotes: existing?.dietaryNotes || 'Batch confirmed by respective class teacher',
         markedBy: teacherName,
         markedByRole: teacherRole,
         updatedAt: new Date().toISOString()
@@ -271,15 +318,17 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
     Storage.batchSaveLunchRecords(newRecords);
     setLunchRecords(Storage.getLunchRecords());
 
-    setNotificationMsg(`Confirmed: All ${activeStudents.length} learners marked as Lunch Taken for ${selectedDate}!`);
+    setNotificationMsg(`Confirmed: All ${targetLearners.length} learners in Grade ${selectedGrade} (${selectedStream}) marked as Lunch Taken by ${teacherName}!`);
     setTimeout(() => setNotificationMsg(null), 3500);
   };
 
   // Open Edit Details Modal
   const handleOpenEditModal = (record: LearnerLunchRecord) => {
-    if (!canMarkLunch) {
-      setNotificationMsg('Access Restricted: Only the assigned Class Teacher can modify lunch records.');
-      setTimeout(() => setNotificationMsg(null), 3000);
+    const student = allStudents.find(s => s.id === record.studentId);
+    const isAuthorized = student ? isUserRespectiveClassTeacher(student.grade, student.stream) : canMarkLunch;
+    if (!isAuthorized) {
+      setNotificationMsg('Access Restricted: Only the respective Class Teacher can modify lunch records and dietary notes.');
+      setTimeout(() => setNotificationMsg(null), 3500);
       return;
     }
     setEditingRecord(record);
@@ -290,7 +339,14 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
   // Save Modal Edit
   const handleSaveModalEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRecord || !canMarkLunch) return;
+    if (!editingRecord) return;
+    const student = allStudents.find(s => s.id === editingRecord.studentId);
+    const isAuthorized = student ? isUserRespectiveClassTeacher(student.grade, student.stream) : canMarkLunch;
+    if (!isAuthorized) {
+      setNotificationMsg('Access Denied: Only the respective Class Teacher is authorized to update lunch records.');
+      setTimeout(() => setNotificationMsg(null), 3500);
+      return;
+    }
 
     Storage.saveLunchRecord({
       ...editingRecord,
@@ -403,7 +459,7 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
             <span>Print Catering Register</span>
           </button>
 
-          {/* Mark All Taken (Class Teacher Action Only) */}
+          {/* Mark All Taken (Respective Class Teacher Action Only) */}
           {canMarkLunch ? (
             <button
               onClick={handleMarkAllTaken}
@@ -413,30 +469,53 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
               <span>Mark All Stream As Taken</span>
             </button>
           ) : !isParent ? (
-            <div className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-slate-500" />
-              <span>Read-Only Audit: Only Class Teacher Can Mark</span>
+            <div className="px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-amber-600" />
+              <span>
+                Read-Only: Marked exclusively by Respective Class Teacher
+                {assignedTeacherForSelectedClass ? ` (${assignedTeacherForSelectedClass.name})` : ''}
+              </span>
             </div>
           ) : null}
         </div>
       </div>
 
       {/* Role-Specific Privacy / Scope Badge */}
-      <div className="p-3.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs bg-slate-50 border-slate-200">
+      <div className={`p-3.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs ${
+        canMarkLunch 
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+          : 'bg-slate-50 border-slate-200 text-slate-800'
+      }`}>
         <div className="flex items-center gap-2">
           {canMarkLunch ? (
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <ShieldCheck className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
           ) : (
-            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <Lock className="w-4.5 h-4.5 text-amber-600 shrink-0" />
           )}
-          <span className="font-semibold text-slate-800">
+          <span className="font-semibold">
             {isParent && `Parent View: Strictly monitoring registered child (${parentChildren.map(c => `${c.name} - Grade ${c.grade} ${c.stream}`).join(', ')})`}
-            {canMarkLunch && `Class Teacher Authorization Active: Marking daily attendance & lunch register for Grade ${selectedGrade} (${selectedStream}).`}
-            {!canMarkLunch && !isParent && "Read-Only Surveillance Mode: Per institutional protocol, only the assigned Class Teacher is authorized to mark daily attendance and learner lunch registers."}
+            {canMarkLunch && `Respective Class Teacher Authorization Active: You are the verified Class Teacher for Grade ${selectedGrade} (${selectedStream}). You are authorized to mark today's lunch register.`}
+            {!canMarkLunch && !isParent && currentUser.role === 'class_teacher' && (
+              `Read-Only Mode: You are the assigned Class Teacher for Grade ${currentUser.grade} (${currentUser.stream}). Only the respective Class Teacher for Grade ${selectedGrade} (${selectedStream})${assignedTeacherForSelectedClass ? ` (${assignedTeacherForSelectedClass.name})` : ''} can mark this register.`
+            )}
+            {!canMarkLunch && !isParent && isExecutiveOrAdmin && (
+              `Executive Dining Surveillance & Audit: Per strict institutional protocol, daily learner lunch registers are marked exclusively by the respective Class Teacher${assignedTeacherForSelectedClass ? ` (${assignedTeacherForSelectedClass.name})` : ''}. This view provides institutional dining audit & oversight.`
+            )}
+            {!canMarkLunch && !isParent && !isExecutiveOrAdmin && currentUser.role === 'teacher' && (
+              `Subject Teacher Read-Only Mode: Per institutional protocol, only the respective Class Teacher${assignedTeacherForSelectedClass ? ` (${assignedTeacherForSelectedClass.name})` : ''} can mark learner lunch registers.`
+            )}
           </span>
         </div>
-        <div className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 self-start sm:self-auto">
-          {isParent ? 'CHILD CONFIDENTIAL' : canMarkLunch ? 'CLASS TEACHER AUTHORIZED' : 'READ-ONLY AUDIT'}
+        <div className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded border self-start sm:self-auto ${
+          canMarkLunch 
+            ? 'bg-emerald-600 text-white border-emerald-700' 
+            : 'bg-white border-slate-200 text-slate-600'
+        }`}>
+          {isParent 
+            ? 'CHILD CONFIDENTIAL' 
+            : canMarkLunch 
+              ? 'RESPECTIVE CLASS TEACHER AUTHORIZED' 
+              : 'READ-ONLY AUDIT'}
         </div>
       </div>
 
@@ -529,7 +608,13 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
               <span className="font-semibold text-slate-600">Stream:</span>
               <select
                 value={executiveStreamFilter}
-                onChange={(e) => setExecutiveStreamFilter(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setExecutiveStreamFilter(val);
+                  if (val !== 'all') {
+                    setSelectedStream(val as StreamName);
+                  }
+                }}
                 className="bg-transparent font-bold text-slate-900 focus:outline-hidden cursor-pointer"
               >
                 <option value="all">All Streams</option>
@@ -540,8 +625,44 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
             </div>
           )}
 
+          {/* Assigned Class Teacher Indicator */}
+          {assignedTeacherForSelectedClass && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200/80 rounded-lg text-xs text-amber-900 font-medium">
+              <UserCheck className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>Assigned Class Teacher:</span>
+              <strong className="font-bold text-amber-950">{assignedTeacherForSelectedClass.name}</strong>
+              {assignedTeacherForSelectedClass.tscNumber && (
+                <span className="text-[10px] font-mono text-amber-800">({assignedTeacherForSelectedClass.tscNumber})</span>
+              )}
+            </div>
+          )}
+
+          {/* Multiple Assigned Streams for Class Teacher */}
+          {currentUser.assignedStreams && currentUser.assignedStreams.length > 1 && !isExecutiveOrAdmin && (
+            <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg text-xs">
+              <span className="font-semibold text-emerald-800">My Streams:</span>
+              {currentUser.assignedStreams.map(as => (
+                <button
+                  key={`${as.grade}-${as.stream}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedGrade(as.grade);
+                    setSelectedStream(as.stream);
+                  }}
+                  className={`px-2 py-0.5 rounded font-bold text-[11px] transition-colors cursor-pointer ${
+                    selectedGrade === as.grade && selectedStream === as.stream
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-100'
+                  }`}
+                >
+                  Gr {as.grade} ({as.stream})
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Class Teacher Locked Stream Tag */}
-          {isClassTeacher && !isExecutiveOrAdmin && (
+          {isClassTeacher && !isExecutiveOrAdmin && (!currentUser.assignedStreams || currentUser.assignedStreams.length <= 1) && (
             <div className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center gap-1.5">
               <span>Grade {selectedGrade} ({selectedStream})</span>
               <span className="text-[10px] font-normal text-emerald-700 font-mono">Assigned Stream</span>
@@ -618,6 +739,8 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
                   const isTaken = record.status === 'taken';
                   const isSpecial = record.status === 'special_diet';
                   const isNotTaken = record.status === 'not_taken';
+                  const isStudentAuthorized = isUserRespectiveClassTeacher(student.grade, student.stream);
+                  const assignedTeacherForStudent = getAssignedClassTeacher(student.grade || selectedGrade, student.stream || selectedStream);
 
                   return (
                     <tr 
@@ -682,10 +805,10 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
                         </div>
                       </td>
 
-                      {/* Actions (Only for Class Teacher) */}
+                      {/* Actions (Only for Respective Class Teacher) */}
                       {!isParent && (
                         <td className="py-3 px-4 text-right">
-                          {canMarkLunch ? (
+                          {isStudentAuthorized ? (
                             <div className="inline-flex items-center gap-1.5">
                               {/* Toggle Taken */}
                               <button
@@ -725,11 +848,11 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
                             </div>
                           ) : (
                             <span 
-                              className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200"
-                              title="Strict Protocol: Only the assigned Class Teacher can mark learner lunch register"
+                              className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 font-medium px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 shadow-2xs"
+                              title={`Strict Protocol: Only the assigned Class Teacher (${assignedTeacherForStudent ? assignedTeacherForStudent.name : 'Class Teacher'}) can mark this learner's lunch status`}
                             >
-                              <Lock className="w-3 h-3 text-slate-400" />
-                              <span>Class Teacher Only</span>
+                              <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>{assignedTeacherForStudent ? `${assignedTeacherForStudent.name.split(' ').slice(0, 2).join(' ')} Only` : 'Class Teacher Only'}</span>
                             </span>
                           )}
                         </td>

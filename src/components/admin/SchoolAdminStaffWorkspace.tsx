@@ -144,7 +144,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
     status: 'upcoming' as SchoolCalendarEvent['status'],
     ticketType: 'free' as 'free' | 'paid',
     ticketPrice: 0,
-    ticketPurchaseUrl: 'https://form.jotform.com/262730415844053'
+    ticketPurchaseUrl: ''
   });
 
   // Form state for Parent Communication
@@ -182,13 +182,14 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       status: 'upcoming',
       ticketType: 'free',
       ticketPrice: 0,
-      ticketPurchaseUrl: 'https://form.jotform.com/262730415844053'
+      ticketPurchaseUrl: ''
     });
     setShowNewCalendarModal(true);
   };
 
   const handleOpenEditEvent = (evt: SchoolCalendarEvent) => {
     setEditingCalendarEvent(evt);
+    const isCoCurricular = evt.category === 'co_curricular';
     setEventForm({
       title: evt.title,
       description: evt.description,
@@ -201,9 +202,9 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       venue: evt.venue || '',
       isImportant: evt.isImportant,
       status: evt.status,
-      ticketType: evt.ticketType || 'free',
-      ticketPrice: evt.ticketPrice || 0,
-      ticketPurchaseUrl: evt.ticketPurchaseUrl || 'https://form.jotform.com/262730415844053'
+      ticketType: isCoCurricular ? (evt.ticketType || 'free') : 'free',
+      ticketPrice: isCoCurricular ? (evt.ticketPrice || 0) : 0,
+      ticketPurchaseUrl: ''
     });
     setShowNewCalendarModal(true);
   };
@@ -212,9 +213,18 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
     e.preventDefault();
     if (!eventForm.title.trim() || !eventForm.startDate) return;
 
+    const isCoCurricular = eventForm.category === 'co_curricular';
+    const payload = {
+      ...eventForm,
+      isTicketedEvent: isCoCurricular,
+      ticketType: isCoCurricular ? eventForm.ticketType : undefined,
+      ticketPrice: isCoCurricular ? eventForm.ticketPrice : undefined,
+      ticketPurchaseUrl: undefined
+    };
+
     if (editingCalendarEvent) {
       const updated = Storage.updateCalendarEvent(editingCalendarEvent.id, {
-        ...eventForm,
+        ...payload,
         updatedBy: `${currentUser.name} (Admin Staff)`,
       });
       if (updated) {
@@ -223,7 +233,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
       }
     } else {
       Storage.addCalendarEvent({
-        ...eventForm,
+        ...payload,
         updatedBy: `${currentUser.name} (Admin Staff)`,
         updatedAt: new Date().toISOString().split('T')[0]
       });
@@ -1310,7 +1320,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                   <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs space-y-1 text-slate-500">
                     <div>Target: <strong>Grade {printableGrade} Examination</strong></div>
                     <div>Papers Scheduled: <strong>{activeExamSchedule.length || 4} Examinations</strong></div>
-                    <div>Invigilators: <strong>Assigned Faculty Staff</strong></div>
+                    <div>Invigilators: <strong>Assigned Academic Department Staff</strong></div>
                   </div>
                 </div>
 

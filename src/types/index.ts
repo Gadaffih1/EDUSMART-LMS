@@ -63,10 +63,13 @@ export const JUNIOR_SUBJECTS = [
   'Kiswahili',
   'Integrated Science',
   'Agriculture and Nutrition',
+  'Agriculture',
   'Social Studies',
   'Religious Education',
   'Creative Arts',
   'Pretechnical Education',
+  'Pre-Technical Studies',
+  'Business Studies',
   'Physical and Health Education'
 ] as const;
 
@@ -860,14 +863,14 @@ export interface SchoolCalendarEvent {
   status: 'upcoming' | 'ongoing' | 'completed' | 'rescheduled';
   updatedBy?: string;
   updatedAt?: string;
-  // --- Event Ticketing & Jotform Integration ---
-  ticketType: EventTicketType; // 'free' (Free Ticket) or 'paid' (Paid Event)
+  // --- Event Ticketing (Applies on Co-Curricular Events Only) ---
+  isTicketedEvent?: boolean; // True ONLY for co-curricular events
+  ticketType?: EventTicketType; // 'free' (Free Ticket) or 'paid' (Paid Event) for co-curricular events
   ticketPrice?: number; // In KES, e.g. 0 for free, 500, 1000 for paid
   ticketCurrency?: string; // Default 'KES'
-  ticketPurchaseUrl?: string; // Default 'https://form.jotform.com/262730415844053'
   totalCapacity?: number; // e.g. 350
   ticketsSold?: number; // e.g. 120
-  ticketPerks?: string[]; // e.g. ['VIP Seating', 'Program Booklet']
+  ticketPerks?: string[]; // e.g. ['VIP Pavilion Seating', 'Program Booklet']
   authorRole?: 'school_admin_staff' | 'dean_of_studies' | 'deputy_head' | 'head_teacher' | string;
   authorName?: string;
 }
@@ -889,10 +892,9 @@ export interface EventTicketPurchase {
   totalAmount: number;
   currency: string;
   paymentStatus: 'completed' | 'pending' | 'free_granted';
-  paymentMethod: 'JotForm Portal' | 'M-Pesa Express' | 'School Cash Desk' | 'Free Pass Voucher';
+  paymentMethod: 'M-Pesa Express' | 'School Cash Desk' | 'Free Pass Voucher';
   mpesaReference?: string;
   purchasedAt: string;
-  jotformUrl?: string;
   notes?: string;
 }
 

@@ -30,7 +30,8 @@ import {
   CheckCircle2,
   HeartPulse,
   Bus,
-  Trophy
+  Trophy,
+  Menu
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
@@ -38,6 +39,7 @@ import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 
 interface SeniorTeacherWorkspaceProps {
   currentUser: User;
@@ -46,6 +48,7 @@ interface SeniorTeacherWorkspaceProps {
 export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ currentUser }) => {
   type SupervisionTab = 'gate_safety' | 'work_entry_audit' | 'sanatorium' | 'transport' | 'cocurricular' | 'attendance_monitor' | 'mentorship' | 'curriculum_coordination' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<SupervisionTab>('gate_safety');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Mentorship log state
   interface MentorshipLog {
@@ -115,215 +118,89 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
   const allWorkLogs = Storage.getWorkEntryLogs();
   const allStudents = Storage.getUsers().filter(u => u.role === 'student');
 
+  const sidebarGroups: WorkspaceSidebarGroup<SupervisionTab>[] = [
+    {
+      title: 'LEARNER GUIDANCE & WELFARE',
+      items: [
+        { id: 'mentorship', label: 'Mentorship & Pastoral Care', icon: Users, badge: mentorshipList.length },
+        { id: 'gate_safety', label: 'Gate Exit Pass Verifications', icon: LogOut, badge: allGatePasses.length },
+        { id: 'attendance_monitor', label: 'Daily Roll Call Monitor', icon: UserCheck }
+      ]
+    },
+    {
+      title: 'ACADEMIC SUPERVISION',
+      items: [
+        { id: 'curriculum_coordination', label: 'Curriculum Strands & KPSEA', icon: BookOpen },
+        { id: 'work_entry_audit', label: 'Teacher Work Entry Audit', icon: FileCheck2, badge: allWorkLogs.length },
+        { id: 'reporting_hub', label: 'Academic Reporting Hub', icon: BarChart3 }
+      ]
+    },
+    {
+      title: 'CAMPUS SERVICES',
+      items: [
+        { id: 'sanatorium', label: 'Sanatorium & Clinic Logs', icon: HeartPulse },
+        { id: 'transport', label: 'School Transport Fleet', icon: Bus },
+        { id: 'cocurricular', label: 'Co-Curricular & Sports', icon: Trophy }
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* Top Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 tracking-wider uppercase">
-              <span>Academic & Learner Supervision Console</span>
-              <span aria-hidden="true">·</span>
-              <span>Senior Teacher & Curriculum Coordinator</span>
-            </div>
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Curriculum Coordination & Learner Supervision
-          </h1>
-          <p className="text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Oversee CBC curriculum alignment, learner welfare and academic guidance, track compound gate exits, verify teacher work entry compliance, and maintain learner mentorship logs for {currentUser.name}.
-          </p>
+
+          <div>
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>Senior Teacher Supervision Console</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Curriculum Coordination
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 hidden sm:block">
+              Learner Welfare, CBC Curriculum Alignment, Gate Exits & Work Entry Sign-Ins
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white/10 backdrop-blur p-4 rounded-xl border border-white/20 shrink-0 text-xs">
-          <div className="text-[10px] uppercase font-bold text-emerald-300 mb-1">Supervision Lead</div>
-          <div className="font-extrabold text-base">{currentUser.name}</div>
-          <div className="text-slate-300 font-mono text-[11px]">{currentUser.tscNumber || 'TSC/29410/ED'}</div>
-          <div className="mt-2 pt-2 border-t border-white/20 flex gap-4 text-[11px]">
-            <span>{allStudents.length} Total Enrolled Learners</span>
-            <span>·</span>
-            <span>Grades 1 to 9</span>
-          </div>
+        <div className="text-right text-xs hidden md:block">
+          <div className="font-bold text-white">{currentUser.name}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/29410/ED'}</div>
         </div>
-      </div>
+      </header>
 
-      {/* Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <button
-          onClick={() => setActiveTab('gate_safety')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'gate_safety'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-rose-100 text-rose-800">
-            <LogOut className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">1. Gate Exit</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'gate_safety' ? 'text-rose-200' : 'text-slate-500'}`}>
-              Passes ({allGatePasses.length})
-            </div>
-          </div>
-        </button>
+      {/* Main Workspace Layout with Sidebar Tree */}
+      <div className="flex-1 flex w-full">
+        <WorkspaceSidebar<SupervisionTab>
+          portalTitle="SENIOR TEACHER"
+          portalSubtitle="Curriculum & Guidance"
+          portalIcon="🧭"
+          portalBadge="Supervision"
+          groups={sidebarGroups}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          themeColor="emerald"
+          footerNote="Pastoral & Curriculum"
+          statusText="● On Duty"
+        />
 
-        <button
-          onClick={() => setActiveTab('work_entry_audit')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'work_entry_audit'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-emerald-100 text-emerald-800">
-            <FileCheck2 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">2. Work Logs</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'work_entry_audit' ? 'text-emerald-200' : 'text-slate-500'}`}>
-              Sign-ins ({allWorkLogs.length})
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sanatorium')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'sanatorium'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-rose-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-rose-100 text-rose-800">
-            <HeartPulse className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">3. Sanatorium</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'sanatorium' ? 'text-rose-200' : 'text-slate-500'}`}>
-              Health logs
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transport')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'transport'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-amber-100 text-amber-800">
-            <Bus className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">4. Transport</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'transport' ? 'text-amber-200' : 'text-slate-500'}`}>
-              Fleet & routes
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cocurricular')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'cocurricular'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-purple-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
-            <Trophy className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">5. Co-Curricular</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'cocurricular' ? 'text-purple-200' : 'text-slate-500'}`}>
-              Clubs & sports
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('mentorship')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'mentorship'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-blue-100 text-blue-800">
-            <HeartHandshake className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">3. Mentorship</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'mentorship' ? 'text-blue-200' : 'text-slate-500'}`}>
-              Pastoral records
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('attendance_monitor')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'attendance_monitor'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-teal-100 text-teal-800">
-            <UserCheck className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">4. Roll Call</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'attendance_monitor' ? 'text-teal-200' : 'text-slate-500'}`}>
-              Daily attendance
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('curriculum_coordination')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'curriculum_coordination'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-cyan-100 text-cyan-800">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">5. Curriculum Dev</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'curriculum_coordination' ? 'text-cyan-200' : 'text-slate-500'}`}>
-              Controlled access
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reporting_hub')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'reporting_hub'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
-            <BarChart3 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">6. Reporting Hub</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'reporting_hub' ? 'text-purple-200' : 'text-slate-500'}`}>
-              Periodic dossiers
-            </div>
-          </div>
-        </button>
-      </div>
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
       {/* ========================================================
           TAB 1: GATE EXIT SAFETY MONITOR
@@ -711,6 +588,8 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
         <ReportingHub currentUser={currentUser} />
       )}
 
+        </main>
+      </div>
     </div>
   );
 };

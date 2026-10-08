@@ -187,9 +187,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (expectedRoleCategory === 'administration' && !['head_teacher', 'deputy_head', 'senior_teacher', 'dean_of_studies', 'hod', 'school_admin_staff', 'admin'].includes(user.role)) {
-      setErrorMsg('This portal is strictly restricted to School Administrative Leadership.');
-      return;
+    if (expectedRoleCategory === 'administration') {
+      if (user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'))) {
+        setErrorMsg('Sanatorium healthcare staff must authenticate through the dedicated School Sanatorium Healthcare portal.');
+        return;
+      }
+      if (!['head_teacher', 'deputy_head', 'senior_teacher', 'dean_of_studies', 'hod', 'school_admin_staff', 'admin'].includes(user.role)) {
+        setErrorMsg('This portal is strictly restricted to School Administrative Leadership.');
+        return;
+      }
     }
 
     // Success
@@ -549,7 +555,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                 👨‍🎓 1,240 Enrolled Learners
               </span>
               <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                👩‍🏫 48 TSC Faculty
+                👩‍🏫 48 Academic Department Staff
               </span>
               <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
                 🚌 8 Commuter Routes
@@ -613,7 +619,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   👩‍🏫
                 </div>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-900/80 text-blue-100">
-                  TSC Faculty
+                  Academic Department
                 </span>
               </div>
               <div className="mt-4">
@@ -1171,7 +1177,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {landingEvents.slice(0, 6).map((evt) => {
-              const isPaid = evt.ticketType === 'paid' && (evt.ticketPrice || 0) > 0;
+              const isCoCurricular = evt.category === 'co_curricular';
+              const isPaid = isCoCurricular && evt.ticketType === 'paid' && (evt.ticketPrice || 0) > 0;
               const dateObj = new Date(evt.startDate);
               const monthStr = isNaN(dateObj.getTime()) ? '2026' : dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase();
               const dayStr = isNaN(dateObj.getTime()) ? '15' : dateObj.getDate().toString().padStart(2, '0');
@@ -1184,22 +1191,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className={`w-14 h-14 rounded-2xl text-white flex flex-col items-center justify-center shrink-0 shadow-xs ${
-                        isPaid ? 'bg-amber-600' : 'bg-emerald-600'
+                        isCoCurricular 
+                          ? isPaid ? 'bg-amber-600' : 'bg-emerald-600'
+                          : 'bg-indigo-700'
                       }`}>
                         <span className="text-[10px] uppercase font-bold tracking-wider">{monthStr}</span>
                         <span className="text-xl font-black leading-none">{dayStr}</span>
                       </div>
 
                       <div className="text-right">
-                        {isPaid ? (
-                          <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
-                            <CreditCard className="w-3 h-3" />
-                            <span>KES {(evt.ticketPrice || 0).toLocaleString()}</span>
-                          </span>
+                        {isCoCurricular ? (
+                          isPaid ? (
+                            <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
+                              <CreditCard className="w-3 h-3" />
+                              <span>KES {(evt.ticketPrice || 0).toLocaleString()}</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
+                              <Ticket className="w-3 h-3" />
+                              <span>FREE PASS</span>
+                            </span>
+                          )
                         ) : (
-                          <span className="px-2.5 py-1 bg-emerald-600 text-white font-black text-xs rounded-xl shadow-xs inline-flex items-center gap-1">
-                            <Ticket className="w-3 h-3" />
-                            <span>FREE PASS</span>
+                          <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 inline-flex items-center gap-1">
+                            <BookOpen className="w-3 h-3 text-slate-500" />
+                            <span>Academic Schedule</span>
                           </span>
                         )}
                       </div>
@@ -1230,21 +1246,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   </div>
 
                   <div className="pt-4 mt-3 border-t border-slate-200/80 flex items-center justify-between">
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {isPaid ? 'JotForm Checkout' : 'Free Entry Pass'}
-                    </span>
+                    {isCoCurricular ? (
+                      <>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {isPaid ? 'Verified Gate Pass' : 'Free Entry Pass'}
+                        </span>
 
-                    <button
-                      onClick={() => setSelectedTicketEvent(evt)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                        isPaid 
-                          ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black' 
-                          : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                      }`}
-                    >
-                      <Ticket className="w-3.5 h-3.5" />
-                      <span>{isPaid ? 'Buy Ticket (Jotform)' : 'Get Free Ticket'}</span>
-                    </button>
+                        <button
+                          onClick={() => setSelectedTicketEvent(evt)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isPaid 
+                              ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-black' 
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }`}
+                        >
+                          <Ticket className="w-3.5 h-3.5" />
+                          <span>{isPaid ? `Get Pass (KES ${(evt.ticketPrice || 0).toLocaleString()})` : 'Get Free Pass'}</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          Open Academic Date
+                        </span>
+
+                        <span className="text-xs text-slate-500 font-medium italic">
+                          No Ticket Required
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -2457,17 +2487,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
                   </button>
 
                   <button
-                    onClick={() => handleQuickDemoLogin('nurse@edusmart.ac.ke')}
-                    className="p-2.5 bg-rose-50/80 hover:bg-rose-100 hover:border-rose-300 rounded-xl border border-rose-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-rose-950">🏥 Sanatorium Nurse</div>
-                      <div className="text-[10px] text-rose-700">Sister Grace Wambui (RN)</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-rose-600" />
-                  </button>
-
-                  <button
                     onClick={() => handleQuickDemoLogin('transport@edusmart.ac.ke')}
                     className="p-2.5 bg-amber-50/80 hover:bg-amber-100 hover:border-amber-300 rounded-xl border border-amber-200 text-left transition-colors flex items-center justify-between group"
                   >
@@ -2972,7 +2991,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
         </div>
       )}
 
-      {/* MODAL: Full Events Directory & JotForm Ticketing */}
+      {/* MODAL: Full Events Directory & Co-Curricular Ticketing */}
       {activeModal === 'events' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
@@ -2980,10 +2999,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <div>
                 <h3 className="text-base font-extrabold text-white flex items-center gap-2">
                   <span>🗓️</span>
-                  <span>EduSmart School Events & Ticket Booking Directory</span>
+                  <span>EduSmart School Events & Co-Curricular Pass Directory</span>
                 </h3>
                 <p className="text-xs text-indigo-200 mt-0.5">
-                  Browse official events, check Free/Paid ticket status, and purchase tickets via JotForm.
+                  Browse official events, academic schedules, and reserve admission tickets for co-curricular galas.
                 </p>
               </div>
               <button onClick={() => setActiveModal(null)} className="text-indigo-200 hover:text-white p-1">

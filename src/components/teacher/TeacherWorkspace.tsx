@@ -28,6 +28,9 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
+import { ResultUploadManager } from '../academic/ResultUploadManager';
+import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -55,7 +58,12 @@ import {
   Trash2,
   Play,
   Sparkles,
-  Tag
+  Tag,
+  Menu,
+  Briefcase,
+  UserCheck,
+  FolderTree,
+  Utensils
 } from 'lucide-react';
 
 interface TeacherWorkspaceProps {
@@ -63,9 +71,11 @@ interface TeacherWorkspaceProps {
 }
 
 type TeacherTab = 
+  | 'cbc_results'
   | 'work_entry' 
   | 'gate_exit' 
   | 'class_register'
+  | 'lunch_register'
   | 'assignments' 
   | 'resources' 
   | 'quizzes'
@@ -82,6 +92,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
   const [activeTab, setActiveTab] = useState<TeacherTab>(
     isClassTeacher ? 'class_register' : 'work_entry'
   );
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Handle direct tab navigation from notification items
   React.useEffect(() => {
@@ -89,8 +100,10 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub'].includes(tab)) {
+        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub'].includes(tab)) {
           setActiveTab(tab as TeacherTab);
+        } else if (tab === 'results' || tab === 'assessments') {
+          setActiveTab('cbc_results');
         } else if (tab === 'attendance' || tab === 'register') {
           setActiveTab('class_register');
         } else if (tab === 'notes' || tab === 'videos' || tab === 'audio') {
@@ -434,245 +447,145 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
     setTimeout(() => setReminderSuccess(false), 2500);
   };
 
+  const sidebarGroups: WorkspaceSidebarGroup<TeacherTab>[] = [
+    {
+      title: 'CLASSROOM & INSTRUCTION',
+      items: [
+        { id: 'work_entry', label: '1. Lesson Work Entry', icon: Briefcase },
+        { id: 'class_register', label: '2. Class Roll Call Register', icon: UserCheck, badge: isClassTeacher ? `${currentUser.stream || 'Stream'}` : undefined },
+        ...(isClassTeacher ? [{ id: 'lunch_register' as TeacherTab, label: '3. Learner Lunch Register', icon: Utensils, badge: 'Class Teacher' }] : []),
+        { id: 'cbc_results', label: isClassTeacher ? '4. CBC Assessment Results' : '3. CBC Assessment Results', icon: Award, badge: 'Marks / Entry', badgeColor: 'bg-emerald-600' }
+      ]
+    },
+    {
+      title: 'LEARNING & TASKS',
+      items: [
+        { id: 'assignments', label: '4. Homework Assignments', icon: BookOpen },
+        { id: 'quizzes', label: '5. CBC Topical Quizzes', icon: CheckSquare },
+        { id: 'resources', label: '6. Curriculum Resources & Links', icon: FolderTree },
+        { id: 'virtual_class', label: '7. Virtual Class (Meet)', icon: Video }
+      ]
+    },
+    {
+      title: 'TIMETABLE & GOVERNANCE',
+      items: [
+        { id: 'timetable', label: '8. Teaching Timetable', icon: Calendar },
+        { id: 'gate_exit', label: '9. Student Gate Exit Passes', icon: LogOut },
+        { id: 'reporting_hub', label: '10. Academic Reporting Hub', icon: FileSpreadsheet },
+        { id: 'reminders', label: '11. Lesson Reminders', icon: Bell }
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* Teacher Profile Banner */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 hidden sm:flex items-center justify-center">
-            <EduSmartGadsaLogo variant="horizontal" size="sm" />
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white font-bold text-xl flex sm:hidden items-center justify-center shadow-xs shrink-0">
-            {currentUser.name.charAt(0)}
-          </div>
+
           <div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-              <span>CBC Staff Console</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono text-slate-700">{currentUser.tscNumber || 'TSC/44120/ED'}</span>
-              <span aria-hidden="true">·</span>
-              <span className="text-emerald-700 font-bold">
-                {isClassTeacher ? `Class Teacher (Grade ${currentUser.grade} ${currentUser.stream})` : 'Subject Teacher'}
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>Academic Department Teacher Console</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                {isClassTeacher ? `Grade ${currentUser.grade} ${currentUser.stream} Class Teacher` : 'Subject Teacher'}
               </span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              {currentUser.name}
             </h1>
-            <div className="text-xs text-slate-600 mt-0.5">
-              Assigned Subjects: <strong className="text-slate-900">{currentUser.assignedSubjects?.join(', ') || 'Mathematics, Science'}</strong> · Authorized across multiple streams
-            </div>
+            <p className="text-[11px] text-slate-400 hidden sm:block">
+              Assigned: {currentUser.assignedSubjects?.join(', ') || 'CBC Curriculum'} · Lesson logs, registers & CBC marks
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Quick Result Upload / View Button */}
           <button
-            onClick={() => setActiveTab('reporting_hub')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl shadow-xs transition-colors ${
-              activeTab === 'reporting_hub'
-                ? 'bg-slate-900 text-white'
-                : 'bg-emerald-700 hover:bg-emerald-800 text-white'
-            }`}
+            onClick={() => setActiveTab('cbc_results')}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
-            <span>Reporting Hub</span>
+            <Award className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">CBC Assessment Results</span>
+            <span className="sm:hidden">CBC Marks</span>
           </button>
+
           <button
             onClick={() => setActiveTab('virtual_class')}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
-            <Video className="w-4 h-4" />
-            <span>Launch Google Meet</span>
+            <Video className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Google Meet</span>
           </button>
+
+          <div className="text-right text-xs hidden md:block pl-2 border-l border-slate-700">
+            <div className="font-bold text-white">{currentUser.name}</div>
+            <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/44120/ED'}</div>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Primary Teacher Action Buttons (Explicitly requested in prompt) */}
-      <div className={`grid grid-cols-2 sm:grid-cols-3 ${isClassTeacher ? 'lg:grid-cols-6' : 'lg:grid-cols-5'} gap-3`}>
-        {/* Button 1: Work entry sign in */}
-        <button
-          onClick={() => setActiveTab('work_entry')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'work_entry'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-emerald-100 text-emerald-800">
-            <FileCheck2 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">1. Work Entry</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'work_entry' ? 'text-slate-300' : 'text-slate-500'}`}>
-              Daily lesson log register
-            </div>
-          </div>
-        </button>
+      {/* Main Workspace Layout with Sidebar Tree */}
+      <div className="flex-1 flex w-full">
+        <WorkspaceSidebar<TeacherTab>
+          portalTitle="TEACHER PORTAL"
+          portalSubtitle="Academic Department"
+          portalIcon="👨‍🏫"
+          portalBadge={isClassTeacher ? 'Form Lead' : 'Academic Dept'}
+          groups={sidebarGroups}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          themeColor="blue"
+          footerNote={`Grade ${defaultGrade} ${defaultStream}`}
+          statusText="● Verified"
+        />
 
-        {/* Button 2: Student Gate Exit sign out */}
-        <button
-          onClick={() => setActiveTab('gate_exit')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'gate_exit'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-rose-100 text-rose-800">
-            <LogOut className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">2. Student Gate Exit</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'gate_exit' ? 'text-slate-300' : 'text-slate-500'}`}>
-              Sign learners out with pass
-            </div>
-          </div>
-        </button>
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
-        {/* Class Teacher Button: Class Attendance Register */}
-        {isClassTeacher && (
-          <button
-            onClick={() => setActiveTab('class_register')}
-            className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-              activeTab === 'class_register'
-                ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-emerald-400'
-                : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-            }`}
-          >
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-emerald-600 text-white">
-              <ClipboardCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="font-bold text-xs sm:text-sm">3. Class Register</div>
-              <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'class_register' ? 'text-emerald-200' : 'text-slate-500'}`}>
-                {currentUser.stream || 'Stream'} Roll Call
-              </div>
-            </div>
-          </button>
+        {/* ========================================================
+            TAB: CBC ASSESSMENT RESULTS (VIEW ASSIGNED & WHOLE GRADE)
+            ======================================================== */}
+        {activeTab === 'cbc_results' && (
+          <ResultUploadManager 
+            currentUser={currentUser} 
+            viewMode="teacher"
+            defaultGrade={defaultGrade}
+          />
         )}
-
-        {/* Button 3: Assignments */}
-        <button
-          onClick={() => setActiveTab('assignments')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'assignments'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-blue-100 text-blue-800">
-            <FileText className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">3. Assignments</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'assignments' ? 'text-slate-300' : 'text-slate-500'}`}>
-              Assign & grade homework
-            </div>
-          </div>
-        </button>
-
-        {/* Button 4: E-Resources & E-Links */}
-        <button
-          onClick={() => setActiveTab('resources')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'resources'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-purple-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-purple-100 text-purple-800">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">4. E-Resources & E-Links</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'resources' ? 'text-slate-300' : 'text-slate-500'}`}>
-              Notes, Audio, Video, Images & E-Links
-            </div>
-          </div>
-        </button>
-
-        {/* Button 5: Quizzes */}
-        <button
-          onClick={() => setActiveTab('quizzes')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'quizzes'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-slate-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-amber-100 text-amber-800">
-            <CheckSquare className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">5. Quizzes</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'quizzes' ? 'text-slate-300' : 'text-slate-500'}`}>
-              Topical test builder & marks
-            </div>
-          </div>
-        </button>
-      </div>
-
-      {/* Auxiliary actions row: Reporting Hub, Virtual Class, Timetable, Lesson Reminders */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-2">
-          Classroom Operations:
-        </span>
-        <button
-          onClick={() => setActiveTab('reporting_hub')}
-          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'reporting_hub' 
-              ? 'bg-slate-900 text-white shadow-xs' 
-              : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-          }`}
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Reporting Hub (Monthly, Termly, Annual PDF)</span>
-        </button>
-        {isClassTeacher && (
-          <button
-            onClick={() => setActiveTab('class_register')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-              activeTab === 'class_register' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-            }`}
-          >
-            <FileCheck2 className="w-3.5 h-3.5" />
-            <span>Class Register ({currentUser.stream || 'Stream'})</span>
-          </button>
-        )}
-        <button
-          onClick={() => setActiveTab('virtual_class')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'virtual_class' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Video className="w-3.5 h-3.5" />
-          <span>Virtual Class (Google Meet)</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'timetable' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Post Class Timetable</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('reminders')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'reminders' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Bell className="w-3.5 h-3.5" />
-          <span>Set Lesson Reminders</span>
-        </button>
-      </div>
 
       {/* ========================================================
           CLASS TEACHER REGISTER & PERFORMANCE CONSOLE
           ======================================================== */}
       {isClassTeacher && activeTab === 'class_register' && (
         <ClassTeacherModule currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          LEARNER LUNCH REGISTER (RESPECTIVE CLASS TEACHER ONLY)
+          ======================================================== */}
+      {activeTab === 'lunch_register' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <LearnerLunchRegister
+            currentUser={currentUser}
+            initialGrade={defaultGrade}
+            initialStream={defaultStream}
+            viewMode="class_teacher"
+            title={`Grade ${defaultGrade} (${defaultStream}) Class Teacher Lunch Register`}
+            subtitle="Official daily midday lunch & dining attendance log. Marked strictly by the respective class teacher."
+          />
+        </div>
       )}
 
       {/* ========================================================
@@ -2041,6 +1954,8 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
       )}
+        </main>
+      </div>
     </div>
   );
 };

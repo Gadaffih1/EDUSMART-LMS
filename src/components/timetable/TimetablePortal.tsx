@@ -940,7 +940,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               }`}
             >
               <UserIcon className="w-3.5 h-3.5" />
-              <span>{isExecutiveLeadership ? 'Faculty Workload' : 'My Teaching Schedule'}</span>
+              <span>{isExecutiveLeadership ? 'Academic Dept Workload' : 'My Teaching Schedule'}</span>
             </button>
           )}
 
@@ -1531,7 +1531,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">
-                  {isExecutiveLeadership ? 'Faculty Teaching Allocations & Workload Matrix' : 'My Faculty Teaching Allocation & Workload'}
+                  {isExecutiveLeadership ? 'Academic Dept Teaching Allocations & Workload Matrix' : 'My Academic Dept Teaching Allocation & Workload'}
                 </h3>
                 <p className="text-xs text-slate-500">
                   {isExecutiveLeadership 

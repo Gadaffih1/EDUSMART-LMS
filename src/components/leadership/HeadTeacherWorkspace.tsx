@@ -12,11 +12,11 @@ import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
-import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
+import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { 
   School, 
   Users, 
@@ -34,11 +34,11 @@ import {
   BookOpen,
   Printer,
   FileSpreadsheet,
-  HeartPulse,
   Bus,
   Trophy,
   CalendarDays,
-  Utensils
+  Utensils,
+  Menu
 } from 'lucide-react';
 
 interface HeadTeacherWorkspaceProps {
@@ -46,8 +46,9 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'analytics' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
+  type HeadTab = 'executive' | 'analytics' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
   const [activeTab, setActiveTab] = useState<HeadTab>('executive');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const allUsers = Storage.getUsers();
   const students = allUsers.filter(u => u.role === 'student');
@@ -98,202 +99,92 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
     setTimeout(() => setAnnSuccess(false), 3000);
   };
 
+  const sidebarGroups: WorkspaceSidebarGroup<HeadTab>[] = [
+    {
+      title: 'EXECUTIVE GOVERNANCE',
+      items: [
+        { id: 'executive', label: 'Executive Overview', icon: BarChart3 },
+        { id: 'analytics', label: 'School-Wide Analytics', icon: TrendingUp },
+        { id: 'announcements', label: 'Directives & Notices', icon: Bell, badge: announcements.length },
+        { id: 'bom_report', label: 'BoM Governance Report', icon: Building2 }
+      ]
+    },
+    {
+      title: 'ACADEMIC DEPARTMENT & STAFF',
+      items: [
+        { id: 'staff_governance', label: 'Academic Dept Allocations', icon: Users, badge: `${teachers.length}` },
+        { id: 'timetable', label: 'Master School Timetable', icon: CalendarDays },
+        { id: 'work_entry_audit', label: 'Staff Work Entry Sign-Ins', icon: FileText, badge: `${workLogs.length}` },
+        { id: 'reporting_hub', label: 'Institutional Reporting Hub', icon: FileSpreadsheet }
+      ]
+    },
+    {
+      title: 'CAMPUS SERVICES & WELFARE',
+      items: [
+        { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
+        { id: 'transport', label: 'School Transport Fleet', icon: Bus },
+        { id: 'cocurricular', label: 'Co-Curricular Directorate', icon: Trophy },
+        { id: 'events', label: 'School Events & Tickets', icon: CalendarDays, badge: 'Post', badgeColor: 'bg-indigo-500' }
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 rounded-2xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 tracking-wider uppercase">
-              <span>Executive School-Wide Management</span>
-              <span aria-hidden="true">·</span>
-              <span>Chief Institutional Officer</span>
-            </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Head Teacher Executive Console
-          </h1>
-          <p className="text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Institutional governance and holistic management of school operations, student enrollment, academic performance indicators, faculty allocations, and school-wide stakeholder communications.
-          </p>
-        </div>
 
-        <div className="bg-white/10 backdrop-blur p-4 rounded-xl border border-white/20 shrink-0 text-xs">
-          <div className="text-[10px] uppercase font-bold text-emerald-300 mb-1">Head of Institution</div>
-          <div className="font-extrabold text-base">{currentUser.name}</div>
-          <div className="text-slate-300 font-mono text-[11px]">{currentUser.tscNumber || 'TSC/14982/ED'}</div>
-          <div className="mt-2 pt-2 border-t border-white/20 flex gap-3 text-[11px]">
-            <span className="text-emerald-300 font-bold">{students.length} Learners</span>
-            <span>·</span>
-            <span className="text-blue-300 font-bold">{teachers.length} Faculty Staff</span>
+          <div>
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>Head Teacher Executive Console</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                School Leadership
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 hidden sm:block">
+              Institutional Governance, Academic Department Oversight & Holistic Operations
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* Institutional Vital Statistics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Total Enrolled Learners</div>
-          <div className="text-2xl font-extrabold font-mono text-slate-900 mt-1">{students.length}</div>
-          <div className="text-xs text-slate-500 mt-0.5">Across Grades 1 to 9 (15 Streams)</div>
+        <div className="text-right text-xs hidden md:block">
+          <div className="font-bold text-white">{currentUser.name}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/14982/ED'}</div>
         </div>
+      </header>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Certified Teaching Faculty</div>
-          <div className="text-2xl font-extrabold font-mono text-blue-700 mt-1">{teachers.length}</div>
-          <div className="text-xs text-slate-500 mt-0.5">TSC Registered Educators</div>
-        </div>
+      {/* Main Workspace Layout with Sidebar Tree */}
+      <div className="flex-1 flex w-full">
+        <WorkspaceSidebar<HeadTab>
+          portalTitle="HEAD TEACHER"
+          portalSubtitle="Institutional Leadership"
+          portalIcon="🏛️"
+          portalBadge="Executive"
+          groups={sidebarGroups}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          themeColor="emerald"
+          footerNote="Governance & CBC Quality"
+          statusText="● Principal"
+        />
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Institution Mean Grade</div>
-          <div className="text-2xl font-extrabold font-mono text-emerald-700 mt-1">81.4%</div>
-          <div className="text-xs text-slate-500 mt-0.5">Grade B+ (Exceeding Expectations)</div>
-        </div>
-
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Campus Attendance Rate</div>
-          <div className="text-2xl font-extrabold font-mono text-purple-700 mt-1">96.8%</div>
-          <div className="text-xs text-slate-500 mt-0.5">Term 3 daily average</div>
-        </div>
-      </div>
-
-      {/* Navigation Sub-Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <button
-          onClick={() => setActiveTab('executive')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'executive' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-emerald-400" />
-          <span>Executive Overview & Governance</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'analytics' ? 'bg-slate-900 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4 text-emerald-600" />
-          <span>School-Wide Analytics (Recharts)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('announcements')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'announcements' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Bell className="w-4 h-4 text-blue-400" />
-          <span>Institutional Announcements ({announcements.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('staff_governance')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'staff_governance' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Users className="w-4 h-4 text-purple-400" />
-          <span>Faculty Allocation</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'timetable' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-emerald-400" />
-          <span>Master Timetable & Bell Schedule</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('work_entry_audit')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'work_entry_audit' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileText className="w-4 h-4 text-emerald-400" />
-          <span>Staff Work Entry Sign-Ins ({workLogs.length})</span>
-          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sanatorium')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <HeartPulse className="w-4 h-4 text-rose-400" />
-          <span>Sanatorium & Clinic</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lunch_register')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Utensils className="w-4 h-4 text-amber-400" />
-          <span>Learner Lunch Register</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transport')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Bus className="w-4 h-4 text-amber-400" />
-          <span>School Transport</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cocurricular')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Trophy className="w-4 h-4 text-purple-400" />
-          <span>Co-Curriculum & Sports</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('bom_report')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'bom_report' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileText className="w-4 h-4 text-amber-400" />
-          <span>Board of Management (BOM) Report</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reporting_hub')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'reporting_hub' ? 'bg-slate-900 text-white' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-          <span>Reporting Hub (Monthly, Termly, Annual PDF)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('events')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'events' ? 'bg-slate-900 text-white' : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-rose-500" />
-          <span>School Events & Tickets</span>
-          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">Executive Authority</span>
-        </button>
-      </div>
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
       {/* ========================================================
           TAB 1: EXECUTIVE OVERVIEW
@@ -360,7 +251,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
                 Institutional Official Announcements & Directives
               </h2>
               <p className="text-xs text-slate-500">
-                Authoritative directives broadcasted to learners, teaching faculty, and parents across the platform.
+                Authoritative directives broadcasted to learners, academic department, and parents across the platform.
               </p>
             </div>
           </div>
@@ -388,7 +279,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
                   <option value="all">Audience: All School Stakeholders</option>
                   <option value="students">Audience: Students Only</option>
                   <option value="parents">Audience: Parents Only</option>
-                  <option value="teachers">Audience: Faculty & Staff Only</option>
+                  <option value="teachers">Audience: Academic Department & Staff</option>
                 </select>
               </div>
             </div>
@@ -442,16 +333,16 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
       )}
 
       {/* ========================================================
-          TAB 3: FACULTY ALLOCATION & WORK LOGS
+          TAB 3: ACADEMIC DEPT ALLOCATION & WORK LOGS
           ======================================================== */}
       {activeTab === 'staff_governance' && (
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
-              Faculty Allocation & Pedagogical Delivery Logs
+              Academic Department Allocation & Pedagogical Delivery Logs
             </h2>
             <p className="text-xs text-slate-500">
-              Oversight of all teaching faculty roles, departmental leads, and daily lesson delivery entries.
+              Oversight of all Academic Department roles, departmental leads, and daily lesson delivery entries.
             </p>
           </div>
 
@@ -499,18 +390,6 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           currentUser={currentUser} 
           title="Executive Work Entry Sign-In Audit Register"
           subtitle="Head Teacher executive oversight: All teacher work entry sign-ins, timestamps, verified GPS stamps, biometric photo ID records, and staff credentials. Strictly non-editable."
-        />
-      )}
-
-      {/* ========================================================
-          TAB: SANATORIUM & CAMPUS CLINIC SURVEILLANCE
-          ======================================================== */}
-      {activeTab === 'sanatorium' && (
-        <SanatoriumSection
-          currentUser={currentUser}
-          canRecord={false}
-          title="Head Teacher Sanatorium & Campus Clinic Surveillance"
-          subtitle="Institutional healthcare oversight: Student illness logs, observation bay admissions, emergency hospital transfers, and outbreak prevention. (Read-Only Audit Mode)"
         />
       )}
 
@@ -617,6 +496,8 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
       {activeTab === 'events' && (
         <SchoolEventsManager currentUser={currentUser} />
       )}
+        </main>
+      </div>
     </div>
   );
 };

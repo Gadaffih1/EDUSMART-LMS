@@ -265,7 +265,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* 2. Teachers & Class Teachers */}
               <div>
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>2. Teaching Faculty</span>
+                  <span>2. Academic Department</span>
                   <span className="text-[10px] text-slate-400 font-normal">Work Entry & Registers</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -293,7 +293,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           </div>
                         </div>
                         <span className="text-[10px] bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded font-mono font-bold shrink-0">
-                          {user.grade ? `Gr ${user.grade} ${user.stream}` : 'Faculty'}
+                          {user.grade ? `Gr ${user.grade} ${user.stream}` : 'Academic Dept'}
                         </span>
                       </button>
                     ))}

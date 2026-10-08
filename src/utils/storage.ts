@@ -67,7 +67,10 @@ import {
   TransportDropoffVerification,
   LessonImage,
   ELink,
-  EventTicketPurchase
+  EventTicketPurchase,
+  StudentAssessmentRecord,
+  TeacherResultUploadAssignment,
+  AssessmentCycle
 } from '../types';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
@@ -101,6 +104,8 @@ import {
   INITIAL_SEARCH_AUDIT_LOGS,
   INITIAL_CALENDAR_EVENTS,
   INITIAL_EVENT_TICKETS,
+  INITIAL_ASSESSMENT_RECORDS,
+  INITIAL_TEACHER_UPLOAD_ASSIGNMENTS,
   INITIAL_PARENT_COMMUNICATIONS,
   INITIAL_EXAM_TIMETABLE,
   INITIAL_SANATORIUM_RECORDS,
@@ -203,6 +208,8 @@ const KEYS = {
   LESSON_IMAGES: 'edusmart_lesson_images_v1',
   E_LINKS: 'edusmart_e_links_v1',
   EVENT_TICKETS: 'edusmart_event_tickets_v1',
+  ASSESSMENT_RECORDS: 'edusmart_assessment_records_v1',
+  TEACHER_UPLOAD_ASSIGNMENTS: 'edusmart_teacher_upload_assignments_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -1301,20 +1308,83 @@ export const Storage = {
 
   // School Calendar Management
   getCalendarEvents(): SchoolCalendarEvent[] {
-    return getFromStorage<SchoolCalendarEvent[]>(KEYS.CALENDAR_EVENTS, INITIAL_CALENDAR_EVENTS);
+    const rawEvents = getFromStorage<SchoolCalendarEvent[]>(KEYS.CALENDAR_EVENTS, INITIAL_CALENDAR_EVENTS);
+    // Enforce business rule: Event tickets apply EXCLUSIVELY to co-curricular events.
+    // Strip ticketing data from any academic or other non-co-curricular events.
+    return rawEvents.map(evt => {
+      if (evt.category !== 'co_curricular') {
+        const {
+          ticketType,
+          ticketPrice,
+          ticketCurrency,
+          ticketPerks,
+          totalCapacity,
+          ticketsSold,
+          isTicketedEvent,
+          ...cleaned
+        } = evt;
+        return {
+          ...cleaned,
+          isTicketedEvent: false
+        };
+      }
+      return {
+        ...evt,
+        isTicketedEvent: true
+      };
+    });
   },
 
   saveCalendarEvents(events: SchoolCalendarEvent[]): void {
-    setToStorage(KEYS.CALENDAR_EVENTS, events);
-    window.dispatchEvent(new CustomEvent('calendar-events-updated', { detail: events }));
+    // Sanitize before saving: only co-curricular events can have ticketing properties
+    const sanitizedEvents = events.map(evt => {
+      if (evt.category !== 'co_curricular') {
+        const {
+          ticketType,
+          ticketPrice,
+          ticketCurrency,
+          ticketPerks,
+          totalCapacity,
+          ticketsSold,
+          isTicketedEvent,
+          ...cleaned
+        } = evt;
+        return {
+          ...cleaned,
+          isTicketedEvent: false
+        };
+      }
+      return {
+        ...evt,
+        isTicketedEvent: true
+      };
+    });
+    setToStorage(KEYS.CALENDAR_EVENTS, sanitizedEvents);
+    window.dispatchEvent(new CustomEvent('calendar-events-updated', { detail: sanitizedEvents }));
   },
 
   addCalendarEvent(event: Omit<SchoolCalendarEvent, 'id'>): SchoolCalendarEvent {
     const events = this.getCalendarEvents();
+    const isCoCurricular = event.category === 'co_curricular';
     const newEvent: SchoolCalendarEvent = {
       ...event,
-      id: `cal-${Date.now()}`
+      id: `cal-${Date.now()}`,
+      isTicketedEvent: isCoCurricular,
+      ticketType: isCoCurricular ? event.ticketType : undefined,
+      ticketPrice: isCoCurricular && event.ticketType === 'paid' ? Number(event.ticketPrice) : undefined,
+      ticketCurrency: isCoCurricular ? event.ticketCurrency : undefined,
+      totalCapacity: isCoCurricular ? (Number(event.totalCapacity) || 0) : undefined,
+      ticketPerks: isCoCurricular ? event.ticketPerks : undefined,
+      ticketsSold: isCoCurricular ? (event.ticketsSold || 0) : undefined
     };
+    if (!isCoCurricular) {
+      delete (newEvent as any).ticketType;
+      delete (newEvent as any).ticketPrice;
+      delete (newEvent as any).ticketCurrency;
+      delete (newEvent as any).ticketPerks;
+      delete (newEvent as any).totalCapacity;
+      delete (newEvent as any).ticketsSold;
+    }
     events.unshift(newEvent);
     this.saveCalendarEvents(events);
     return newEvent;
@@ -1324,7 +1394,29 @@ export const Storage = {
     const events = this.getCalendarEvents();
     const index = events.findIndex(e => e.id === id);
     if (index === -1) return null;
-    events[index] = { ...events[index], ...updates, updatedAt: new Date().toISOString().split('T')[0] };
+    const existing = events[index];
+    const category = updates.category !== undefined ? updates.category : existing.category;
+    const isCoCurricular = category === 'co_curricular';
+
+    let merged: SchoolCalendarEvent = {
+      ...existing,
+      ...updates,
+      category,
+      isTicketedEvent: isCoCurricular,
+      updatedAt: new Date().toISOString().split('T')[0]
+    };
+
+    if (!isCoCurricular) {
+      delete (merged as any).ticketType;
+      delete (merged as any).ticketPrice;
+      delete (merged as any).ticketCurrency;
+      delete (merged as any).ticketPerks;
+      delete (merged as any).totalCapacity;
+      delete (merged as any).ticketsSold;
+      merged.isTicketedEvent = false;
+    }
+
+    events[index] = merged;
     this.saveCalendarEvents(events);
     return events[index];
   },
@@ -1337,7 +1429,7 @@ export const Storage = {
     return true;
   },
 
-  // Event Ticketing & Jotform Purchase Management
+  // Event Ticketing & Pass Purchase Management
   getEventTicketPurchases(): EventTicketPurchase[] {
     return getFromStorage<EventTicketPurchase[]>(KEYS.EVENT_TICKETS, INITIAL_EVENT_TICKETS);
   },
@@ -1348,6 +1440,12 @@ export const Storage = {
   },
 
   bookEventTicket(ticketData: Omit<EventTicketPurchase, 'id' | 'ticketCode' | 'purchasedAt'>): EventTicketPurchase {
+    const events = this.getCalendarEvents();
+    const targetEvent = events.find(e => e.id === ticketData.eventId);
+    if (targetEvent && targetEvent.category !== 'co_curricular') {
+      throw new Error('Event ticketing passes are exclusively for Co-Curricular events. Academic schedules do not require tickets.');
+    }
+
     const tickets = this.getEventTicketPurchases();
     const randomCode = Math.floor(1000 + Math.random() * 9000);
     const newTicket: EventTicketPurchase = {
@@ -1360,10 +1458,9 @@ export const Storage = {
     tickets.unshift(newTicket);
     this.saveEventTicketPurchases(tickets);
 
-    // Also increment ticketsSold on the calendar event
-    const events = this.getCalendarEvents();
+    // Also increment ticketsSold on the calendar event (if co-curricular)
     const eventIndex = events.findIndex(e => e.id === ticketData.eventId);
-    if (eventIndex !== -1) {
+    if (eventIndex !== -1 && events[eventIndex].category === 'co_curricular') {
       const currentSold = events[eventIndex].ticketsSold || 0;
       events[eventIndex] = {
         ...events[eventIndex],
@@ -1373,6 +1470,50 @@ export const Storage = {
     }
 
     return newTicket;
+  },
+
+  updateEventTicketQuantity(ticketId: string, newQuantity: number): EventTicketPurchase | null {
+    if (newQuantity <= 0) {
+      throw new Error('Ticket quantity must be at least 1.');
+    }
+
+    const tickets = this.getEventTicketPurchases();
+    const ticketIdx = tickets.findIndex(t => t.id === ticketId);
+    if (ticketIdx === -1) return null;
+
+    const ticket = tickets[ticketIdx];
+    const events = this.getCalendarEvents();
+    const eventIdx = events.findIndex(e => e.id === ticket.eventId);
+    const targetEvent = eventIdx !== -1 ? events[eventIdx] : null;
+
+    const delta = newQuantity - ticket.quantity;
+
+    if (targetEvent) {
+      const currentSold = targetEvent.ticketsSold || 0;
+      const totalCapacity = targetEvent.totalCapacity || 400;
+      if (delta > 0 && currentSold + delta > totalCapacity) {
+        const available = Math.max(0, totalCapacity - currentSold);
+        throw new Error(`Cannot add ${delta} ticket(s). Only ${available} seat(s) remaining for capacity.`);
+      }
+
+      // Update event ticketsSold
+      events[eventIdx] = {
+        ...targetEvent,
+        ticketsSold: Math.max(0, currentSold + delta)
+      };
+      this.saveCalendarEvents(events);
+    }
+
+    // Update ticket record
+    const updatedTicket: EventTicketPurchase = {
+      ...ticket,
+      quantity: newQuantity,
+      totalAmount: ticket.unitPrice * newQuantity
+    };
+
+    tickets[ticketIdx] = updatedTicket;
+    this.saveEventTicketPurchases(tickets);
+    return updatedTicket;
   },
 
   deleteEventTicket(id: string): boolean {
@@ -2003,6 +2144,110 @@ export const Storage = {
     const verifs = this.getDropoffVerifications();
     const updated = verifs.map(v => v.id === id ? { ...v, ...updates } : v);
     this.saveDropoffVerifications(updated);
+  },
+
+  // ========================================================
+  // CBC ASSESSMENT RECORDS & WHOLE GRADE RESULTS
+  // ========================================================
+  getAssessmentRecords(filter?: { grade?: GradeLevel; term?: 1 | 2 | 3; cycle?: AssessmentCycle; studentId?: string; isPublished?: boolean }): StudentAssessmentRecord[] {
+    let records = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    if (!filter) return records;
+    if (filter.grade !== undefined) records = records.filter(r => r.grade === filter.grade);
+    if (filter.term !== undefined) records = records.filter(r => r.term === filter.term);
+    if (filter.cycle !== undefined) records = records.filter(r => r.assessmentCycle === filter.cycle);
+    if (filter.studentId !== undefined) records = records.filter(r => r.studentId === filter.studentId);
+    if (filter.isPublished !== undefined) records = records.filter(r => r.deanPublished === filter.isPublished);
+    return records;
+  },
+
+  saveAssessmentRecord(record: StudentAssessmentRecord): void {
+    const records = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const index = records.findIndex(r => r.id === record.id);
+    if (index >= 0) {
+      records[index] = record;
+    } else {
+      records.unshift(record);
+    }
+    setToStorage(KEYS.ASSESSMENT_RECORDS, records);
+    window.dispatchEvent(new CustomEvent('assessment-records-updated', { detail: records }));
+  },
+
+  saveGradeAssessmentRecords(recordsToSave: StudentAssessmentRecord[]): void {
+    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    for (const rec of recordsToSave) {
+      const idx = allRecords.findIndex(r => r.id === rec.id || (r.studentId === rec.studentId && r.grade === rec.grade && r.term === rec.term && r.assessmentCycle === rec.assessmentCycle));
+      if (idx >= 0) {
+        allRecords[idx] = rec;
+      } else {
+        allRecords.unshift(rec);
+      }
+    }
+    setToStorage(KEYS.ASSESSMENT_RECORDS, allRecords);
+    window.dispatchEvent(new CustomEvent('assessment-records-updated', { detail: allRecords }));
+  },
+
+  publishGradeAssessments(grade: GradeLevel, cycle: AssessmentCycle, term: 1 | 2 | 3, published: boolean, publishedBy: string): void {
+    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const updated = allRecords.map(r => {
+      if (r.grade === grade && r.assessmentCycle === cycle && r.term === term) {
+        return {
+          ...r,
+          deanPublished: published,
+          publishedAt: published ? new Date().toISOString().replace('T', ' ').slice(0, 16) : undefined,
+          publishedBy: published ? publishedBy : undefined
+        };
+      }
+      return r;
+    });
+    setToStorage(KEYS.ASSESSMENT_RECORDS, updated);
+    window.dispatchEvent(new CustomEvent('assessment-records-updated', { detail: updated }));
+  },
+
+  deleteAssessmentRecord(id: string): void {
+    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const filtered = allRecords.filter(r => r.id !== id);
+    setToStorage(KEYS.ASSESSMENT_RECORDS, filtered);
+    window.dispatchEvent(new CustomEvent('assessment-records-updated', { detail: filtered }));
+  },
+
+  // ========================================================
+  // TEACHER RESULT UPLOAD ASSIGNMENTS
+  // ========================================================
+  getTeacherUploadAssignments(teacherId?: string): TeacherResultUploadAssignment[] {
+    const assignments = getFromStorage<TeacherResultUploadAssignment[]>(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, INITIAL_TEACHER_UPLOAD_ASSIGNMENTS);
+    if (teacherId) {
+      return assignments.filter(a => a.teacherId === teacherId);
+    }
+    return assignments;
+  },
+
+  saveTeacherUploadAssignment(assignment: TeacherResultUploadAssignment): void {
+    const assignments = this.getTeacherUploadAssignments();
+    const idx = assignments.findIndex(a => a.id === assignment.id);
+    if (idx >= 0) {
+      assignments[idx] = assignment;
+    } else {
+      assignments.unshift(assignment);
+    }
+    setToStorage(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, assignments);
+    window.dispatchEvent(new CustomEvent('teacher-assignments-updated', { detail: assignments }));
+  },
+
+  updateTeacherUploadAssignment(id: string, updates: Partial<TeacherResultUploadAssignment>): void {
+    const assignments = this.getTeacherUploadAssignments();
+    const idx = assignments.findIndex(a => a.id === id);
+    if (idx >= 0) {
+      assignments[idx] = { ...assignments[idx], ...updates };
+      setToStorage(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, assignments);
+      window.dispatchEvent(new CustomEvent('teacher-assignments-updated', { detail: assignments }));
+    }
+  },
+
+  deleteTeacherUploadAssignment(id: string): void {
+    const assignments = this.getTeacherUploadAssignments();
+    const filtered = assignments.filter(a => a.id !== id);
+    setToStorage(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, filtered);
+    window.dispatchEvent(new CustomEvent('teacher-assignments-updated', { detail: filtered }));
   }
 };
 

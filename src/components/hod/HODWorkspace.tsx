@@ -33,10 +33,12 @@ import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
+import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { 
   HeartPulse,
   Bus,
-  Trophy
+  Trophy,
+  Menu
 } from 'lucide-react';
 
 interface HODWorkspaceProps {
@@ -55,6 +57,7 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
 
   type HODTab = 'syllabus' | 'work_logs' | 'quiz_audit' | 'subject_analytics' | 'curriculum_resources' | 'sanatorium' | 'transport' | 'cocurricular' | 'reporting_hub';
   const [activeTab, setActiveTab] = useState<HODTab>('syllabus');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
   const [selectedSubject, setSelectedSubject] = useState<SubjectName>(departmentSubjects[0]);
@@ -92,215 +95,89 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
     u.assignedSubjects?.some(s => departmentSubjects.includes(s))
   );
 
+  const sidebarGroups: WorkspaceSidebarGroup<HODTab>[] = [
+    {
+      title: 'CURRICULUM & SYLLABUS',
+      items: [
+        { id: 'syllabus', label: 'Syllabus & Strands', icon: BookOpen },
+        { id: 'curriculum_resources', label: 'Curriculum Resources', icon: ShieldCheck, badge: `${deptNotes.length + deptAudios.length + deptVideos.length}` },
+        { id: 'quiz_audit', label: 'Topical Quizzes & Tests', icon: CheckSquare, badge: `${deptQuizzes.length}` }
+      ]
+    },
+    {
+      title: 'SUPERVISION & AUDIT',
+      items: [
+        { id: 'work_logs', label: 'Teacher Work Entries', icon: FileCheck2, badge: `${deptWorkLogs.length}` },
+        { id: 'subject_analytics', label: 'Subject Performance Mean', icon: BarChart3 },
+        { id: 'reporting_hub', label: 'Department Reporting Hub', icon: FileText }
+      ]
+    },
+    {
+      title: 'CAMPUS SERVICES',
+      items: [
+        { id: 'sanatorium', label: 'Sanatorium & Health', icon: HeartPulse },
+        { id: 'transport', label: 'School Transport Fleet', icon: Bus },
+        { id: 'cocurricular', label: 'Co-Curricular & Sports', icon: Trophy }
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* HOD Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400 tracking-wider uppercase">
-              <span>Departmental Leadership Console</span>
-              <span aria-hidden="true">·</span>
-              <span>Head of Department</span>
-            </div>
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {deptName} Department
-          </h1>
-          <p className="text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Supervise curriculum delivery, audit teacher work entry registers, review topical quizzes, and monitor learning area performance across primary and junior school grades.
-          </p>
+
+          <div>
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>{deptName} Department</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                HOD Leadership
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 hidden sm:block">
+              Curriculum delivery, teacher work entries, topical test bank & learning area supervision
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white/10 backdrop-blur p-4 rounded-xl border border-white/20 shrink-0 text-xs">
-          <div className="text-[10px] uppercase font-bold text-indigo-300 mb-1">HOD Lead</div>
-          <div className="font-extrabold text-base">{currentUser.name}</div>
-          <div className="text-slate-300 font-mono text-[11px]">{currentUser.tscNumber || 'TSC/31204/ED'}</div>
-          <div className="mt-2 pt-2 border-t border-white/20 flex gap-4 text-[11px]">
-            <span>{departmentSubjects.length} Learning Areas</span>
-            <span>·</span>
-            <span>{deptTeachers.length} Teaching Staff</span>
-          </div>
+        <div className="text-right text-xs hidden md:block">
+          <div className="font-bold text-white">{currentUser.name}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/31204/ED'}</div>
         </div>
-      </div>
+      </header>
 
-      {/* Primary Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <button
-          onClick={() => setActiveTab('syllabus')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'syllabus'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-indigo-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-indigo-100 text-indigo-800">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">1. Syllabus</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'syllabus' ? 'text-indigo-200' : 'text-slate-500'}`}>
-              CBC milestones
-            </div>
-          </div>
-        </button>
+      {/* Main Workspace Layout with Sidebar Tree */}
+      <div className="flex-1 flex w-full">
+        <WorkspaceSidebar<HODTab>
+          portalTitle={`${deptName.toUpperCase()} DEPT`}
+          portalSubtitle="Head of Department"
+          portalIcon="📐"
+          portalBadge="Academic"
+          groups={sidebarGroups}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          themeColor="indigo"
+          footerNote={`${departmentSubjects.length} Learning Areas`}
+          statusText="● Active"
+        />
 
-        <button
-          onClick={() => setActiveTab('work_logs')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'work_logs'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-indigo-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-emerald-100 text-emerald-800">
-            <FileCheck2 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">2. Work Entry</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'work_logs' ? 'text-emerald-200' : 'text-slate-500'}`}>
-              Lesson logs ({deptWorkLogs.length})
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('quiz_audit')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'quiz_audit'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-indigo-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-amber-100 text-amber-800">
-            <CheckSquare className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">3. Test Bank</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'quiz_audit' ? 'text-amber-200' : 'text-slate-500'}`}>
-              Quizzes ({deptQuizzes.length})
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('curriculum_resources')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'curriculum_resources'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-indigo-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-cyan-100 text-cyan-800">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">4. Curriculum Dev</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'curriculum_resources' ? 'text-cyan-200' : 'text-slate-500'}`}>
-              Controlled access ({deptNotes.length + deptAudios.length + deptVideos.length})
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('subject_analytics')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'subject_analytics'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-indigo-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
-            <BarChart3 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">5. Analytics</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'subject_analytics' ? 'text-purple-200' : 'text-slate-500'}`}>
-              Subject means
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reporting_hub')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'reporting_hub'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-indigo-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-emerald-100 text-emerald-800">
-            <FileText className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">6. Reporting Hub</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'reporting_hub' ? 'text-emerald-200' : 'text-slate-500'}`}>
-              Periodic dossiers
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sanatorium')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'sanatorium'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-rose-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-rose-100 text-rose-800">
-            <HeartPulse className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">7. Sanatorium</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'sanatorium' ? 'text-rose-200' : 'text-slate-500'}`}>
-              Health logs
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transport')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'transport'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-amber-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-amber-100 text-amber-800">
-            <Bus className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">8. Transport</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'transport' ? 'text-amber-200' : 'text-slate-500'}`}>
-              Fleet & routes
-            </div>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cocurricular')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'cocurricular'
-              ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-2 ring-purple-500'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2 bg-purple-100 text-purple-800">
-            <Trophy className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">9. Co-Curricular</div>
-            <div className={`text-[10px] mt-0.5 ${activeTab === 'cocurricular' ? 'text-purple-200' : 'text-slate-500'}`}>
-              Activities & clubs
-            </div>
-          </div>
-        </button>
-      </div>
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
       {/* ========================================================
           TAB 1: SYLLABUS COVERAGE & TOPICS
@@ -659,6 +536,8 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
       )}
+        </main>
+      </div>
     </div>
   );
 };

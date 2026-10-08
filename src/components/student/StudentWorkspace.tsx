@@ -63,7 +63,10 @@ import {
   Layers,
   FileSpreadsheet,
   Globe,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Menu,
+  X,
+  ChevronLeft
 } from 'lucide-react';
 
 interface StudentWorkspaceProps {
@@ -92,6 +95,8 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('resources');
   const [showSafeSearch, setShowSafeSearch] = useState(false);
   const [reportViewType, setReportViewType] = useState<'hub' | 'periodic' | 'termly'>('hub');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Handle direct tab navigation from notification items
   React.useEffect(() => {
@@ -211,279 +216,218 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
     }, 1800);
   };
 
+  // Clear Operational and Academic Groupings for Library-Style Collapsible Sidebar
+  const sidebarGroups = [
+    {
+      title: 'ACADEMIC & CURRICULUM',
+      items: [
+        { id: 'resources' as WorkspaceTab, label: '1. E-Resources & CBC Notes', icon: BookOpen, badge: `${gradeTopics.length} Topics` },
+        { id: 'assignments' as WorkspaceTab, label: '2. Homework Assignments', icon: FileText, badge: gradeAssignments.length > 0 ? `${gradeAssignments.length}` : undefined, badgeColor: 'bg-emerald-600' },
+        { id: 'quiz_results' as WorkspaceTab, label: '3. CBC Topical Quizzes', icon: CheckSquare, badge: studentAttempts.length > 0 ? `${studentAttempts.length}` : undefined },
+        { id: 'reports' as WorkspaceTab, label: '4. Academic Reports & Cards', icon: BarChart3 },
+        { id: 'portfolio' as WorkspaceTab, label: '5. E-Portfolio & Projects', icon: FolderGit2 },
+        { id: 'timetable' as WorkspaceTab, label: '6. Class Timetable', icon: Calendar }
+      ]
+    },
+    {
+      title: 'OPERATIONAL & COLLABORATION',
+      items: [
+        { id: 'announcements' as WorkspaceTab, label: '7. Announcements & Notices', icon: Bell, badge: gradeAnnouncements.length > 0 ? `${gradeAnnouncements.length}` : undefined, badgeColor: 'bg-rose-600' },
+        { id: 'virtual_class' as WorkspaceTab, label: '8. Virtual Class (Meet Live)', icon: Video },
+        { id: 'grade_chats' as WorkspaceTab, label: '9. Stream & Teacher Chats', icon: MessageSquare },
+        { id: 'badges' as WorkspaceTab, label: '10. Badges & XP Matrix', icon: Trophy, badge: `${learnerTotalXP} XP`, badgeColor: 'bg-amber-600' },
+        { id: 'browser' as WorkspaceTab, label: '11. Safe Browser (AI Guarded)', icon: Globe },
+        { id: 'integrations' as WorkspaceTab, label: '12. External Learning Hubs', icon: Layers }
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* Student Banner Header */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 hidden sm:flex items-center justify-center">
-            <EduSmartGadsaLogo variant="horizontal" size="sm" />
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors hidden lg:flex items-center justify-center cursor-pointer"
+            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white font-bold text-xl flex sm:hidden items-center justify-center shadow-xs shrink-0">
-            {currentUser.name.charAt(0)}
-          </div>
+
           <div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
               <span>CBC Learner Portal</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono text-slate-600">{currentUser.admissionNumber || 'ADM/2026/0412'}</span>
-              <span aria-hidden="true">·</span>
-              <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Single-Grade Enrolled</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Grade {studentGrade} {studentStream}
               </span>
-            </div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              {currentUser.name}
             </h1>
-            <div className="text-xs text-slate-600 mt-0.5">
-              Grade <strong className="text-slate-900">{studentGrade}</strong> · Stream: <strong className="text-emerald-700 font-bold">{studentStream}</strong> · 2026 Academic Session
-            </div>
+            <p className="text-[11px] text-slate-400 hidden sm:block font-mono">
+              ADM: {currentUser.admissionNumber || 'ADM/2026/0412'} · Single-Grade Curriculum Locked
+            </p>
           </div>
         </div>
 
-        {/* Header Tools: Safe Browser, Safe Search & XP Badges */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        {/* Quick Top Tools */}
+        <div className="flex items-center gap-2">
           {/* Safe Browser Button */}
           <button
             onClick={() => setActiveTab('browser')}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold shadow-xs transition-all"
-            title="Safe Browser with AI-powered content filtration for Grades 1-9"
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'browser'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-slate-800 hover:bg-slate-700 text-emerald-300'
+            }`}
+            title="Safe Browser with AI content filtration"
           >
-            <ShieldCheck className="w-4 h-4 text-emerald-300" />
-            <span>Safe Browser (AI Filtered)</span>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Safe Browser</span>
           </button>
 
           {/* Safe Search Button */}
           <button
             onClick={() => setShowSafeSearch(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-all"
-            title="Safe Search with content filtration & curriculum guidance"
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-800 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Safe Search with content filtration"
           >
             <Search className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Safe Curriculum Search</span>
+            <span className="hidden sm:inline">Safe Search</span>
           </button>
 
           {/* XP & Badges Capsule */}
           <button
             onClick={() => setActiveTab('badges')}
-            className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 text-xs text-amber-900 transition-colors"
+            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer"
             title="View Badges & Certification XP"
           >
-            <Trophy className="w-4 h-4 text-amber-600 shrink-0" />
-            <div className="text-left leading-tight">
-              <div className="font-extrabold font-mono text-amber-800">{learnerTotalXP} XP</div>
-              <div className="text-[10px] text-amber-700">{unlockedBadgesCount} Badges Unlocked</div>
-            </div>
+            <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>{learnerTotalXP} XP</span>
           </button>
-
-          {/* Security badge */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900">
-            <Lock className="w-4 h-4 text-emerald-700 shrink-0" />
-            <div>
-              <div className="font-bold">Grade {studentGrade} Locked</div>
-              <div className="text-[10px] text-emerald-700">Strictly single-grade access</div>
-            </div>
-          </div>
         </div>
-      </div>
+      </header>
 
-      {/* The 6 Main Workspace Buttons requested in prompt (+ Timetable & Assignments shortcuts) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* 1. Resources */}
-        <button
-          onClick={() => setActiveTab('resources')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'resources'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-emerald-100 text-emerald-800">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">1. E-Resources & E-Links</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'resources' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              Notes, Video, Audio, Diagrams & Links
+      {/* Main Workspace Layout with Library-Style Collapsible Sidebar */}
+      <div className="flex-1 flex w-full">
+        {/* Mobile Backdrop */}
+        {isMobileSidebarOpen && (
+          <div 
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 lg:hidden"
+          />
+        )}
+
+        {/* Collapsible Left Sidebar */}
+        <aside className={`
+          fixed lg:static top-0 bottom-0 left-0 z-40
+          ${isSidebarCollapsed ? 'w-20 min-w-20 max-w-20' : 'w-64 min-w-64 max-w-64'}
+          bg-slate-900 border-r border-slate-800 text-slate-300
+          flex flex-col shrink-0 transition-all duration-200 ease-in-out
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}>
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-slate-800/80 bg-slate-950/70 flex items-center justify-between">
+            <div className={`flex items-center gap-2.5 truncate ${isSidebarCollapsed ? 'justify-center w-full' : ''}`}>
+              <span className="text-xl shrink-0">🎒</span>
+              {!isSidebarCollapsed && (
+                <div className="truncate">
+                  <div className="text-xs font-black text-white uppercase tracking-wider truncate">
+                    STUDENT PORTAL
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono truncate">
+                    Grade {studentGrade} {studentStream}
+                  </div>
+                </div>
+              )}
             </div>
+            {!isSidebarCollapsed && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
+                Active
+              </span>
+            )}
           </div>
-        </button>
 
-        {/* 2. Announcements */}
-        <button
-          onClick={() => setActiveTab('announcements')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'announcements'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-blue-100 text-blue-800">
-            <Bell className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">2. Announcements</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'announcements' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              Reminders & Notices
-            </div>
-          </div>
-        </button>
+          {/* Scrollable Groups */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-5 text-xs">
+            {sidebarGroups.map((group, gIdx) => (
+              <div key={gIdx} className="space-y-1">
+                {!isSidebarCollapsed ? (
+                  <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    {group.title}
+                  </div>
+                ) : (
+                  <div className="border-t border-slate-800/80 my-2" />
+                )}
 
-        {/* 3. Reports */}
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'reports'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-purple-100 text-purple-800">
-            <BarChart3 className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">3. Reports</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'reports' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              Subject & Termly Cards
-            </div>
-          </div>
-        </button>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
 
-        {/* 4. Quiz Results */}
-        <button
-          onClick={() => setActiveTab('quiz_results')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'quiz_results'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-amber-100 text-amber-800">
-            <CheckSquare className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">4. Quiz Results</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'quiz_results' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              Scores & Auto-Marking
-            </div>
-          </div>
-        </button>
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileSidebarOpen(false);
+                        }}
+                        title={isSidebarCollapsed ? item.label : undefined}
+                        className={`
+                          w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'}
+                          rounded-xl font-bold transition-all text-left cursor-pointer
+                          ${isActive 
+                            ? 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white shadow-xs' 
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }
+                        `}
+                      >
+                        <div className={`flex items-center gap-2.5 ${isSidebarCollapsed ? 'justify-center' : 'truncate'}`}>
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                          {!isSidebarCollapsed && (
+                            <span className="truncate">{item.label}</span>
+                          )}
+                        </div>
 
-        {/* 5. Virtual Class */}
-        <button
-          onClick={() => setActiveTab('virtual_class')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'virtual_class'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-rose-100 text-rose-800">
-            <Video className="w-4 h-4" />
+                        {!isSidebarCollapsed && item.badge !== undefined && (
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black text-white shrink-0 ${item.badgeColor || 'bg-slate-700'}`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">5. Virtual Class</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'virtual_class' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              Google Meet Live
-            </div>
-          </div>
-        </button>
 
-        {/* 6. Grade Chats */}
-        <button
-          onClick={() => setActiveTab('grade_chats')}
-          className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between ${
-            activeTab === 'grade_chats'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-400'
-              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3 bg-teal-100 text-teal-800">
-            <MessageSquare className="w-4 h-4" />
+          {/* Bottom Stamp */}
+          <div className="p-3 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
+            {!isSidebarCollapsed ? (
+              <>
+                <span className="truncate font-mono">{currentUser.admissionNumber || 'ADM/2026'}</span>
+                <span className="text-emerald-400 font-bold shrink-0">● Enrolled</span>
+              </>
+            ) : (
+              <span className="text-emerald-400 font-bold mx-auto">●</span>
+            )}
           </div>
-          <div>
-            <div className="font-bold text-xs sm:text-sm">6. Grade Chats</div>
-            <div className={`text-[10px] sm:text-[11px] mt-0.5 ${activeTab === 'grade_chats' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              Stream & Teacher Chat
-            </div>
-          </div>
-        </button>
-      </div>
+        </aside>
 
-      {/* Secondary quick tabs: Timetable, Assignments, E-Portfolio, Badges, Integrations */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-2">
-          Additional Tools:
-        </span>
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'timetable'
-              ? 'bg-slate-900 text-white'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Class Timetable ({studentStream})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('assignments')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'assignments'
-              ? 'bg-slate-900 text-white'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5" />
-          <span>Assignments ({gradeAssignments.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('portfolio')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'portfolio'
-              ? 'bg-indigo-700 text-white shadow-xs'
-              : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-          }`}
-        >
-          <FolderGit2 className="w-3.5 h-3.5" />
-          <span>E-Portfolio & Projects</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('badges')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'badges'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
-          }`}
-        >
-          <Trophy className="w-3.5 h-3.5 text-amber-500" />
-          <span>Badges & Certification XP</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('integrations')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'integrations'
-              ? 'bg-emerald-700 text-white shadow-xs'
-              : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>External Integrations Hub</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('browser')}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'browser'
-              ? 'bg-emerald-800 text-white shadow-xs'
-              : 'bg-emerald-100/70 text-emerald-900 hover:bg-emerald-200/80 border border-emerald-300'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>🛡️ Safe Browser (AI Guarded)</span>
-        </button>
-      </div>
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
       {/* ========================================================
           ACHIEVEMENT SYSTEM: DIGITAL BADGES SHELF WIDGET
@@ -1691,6 +1635,8 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           </div>
         </div>
       )}
+        </main>
+      </div>
     </div>
   );
 };

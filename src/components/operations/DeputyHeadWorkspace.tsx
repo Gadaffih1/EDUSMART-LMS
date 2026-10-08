@@ -49,11 +49,16 @@ import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
+import { ResultUploadManager } from '../academic/ResultUploadManager';
+import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { 
   Bus,
   Trophy,
   CalendarDays,
-  Utensils
+  Utensils,
+  Menu,
+  Upload,
+  ChevronRight
 } from 'lucide-react';
 
 interface DeputyHeadWorkspaceProps {
@@ -75,8 +80,9 @@ interface DisciplineCase {
 }
 
 export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ currentUser }) => {
-  type DeputyTab = 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'reporting_hub' | 'events';
+  type DeputyTab = 'results_upload' | 'operations' | 'discipline' | 'online_discipline' | 'staff_duty' | 'timetable' | 'work_ledger' | 'sanatorium' | 'lunch_register' | 'transport' | 'cocurricular' | 'reporting_hub' | 'events';
   const [activeTab, setActiveTab] = useState<DeputyTab>('operations');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Gate passes from storage
   const [gatePasses, setGatePasses] = useState<GateExitPass[]>(() => Storage.getGatePasses());
@@ -290,199 +296,121 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
     setDispAction('');
   };
 
+  const sidebarGroups: WorkspaceSidebarGroup<DeputyTab>[] = [
+    {
+      title: 'OPERATIONS & GATE PASSES',
+      items: [
+        { id: 'operations', label: 'Gate Security & Operations', icon: ShieldCheck, badge: gatePasses.length },
+        { id: 'staff_duty', label: 'Staff Duty Rosters', icon: Calendar, badge: dutyRosters.length }
+      ]
+    },
+    {
+      title: 'DISCIPLINE & WELFARE',
+      items: [
+        { id: 'discipline', label: 'Learner Discipline & Conduct', icon: BadgeAlert, badge: disciplineCases.length, badgeColor: 'bg-amber-600' },
+        { id: 'online_discipline', label: 'Online Behavior & Filtration', icon: ShieldAlert, badge: searchLogs.length, badgeColor: 'bg-rose-600' }
+      ]
+    },
+    {
+      title: 'ACADEMIC & CBC ASSESSMENTS',
+      items: [
+        { id: 'results_upload', label: 'CBC Assessment Results Hub', icon: Upload, badge: 'Upload / Assign', badgeColor: 'bg-emerald-600' },
+        { id: 'work_ledger', label: 'Staff Work Entry Audit', icon: FileCheck2, badge: workLogs.length },
+        { id: 'timetable', label: 'Curriculum Master Timetable', icon: CalendarDays },
+        { id: 'reporting_hub', label: 'Institutional Reporting Hub', icon: BarChart3 }
+      ]
+    },
+    {
+      title: 'CAMPUS SERVICES',
+      items: [
+        { id: 'sanatorium', label: 'Sanatorium & Clinic', icon: HeartPulse },
+        { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
+        { id: 'transport', label: 'Transport & Fleet', icon: Bus },
+        { id: 'cocurricular', label: 'Co-Curriculum & Sports', icon: Trophy },
+        { id: 'events', label: 'School Events & Tickets', icon: CalendarDays, badge: 'Post', badgeColor: 'bg-indigo-500' }
+      ]
+    }
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-blue-400 tracking-wider uppercase">
-              <span>Operations, Discipline & Staff Supervision</span>
-              <span aria-hidden="true">·</span>
-              <span>Executive Directorate</span>
-            </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Deputy Head Teacher Workspace
-          </h1>
-          <p className="text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            Direct operational oversight of campus security, student gate pass authorizations, learner discipline and counseling cases, weekly staff duty rosters, and teacher lesson work entry audits.
-          </p>
-        </div>
 
-        <div className="bg-white/10 backdrop-blur p-4 rounded-xl border border-white/20 shrink-0 text-xs">
-          <div className="text-[10px] uppercase font-bold text-blue-300 mb-1">Office of the Deputy Head</div>
-          <div className="font-extrabold text-base">{currentUser.name}</div>
-          <div className="text-slate-300 font-mono text-[11px]">{currentUser.tscNumber || 'TSC/23491/ED'}</div>
-          <div className="mt-2 pt-2 border-t border-white/20 flex gap-3 text-[11px]">
-            <span className="text-emerald-300 font-bold">{gatePasses.filter(p => p.status === 'active').length} Active Passes</span>
-            <span>·</span>
-            <span className="text-amber-300 font-bold">{disciplineCases.filter(c => c.status !== 'Resolved').length} Active Cases</span>
+          <div>
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>Deputy Head Teacher Workspace</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                Executive Directorate
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 hidden sm:block">
+              Operations, Discipline, Duty Rosters & CBC Grade Result Upload Oversight
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Active Gate Passes</div>
-          <div className="text-2xl font-extrabold font-mono text-amber-600 mt-1">
-            {gatePasses.filter(p => p.status === 'active' || p.status === 'departed').length}
+        <div className="flex items-center gap-3">
+          {/* Quick Result Upload Action Button */}
+          <button
+            onClick={() => setActiveTab('results_upload')}
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Upload Grade Results</span>
+            <span className="sm:hidden">Upload Results</span>
+          </button>
+
+          <div className="text-right text-xs hidden md:block">
+            <div className="font-bold text-white">{currentUser.name}</div>
+            <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/23491/ED'}</div>
           </div>
-          <div className="text-xs text-slate-500 mt-0.5">Students currently off-campus</div>
         </div>
+      </header>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Discipline Incidents</div>
-          <div className="text-2xl font-extrabold font-mono text-slate-900 mt-1">
-            {disciplineCases.length}
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5">{disciplineCases.filter(c => c.status === 'Open').length} pending action</div>
-        </div>
+      {/* Main Workspace Layout with Sidebar Tree */}
+      <div className="flex-1 flex w-full">
+        <WorkspaceSidebar<DeputyTab>
+          portalTitle="DEPUTY HEAD"
+          portalSubtitle="Operations & Security"
+          portalIcon="🛡️"
+          portalBadge="Executive"
+          groups={sidebarGroups}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          themeColor="blue"
+          footerNote="Safety & CBC Integrity"
+          statusText="● Active Duty"
+        />
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Staff Duty Week</div>
-          <div className="text-2xl font-extrabold font-mono text-blue-700 mt-1">
-            Week 5
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5">Lead: Mr. Kiprono</div>
-        </div>
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-[10px] uppercase font-bold text-slate-500">Work Logs Submitted</div>
-          <div className="text-2xl font-extrabold font-mono text-emerald-700 mt-1">
-            {workLogs.length}
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5">100% staff compliance</div>
-        </div>
-      </div>
-
-      {/* Navigation Sub-Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <button
-          onClick={() => setActiveTab('operations')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'operations' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Gate Security & Operations ({gatePasses.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('discipline')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'discipline' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BadgeAlert className="w-4 h-4 text-amber-400" />
-          <span>Learner Discipline & Conduct ({disciplineCases.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('online_discipline')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'online_discipline' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4 text-rose-400" />
-          <span>Online Behavior & Search Filtration ({searchLogs.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('staff_duty')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'staff_duty' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Calendar className="w-4 h-4 text-blue-400" />
-          <span>Staff Duty Roster ({dutyRosters.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'timetable' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-emerald-400" />
-          <span>Curriculum Timetable & Bell Schedule</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('work_ledger')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'work_ledger' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileCheck2 className="w-4 h-4 text-purple-400" />
-          <span>Staff Work Entry Audit ({workLogs.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sanatorium')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <HeartPulse className="w-4 h-4 text-rose-400" />
-          <span>Sanatorium & Health</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lunch_register')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Utensils className="w-4 h-4 text-amber-400" />
-          <span>Learner Lunch Register</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transport')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Bus className="w-4 h-4 text-amber-400" />
-          <span>Transport & Fleet</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cocurricular')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Trophy className="w-4 h-4 text-purple-400" />
-          <span>Co-Curriculum & Sports</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reporting_hub')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'reporting_hub' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-4 h-4 text-emerald-400" />
-          <span>Reporting Hub (Monthly, Termly & Annual)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('events')}
-          className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'events' ? 'bg-slate-900 text-white' : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-rose-500" />
-          <span>School Events & Tickets</span>
-          <span className="text-[10px] bg-indigo-200/80 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">Posting Authority</span>
-        </button>
-      </div>
+          {/* ========================================================
+              TAB: CBC ASSESSMENT RESULTS HUB (DEPUTY VIEW / ASSIGN / UPLOAD)
+              ======================================================== */}
+          {activeTab === 'results_upload' && (
+            <ResultUploadManager 
+              currentUser={currentUser} 
+              viewMode="deputy"
+              defaultGrade={4}
+            />
+          )}
 
       {/* ========================================================
           TAB 1: GATE PASS SECURITY & OPERATIONS
@@ -1354,6 +1282,8 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       {activeTab === 'events' && (
         <SchoolEventsManager currentUser={currentUser} />
       )}
+        </main>
+      </div>
     </div>
   );
 };

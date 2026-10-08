@@ -9,7 +9,9 @@ import {
   ChatMessage,
   GradeLevel,
   StreamName,
-  TransportDropoffVerification
+  TransportDropoffVerification,
+  CalendarEvent,
+  EventTicketPurchase
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { PerformanceCharts } from '../student/PerformanceCharts';
@@ -22,6 +24,7 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
+import { EventTicketModal } from '../events/EventTicketModal';
 import { 
   Home,
   Users, 
@@ -57,6 +60,7 @@ import {
   LogOut,
   Search,
   Plus,
+  Minus,
   Check,
   AlertTriangle,
   Download,
@@ -69,7 +73,12 @@ import {
   Info,
   HeartPulse,
   Utensils,
-  KeyRound
+  KeyRound,
+  Ticket,
+  Menu,
+  X,
+  ChevronLeft,
+  QrCode
 } from 'lucide-react';
 
 interface ParentWorkspaceProps {
@@ -2596,7 +2605,7 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
               {/* Signatures */}
               <div className="pt-4 border-t border-slate-200 grid grid-cols-2 gap-4 text-[10px] text-slate-500">
                 <div>
-                  <div>Authorizing Faculty:</div>
+                  <div>Authorizing Academic Dept:</div>
                   <strong className="text-slate-900 block mt-0.5">{passToPrint.teacherName}</strong>
                 </div>
                 <div className="text-right">

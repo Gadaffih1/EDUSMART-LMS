@@ -146,8 +146,6 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     };
   }, []);
 
-  if (!isOpen) return null;
-
   // Selected Room Object
   const selectedRoom = rooms.find(r => r.id === selectedRoomId) || rooms[0];
 
@@ -323,6 +321,8 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     }
     return true;
   });
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">

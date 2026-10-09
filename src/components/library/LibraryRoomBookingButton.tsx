@@ -34,12 +34,14 @@ export const LibraryRoomBookingButton: React.FC<LibraryRoomBookingButtonProps> =
           <span className="sm:hidden">{label || 'Book Room'}</span>
         </button>
 
-        <LibraryRoomBookingModal
-          currentUser={currentUser}
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          onBookingSuccess={onBookingSuccess}
-        />
+        {isOpen && (
+          <LibraryRoomBookingModal
+            currentUser={currentUser}
+            isOpen={isOpen}
+            onClose={() => setIsOpen(false)}
+            onBookingSuccess={onBookingSuccess}
+          />
+        )}
       </>
     );
   }
@@ -59,12 +61,14 @@ export const LibraryRoomBookingButton: React.FC<LibraryRoomBookingButtonProps> =
           </span>
         </button>
 
-        <LibraryRoomBookingModal
-          currentUser={currentUser}
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          onBookingSuccess={onBookingSuccess}
-        />
+        {isOpen && (
+          <LibraryRoomBookingModal
+            currentUser={currentUser}
+            isOpen={isOpen}
+            onClose={() => setIsOpen(false)}
+            onBookingSuccess={onBookingSuccess}
+          />
+        )}
       </>
     );
   }
@@ -81,12 +85,14 @@ export const LibraryRoomBookingButton: React.FC<LibraryRoomBookingButtonProps> =
           <span>{label || 'Book Room'}</span>
         </button>
 
-        <LibraryRoomBookingModal
-          currentUser={currentUser}
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          onBookingSuccess={onBookingSuccess}
-        />
+        {isOpen && (
+          <LibraryRoomBookingModal
+            currentUser={currentUser}
+            isOpen={isOpen}
+            onClose={() => setIsOpen(false)}
+            onBookingSuccess={onBookingSuccess}
+          />
+        )}
       </>
     );
   }
@@ -106,12 +112,14 @@ export const LibraryRoomBookingButton: React.FC<LibraryRoomBookingButtonProps> =
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
         </button>
 
-        <LibraryRoomBookingModal
-          currentUser={currentUser}
-          isOpen={isOpen}
-          onClose={() => setIsOpen(false)}
-          onBookingSuccess={onBookingSuccess}
-        />
+        {isOpen && (
+          <LibraryRoomBookingModal
+            currentUser={currentUser}
+            isOpen={isOpen}
+            onClose={() => setIsOpen(false)}
+            onBookingSuccess={onBookingSuccess}
+          />
+        )}
       </>
     );
   }
@@ -127,12 +135,14 @@ export const LibraryRoomBookingButton: React.FC<LibraryRoomBookingButtonProps> =
         <span>{label || 'Book Library Room'}</span>
       </button>
 
-      <LibraryRoomBookingModal
-        currentUser={currentUser}
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        onBookingSuccess={onBookingSuccess}
-      />
+      {isOpen && (
+        <LibraryRoomBookingModal
+          currentUser={currentUser}
+          isOpen={isOpen}
+          onClose={() => setIsOpen(false)}
+          onBookingSuccess={onBookingSuccess}
+        />
+      )}
     </>
   );
 };

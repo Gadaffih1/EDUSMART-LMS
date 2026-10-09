@@ -613,12 +613,19 @@ export interface LibraryBook {
   totalCopies: number;
   locationShelf: string;
   coverImage?: string;
+  acquisitionType?: 'Stocked' | 'Donated';
+  donorName?: string;
+  accessionPrefix?: string;
+  uniqueCopyIds?: string[];
 }
 
 export interface LibraryBorrowRecord {
   id: string;
   bookId: string;
   bookTitle: string;
+  bookCopyId?: string; // Unique ID given by librarian for this specific physical copy
+  publisher?: string;
+  acquisitionType?: 'Stocked' | 'Donated';
   borrowerId: string;
   borrowerName: string;
   borrowerRole: 'student' | 'teacher';
@@ -629,6 +636,8 @@ export interface LibraryBorrowRecord {
   returnedDate?: string;
   status: 'active' | 'returned' | 'overdue';
   remarks?: string;
+  conditionOnIssue?: string;
+  conditionOnReturn?: string;
 }
 
 // ========================================================

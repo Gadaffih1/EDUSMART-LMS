@@ -67,6 +67,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
   // Quick Issue Modal state
   const [showIssueModal, setShowIssueModal] = useState(false);
   const [issueBookId, setIssueBookId] = useState(books[0]?.id || '');
+  const [issueCopyId, setIssueCopyId] = useState('');
   const [issueBorrowerId, setIssueBorrowerId] = useState('');
   const [issueBorrowerRole, setIssueBorrowerRole] = useState<'student' | 'teacher'>('student');
   const [issueDueDate, setIssueDueDate] = useState('2026-10-18');
@@ -79,6 +80,9 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
   const [newIsbn, setNewIsbn] = useState('978-9966-');
   const [newPublisher, setNewPublisher] = useState('Kenya Literature Bureau');
   const [newCategory, setNewCategory] = useState<'CBC Textbook' | 'CBC Teacher Guide' | 'Supplementary Reader' | 'Encyclopedia' | 'Fiction Storybook'>('CBC Textbook');
+  const [newAcqType, setNewAcqType] = useState<'Stocked' | 'Donated'>('Stocked');
+  const [newDonorName, setNewDonorName] = useState('School Capitation Grant');
+  const [newPrefix, setNewPrefix] = useState('ACC-KLB');
   const [newCopies, setNewCopies] = useState(30);
   const [newShelf, setNewShelf] = useState('SEC-A-01');
 
@@ -101,6 +105,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
     const handleAud = () => setAuditLogs(Storage.getLibraryAuditLogs());
 
     window.addEventListener('library-books-updated', handleBooks);
+    window.addEventListener('library-borrow-records-updated', handleBorrow);
     window.addEventListener('library-reservations-updated', handleRes);
     window.addEventListener('library-fines-updated', handleFines);
     window.addEventListener('library-acquisitions-updated', handleAcq);
@@ -115,6 +120,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
 
     return () => {
       window.removeEventListener('library-books-updated', handleBooks);
+      window.removeEventListener('library-borrow-records-updated', handleBorrow);
       window.removeEventListener('library-reservations-updated', handleRes);
       window.removeEventListener('library-fines-updated', handleFines);
       window.removeEventListener('library-acquisitions-updated', handleAcq);
@@ -185,10 +191,23 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
       return;
     }
 
+    const assignedCopyId = issueCopyId.trim() || `${bk.accessionPrefix || 'ACC'}-${String(bk.totalCopies - bk.copiesAvailable + 1).padStart(3, '0')}`;
+
+    // Verify Unique ID is not currently loaned
+    const activeLoans = borrowRecords.filter(r => r.status !== 'returned');
+    const duplicate = activeLoans.some(r => r.bookCopyId && r.bookCopyId.trim().toUpperCase() === assignedCopyId.toUpperCase());
+    if (duplicate) {
+      alert(`The Unique ID "${assignedCopyId}" is already checked out to another borrower! Please select/enter an available unique copy ID.`);
+      return;
+    }
+
     const newRec: LibraryBorrowRecord = {
       id: `bor-${Date.now()}`,
       bookId: bk.id,
       bookTitle: bk.title,
+      bookCopyId: assignedCopyId,
+      publisher: bk.publisher,
+      acquisitionType: bk.acquisitionType || 'Stocked',
       borrowerId: user.id,
       borrowerName: user.name,
       borrowerRole: issueBorrowerRole,
@@ -202,6 +221,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
 
     handleIssueBook(newRec);
     setShowIssueModal(false);
+    setIssueCopyId('');
     setIssueRemarks('');
   };
 
@@ -336,6 +356,8 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
               currentUser={currentUser}
               section={currentSection}
               books={books}
+              borrowRecords={borrowRecords}
+              allUsers={allUsers}
               acquisitions={acquisitions}
               shelves={shelves}
               digitalItems={digitalItems}
@@ -348,6 +370,8 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
                 Storage.addDigitalLibraryItem(item);
                 setDigitalItems(Storage.getDigitalLibraryItems());
               }}
+              onIssueBook={handleIssueBook}
+              onReturnBook={handleReturnBook}
             />
           )}
 
@@ -411,13 +435,49 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Select Book</label>
                 <select
                   value={issueBookId}
-                  onChange={(e) => setIssueBookId(e.target.value)}
+                  onChange={(e) => {
+                    setIssueBookId(e.target.value);
+                    const bk = books.find(b => b.id === e.target.value);
+                    if (bk) {
+                      const activeLoans = borrowRecords.filter(r => r.status !== 'returned');
+                      const firstAvail = bk.uniqueCopyIds?.find(cid => !activeLoans.some(r => r.bookCopyId === cid));
+                      setIssueCopyId(firstAvail || `${bk.accessionPrefix || 'ACC'}-001`);
+                    }
+                  }}
                   className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
                 >
                   {books.map(b => (
-                    <option key={b.id} value={b.id}>{b.title} ({b.copiesAvailable}/{b.totalCopies} Avail)</option>
+                    <option key={b.id} value={b.id}>{b.title} — {b.publisher} ({b.copiesAvailable}/{b.totalCopies} Avail)</option>
                   ))}
                 </select>
+              </div>
+
+              {(() => {
+                const bk = books.find(b => b.id === issueBookId);
+                if (!bk) return null;
+                return (
+                  <div className="bg-purple-50 p-2.5 rounded-xl border border-purple-200 text-[11px] space-y-0.5">
+                    <div>Publisher: <strong>{bk.publisher}</strong> · {bk.acquisitionType || 'Stocked'}</div>
+                    <div className="text-slate-500">Shelf: {bk.locationShelf}</div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Book Unique ID given by Librarian *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={issueCopyId}
+                  onChange={(e) => setIssueCopyId(e.target.value)}
+                  placeholder="e.g. ACC-KLB-M4-001"
+                  className="w-full text-xs border border-purple-300 bg-purple-50/50 rounded-lg p-2 font-mono font-bold"
+                />
+                <span className="text-[10px] text-slate-500">
+                  Multiple borrowers can receive this same title & publisher, but each gets a distinct Unique ID.
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

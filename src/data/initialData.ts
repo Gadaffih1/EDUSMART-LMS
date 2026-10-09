@@ -1547,7 +1547,11 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     subject: 'Mathematics',
     copiesAvailable: 42,
     totalCopies: 45,
-    locationShelf: 'Shelf M-04A'
+    locationShelf: 'Shelf M-04A',
+    acquisitionType: 'Stocked',
+    donorName: 'Ministry of Education Capitation Grant',
+    accessionPrefix: 'ACC-KLB-M4',
+    uniqueCopyIds: Array.from({ length: 45 }, (_, i) => `ACC-KLB-M4-${String(i + 1).padStart(3, '0')}`)
   },
   {
     id: 'bk-cbc-sci-4',
@@ -1560,7 +1564,11 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     subject: 'Integrated Science',
     copiesAvailable: 38,
     totalCopies: 40,
-    locationShelf: 'Shelf S-04B'
+    locationShelf: 'Shelf S-04B',
+    acquisitionType: 'Donated',
+    donorName: 'USAID / STEM Africa Foundation',
+    accessionPrefix: 'DON-OUP-SCI4',
+    uniqueCopyIds: Array.from({ length: 40 }, (_, i) => `DON-OUP-SCI4-${String(i + 1).padStart(3, '0')}`)
   },
   {
     id: 'bk-cbc-agri-4',
@@ -1573,7 +1581,11 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     subject: 'Agriculture and Nutrition',
     copiesAvailable: 35,
     totalCopies: 35,
-    locationShelf: 'Shelf A-04C'
+    locationShelf: 'Shelf A-04C',
+    acquisitionType: 'Stocked',
+    donorName: 'School Board of Management (BOM)',
+    accessionPrefix: 'ACC-SPT-AGR4',
+    uniqueCopyIds: Array.from({ length: 35 }, (_, i) => `ACC-SPT-AGR4-${String(i + 1).padStart(3, '0')}`)
   },
   {
     id: 'bk-cbc-eng-8',
@@ -1586,7 +1598,11 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     subject: 'English',
     copiesAvailable: 28,
     totalCopies: 30,
-    locationShelf: 'Shelf E-08A'
+    locationShelf: 'Shelf E-08A',
+    acquisitionType: 'Stocked',
+    donorName: 'Government Free Day Secondary Education (FDSE)',
+    accessionPrefix: 'ACC-LGH-ENG8',
+    uniqueCopyIds: Array.from({ length: 30 }, (_, i) => `ACC-LGH-ENG8-${String(i + 1).padStart(3, '0')}`)
   },
   {
     id: 'bk-cbc-pretech-8',
@@ -1599,7 +1615,11 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     subject: 'Pretechnical Education',
     copiesAvailable: 22,
     totalCopies: 25,
-    locationShelf: 'Shelf P-08B'
+    locationShelf: 'Shelf P-08B',
+    acquisitionType: 'Stocked',
+    donorName: 'Junior Secondary Capitation',
+    accessionPrefix: 'ACC-MOR-PT8',
+    uniqueCopyIds: Array.from({ length: 25 }, (_, i) => `ACC-MOR-PT8-${String(i + 1).padStart(3, '0')}`)
   },
   {
     id: 'bk-story-chike',
@@ -1610,7 +1630,11 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     category: 'Fiction Storybook',
     copiesAvailable: 14,
     totalCopies: 15,
-    locationShelf: 'Shelf FIC-ACH'
+    locationShelf: 'Shelf FIC-ACH',
+    acquisitionType: 'Donated',
+    donorName: 'Rotary Club of Nairobi Literacy Drive',
+    accessionPrefix: 'DON-HAF-CHK',
+    uniqueCopyIds: Array.from({ length: 15 }, (_, i) => `DON-HAF-CHK-${String(i + 1).padStart(3, '0')}`)
   },
   {
     id: 'bk-story-weep',
@@ -1621,7 +1645,45 @@ export const INITIAL_LIBRARY_BOOKS: LibraryBook[] = [
     category: 'Supplementary Reader',
     copiesAvailable: 11,
     totalCopies: 12,
-    locationShelf: 'Shelf LIT-NGU'
+    locationShelf: 'Shelf LIT-NGU',
+    acquisitionType: 'Donated',
+    donorName: 'Alumni Association Class of 2018',
+    accessionPrefix: 'DON-PEN-WNC',
+    uniqueCopyIds: Array.from({ length: 12 }, (_, i) => `DON-PEN-WNC-${String(i + 1).padStart(3, '0')}`)
+  },
+  {
+    id: 'bk-tusome-eng-4',
+    isbn: '978-9966-22-819-7',
+    title: 'Tusome Early Literacy Reader Grade 4',
+    author: 'Ministry of Education & KICD',
+    publisher: 'KICD & USAID Kenya',
+    category: 'Supplementary Reader',
+    grade: 4,
+    subject: 'English',
+    copiesAvailable: 48,
+    totalCopies: 50,
+    locationShelf: 'Shelf TUS-04',
+    acquisitionType: 'Donated',
+    donorName: 'USAID & KICD National Reading Programme',
+    accessionPrefix: 'DON-TUS-ENG4',
+    uniqueCopyIds: Array.from({ length: 50 }, (_, i) => `DON-TUS-ENG4-${String(i + 1).padStart(3, '0')}`)
+  },
+  {
+    id: 'bk-oxf-atlas',
+    isbn: '978-0195-738-90-2',
+    title: 'Oxford Primary Illustrated CBC Atlas for Kenya',
+    author: 'Oxford Cartographic Team',
+    publisher: 'Oxford EA',
+    category: 'Encyclopedia',
+    grade: 5,
+    subject: 'Social Studies',
+    copiesAvailable: 20,
+    totalCopies: 20,
+    locationShelf: 'Shelf REF-ATL',
+    acquisitionType: 'Stocked',
+    donorName: 'School Library Development Budget',
+    accessionPrefix: 'ACC-OUP-ATL5',
+    uniqueCopyIds: Array.from({ length: 20 }, (_, i) => `ACC-OUP-ATL5-${String(i + 1).padStart(3, '0')}`)
   }
 ];
 
@@ -1630,6 +1692,9 @@ export const INITIAL_BORROW_RECORDS: LibraryBorrowRecord[] = [
     id: 'bor-1',
     bookId: 'bk-cbc-math-4',
     bookTitle: 'KLB Top Scholar Mathematics Learner\'s Book Grade 4',
+    bookCopyId: 'ACC-KLB-M4-001',
+    publisher: 'KLB Publishing',
+    acquisitionType: 'Stocked',
     borrowerId: 'usr-stu-brian',
     borrowerName: 'Brian Otieno',
     borrowerRole: 'student',
@@ -1638,12 +1703,32 @@ export const INITIAL_BORROW_RECORDS: LibraryBorrowRecord[] = [
     borrowedDate: '2026-09-24',
     dueDate: '2026-10-08',
     status: 'active',
-    remarks: 'Fractions study guide assigned by Mr. Kiprono'
+    remarks: 'Fractions study guide assigned by Mr. Kiprono · Copy 001'
+  },
+  {
+    id: 'bor-1b',
+    bookId: 'bk-cbc-math-4',
+    bookTitle: 'KLB Top Scholar Mathematics Learner\'s Book Grade 4',
+    bookCopyId: 'ACC-KLB-M4-002',
+    publisher: 'KLB Publishing',
+    acquisitionType: 'Stocked',
+    borrowerId: 'usr-stu-faith',
+    borrowerName: 'Faith Chebet',
+    borrowerRole: 'student',
+    grade: 4,
+    stream: 'Dove',
+    borrowedDate: '2026-09-25',
+    dueDate: '2026-10-09',
+    status: 'active',
+    remarks: 'Numeracy practicum exercises · Copy 002'
   },
   {
     id: 'bor-2',
     bookId: 'bk-cbc-sci-4',
     bookTitle: 'Spark Integrated Science Learner\'s Book Grade 4',
+    bookCopyId: 'DON-OUP-SCI4-001',
+    publisher: 'Oxford EA',
+    acquisitionType: 'Donated',
     borrowerId: 'usr-stu-amina',
     borrowerName: 'Amina Hassan',
     borrowerRole: 'student',
@@ -1651,12 +1736,16 @@ export const INITIAL_BORROW_RECORDS: LibraryBorrowRecord[] = [
     stream: 'Dove',
     borrowedDate: '2026-09-20',
     dueDate: '2026-10-04',
-    status: 'active'
+    status: 'active',
+    remarks: 'Donated STEM copy · Copy 001'
   },
   {
     id: 'bor-3',
     bookId: 'bk-story-chike',
     bookTitle: 'Chike and the River',
+    bookCopyId: 'DON-HAF-CHK-001',
+    publisher: 'Heinemann African Writers',
+    acquisitionType: 'Donated',
     borrowerId: 'usr-stu-kelvin',
     borrowerName: 'Kelvin Kiprop',
     borrowerRole: 'student',
@@ -1665,19 +1754,22 @@ export const INITIAL_BORROW_RECORDS: LibraryBorrowRecord[] = [
     borrowedDate: '2026-09-15',
     dueDate: '2026-09-29',
     status: 'overdue',
-    remarks: 'First reminder sent'
+    remarks: 'First reminder sent · Copy 001'
   },
   {
     id: 'bor-4',
     bookId: 'bk-cbc-pretech-8',
     bookTitle: 'Pre-Technical Studies Learner\'s Guide Grade 8',
+    bookCopyId: 'ACC-MOR-PT8-001',
+    publisher: 'Moran EA',
+    acquisitionType: 'Stocked',
     borrowerId: 'usr-teach-mutua',
     borrowerName: 'Mr. Peter Mutua',
     borrowerRole: 'teacher',
     borrowedDate: '2026-09-22',
     dueDate: '2026-10-22',
     status: 'active',
-    remarks: 'Lesson preparation'
+    remarks: 'Lesson preparation & workshop safety · Copy 001'
   }
 ];
 

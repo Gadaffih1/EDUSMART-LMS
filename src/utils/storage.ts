@@ -1225,10 +1225,17 @@ export const Storage = {
       bk.copiesAvailable -= 1;
       setToStorage(KEYS.LIBRARY_BOOKS, books);
     }
+    window.dispatchEvent(new CustomEvent('library-borrow-records-updated', { detail: records }));
+    window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
   },
-  returnBook(recordId: string, remarks?: string): void {
+  returnBook(recordIdOrCopyId: string, remarks?: string): LibraryBorrowRecord | null {
     const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, INITIAL_BORROW_RECORDS);
-    const rec = records.find(r => r.id === recordId);
+    // Find either by borrow record id or by unique copy id (case-insensitive trim)
+    const rec = records.find(r => 
+      (r.id === recordIdOrCopyId || (r.bookCopyId && r.bookCopyId.trim().toUpperCase() === recordIdOrCopyId.trim().toUpperCase())) &&
+      r.status !== 'returned'
+    ) || records.find(r => r.id === recordIdOrCopyId);
+
     if (rec) {
       rec.status = 'returned';
       rec.returnedDate = new Date().toISOString().split('T')[0];
@@ -1242,7 +1249,29 @@ export const Storage = {
         bk.copiesAvailable += 1;
         setToStorage(KEYS.LIBRARY_BOOKS, books);
       }
+      window.dispatchEvent(new CustomEvent('library-borrow-records-updated', { detail: records }));
+      window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+      return rec;
     }
+    return null;
+  },
+  getActiveBorrowRecordByCopyId(copyId: string): LibraryBorrowRecord | undefined {
+    if (!copyId) return undefined;
+    const records = this.getBorrowRecords();
+    return records.find(r => 
+      r.status !== 'returned' && 
+      r.bookCopyId && 
+      r.bookCopyId.trim().toUpperCase() === copyId.trim().toUpperCase()
+    );
+  },
+  isCopyCurrentlyBorrowed(copyId: string): boolean {
+    return !!this.getActiveBorrowRecordByCopyId(copyId);
+  },
+  getIssuedCopyIdsForBook(bookId: string): string[] {
+    const records = this.getBorrowRecords();
+    return records
+      .filter(r => r.bookId === bookId && r.status !== 'returned' && r.bookCopyId)
+      .map(r => r.bookCopyId as string);
   },
 
   getLibraryReservations(): LibraryReservation[] {

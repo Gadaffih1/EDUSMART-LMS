@@ -53,7 +53,11 @@ import {
   X,
   Upload,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Edit2,
+  Save,
+  Send,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -101,7 +105,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     | 'reporting_hub'
     | 'events';
 
-  const [activeTab, setActiveTab] = useState<DeanTab>('results_upload');
+  const [activeTab, setActiveTab] = useState<DeanTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [analyticsSubView, setAnalyticsSubView] = useState<'school_health' | 'exam_means'>('school_health');
   const [showAutoGenModal, setShowAutoGenModal] = useState(false);
@@ -153,14 +157,104 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     }
   ]);
 
-  // Report cards
+  // Report cards and Dean Republishing states
+  const [reportCards, setReportCards] = useState<ReportCard[]>(() => Storage.getReportCards());
+  const [editingReportCard, setEditingReportCard] = useState<ReportCard | null>(null);
+  const [editClassRemarks, setEditClassRemarks] = useState('');
+  const [editDeanRemarks, setEditDeanRemarks] = useState('');
+  const [editHeadRemarks, setEditHeadRemarks] = useState('');
+  const [editSubjectRemarks, setEditSubjectRemarks] = useState<{ subject: SubjectName; remarks: string }[]>([]);
+  const [deanRepublishToast, setDeanRepublishToast] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const handleReportUpdate = () => {
+      setReportCards(Storage.getReportCards());
+    };
+    window.addEventListener('report-cards-updated', handleReportUpdate);
+    return () => window.removeEventListener('report-cards-updated', handleReportUpdate);
+  }, []);
+
+  const showDeanToast = (msg: string) => {
+    setDeanRepublishToast(msg);
+    setTimeout(() => setDeanRepublishToast(null), 4000);
+  };
+
+  const handleOpenEditReport = (rc: ReportCard) => {
+    setEditingReportCard(rc);
+    setEditClassRemarks(rc.classTeacherRemarks || '');
+    setEditDeanRemarks(rc.deanRemarks || 'Verified and officially authorized by Dean of Studies for curriculum competence.');
+    setEditHeadRemarks(rc.headTeacherRemarks || '');
+    setEditSubjectRemarks(rc.subjects.map(s => ({ subject: s.subject, remarks: s.remarks || '' })));
+  };
+
+  const handleSaveAndRepublish = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingReportCard) return;
+
+    const updatedSubjects = editingReportCard.subjects.map(s => {
+      const match = editSubjectRemarks.find(sr => sr.subject === s.subject);
+      return match ? { ...s, remarks: match.remarks } : s;
+    });
+
+    const republished = Storage.republishReportCard(
+      editingReportCard.id,
+      {
+        classTeacherRemarks: editClassRemarks.trim(),
+        deanRemarks: editDeanRemarks.trim(),
+        headTeacherRemarks: editHeadRemarks.trim(),
+        subjects: updatedSubjects
+      },
+      currentUser.name,
+      'Dean of Studies',
+      'Curriculum review complete. All subject marks and qualitative write-ups moderated and officially republished.'
+    );
+
+    if (republished) {
+      setReportCards(Storage.getReportCards());
+      showDeanToast(`Report Card for ${editingReportCard.studentName} successfully republished with Dean of Studies official seal!`);
+      setEditingReportCard(null);
+    }
+  };
+
+  const handleQuickRepublishSingle = (rc: ReportCard) => {
+    const republished = Storage.republishReportCard(
+      rc.id,
+      {
+        deanRemarks: rc.deanRemarks || 'Approved and officially republished by Dean of Studies.'
+      },
+      currentUser.name,
+      'Dean of Studies',
+      'Endorsed and republished following termly academic moderation.'
+    );
+    if (republished) {
+      setReportCards(Storage.getReportCards());
+      showDeanToast(`Report Card for ${rc.studentName} republished with official Dean seal!`);
+    }
+  };
+
+  const handleBatchRepublishGrade = () => {
+    gradeReportCards.forEach(rc => {
+      Storage.republishReportCard(
+        rc.id,
+        {
+          deanRemarks: rc.deanRemarks || 'Cohort academic standards verified and republished by Dean of Studies.'
+        },
+        currentUser.name,
+        'Dean of Studies',
+        `Batch cohort authorization for Grade ${selectedGrade}.`
+      );
+    });
+    setReportCards(Storage.getReportCards());
+    showDeanToast(`All Grade ${selectedGrade} report cards successfully republished with Dean of Studies seal!`);
+  };
+
   const allUsers = Storage.getUsers();
   const students = allUsers.filter(u => u.role === 'student');
   const gradeStudents = students.filter(s => s.grade === selectedGrade);
 
   // Report cards for selected grade
   const gradeReportCards: ReportCard[] = gradeStudents.map(student => {
-    const existing = Storage.getReportCards(student.id)[0];
+    const existing = reportCards.find(r => r.studentId === student.id);
     if (existing) return existing;
 
     // Fallback dynamic card
@@ -219,12 +313,17 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
 
   const sidebarGroups = [
     {
+      title: 'EXECUTIVE & GOVERNANCE',
+      items: [
+        { id: 'analytics' as DeanTab, label: 'Executive Health, Attendance & Academic Analytics', icon: TrendingUp },
+      ]
+    },
+    {
       title: 'OVERVIEW & CBC ASSESSMENTS',
       items: [
         { id: 'results_upload' as DeanTab, label: 'CBC Assessment Results Hub', icon: Upload, badge: 'Upload & Publish', badgeColor: 'bg-emerald-500' },
         { id: 'assessments' as DeanTab, label: 'Assessment Schedules & Rosters', icon: Calendar },
         { id: 'report_cards' as DeanTab, label: 'Term Report Card Authorization', icon: FileText, badge: `${gradeStudents.length}` },
-        { id: 'analytics' as DeanTab, label: 'Institutional Exam Analytics', icon: BarChart3 },
         { id: 'curriculum' as DeanTab, label: 'Curriculum Strands & KPSEA Pacing', icon: BookOpen },
       ]
     },
@@ -387,32 +486,149 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
         {/* Content View Area on the Right */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
           
-          {/* Top KPI Cards (Always visible in Dean Overview) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Upcoming Assessments</div>
-              <div className="text-2xl font-extrabold font-mono text-emerald-700 mt-1">3</div>
-              <div className="text-xs text-slate-500 mt-0.5">Term 3 Assessment Windows</div>
-            </div>
+          {/* Top KPI Cards (Visible in Dean Overview when not on Executive Analytics) */}
+          {activeTab !== 'analytics' && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Upcoming Assessments</div>
+                <div className="text-2xl font-extrabold font-mono text-emerald-700 mt-1">3</div>
+                <div className="text-xs text-slate-500 mt-0.5">Term 3 Assessment Windows</div>
+              </div>
 
-            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-              <div className="text-[10px] uppercase font-bold text-slate-500">School-Wide Mastery Rate</div>
-              <div className="text-2xl font-extrabold font-mono text-blue-700 mt-1">80.0%</div>
-              <div className="text-xs text-slate-500 mt-0.5">Meeting or Exceeding (EE + ME)</div>
-            </div>
+              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">School-Wide Mastery Rate</div>
+                <div className="text-2xl font-extrabold font-mono text-blue-700 mt-1">80.0%</div>
+                <div className="text-xs text-slate-500 mt-0.5">Meeting or Exceeding (EE + ME)</div>
+              </div>
 
-            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Report Cards Pending Approval</div>
-              <div className="text-2xl font-extrabold font-mono text-amber-600 mt-1">{gradeStudents.length}</div>
-              <div className="text-xs text-slate-500 mt-0.5">Grade {selectedGrade} cohort</div>
-            </div>
+              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Report Cards Pending Approval</div>
+                <div className="text-2xl font-extrabold font-mono text-amber-600 mt-1">{gradeStudents.length}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Grade {selectedGrade} cohort</div>
+              </div>
 
-            <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-              <div className="text-[10px] uppercase font-bold text-slate-500">Syllabus Completion Index</div>
-              <div className="text-2xl font-extrabold font-mono text-purple-700 mt-1">92.4%</div>
-              <div className="text-xs text-slate-500 mt-0.5">Tracking ahead of schedule</div>
+              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Syllabus Completion Index</div>
+                <div className="text-2xl font-extrabold font-mono text-purple-700 mt-1">92.4%</div>
+                <div className="text-xs text-slate-500 mt-0.5">Tracking ahead of schedule</div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* ========================================================
+              TAB 0: EXECUTIVE HEALTH, ATTENDANCE & ACADEMIC ANALYTICS
+              (Executive Health & Intelligence Console - Landing Data)
+              ======================================================== */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              {/* Sub-view switcher */}
+              <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200 w-fit">
+                <button
+                  onClick={() => setAnalyticsSubView('school_health')}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    analyticsSubView === 'school_health'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Executive Health & Intelligence Console</span>
+                </button>
+                <button
+                  onClick={() => setAnalyticsSubView('exam_means')}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    analyticsSubView === 'exam_means'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Curriculum Exam Performance & Mastery Bands</span>
+                </button>
+              </div>
+
+              {analyticsSubView === 'school_health' ? (
+                <ExecutiveAnalyticsDashboard
+                  currentUser={currentUser}
+                  title="Executive Health, Attendance & Academic Analytics"
+                  subtitle="Executive Health & Intelligence Console: Real-time Recharts surveillance of campus attendance rates, longitudinal CBC mastery, library foot-traffic, sanatorium clinic logs, and student wellbeing indicators."
+                />
+              ) : (
+                <section className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900">
+                            Mean Performance Index Across Grades (Term 3)
+                          </h3>
+                          <p className="text-xs text-slate-500">Actual performance mean vs institutional target benchmark (80%)</p>
+                        </div>
+                      </div>
+
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={gradePerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="grade" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                            <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                            <Tooltip 
+                              formatter={(val: any) => [`${val}%`, 'Mean Score']} 
+                              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                            />
+                            <Bar dataKey="mean" fill="#059669" radius={[6, 6, 0, 0]} name="Actual Mean %" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+                      <div>
+                        <h3 className="text-base font-bold text-slate-900">
+                          CBC Mastery Distribution
+                        </h3>
+                        <p className="text-xs text-slate-500">Overall cohort rating breakdown</p>
+                      </div>
+
+                      <div className="h-48 w-full flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={masteryPieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={45}
+                              outerRadius={70}
+                              paddingAngle={4}
+                              dataKey="value"
+                            >
+                              {masteryPieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip 
+                              formatter={(val: any) => [`${val}%`, 'Learners']}
+                              contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
+                        {masteryPieData.map((d, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                            <span className="text-slate-600 truncate">{d.name.split(' ')[0]}</span>
+                            <span className="font-bold text-slate-900 ml-auto">{d.value}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
 
           {/* ========================================================
               TAB 0: CBC ASSESSMENT RESULTS & WHOLE GRADE UPLOAD HUB
@@ -492,176 +708,275 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       )}
 
       {/* ========================================================
-          TAB 2: INSTITUTIONAL EXAM & SCHOOL HEALTH ANALYTICS
-          ======================================================== */}
-      {activeTab === 'analytics' && (
-        <div className="space-y-6">
-          {/* Sub-view switcher */}
-          <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200 w-fit">
-            <button
-              onClick={() => setAnalyticsSubView('school_health')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                analyticsSubView === 'school_health'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              <span>School Health, Attendance & Library Usage (Recharts)</span>
-            </button>
-            <button
-              onClick={() => setAnalyticsSubView('exam_means')}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                analyticsSubView === 'exam_means'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
-              <span>Curriculum Exam Performance & Mastery Bands</span>
-            </button>
-          </div>
-
-          {analyticsSubView === 'school_health' ? (
-            <ExecutiveAnalyticsDashboard
-              currentUser={currentUser}
-              title="Dean of Studies Academic Health, Attendance & Library Analytics"
-              subtitle="Executive Recharts surveillance: Attendance trends, longitudinal subject CBC mastery, and library foot-traffic for academic oversight."
-            />
-          ) : (
-            <section className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900">
-                        Mean Performance Index Across Grades (Term 3)
-                      </h3>
-                      <p className="text-xs text-slate-500">Actual performance mean vs institutional target benchmark (80%)</p>
-                    </div>
-                  </div>
-
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={gradePerformanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="grade" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <Tooltip 
-                          formatter={(val: any) => [`${val}%`, 'Mean Score']} 
-                          contentStyle={{ backgroundColor: '#0f172a', color: '#fff', borderRadius: '8px', fontSize: '12px' }}
-                        />
-                        <Bar dataKey="mean" fill="#059669" radius={[4, 4, 0, 0]} name="Actual Mean" />
-                        <Bar dataKey="target" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Target (80%)" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900">
-                      CBC Mastery Distribution
-                    </h3>
-                    <p className="text-xs text-slate-500">Student competency banding</p>
-                  </div>
-
-                  <div className="h-48 w-full flex items-center justify-center">
-                    <PieChart width={200} height={190}>
-                      <Pie
-                        data={masteryPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={45}
-                        outerRadius={70}
-                        paddingAngle={4}
-                        dataKey="value"
-                      >
-                        {masteryPieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(val: any) => [`${val}% of Students`, 'Cohort']} />
-                    </PieChart>
-                  </div>
-
-                  <div className="space-y-1 text-xs">
-                    {masteryPieData.map(m => (
-                      <div key={m.name} className="flex items-center justify-between text-slate-600">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: m.color }} />
-                          <span className="text-[11px] truncate max-w-[170px]">{m.name}</span>
-                        </span>
-                        <span className="font-mono font-bold text-slate-900">{m.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================
-          TAB 3: REPORT CARDS AUTHORIZATION
+          TAB 3: REPORT CARDS AUTHORIZATION & REPUBLISHING
           ======================================================== */}
       {activeTab === 'report_cards' && (
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
+              <div className="flex items-center gap-2 text-xs font-bold text-cyan-700 uppercase tracking-wider mb-1">
+                <FileCheck className="w-4 h-4 text-cyan-600" />
+                <span>Executive Academic Moderation</span>
+              </div>
               <h2 className="text-lg font-bold text-slate-900">
-                Term Report Card Verification & Seal Authorization
+                Term Report Card Verification, Write-ups Moderation & Republishing
               </h2>
               <p className="text-xs text-slate-500">
-                Review class teacher remarks, subject marks breakdown, and authorize release to parents.
+                Dean of Studies has full authoritative rights to review, edit comment write-ups, adjust remarks, and officially republish reports.
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600">Cohort:</span>
-              <select
-                value={selectedGrade}
-                onChange={(e) => setSelectedGrade(Number(e.target.value) as GradeLevel)}
-                className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white font-medium"
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold">
+                <span className="text-slate-500">Cohort:</span>
+                <select
+                  value={selectedGrade}
+                  onChange={(e) => setSelectedGrade(Number(e.target.value) as GradeLevel)}
+                  className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer"
+                >
+                  {[1,2,3,4,5,6,7,8,9].map(g => (
+                    <option key={g} value={g}>Grade {g}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={handleBatchRepublishGrade}
+                className="px-3.5 py-1.5 text-xs font-bold bg-cyan-700 hover:bg-cyan-800 text-white rounded-lg transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                title="Authoritatively republish all approved report cards for this cohort"
               >
-                {[1,2,3,4,5,6,7,8,9].map(g => (
-                  <option key={g} value={g}>Grade {g}</option>
-                ))}
-              </select>
+                <Send className="w-3.5 h-3.5" />
+                <span>Republish All Grade {selectedGrade} Reports</span>
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {gradeReportCards.map((rc) => (
-              <div key={rc.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">{rc.studentName}</h3>
-                    <div className="text-xs text-slate-500">Grade {rc.grade} ({rc.stream}) · Term {rc.term}</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-base font-extrabold font-mono text-emerald-700">{rc.overallAverage}%</span>
-                    <div className="text-[10px] text-slate-400 font-mono">{rc.overallRubric}</div>
-                  </div>
-                </div>
-
-                <div className="text-xs bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
-                  <div className="text-slate-500 font-semibold text-[10px] uppercase">Class Teacher Remarks:</div>
-                  <p className="text-slate-700 italic text-[11px]">"{rc.classTeacherRemarks}"</p>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
-                  <span className="text-slate-500 font-mono text-[11px]">Attendance: {rc.attendanceDays}/{rc.totalSchoolDays} days</span>
-                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Dean Approved</span>
-                  </span>
-                </div>
+          {deanRepublishToast && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 font-medium flex items-center justify-between animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>{deanRepublishToast}</span>
               </div>
-            ))}
+              <button onClick={() => setDeanRepublishToast(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {gradeReportCards.map((rc) => {
+              const isRepublished = rc.publicationStatus === 'Republished';
+
+              return (
+                <div key={rc.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-slate-900">{rc.studentName}</h3>
+                          {isRepublished && (
+                            <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                              <span>Republished</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono">
+                          {rc.admissionNumber} · Grade {rc.grade} ({rc.stream}) · {rc.term} ({rc.academicYear})
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-base font-extrabold font-mono text-emerald-700">{rc.overallAverage}%</span>
+                        <div className="text-[10px] text-slate-400 font-mono">{rc.overallRubric}</div>
+                      </div>
+                    </div>
+
+                    {/* Class Teacher Remarks */}
+                    <div className="text-xs bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                      <div className="text-slate-500 font-semibold text-[10px] uppercase">Class Teacher Remarks:</div>
+                      <p className="text-slate-700 italic text-[11px] leading-relaxed">"{rc.classTeacherRemarks}"</p>
+                    </div>
+
+                    {/* Dean of Studies Remarks */}
+                    {rc.deanRemarks && (
+                      <div className="text-xs bg-cyan-50/70 p-2.5 rounded-lg border border-cyan-200 space-y-1">
+                        <div className="text-cyan-900 font-semibold text-[10px] uppercase flex items-center gap-1">
+                          <Award className="w-3 h-3 text-cyan-700" />
+                          <span>Dean of Studies Endorsement:</span>
+                        </div>
+                        <p className="text-cyan-950 font-medium text-[11px] leading-relaxed">"{rc.deanRemarks}"</p>
+                        {rc.republishedAt && (
+                          <div className="text-[9px] text-cyan-700 font-mono">
+                            Republished by {rc.republishedBy || 'Dean'} on {new Date(rc.republishedAt).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Bar */}
+                  <div className="flex flex-wrap items-center justify-between text-xs pt-3 border-t border-slate-200 gap-2">
+                    <span className="text-slate-500 font-mono text-[11px]">
+                      Attendance: {rc.attendanceDays}/{rc.totalSchoolDays} days
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenEditReport(rc)}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-white text-slate-700 hover:text-cyan-800 border border-slate-300 hover:border-cyan-400 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Edit teacher remarks, subject write-ups, or Dean remarks"
+                      >
+                        <Edit2 className="w-3 h-3 text-cyan-600" />
+                        <span>Edit Remarks</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleQuickRepublishSingle(rc)}
+                        className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                          isRepublished 
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                            : 'bg-cyan-700 hover:bg-cyan-800 text-white shadow-2xs'
+                        }`}
+                        title="Republish this student's official report card dossier"
+                      >
+                        <Send className="w-3 h-3" />
+                        <span>{isRepublished ? 'Re-Publish' : 'Republish Report'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          MODAL: DEAN OF STUDIES EDIT REMARKS & REPUBLISH
+          ======================================================== */}
+      {editingReportCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center font-bold shadow-xs">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Edit Write-Ups & Republish Report
+                  </h3>
+                  <div className="text-xs text-slate-500 font-mono">
+                    Learner: {editingReportCard.studentName} · Grade {editingReportCard.grade} ({editingReportCard.stream})
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingReportCard(null)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Edit Form */}
+            <form onSubmit={handleSaveAndRepublish} className="p-6 overflow-y-auto flex-1 space-y-5">
+              <div className="p-3 bg-cyan-50 border border-cyan-200 rounded-xl text-xs text-cyan-950">
+                <strong>Dean Rights Active:</strong> You have full authority to modify any class teacher remark, subject feedback commentary, or institutional endorsement, and officially republish to student & parent portals.
+              </div>
+
+              {/* Class Teacher Remarks */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-900 uppercase">
+                  Class Teacher General Remarks
+                </label>
+                <textarea
+                  rows={3}
+                  value={editClassRemarks}
+                  onChange={(e) => setEditClassRemarks(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 font-medium"
+                  placeholder="Enter or edit general conduct and academic remarks..."
+                />
+              </div>
+
+              {/* Dean Remarks */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-900 uppercase flex items-center gap-1.5">
+                  <Award className="w-3.5 h-3.5 text-cyan-700" />
+                  <span>Dean of Studies Official Endorsement</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={editDeanRemarks}
+                  onChange={(e) => setEditDeanRemarks(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-cyan-300 bg-cyan-50/30 rounded-lg focus:ring-2 focus:ring-cyan-500 font-medium"
+                  placeholder="Official Dean academic summary..."
+                />
+              </div>
+
+              {/* Head Teacher Remarks */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-900 uppercase">
+                  Head Teacher / Executive Remarks
+                </label>
+                <input
+                  type="text"
+                  value={editHeadRemarks}
+                  onChange={(e) => setEditHeadRemarks(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-cyan-500 font-medium"
+                  placeholder="Executive approval remarks..."
+                />
+              </div>
+
+              {/* Subject-Specific Remarks */}
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <label className="block text-xs font-bold text-slate-900 uppercase">
+                  Subject Qualitative Remarks & Moderation
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {editSubjectRemarks.map((sub, idx) => (
+                    <div key={sub.subject} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+                      <span className="font-bold text-slate-800">{sub.subject}</span>
+                      <input
+                        type="text"
+                        value={sub.remarks}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditSubjectRemarks(prev => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], remarks: val };
+                            return next;
+                          });
+                        }}
+                        className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded focus:ring-1 focus:ring-cyan-500 bg-white"
+                        placeholder={`Subject remarks for ${sub.subject}...`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3 sticky bottom-0 bg-white py-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingReportCard(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-bold text-white bg-cyan-700 hover:bg-cyan-800 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Save Remarks & Republish Report</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ========================================================

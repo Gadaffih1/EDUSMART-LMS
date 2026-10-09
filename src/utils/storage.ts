@@ -1,5 +1,8 @@
 import {
   User,
+  UserRole,
+  RoleAccessRights,
+  SubjectName,
   GradePassword,
   Topic,
   LessonNote,
@@ -58,6 +61,8 @@ import {
   LibraryEvent,
   LibraryAuditLog,
   LibraryPolicy,
+  LibraryRoom,
+  LibraryRoomBooking,
   FixedLessonCondition,
   SharedResourceFacility,
   BellPeriodDef,
@@ -134,6 +139,8 @@ import {
   INITIAL_LIBRARY_EVENTS,
   INITIAL_LIBRARY_POLICIES,
   INITIAL_LIBRARY_AUDIT_LOGS,
+  INITIAL_LIBRARY_ROOMS,
+  INITIAL_LIBRARY_ROOM_BOOKINGS,
   INITIAL_BELL_SCHEDULE,
   INITIAL_LUNCH_RECORDS,
   INITIAL_STAFF_DUTY_ROSTER,
@@ -144,6 +151,7 @@ import {
 
 const KEYS = {
   USERS: 'edusmart_users_v1',
+  ROLE_PERMISSIONS: 'edusmart_role_permissions_v1',
   GRADE_PASSWORDS: 'edusmart_grade_passwords_v1',
   TOPICS: 'edusmart_topics_v1',
   NOTES: 'edusmart_notes_v1',
@@ -203,6 +211,8 @@ const KEYS = {
   LIBRARY_EVENTS: 'edusmart_library_events_v1',
   LIBRARY_POLICIES: 'edusmart_library_policies_v1',
   LIBRARY_AUDIT_LOGS: 'edusmart_library_audit_logs_v1',
+  LIBRARY_ROOMS: 'edusmart_library_rooms_v1',
+  LIBRARY_ROOM_BOOKINGS: 'edusmart_library_room_bookings_v1',
   STAFF_DUTY_ROSTER: 'edusmart_staff_duty_rosters_v1',
   DROPOFF_VERIFICATIONS: 'edusmart_transport_dropoff_verifications_v1',
   LESSON_IMAGES: 'edusmart_lesson_images_v1',
@@ -233,6 +243,264 @@ function setToStorage<T>(key: string, value: T): void {
     console.error(`Error writing ${key} to localStorage`, err);
   }
 }
+
+export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RoleAccessRights> = {
+  admin: {
+    canAccessSanatorium: true,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: true,
+    canManageUsersAndRoles: true,
+    canAccessAdminSettings: true,
+    canAccessFinancials: true,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: true,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: true,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: true,
+  },
+  head_teacher: {
+    canAccessSanatorium: true,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: true,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: true,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: true,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: true,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: true,
+  },
+  deputy_head: {
+    canAccessSanatorium: true,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: true,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: true,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: true,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: true,
+  },
+  dean_of_studies: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: true,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: false,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: false,
+  },
+  senior_teacher: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: true,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: true,
+  },
+  hod: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: false,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: false,
+  },
+  class_teacher: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: true,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: true,
+  },
+  teacher: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: false,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: false,
+  },
+  nurse: {
+    canAccessSanatorium: true,
+    canAccessAcademicReports: false,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: false,
+    canAccessGatePasses: false,
+    canAccessLibrary: false,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: false,
+    canManageDiscipline: false,
+  },
+  librarian: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: false,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: false,
+    canAccessGatePasses: false,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: false,
+    canManageDiscipline: false,
+  },
+  school_admin_staff: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: true,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: true,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: true,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: false,
+  },
+  transport_team: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: false,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: false,
+    canAccessGatePasses: true,
+    canAccessLibrary: false,
+    canAccessTransport: true,
+    canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: false,
+    canManageDiscipline: false,
+  },
+  cocurricular_team: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: false,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: false,
+    canAccessGatePasses: false,
+    canAccessLibrary: false,
+    canAccessTransport: false,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: false,
+    canManageDiscipline: false,
+  },
+  parent: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: true,
+    canAccessTimetable: true,
+    canAccessGatePasses: true,
+    canAccessLibrary: true,
+    canAccessTransport: true,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: false,
+    canManageDiscipline: false,
+  },
+  student: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: false,
+    canRepublishReports: false,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: false,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: true,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: false,
+  },
+};
 
 export const Storage = {
   // Reset all data to factory demo defaults
@@ -286,6 +554,79 @@ export const Storage = {
     localStorage.setItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
     localStorage.setItem(KEYS.LESSON_IMAGES, JSON.stringify(INITIAL_LESSON_IMAGES));
     localStorage.setItem(KEYS.E_LINKS, JSON.stringify(INITIAL_E_LINKS));
+  },
+
+  // Role Permissions & Access Control
+  getRolePermissions(): Record<UserRole, RoleAccessRights> {
+    return getFromStorage<Record<UserRole, RoleAccessRights>>(KEYS.ROLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS);
+  },
+
+  updateRolePermissions(role: UserRole, permissions: Partial<RoleAccessRights>): void {
+    const current = this.getRolePermissions();
+    current[role] = { ...current[role], ...permissions };
+    setToStorage(KEYS.ROLE_PERMISSIONS, current);
+    window.dispatchEvent(new CustomEvent('role-permissions-updated', { detail: { role, permissions: current[role] } }));
+  },
+
+  getUserEffectivePermissions(user: User): RoleAccessRights {
+    // Nurse is strictly restricted to Sanatorium by policy
+    const isNurse = user.role === 'nurse' || user.email === 'nurse@edusmart.ac.ke' || 
+      (Boolean(user.designation) && user.designation!.toLowerCase().includes('nurse'));
+    if (isNurse) {
+      return {
+        canAccessSanatorium: true,
+        canAccessAcademicReports: false,
+        canEditCommentWriteUps: false,
+        canRepublishReports: false,
+        canManageUsersAndRoles: false,
+        canAccessAdminSettings: false,
+        canAccessFinancials: false,
+        canAccessTimetable: false,
+        canAccessGatePasses: false,
+        canAccessLibrary: false,
+        canAccessTransport: false,
+        canAccessCoCurricular: false,
+        canAccessLunchRegister: false,
+        canAccessVirtualRooms: false,
+        canManageDiscipline: false,
+      };
+    }
+
+    const allRolePerms = this.getRolePermissions();
+    const basePerms = allRolePerms[user.role] || DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.student;
+    
+    // Apply user-level custom overrides if defined
+    if (user.customPermissions) {
+      return { ...basePerms, ...user.customPermissions };
+    }
+    return basePerms;
+  },
+
+  updateUserRoleAndPermissions(
+    userId: string, 
+    newRole: UserRole, 
+    customPermissions?: Partial<RoleAccessRights>,
+    additionalUpdates?: Partial<User>
+  ): User | null {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return null;
+
+    users[idx] = {
+      ...users[idx],
+      ...additionalUpdates,
+      role: newRole,
+      customPermissions: customPermissions ? { ...users[idx].customPermissions, ...customPermissions } : users[idx].customPermissions
+    };
+
+    setToStorage(KEYS.USERS, users);
+    const current = this.getCurrentUser();
+    if (current && current.id === userId) {
+      this.setCurrentUser(users[idx]);
+    }
+
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: users[idx] }));
+    return users[idx];
   },
 
   // Auth & Session
@@ -745,6 +1086,99 @@ export const Storage = {
       reports.push(report);
     }
     setToStorage(KEYS.REPORT_CARDS, reports);
+    window.dispatchEvent(new CustomEvent('report-cards-updated', { detail: report }));
+  },
+
+  republishReportCard(
+    reportId: string,
+    updates: Partial<ReportCard>,
+    publisherName: string,
+    publisherRole: string,
+    auditNotes?: string
+  ): ReportCard | null {
+    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, INITIAL_REPORT_CARDS);
+    let idx = reports.findIndex(r => r.id === reportId);
+    const now = new Date().toISOString();
+    if (idx === -1) {
+      const newCard: ReportCard = {
+        id: reportId,
+        studentId: updates.studentId || 'stu-demo',
+        studentName: updates.studentName || 'Student',
+        admissionNumber: updates.admissionNumber || 'ADM/2026/01',
+        grade: updates.grade || 4,
+        stream: updates.stream || 'Dove',
+        term: updates.term || 'Term 3',
+        academicYear: 2026,
+        subjects: updates.subjects || [],
+        overallAverage: updates.overallAverage || 80,
+        overallRubric: updates.overallRubric || 'Exceeding Expectations',
+        streamPosition: updates.streamPosition ?? 1,
+        totalStudentsInStream: updates.totalStudentsInStream ?? 40,
+        attendanceDays: updates.attendanceDays || 49,
+        totalSchoolDays: 50,
+        nextTermBegins: '2027-01-05',
+        classTeacherRemarks: updates.classTeacherRemarks || 'Diligent and consistent.',
+        headTeacherRemarks: updates.headTeacherRemarks || 'Commended for progress.',
+        ...updates,
+        publicationStatus: 'Republished',
+        republishedAt: now,
+        republishedBy: publisherName,
+        republishedRole: publisherRole,
+        republishAuditNotes: auditNotes || `Officially reviewed and republished with authoritative moderation by ${publisherName} (${publisherRole}).`
+      };
+      reports.push(newCard);
+      setToStorage(KEYS.REPORT_CARDS, reports);
+      window.dispatchEvent(new CustomEvent('report-cards-updated', { detail: newCard }));
+      return newCard;
+    }
+    const updated: ReportCard = {
+      ...reports[idx],
+      ...updates,
+      publicationStatus: 'Republished',
+      republishedAt: now,
+      republishedBy: publisherName,
+      republishedRole: publisherRole,
+      republishAuditNotes: auditNotes || `Officially reviewed and republished with authoritative moderation by ${publisherName} (${publisherRole}).`
+    };
+    reports[idx] = updated;
+    setToStorage(KEYS.REPORT_CARDS, reports);
+    window.dispatchEvent(new CustomEvent('report-cards-updated', { detail: updated }));
+    return updated;
+  },
+
+  updateReportCardRemarks(
+    reportId: string,
+    remarksUpdates: {
+      classTeacherRemarks?: string;
+      headTeacherRemarks?: string;
+      deanRemarks?: string;
+      deputyRemarks?: string;
+      subjectRemarks?: { subject: SubjectName; remarks: string }[];
+    }
+  ): ReportCard | null {
+    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, INITIAL_REPORT_CARDS);
+    const idx = reports.findIndex(r => r.id === reportId);
+    if (idx === -1) return null;
+    const current = reports[idx];
+    let updatedSubjects = [...current.subjects];
+    if (remarksUpdates.subjectRemarks) {
+      updatedSubjects = updatedSubjects.map(s => {
+        const match = remarksUpdates.subjectRemarks?.find(sr => sr.subject === s.subject);
+        return match ? { ...s, remarks: match.remarks } : s;
+      });
+    }
+    const updated: ReportCard = {
+      ...current,
+      subjects: updatedSubjects,
+      classTeacherRemarks: remarksUpdates.classTeacherRemarks ?? current.classTeacherRemarks,
+      headTeacherRemarks: remarksUpdates.headTeacherRemarks ?? current.headTeacherRemarks,
+      deanRemarks: remarksUpdates.deanRemarks ?? current.deanRemarks,
+      deputyRemarks: remarksUpdates.deputyRemarks ?? current.deputyRemarks,
+    };
+    reports[idx] = updated;
+    setToStorage(KEYS.REPORT_CARDS, reports);
+    window.dispatchEvent(new CustomEvent('report-cards-updated', { detail: updated }));
+    return updated;
   },
 
   // Chat Messages
@@ -969,6 +1403,37 @@ export const Storage = {
     const updated = [log, ...list];
     setToStorage(KEYS.LIBRARY_AUDIT_LOGS, updated);
     window.dispatchEvent(new CustomEvent('library-audit-updated', { detail: updated }));
+  },
+
+  // Library Rooms & Room Booking Portal
+  getLibraryRooms(): LibraryRoom[] {
+    return getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, INITIAL_LIBRARY_ROOMS);
+  },
+  saveLibraryRooms(rooms: LibraryRoom[]): void {
+    setToStorage(KEYS.LIBRARY_ROOMS, rooms);
+    window.dispatchEvent(new CustomEvent('library-rooms-updated', { detail: rooms }));
+  },
+  getLibraryRoomBookings(): LibraryRoomBooking[] {
+    return getFromStorage<LibraryRoomBooking[]>(KEYS.LIBRARY_ROOM_BOOKINGS, INITIAL_LIBRARY_ROOM_BOOKINGS);
+  },
+  saveLibraryRoomBookings(bookings: LibraryRoomBooking[]): void {
+    setToStorage(KEYS.LIBRARY_ROOM_BOOKINGS, bookings);
+    window.dispatchEvent(new CustomEvent('library-room-bookings-updated', { detail: bookings }));
+  },
+  addLibraryRoomBooking(booking: LibraryRoomBooking): void {
+    const list = this.getLibraryRoomBookings();
+    const updated = [booking, ...list];
+    this.saveLibraryRoomBookings(updated);
+  },
+  updateLibraryRoomBooking(id: string, updates: Partial<LibraryRoomBooking>): void {
+    const list = this.getLibraryRoomBookings();
+    const updated = list.map(b => b.id === id ? { ...b, ...updates } : b);
+    this.saveLibraryRoomBookings(updated);
+  },
+  cancelLibraryRoomBooking(id: string): void {
+    const list = this.getLibraryRoomBookings();
+    const updated = list.map(b => b.id === id ? { ...b, status: 'cancelled' as const } : b);
+    this.saveLibraryRoomBookings(updated);
   },
 
   // Parent Helpers

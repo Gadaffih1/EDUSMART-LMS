@@ -11,17 +11,21 @@ import {
   Search, 
   CheckCircle2, 
   Users,
-  BookOpen
+  BookOpen,
+  DoorOpen
 } from 'lucide-react';
 import { 
+  User,
   ReadingProgrammeMember, 
   LibraryAttendanceLog, 
   LibraryTimetableSlot, 
   LibraryEvent 
 } from '../../types';
 import { LibraryPortalSection } from './types';
+import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
 
 interface ProgrammesViewsProps {
+  currentUser?: User;
   section: LibraryPortalSection;
   readingMembers: ReadingProgrammeMember[];
   attendanceLogs: LibraryAttendanceLog[];
@@ -33,6 +37,7 @@ interface ProgrammesViewsProps {
 }
 
 export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
+  currentUser,
   section,
   readingMembers,
   attendanceLogs,
@@ -165,14 +170,34 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
   if (section === 'timetable') {
     return (
       <div className="space-y-6">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-          <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-purple-600" />
-            <span>Class Library Timetable & Session Schedule</span>
-          </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Weekly scheduled reading periods, library orientation, and digital literacy lab bookings.
-          </p>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-purple-600" />
+              <span>Class Library Timetable & Session Schedule</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Weekly scheduled reading periods, library orientation, and digital literacy lab bookings.
+            </p>
+          </div>
+
+          <LibraryRoomBookingButton 
+            currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)}
+            variant="hero"
+            label="Book Free Room Spot"
+          />
+        </div>
+
+        {/* Timetable spots explanation banner */}
+        <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs">
+          <div className="text-purple-900 font-medium">
+            <strong className="text-purple-950 font-black">Facility Booking Rule:</strong> The spots below contain scheduled class lessons and cannot be booked. Subject Teachers & Librarians can book rooms on any open spot without scheduled lessons.
+          </div>
+          <LibraryRoomBookingButton 
+            currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)}
+            variant="outline"
+            label="Check Spot Availability"
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -198,6 +223,54 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Room Booking Section
+  if (section === 'room_booking') {
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-purple-900 to-indigo-900 rounded-2xl p-6 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-400/30 rounded-full text-xs font-semibold mb-2">
+              <DoorOpen className="w-3.5 h-3.5" />
+              <span>CBC Facilities Reservation</span>
+            </div>
+            <h3 className="text-2xl font-black tracking-tight">
+              Library Room Booking & Learning Spaces
+            </h3>
+            <p className="text-purple-200/80 text-xs mt-1 max-w-xl">
+              Collaborative seminar rooms, audio-visual suites, and reading halls. Room bookings are strictly permitted only on vacant timetable spots without scheduled library lessons.
+            </p>
+          </div>
+
+          <LibraryRoomBookingButton 
+            currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)}
+            variant="hero"
+            label="Open Booking Console"
+          />
+        </div>
+
+        {/* Quick launch card */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto">
+            <DoorOpen className="w-8 h-8" />
+          </div>
+          <div className="max-w-md mx-auto">
+            <h4 className="font-black text-lg text-slate-900">Reserve a Library Space</h4>
+            <p className="text-xs text-slate-500 mt-1">
+              Select any open period across the school week to reserve a room for research, multimedia screenings, or group discussions.
+            </p>
+          </div>
+          <div className="pt-2">
+            <LibraryRoomBookingButton 
+              currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)}
+              variant="hero"
+              label="Launch Room Booking & Timetable Matrix"
+            />
+          </div>
         </div>
       </div>
     );

@@ -78,7 +78,8 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
   subtitle = "Official medical register: Student clinic attendance logs, nurse in-charge notes, vital signs, and clinical recommendations."
 }) => {
   // Executive leadership (Head Teacher, Deputy Head, Dean of Studies) & Nurse Officer have full school-wide view
-  const isNurseOfficer = currentUser.email === 'nurse@edusmart.ac.ke' || 
+  const isNurseOfficer = currentUser.role === 'nurse' || 
+    currentUser.email === 'nurse@edusmart.ac.ke' || 
     (Boolean(currentUser.designation) && currentUser.designation!.toLowerCase().includes('nurse'));
   const effectiveCanRecord = canRecord && isNurseOfficer;
 

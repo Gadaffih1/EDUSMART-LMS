@@ -17,6 +17,7 @@ import {
   Globe
 } from 'lucide-react';
 import { 
+  User,
   LibraryBook, 
   LibraryBorrowRecord, 
   LibraryReservation, 
@@ -24,8 +25,10 @@ import {
   ReadingProgrammeMember 
 } from '../../types';
 import { LibraryPortalSection } from './types';
+import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
 
 interface LibraryDashboardViewProps {
+  currentUser?: User;
   books: LibraryBook[];
   borrowRecords: LibraryBorrowRecord[];
   reservations: LibraryReservation[];
@@ -37,6 +40,7 @@ interface LibraryDashboardViewProps {
 }
 
 export const LibraryDashboardView: React.FC<LibraryDashboardViewProps> = ({
+  currentUser,
   books,
   borrowRecords,
   reservations,
@@ -73,6 +77,10 @@ export const LibraryDashboardView: React.FC<LibraryDashboardViewProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <LibraryRoomBookingButton 
+              currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)} 
+              variant="hero" 
+            />
             <button
               onClick={() => onNavigate('digital_library')}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"

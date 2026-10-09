@@ -10,9 +10,28 @@ export type UserRole =
   | 'librarian'      // Librarian: Library
   | 'head_teacher'   // Head Teacher: School-wide management
   | 'school_admin_staff' // School Admin Staff: Secretarial, registers, gate exits, work analysis, calendar
+  | 'nurse'          // School Nursing Officer: Strictly restricted to school sanatorium portal
   | 'transport_team' // Transport Team: Drivers, Assistants, Fleet & Route Operations
   | 'cocurricular_team' // Co-Curricular Team: Sports Coaches, Club Patrons, Talent & Activities Management
   | 'admin';         // System Administrator: Full system administration
+
+export interface RoleAccessRights {
+  canAccessSanatorium: boolean;
+  canAccessAcademicReports: boolean;
+  canEditCommentWriteUps: boolean;
+  canRepublishReports: boolean;
+  canManageUsersAndRoles: boolean;
+  canAccessAdminSettings: boolean;
+  canAccessFinancials: boolean;
+  canAccessTimetable: boolean;
+  canAccessGatePasses: boolean;
+  canAccessLibrary: boolean;
+  canAccessTransport: boolean;
+  canAccessCoCurricular: boolean;
+  canAccessLunchRegister: boolean;
+  canAccessVirtualRooms: boolean;
+  canManageDiscipline: boolean;
+}
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -110,6 +129,7 @@ export interface User {
   parentPhone?: string;
   tscNumber?: string; // Teachers Service Commission ID
   designation?: string;
+  customPermissions?: Partial<RoleAccessRights>;
 }
 
 export interface Topic {
@@ -464,6 +484,13 @@ export interface ReportCard {
   totalStudentsInStream: number;
   classTeacherRemarks: string;
   headTeacherRemarks: string;
+  deanRemarks?: string;
+  deputyRemarks?: string;
+  publicationStatus?: 'Draft' | 'Published' | 'Republished';
+  republishedAt?: string;
+  republishedBy?: string;
+  republishedRole?: string;
+  republishAuditNotes?: string;
   attendanceDays: number;
   totalSchoolDays: number;
   nextTermBegins: string;
@@ -747,6 +774,41 @@ export interface LibraryPolicy {
   description: string;
 }
 
+export interface LibraryRoom {
+  id: string;
+  name: string;
+  type: string;
+  capacity: number;
+  location: string;
+  features: string[];
+  description: string;
+}
+
+export interface LibraryRoomBooking {
+  id: string;
+  bookingRef: string;
+  roomId: string;
+  roomName: string;
+  roomCapacity: number;
+  date: string; // YYYY-MM-DD
+  dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  startTime: string; // e.g. "08:40 AM" or "08:40"
+  endTime: string; // e.g. "09:20 AM" or "09:20"
+  periodLabel?: string; // e.g. "Period 2 (Core Instruction)"
+  bookedByUserId: string;
+  bookedByName: string;
+  bookedByRole: 'librarian' | 'teacher' | 'class_teacher' | 'subject_teacher' | string;
+  subject?: string;
+  grade?: GradeLevel;
+  stream?: string;
+  purpose: string;
+  learnersCount: number;
+  equipmentNeeded: string[];
+  status: 'confirmed' | 'cancelled';
+  createdAt: string;
+  notes?: string;
+}
+
 export type NotificationCategory = 'assignment' | 'grade' | 'announcement' | 'system' | 'safety' | 'transport';
 
 export interface AppNotification {
@@ -874,6 +936,8 @@ export interface SchoolCalendarEvent {
   authorRole?: 'school_admin_staff' | 'dean_of_studies' | 'deputy_head' | 'head_teacher' | string;
   authorName?: string;
 }
+
+export type CalendarEvent = SchoolCalendarEvent;
 
 export interface EventTicketPurchase {
   id: string;

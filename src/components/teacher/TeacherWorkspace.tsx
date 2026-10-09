@@ -31,6 +31,7 @@ import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
+import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -63,7 +64,8 @@ import {
   Briefcase,
   UserCheck,
   FolderTree,
-  Utensils
+  Utensils,
+  DoorOpen
 } from 'lucide-react';
 
 interface TeacherWorkspaceProps {
@@ -81,6 +83,7 @@ type TeacherTab =
   | 'quizzes'
   | 'virtual_class'
   | 'timetable'
+  | 'library_booking'
   | 'reminders'
   | 'reporting_hub';
 
@@ -470,6 +473,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       title: 'TIMETABLE & GOVERNANCE',
       items: [
         { id: 'timetable', label: '8. Teaching Timetable', icon: Calendar },
+        { id: 'library_booking', label: '8b. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
         { id: 'gate_exit', label: '9. Student Gate Exit Passes', icon: LogOut },
         { id: 'reporting_hub', label: '10. Academic Reporting Hub', icon: FileSpreadsheet },
         { id: 'reminders', label: '11. Lesson Reminders', icon: Bell }
@@ -518,6 +522,13 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             <span className="hidden sm:inline">CBC Assessment Results</span>
             <span className="sm:hidden">CBC Marks</span>
           </button>
+
+          {/* Library Room Booking Button */}
+          <LibraryRoomBookingButton 
+            currentUser={currentUser} 
+            variant="header" 
+            label="Book Library Room" 
+          />
 
           <button
             onClick={() => setActiveTab('virtual_class')}
@@ -1856,11 +1867,111 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
           AUX TAB: POST & MANAGE CLASS TIMETABLE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <TimetablePortal
-          currentUser={currentUser}
-          initialGrade={defaultGrade}
-          initialStream={defaultStream}
-        />
+        <div className="space-y-4">
+          {/* Library Room Booking Callout */}
+          <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                <DoorOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="font-black text-purple-950 text-sm">Need a Special Learning Venue? Book a Library Space</span>
+                <p className="text-[11px] text-purple-800 mt-0.5">
+                  Reserve the Main Reading Hall, AV Suite, or CBC Seminar Rooms for your class. Available exclusively on spots without scheduled library lessons.
+                </p>
+              </div>
+            </div>
+            <LibraryRoomBookingButton 
+              currentUser={currentUser} 
+              variant="hero" 
+              label="Book Library Room Spot" 
+            />
+          </div>
+
+          <TimetablePortal
+            currentUser={currentUser}
+            initialGrade={defaultGrade}
+            initialStream={defaultStream}
+          />
+        </div>
+      )}
+
+      {/* ========================================================
+          AUX TAB: LIBRARY ROOM BOOKING
+          ======================================================== */}
+      {activeTab === 'library_booking' && (
+        <section className="space-y-6">
+          <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 rounded-2xl p-6 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-400/30 rounded-full text-xs font-semibold mb-2">
+                <DoorOpen className="w-3.5 h-3.5" />
+                <span>CBC Faculty Facility Reservation</span>
+              </div>
+              <h2 className="text-2xl font-black tracking-tight">
+                Subject Teacher Library Room Booking
+              </h2>
+              <p className="text-purple-200/80 text-xs mt-1 max-w-xl">
+                Reserve the Library Reading Hall, Digital Research & AV Suite, or Discussion Rooms for your class lessons, revision groups, or digital practicals. Bookings are permitted exclusively on spots without scheduled class library lessons.
+              </p>
+            </div>
+
+            <LibraryRoomBookingButton 
+              currentUser={currentUser} 
+              variant="hero" 
+              label="Book Library Room Now" 
+            />
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Interactive Room Booking Console & Timetable Spot Checker
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Instant collision detection checks both curriculum library lessons and confirmed reservations.
+                </p>
+              </div>
+
+              <LibraryRoomBookingButton 
+                currentUser={currentUser} 
+                variant="outline" 
+                label="Launch Full Booking Matrix" 
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50">
+                <div className="font-bold text-xs text-purple-900 uppercase tracking-wider">1. Select Venue & Period</div>
+                <p className="text-xs text-purple-800 mt-1">
+                  Choose from 5 library venues including the Digital AV Lab and Collaborative Seminar Rooms across Periods 1 to 9.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                <div className="font-bold text-xs text-emerald-900 uppercase tracking-wider">2. Automated Spot Verification</div>
+                <p className="text-xs text-emerald-800 mt-1">
+                  System strictly locks spots with scheduled curriculum library reading lessons. Only vacant spots can be reserved.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/50">
+                <div className="font-bold text-xs text-indigo-900 uppercase tracking-wider">3. Instant Entry Pass</div>
+                <p className="text-xs text-indigo-800 mt-1">
+                  Get a confirmed booking reference (e.g. LRB-2026-X) logged directly in the school library audit ledger.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-4 text-center">
+              <LibraryRoomBookingButton 
+                currentUser={currentUser} 
+                variant="hero" 
+                label="Open Booking Modal & View Spots" 
+              />
+            </div>
+          </div>
+        </section>
       )}
 
       {/* ========================================================

@@ -25,6 +25,7 @@ import { CirculationViews } from './CirculationViews';
 import { CollectionViews } from './CollectionViews';
 import { ProgrammesViews } from './ProgrammesViews';
 import { GovernanceViews } from './GovernanceViews';
+import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
 import { 
   LogOut, 
   Menu, 
@@ -207,7 +208,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
   // Section categorize
   const isCirculation = ['issue_return', 'reservations', 'borrowers', 'overdue', 'fines_charges'].includes(currentSection);
   const isCollection = ['catalogue', 'books_resources', 'acquisitions', 'inventory', 'shelves_locations', 'digital_library'].includes(currentSection);
-  const isProgrammes = ['reading_programme', 'attendance', 'timetable', 'events_programmes'].includes(currentSection);
+  const isProgrammes = ['reading_programme', 'attendance', 'timetable', 'room_booking', 'events_programmes'].includes(currentSection);
   const isGovernance = ['reports_analytics', 'notifications', 'policies', 'settings', 'audit_trail'].includes(currentSection);
 
   const overdueCount = borrowRecords.filter(r => r.status === 'overdue').length;
@@ -245,6 +246,12 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            <LibraryRoomBookingButton 
+              currentUser={currentUser} 
+              variant="header" 
+              label="Book Library Room" 
+            />
+
             <div className="text-right hidden sm:block">
               <div className="font-bold text-xs text-white">
                 {currentUser.name}
@@ -283,6 +290,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {currentSection === 'dashboard' && (
             <LibraryDashboardView
+              currentUser={currentUser}
               books={books}
               borrowRecords={borrowRecords}
               reservations={reservations}
@@ -345,6 +353,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
 
           {isProgrammes && (
             <ProgrammesViews
+              currentUser={currentUser}
               section={currentSection}
               readingMembers={readingMembers}
               attendanceLogs={attendanceLogs}

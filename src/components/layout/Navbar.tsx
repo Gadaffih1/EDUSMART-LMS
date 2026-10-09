@@ -389,9 +389,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {allUsers
-                    .filter(u => ['transport_team', 'cocurricular_team'].includes(u.role) || u.email === 'nurse@edusmart.ac.ke' || (u.designation && u.designation.toLowerCase().includes('nurse')))
+                    .filter(u => ['transport_team', 'cocurricular_team', 'nurse'].includes(u.role) || u.email === 'nurse@edusmart.ac.ke' || (u.designation && u.designation.toLowerCase().includes('nurse')))
                     .map(user => {
-                      const isNurse = user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'));
+                      const isNurse = user.role === 'nurse' || user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'));
                       const isTransport = user.role === 'transport_team';
                       return (
                         <button

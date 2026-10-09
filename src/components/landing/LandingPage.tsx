@@ -147,6 +147,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    const isNurseUser = user.role === 'nurse' || user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'));
+    if (isNurseUser && expectedRoleCategory !== 'sanatorium') {
+      setErrorMsg('School Nursing Officer is strictly authorized to access the School Sanatorium Clinic portal only.');
+      return;
+    }
+
     if (expectedRoleCategory === 'student' && user.role !== 'student') {
       setErrorMsg('This account is not a student account. Please use your designated portal.');
       return;
@@ -172,7 +178,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (expectedRoleCategory === 'sanatorium' && !['school_admin_staff', 'admin'].includes(user.role)) {
+    if (expectedRoleCategory === 'sanatorium' && !['nurse', 'school_admin_staff', 'admin'].includes(user.role)) {
       setErrorMsg('This portal is reserved for School Sanatorium Medical Officers & Staff.');
       return;
     }
@@ -524,49 +530,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             <p className="text-slate-300 text-xs sm:text-sm md:text-base mt-2 max-w-2xl mx-auto font-medium italic">
               "A secure digital platform connecting learners, teachers, parents and school leadership."
             </p>
-
-            {/* Quick Hero Call-To-Action Buttons */}
-            <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4 sm:mt-5">
-              <a
-                href="#portal-cards-grid"
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>🚀</span>
-                <span>Access Portals</span>
-              </a>
-              <button
-                onClick={() => {
-                  const el = document.getElementById('announcements-section');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>📢</span>
-                <span>Announcements</span>
-              </button>
-            </div>
-
-            {/* Live Campus Metrics Badges Strip */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px] text-slate-300">
-              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                🎓 Grades 1–9 CBC
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                👨‍🎓 1,240 Enrolled Learners
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                👩‍🏫 48 Academic Department Staff
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                🚌 8 Commuter Routes
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                🏥 24/7 Sanatorium Bay
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700 font-medium">
-                🍽️ Daily Meals Register
-              </span>
-            </div>
           </div>
 
           {/* ========================================================

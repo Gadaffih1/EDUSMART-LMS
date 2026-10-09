@@ -46,8 +46,8 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'executive' | 'analytics' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
-  const [activeTab, setActiveTab] = useState<HeadTab>('executive');
+  type HeadTab = 'analytics' | 'executive' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
+  const [activeTab, setActiveTab] = useState<HeadTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const allUsers = Storage.getUsers();
@@ -101,10 +101,10 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
 
   const sidebarGroups: WorkspaceSidebarGroup<HeadTab>[] = [
     {
-      title: 'EXECUTIVE GOVERNANCE',
+      title: 'EXECUTIVE & GOVERNANCE',
       items: [
+        { id: 'analytics', label: 'Executive Health, Attendance & Academic Analytics', icon: TrendingUp },
         { id: 'executive', label: 'Executive Overview', icon: BarChart3 },
-        { id: 'analytics', label: 'School-Wide Analytics', icon: TrendingUp },
         { id: 'announcements', label: 'Directives & Notices', icon: Bell, badge: announcements.length },
         { id: 'bom_report', label: 'BoM Governance Report', icon: Building2 }
       ]
@@ -187,7 +187,19 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
 
       {/* ========================================================
-          TAB 1: EXECUTIVE OVERVIEW
+          TAB 1: HEAD TEACHER EXECUTIVE HEALTH, ATTENDANCE & ACADEMIC ANALYTICS
+          (Landing Data on Dashboard)
+          ======================================================== */}
+      {activeTab === 'analytics' && (
+        <ExecutiveAnalyticsDashboard 
+          currentUser={currentUser}
+          title="Head Teacher Executive Health, Attendance & Academic Analytics"
+          subtitle="Real-time Recharts surveillance: Campus attendance rates, longitudinal CBC mastery, library foot-traffic, sanatorium clinic logs, and student wellbeing indicators."
+        />
+      )}
+
+      {/* ========================================================
+          TAB 2: EXECUTIVE OVERVIEW
           ======================================================== */}
       {activeTab === 'executive' && (
         <section className="space-y-6">
@@ -469,17 +481,6 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
             </div>
           </div>
         </section>
-      )}
-
-      {/* ========================================================
-          TAB 1B: EXECUTIVE ANALYTICS DASHBOARD (RECHARTS)
-          ======================================================== */}
-      {activeTab === 'analytics' && (
-        <ExecutiveAnalyticsDashboard 
-          currentUser={currentUser}
-          title="Head Teacher Executive Health, Attendance & Academic Analytics"
-          subtitle="Real-time Recharts surveillance: Campus attendance rates, longitudinal CBC mastery, library foot-traffic, and student wellbeing indicators."
-        />
       )}
 
       {/* ========================================================

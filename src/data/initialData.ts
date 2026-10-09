@@ -29,6 +29,8 @@ import {
   LibraryEvent,
   LibraryAuditLog,
   LibraryPolicy,
+  LibraryRoom,
+  LibraryRoomBooking,
   AppNotification,
   LearnerBadge,
   PortfolioItem,
@@ -103,7 +105,7 @@ export const INITIAL_USERS: User[] = [
     name: 'Sister Grace Wambui, RN',
     email: 'nurse@edusmart.ac.ke',
     password: 'nurse2026',
-    role: 'school_admin_staff',
+    role: 'nurse',
     tscNumber: 'NCK/RN-58921',
     designation: 'School Nursing Officer In-Charge · Sanatorium Bay',
     avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80',
@@ -2053,6 +2055,105 @@ export const INITIAL_LIBRARY_AUDIT_LOGS: LibraryAuditLog[] = [
     role: 'system',
     timestamp: '2026-10-02T07:00:00Z',
     details: 'Sent overdue SMS and portal alert to Parent of Kelvin Kiprop'
+  }
+];
+
+export const INITIAL_LIBRARY_ROOMS: LibraryRoom[] = [
+  {
+    id: 'room-main-hall',
+    name: 'Main Library Reading Hall',
+    type: 'Reading & Silent Study Hall',
+    capacity: 80,
+    location: 'Central Library, Ground Floor',
+    features: ['CBC Reference Stacks', 'Individual Carrels', 'Reading Tables', 'Librarian Desk'],
+    description: 'Spacious silent reading hall for whole-class reading, reference research, and quiet individual study.'
+  },
+  {
+    id: 'room-digital-suite',
+    name: 'Digital Research & Audio-Visual Suite',
+    type: 'Digital Literacy & AV Lab',
+    capacity: 40,
+    location: 'East Wing, 1st Floor',
+    features: ['Interactive Smart Screen', 'High-Speed CBC Tablets', 'Audio Headsets', 'Ceiling Projector'],
+    description: 'Equipped with digital learning workstations, multimedia projection, and online research tools.'
+  },
+  {
+    id: 'room-discussion-a',
+    name: 'CBC Discussion & Group Seminar Room A',
+    type: 'Collaborative Seminar Room',
+    capacity: 25,
+    location: 'West Wing, 1st Floor',
+    features: ['Magnetic Whiteboards', 'Modular Group Seating', 'Presentation Monitor', 'Makerspace Kit'],
+    description: 'Designed for collaborative group work, debate preparation, and CBC strand syndicate sessions.'
+  },
+  {
+    id: 'room-discussion-b',
+    name: 'CBC Discussion & Group Seminar Room B',
+    type: 'Collaborative Seminar Room',
+    capacity: 25,
+    location: 'West Wing, 1st Floor',
+    features: ['Magnetic Whiteboards', 'Modular Group Seating', 'Presentation Monitor'],
+    description: 'Ideal for subject remedial groups, CBC assessment research, and teacher-led symposiums.'
+  },
+  {
+    id: 'room-archive-special',
+    name: 'Special Collections & Quiet Study Alcove',
+    type: 'Special Collections Room',
+    capacity: 15,
+    location: 'Mezzanine Level',
+    features: ['Rare CBC Manuscripts', 'Historical Archives', 'Sound-dampened Walls'],
+    description: 'Intimate quiet alcove for focused revision, teacher planning, and advanced research.'
+  }
+];
+
+export const INITIAL_LIBRARY_ROOM_BOOKINGS: LibraryRoomBooking[] = [
+  {
+    id: 'lrb-101',
+    bookingRef: 'LRB-2026-101',
+    roomId: 'room-digital-suite',
+    roomName: 'Digital Research & Audio-Visual Suite',
+    roomCapacity: 40,
+    date: '2026-10-15',
+    dayOfWeek: 'Thursday',
+    startTime: '09:20 AM',
+    endTime: '10:00 AM',
+    periodLabel: 'Period 3 (STEM & Numeracy)',
+    bookedByUserId: 'usr-tea-kiprono',
+    bookedByName: 'Mr. David Kiprono',
+    bookedByRole: 'subject_teacher',
+    grade: 4,
+    stream: 'Grade 4 Dove',
+    subject: 'Science & Technology',
+    purpose: 'CBC Digital Research: Plant Living Organisms & Microscopic Imaging',
+    learnersCount: 36,
+    equipmentNeeded: ['Interactive Smart Screen', 'High-Speed CBC Tablets', 'Ceiling Projector'],
+    status: 'confirmed',
+    createdAt: '2026-10-08T09:00:00Z',
+    notes: 'Learners will use virtual lab simulations for CBC Grade 4 Strand 2.'
+  },
+  {
+    id: 'lrb-102',
+    bookingRef: 'LRB-2026-102',
+    roomId: 'room-discussion-a',
+    roomName: 'CBC Discussion & Group Seminar Room A',
+    roomCapacity: 25,
+    date: '2026-10-16',
+    dayOfWeek: 'Friday',
+    startTime: '11:50 AM',
+    endTime: '12:30 PM',
+    periodLabel: 'Period 6 (Creative & Practical)',
+    bookedByUserId: 'usr-lib-esther',
+    bookedByName: 'Mrs. Esther Kamau',
+    bookedByRole: 'librarian',
+    grade: 6,
+    stream: 'Grade 6 Falcon',
+    subject: 'English & Literature',
+    purpose: 'Junior Readers Book Club & Creative Storytelling Circle',
+    learnersCount: 22,
+    equipmentNeeded: ['Magnetic Whiteboards', 'Modular Group Seating'],
+    status: 'confirmed',
+    createdAt: '2026-10-08T11:30:00Z',
+    notes: 'Reviewing "The River and the Source" excerpts.'
   }
 ];
 

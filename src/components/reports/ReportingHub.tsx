@@ -36,7 +36,11 @@ import {
   FileSpreadsheet, 
   Check, 
   ShieldCheck,
-  Filter
+  Filter,
+  Edit2,
+  Send,
+  X,
+  Save
 } from 'lucide-react';
 
 interface ReportingHubProps {
@@ -110,9 +114,67 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 
   const activeStudent = eligibleStudents.find(s => s.id === selectedStudentId) || eligibleStudents[0] || allStudents[0];
 
+  // Executive Moderation & Republishing Rights (Deputy, Dean, Admin)
+  const canRepublishReports = ['deputy_head', 'dean_of_studies', 'head_teacher', 'admin'].includes(currentUser.role);
+  const [isExecutiveEditMode, setIsExecutiveEditMode] = useState<boolean>(false);
+  const [editedTeacherRemarks, setEditedTeacherRemarks] = useState<string>('');
+  const [editedDeanRemarks, setEditedDeanRemarks] = useState<string>('');
+  const [editedSubjectRemarks, setEditedSubjectRemarks] = useState<Record<string, string>>({});
+  const [republishStamp, setRepublishStamp] = useState<{
+    publisherName: string;
+    publisherRole: string;
+    date: string;
+  } | null>(null);
+  const [republishToast, setRepublishToast] = useState<string | null>(null);
+
   // Print Preview state
   const [printMode, setPrintMode] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
+
+  const handleSaveAndRepublishDossier = () => {
+    if (!aggregatedStudentData) return;
+
+    // Check if report card exists in storage and update
+    const reports = Storage.getReportCards(activeStudent.id);
+    const existing = reports[0];
+    const publisherRoleLabel = currentUser.role === 'deputy_head' ? 'Deputy Head Teacher' :
+                               currentUser.role === 'dean_of_studies' ? 'Dean of Studies' :
+                               currentUser.role === 'admin' ? 'System Administrator' : 'Head Teacher';
+
+    const updatedSubjects = (existing?.subjects || []).map(s => {
+      const editedRemark = editedSubjectRemarks[s.subject];
+      return editedRemark ? { ...s, remarks: editedRemark } : s;
+    });
+
+    const reportId = existing ? existing.id : `rc-${activeStudent.id}-report`;
+    Storage.republishReportCard(
+      reportId,
+      {
+        studentId: activeStudent.id,
+        studentName: activeStudent.name,
+        admissionNumber: activeStudent.admissionNumber || `ADM/2026/0${activeStudent.grade || 4}01`,
+        grade: activeStudent.grade || selectedGrade,
+        stream: activeStudent.stream || 'Dove',
+        classTeacherRemarks: editedTeacherRemarks || existing?.classTeacherRemarks || aggregatedStudentData.teacherRemarks,
+        deanRemarks: currentUser.role === 'dean_of_studies' ? (editedDeanRemarks || existing?.deanRemarks) : existing?.deanRemarks,
+        deputyRemarks: currentUser.role === 'deputy_head' ? (editedDeanRemarks || existing?.deputyRemarks) : existing?.deputyRemarks,
+        subjects: updatedSubjects.length > 0 ? updatedSubjects : undefined
+      },
+      currentUser.name,
+      publisherRoleLabel,
+      `Dossier officially moderated, remarks verified and republished by ${currentUser.name} (${publisherRoleLabel}).`
+    );
+
+    setRepublishStamp({
+      publisherName: currentUser.name,
+      publisherRole: publisherRoleLabel,
+      date: new Date().toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric' })
+    });
+
+    setRepublishToast(`Dossier write-ups and evaluation remarks successfully republished with ${publisherRoleLabel} official endorsement!`);
+    setIsExecutiveEditMode(false);
+    setTimeout(() => setRepublishToast(null), 5000);
+  };
 
   // -------------------------------------------------------------
   // DATA AGGREGATION FOR SELECTED STUDENT
@@ -643,7 +705,95 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           RENDER: INDIVIDUAL LEARNER PROGRESS DOSSIER
           ======================================================== */}
       {reportScope === 'individual' && aggregatedStudentData && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden printable-report">
+        <div className="space-y-4">
+          {/* Executive Moderation & Republishing Bar (Deputy, Dean, Admin) */}
+          {canRepublishReports && (
+            <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md border border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-400/40 text-blue-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded font-bold border border-blue-400/30">
+                      {currentUser.role.replace('_', ' ').toUpperCase()} CLEARANCE
+                    </span>
+                    <span className="text-xs font-bold text-slate-300">Executive Moderation Rights Active</span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    You have authoritative rights to edit teacher remarks, revise qualitative write-ups, and republish this official dossier.
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    setIsExecutiveEditMode(!isExecutiveEditMode);
+                    if (!editedTeacherRemarks) {
+                      setEditedTeacherRemarks(aggregatedStudentData.teacherRemarks);
+                    }
+                  }}
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                    isExecutiveEditMode
+                      ? 'bg-amber-400 text-slate-950 font-black'
+                      : 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
+                  }`}
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isExecutiveEditMode ? 'Exit Edit Mode' : 'Edit Remarks & Write-Ups'}</span>
+                </button>
+
+                <button
+                  onClick={handleSaveAndRepublishDossier}
+                  className="px-4 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Authoritatively republish this official dossier to student and parent portals"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Save & Republish Dossier</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {republishToast && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-950 font-bold flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{republishToast}</span>
+              </div>
+              <button onClick={() => setRepublishToast(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Official Republished Seal Banner */}
+          {republishStamp && (
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-500 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                  ✓
+                </div>
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wider text-emerald-900 flex items-center gap-2">
+                    <span>OFFICIALLY REPUBLISHED & ENDORSED DOSSIER</span>
+                    <span className="bg-emerald-200 text-emerald-950 text-[10px] px-2 py-0.5 rounded-full font-mono">
+                      Institutional Seal
+                    </span>
+                  </div>
+                  <div className="text-xs text-emerald-800 mt-0.5 font-medium">
+                    Moderated and republished by <strong>{republishStamp.publisherName}</strong> ({republishStamp.publisherRole}) on {republishStamp.date}.
+                  </div>
+                </div>
+              </div>
+              <div className="text-right font-mono text-[11px] text-emerald-800">
+                Verified Official Release
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden printable-report">
           {/* Letterhead Header */}
           <div className="p-6 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -791,7 +941,19 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
                            s.rubric === 'Meeting Expectations' ? 'ME' : 'AE'} ({s.rubric.split(' ')[0]})
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-slate-600 text-xs italic">{s.remarks}</td>
+                      <td className="py-2.5 px-3 text-slate-600 text-xs italic">
+                        {isExecutiveEditMode ? (
+                          <input
+                            type="text"
+                            value={editedSubjectRemarks[s.subject] ?? s.remarks}
+                            onChange={(e) => setEditedSubjectRemarks(prev => ({ ...prev, [s.subject]: e.target.value }))}
+                            className="w-full px-2 py-1 text-xs border border-amber-300 rounded bg-amber-50/70 text-slate-900 font-normal focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            placeholder="Edit teacher remarks..."
+                          />
+                        ) : (
+                          editedSubjectRemarks[s.subject] ?? s.remarks
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -854,12 +1016,71 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
-              <span className="font-bold text-slate-900 block">Class Teacher Summative Verdict:</span>
-              <p className="text-slate-700 italic leading-relaxed">
-                "{aggregatedStudentData.teacherRemarks}"
-              </p>
-            </div>
+            {isExecutiveEditMode ? (
+              <div className="p-4 bg-amber-50/80 rounded-xl border-2 border-amber-300 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900 uppercase">
+                    <Edit2 className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Executive Write-Ups Moderation ({currentUser.role.replace('_', ' ').toUpperCase()})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">
+                    Active Edit Session
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-900">
+                    Class Teacher Summative Verdict & General Conduct Write-Up:
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editedTeacherRemarks || aggregatedStudentData.teacherRemarks}
+                    onChange={(e) => setEditedTeacherRemarks(e.target.value)}
+                    className="w-full p-2.5 text-xs border border-amber-300 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed font-normal"
+                    placeholder="Enter official teacher qualitative verdict..."
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                    <span>
+                      {currentUser.role === 'deputy_head' ? 'Deputy Head Pastoral & Disciplinary Endorsement:' :
+                       currentUser.role === 'dean_of_studies' ? 'Dean of Studies Academic Endorsement Write-Up:' :
+                       'Executive Moderation Institutional Endorsement Write-Up:'}
+                    </span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editedDeanRemarks}
+                    onChange={(e) => setEditedDeanRemarks(e.target.value)}
+                    className="w-full p-2.5 text-xs border border-blue-300 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed font-normal"
+                    placeholder={`Enter ${currentUser.role === 'deputy_head' ? 'pastoral review, decorum and conduct recommendation' : 'academic mastery, CBC competencies and progression verdict'}...`}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+                  <span className="font-bold text-slate-900 block">Class Teacher Summative Verdict:</span>
+                  <p className="text-slate-700 italic leading-relaxed">
+                    "{editedTeacherRemarks || aggregatedStudentData.teacherRemarks}"
+                  </p>
+                </div>
+
+                {(editedDeanRemarks || (Storage.getReportCards(activeStudent.id)[0]?.deanRemarks || Storage.getReportCards(activeStudent.id)[0]?.deputyRemarks)) && (
+                  <div className="p-4 bg-blue-50/70 rounded-xl border border-blue-200 text-xs space-y-1">
+                    <span className="font-bold text-blue-900 block flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      <span>Executive Moderation Endorsement (Dean / Deputy):</span>
+                    </span>
+                    <p className="text-blue-950 italic leading-relaxed">
+                      "{editedDeanRemarks || Storage.getReportCards(activeStudent.id)[0]?.deanRemarks || Storage.getReportCards(activeStudent.id)[0]?.deputyRemarks}"
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section 4: Formal Sign-off Section (Printable Signature Lines) */}
@@ -889,6 +1110,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* ========================================================

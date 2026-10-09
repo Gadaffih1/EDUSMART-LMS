@@ -14,6 +14,7 @@ export type LibraryPortalSection =
   | 'reading_programme'
   | 'attendance'
   | 'timetable'
+  | 'room_booking'
   | 'events_programmes'
   | 'reports_analytics'
   | 'notifications'

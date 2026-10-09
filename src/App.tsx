@@ -20,6 +20,7 @@ import { DeputyHeadWorkspace } from './components/operations/DeputyHeadWorkspace
 import { DeanOfStudiesWorkspace } from './components/academic/DeanOfStudiesWorkspace';
 import { HeadTeacherWorkspace } from './components/leadership/HeadTeacherWorkspace';
 import { SchoolAdminStaffWorkspace } from './components/admin/SchoolAdminStaffWorkspace';
+import { SanatoriumWorkspace } from './components/sanatorium/SanatoriumWorkspace';
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
 import { CoCurricularWorkspace } from './components/cocurricular/CoCurricularWorkspace';
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -111,6 +112,9 @@ function AppContent({
             ) : currentUser.role === 'head_teacher' ? (
               /* Head Teacher: School-wide management */
               <HeadTeacherWorkspace currentUser={currentUser} />
+            ) : currentUser.role === 'nurse' || currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.role === 'school_admin_staff' && currentUser.designation?.toLowerCase().includes('nurse')) ? (
+              /* School Sanatorium Nurse In-Charge: Strictly only access to school sanatorium portal */
+              <SanatoriumWorkspace currentUser={currentUser} onLogout={onLogout} />
             ) : currentUser.role === 'school_admin_staff' ? (
               /* School Admin Staff: Secretarial, registers, gate exits, work analysis, calendar */
               <SchoolAdminStaffWorkspace currentUser={currentUser} onLogout={onLogout} />

@@ -78,7 +78,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  QrCode
+  QrCode,
+  Edit2
 } from 'lucide-react';
 
 interface ParentWorkspaceProps {
@@ -289,6 +290,36 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
   const [gateAlertsEnabled, setGateAlertsEnabled] = useState(true);
   const [languagePreference, setLanguagePreference] = useState('English');
 
+  // Library-Style Collapsible Sidebar States
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Calendar Events & Ticket Purchases State (for Prominent Dashboard Ticketing)
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(() => Storage.getCalendarEvents());
+  const [ticketPurchases, setTicketPurchases] = useState<EventTicketPurchase[]>(() => Storage.getEventTicketPurchases());
+  const [selectedEventForBooking, setSelectedEventForBooking] = useState<CalendarEvent | null>(null);
+  const [editingTicket, setEditingTicket] = useState<EventTicketPurchase | null>(null);
+  const [editingTicketQty, setEditingTicketQty] = useState<number>(1);
+  const [editTicketError, setEditTicketError] = useState<string | null>(null);
+  const [editTicketSuccess, setEditTicketSuccess] = useState<string | null>(null);
+  const [passToView, setPassToView] = useState<EventTicketPurchase | null>(null);
+
+  // Synchronize events and ticket state with local storage updates
+  React.useEffect(() => {
+    const handleEventsUpdate = () => {
+      setCalendarEvents(Storage.getCalendarEvents());
+    };
+    const handleTicketsUpdate = () => {
+      setTicketPurchases(Storage.getEventTicketPurchases());
+    };
+    window.addEventListener('calendar-events-updated', handleEventsUpdate);
+    window.addEventListener('event-tickets-updated', handleTicketsUpdate);
+    return () => {
+      window.removeEventListener('calendar-events-updated', handleEventsUpdate);
+      window.removeEventListener('event-tickets-updated', handleTicketsUpdate);
+    };
+  }, []);
+
   // Filtered Data based on child selection
   const relevantChildren = selectedChild ? [selectedChild] : myChildren;
 
@@ -434,238 +465,417 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
     }
   };
 
-  // Exact 20 Navigation Buttons Definitions
-  const navigationItems: { key: ParentNavigationTab; label: string; icon: React.ReactNode; badge?: string }[] = [
-    { key: 'dashboard', label: '1. Dashboard', icon: <Home className="w-4 h-4 text-emerald-400" /> },
-    { key: 'my_children', label: '2. My Children', icon: <Users className="w-4 h-4 text-blue-400" />, badge: `${myChildren.length}` },
-    { key: 'performance', label: '3. Academic Performance', icon: <TrendingUp className="w-4 h-4 text-indigo-400" /> },
-    { key: 'attendance', label: '4. Attendance', icon: <ClipboardCheck className="w-4 h-4 text-teal-400" /> },
-    { key: 'assignments', label: '5. Assignments', icon: <FileText className="w-4 h-4 text-amber-400" /> },
-    { key: 'timetable', label: '6. Timetable', icon: <Calendar className="w-4 h-4 text-purple-400" /> },
-    { key: 'fees', label: '7. Fees & Payments', icon: <CreditCard className="w-4 h-4 text-emerald-400" /> },
-    { key: 'messages', label: '8. Messages', icon: <MessageSquare className="w-4 h-4 text-cyan-400" />, badge: `${messages.length}` },
-    { key: 'announcements', label: '9. School Announcements', icon: <Bell className="w-4 h-4 text-rose-400" /> },
-    { key: 'calendar', label: '10. School Calendar', icon: <CalendarDays className="w-4 h-4 text-orange-400" /> },
-    { key: 'transport', label: '11. Transport', icon: <Bus className="w-4 h-4 text-yellow-400" /> },
-    { key: 'gate_records', label: '12. Gate / Exit Records', icon: <DoorOpen className="w-4 h-4 text-rose-400" /> },
-    { key: 'sanatorium', label: '13. Sanatorium Visits', icon: <HeartPulse className="w-4 h-4 text-rose-400" /> },
-    { key: 'lunch', label: '14. Lunch & Meals', icon: <Utensils className="w-4 h-4 text-amber-400" /> },
-    { key: 'achievements', label: '15. Achievements', icon: <Trophy className="w-4 h-4 text-amber-400" /> },
-    { key: 'discipline', label: '16. Behaviour & Discipline', icon: <ShieldAlert className="w-4 h-4 text-emerald-400" /> },
-    { key: 'resources', label: '17. Learning Resources', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
-    { key: 'reports', label: '18. Reports', icon: <FileSpreadsheet className="w-4 h-4 text-indigo-400" /> },
-    { key: 'notifications', label: '19. Notifications', icon: <Bell className="w-4 h-4 text-red-400" />, badge: `${notifications.filter(n => !n.readByUserIds.includes(currentUser.id)).length || ''}` },
-    { key: 'profile', label: '20. My Profile', icon: <UserIcon className="w-4 h-4 text-slate-400" /> },
-    { key: 'settings', label: '21. Settings', icon: <Settings className="w-4 h-4 text-slate-400" /> },
-    { key: 'sign_out', label: '22. Sign Out', icon: <LogOut className="w-4 h-4 text-rose-400" /> },
+  // Library-Style Collapsible Sidebar Groups: Clear Operational and Academic Groupings
+  const unreadAnnouncementsCount = relevantAnnouncements.length - Object.keys(acknowledgedAnnouncements).length;
+  const unreadNotificationsCount = notifications.filter(n => !n.readByUserIds.includes(currentUser.id)).length;
+  const coCurricularEvents = calendarEvents.filter(e => e.category === 'co_curricular' || e.isTicketedEvent);
+  const pendingDropoffs = dropoffVerifications.filter(v => myChildren.some(c => c.id === v.studentId) && v.status === 'pending_code');
+
+  const sidebarGroups = [
+    {
+      title: 'ACADEMIC & LEARNING PROGRESS',
+      items: [
+        { id: 'dashboard' as ParentNavigationTab, label: '1. Family Dashboard', icon: Home },
+        { id: 'my_children' as ParentNavigationTab, label: '2. My Children', icon: Users, badge: `${myChildren.length}` },
+        { id: 'performance' as ParentNavigationTab, label: '3. Academic Performance', icon: TrendingUp },
+        { id: 'attendance' as ParentNavigationTab, label: '4. Attendance Register', icon: ClipboardCheck },
+        { id: 'assignments' as ParentNavigationTab, label: '5. Assignments & Tasks', icon: FileText },
+        { id: 'timetable' as ParentNavigationTab, label: '6. Class Timetable', icon: Calendar },
+        { id: 'resources' as ParentNavigationTab, label: '7. Learning Resources', icon: BookOpen },
+        { id: 'reports' as ParentNavigationTab, label: '8. Termly Reports', icon: FileSpreadsheet },
+        { id: 'achievements' as ParentNavigationTab, label: '9. Honours & Badges', icon: Trophy }
+      ]
+    },
+    {
+      title: 'CAMPUS & OPERATIONAL SERVICES',
+      items: [
+        { 
+          id: 'calendar' as ParentNavigationTab, 
+          label: '10. School Events & Passes', 
+          icon: CalendarDays, 
+          badge: coCurricularEvents.length > 0 ? `${coCurricularEvents.length} Events` : undefined,
+          badgeColor: 'bg-indigo-600'
+        },
+        { id: 'fees' as ParentNavigationTab, label: '11. Fees & Invoices', icon: CreditCard },
+        { 
+          id: 'transport' as ParentNavigationTab, 
+          label: '12. Transport Fleet', 
+          icon: Bus,
+          badge: pendingDropoffs.length > 0 ? `${pendingDropoffs.length} PIN` : undefined,
+          badgeColor: 'bg-amber-600'
+        },
+        { id: 'gate_records' as ParentNavigationTab, label: '13. Gate Exit Records', icon: DoorOpen },
+        { id: 'lunch' as ParentNavigationTab, label: '14. Lunch & Meals', icon: Utensils },
+        { id: 'sanatorium' as ParentNavigationTab, label: '15. Sanatorium Visits', icon: HeartPulse },
+        { 
+          id: 'announcements' as ParentNavigationTab, 
+          label: '16. Announcements', 
+          icon: Bell,
+          badge: unreadAnnouncementsCount > 0 ? `${unreadAnnouncementsCount}` : undefined,
+          badgeColor: 'bg-rose-600'
+        },
+        { 
+          id: 'messages' as ParentNavigationTab, 
+          label: '17. Teacher Chats', 
+          icon: MessageSquare,
+          badge: messages.length > 0 ? `${messages.length}` : undefined
+        },
+        { id: 'discipline' as ParentNavigationTab, label: '18. Discipline & Conduct', icon: ShieldAlert }
+      ]
+    },
+    {
+      title: 'ACCOUNT & SYSTEM',
+      items: [
+        { 
+          id: 'notifications' as ParentNavigationTab, 
+          label: '19. Notifications', 
+          icon: Bell,
+          badge: unreadNotificationsCount > 0 ? `${unreadNotificationsCount}` : undefined,
+          badgeColor: 'bg-red-600'
+        },
+        { id: 'profile' as ParentNavigationTab, label: '20. Parent Profile', icon: UserIcon },
+        { id: 'settings' as ParentNavigationTab, label: '21. Portal Settings', icon: Settings },
+        { id: 'sign_out' as ParentNavigationTab, label: '22. Sign Out', icon: LogOut }
+      ]
+    }
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
-      {/* ========================================================
-          TOP HEADER & MULTIPLE CHILDREN SELECTOR (ALL CHILDREN ▼)
-          ======================================================== */}
-      <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="space-y-2 max-w-xl z-10">
-          <div className="flex items-center gap-3">
-            <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-emerald-400">
-              <Users className="w-4 h-4 text-emerald-300" />
-              <span>Parent Portal · Family Academic Gateway</span>
-            </div>
+      {/* Top Navbar Header with Child Selector & Sidebar Toggles */}
+      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors hidden lg:flex items-center justify-center cursor-pointer"
+            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
+          </button>
+          
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Welcome, {currentUser.name}
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Monitor learning performance across all your children, inspect attendance registers, track fee clearances, communicate with teachers, and review official CBC progress dossiers.
-          </p>
-          <div className="text-[11px] text-emerald-300 font-mono flex items-center gap-2 pt-1">
-            <span>Primary Contact: {currentUser.phone || '+254 722 123 456'}</span>
-            <span>·</span>
-            <span>{myChildren.length} Enrolled Learners</span>
+
+          <div>
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+              <span>CBC Parent & Guardian Gateway</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                {myChildren.length} Enrolled Learners
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 hidden sm:block font-mono">
+              Family Account: {currentUser.name} · {currentUser.phone || '+254 722 123 456'}
+            </p>
           </div>
         </div>
 
-        {/* The Exact CHILD SELECTOR requested by user */}
-        <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shrink-0 min-w-[280px] z-10 space-y-2">
-          <div className="text-xs font-extrabold uppercase tracking-wider text-emerald-300 flex items-center justify-between">
-            <span className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" />
-              <span>Viewing Child:</span>
-            </span>
-            <span className="text-[10px] text-slate-300 font-mono">{myChildren.length} Registered</span>
-          </div>
-
-          {/* Child Dropdown / Pill Switcher */}
+        {/* Child Selector & Quick Actions */}
+        <div className="flex items-center gap-2">
           <div className="relative">
             <select
               value={selectedChildId}
               onChange={(e) => setSelectedChildId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 text-white border border-emerald-400/50 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 text-emerald-300 border border-slate-700 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
             >
-              <option value="all">👨👩👧 Viewing: All Children ▼</option>
+              <option value="all">👨‍👩‍👧 All Children ({myChildren.length})</option>
               {myChildren.map((child) => (
                 <option key={child.id} value={child.id}>
-                  👤 {child.name} — Grade {child.grade}{child.stream ? ` (${child.stream})` : ''} · {child.admissionNumber}
+                  👤 {child.name} (Gr {child.grade} {child.stream})
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Quick Child Switcher Pills */}
-          <div className="flex flex-col gap-1.5 pt-1">
-            <button
-              onClick={() => setSelectedChildId('all')}
-              className={`px-3 py-1.5 rounded-lg text-left text-xs font-bold transition-all flex items-center justify-between ${
-                selectedChildId === 'all'
-                  ? 'bg-emerald-500 text-white shadow-2xs'
-                  : 'bg-white/10 hover:bg-white/15 text-slate-200'
-              }`}
-            >
-              <span>All Children Aggregate</span>
-              {selectedChildId === 'all' && <CheckCircle className="w-3.5 h-3.5 text-white" />}
-            </button>
-
-            {myChildren.map((child) => (
-              <button
-                key={child.id}
-                onClick={() => setSelectedChildId(child.id)}
-                className={`px-3 py-1.5 rounded-lg text-left text-xs font-bold transition-all flex items-center justify-between ${
-                  selectedChildId === child.id
-                    ? 'bg-emerald-600 text-white shadow-2xs'
-                    : 'bg-white/10 hover:bg-white/15 text-slate-200'
-                }`}
-              >
-                <div>
-                  <div className="font-extrabold">{child.name}</div>
-                  <div className="text-[10px] opacity-80 font-normal">
-                    Grade {child.grade} {child.stream} · {child.admissionNumber}
-                  </div>
-                </div>
-                {selectedChildId === child.id && <CheckCircle className="w-3.5 h-3.5 text-white shrink-0" />}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Selected Child Active Context Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 text-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-base shadow-2xs">
-            {selectedChild ? selectedChild.name.charAt(0) : '👨‍👩‍👧'}
-          </div>
-          <div>
-            <div className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-              <span>{selectedChild ? selectedChild.name : 'All Children (Family Aggregate)'}</span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold">
-                {selectedChild ? `Grade ${selectedChild.grade} ${selectedChild.stream}` : `${myChildren.length} Learners`}
-              </span>
-            </div>
-            <div className="text-slate-500 text-[11px] mt-0.5">
-              {selectedChild ? (
-                <>Admission: <span className="font-mono font-semibold text-slate-800">{selectedChild.admissionNumber || 'ADM/2023/0412'}</span> · Class Teacher: <span className="text-slate-800 font-medium">Mr. David Kiprono</span></>
-              ) : (
-                <>Viewing aggregated performance, attendance roll-calls, fee statements, and schedules across your family.</>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
           <button
             onClick={() => {
               setPayChildId(selectedChild?.id || myChildren[0]?.id || '');
               setShowPaymentModal(true);
             }}
-            className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
           >
             <CreditCard className="w-3.5 h-3.5" />
-            <span>Pay School Fees</span>
+            <span className="hidden md:inline">Pay Fees</span>
           </button>
+
           <button
             onClick={() => {
               setAbsenceChildId(selectedChild?.id || myChildren[0]?.id || '');
               setShowAbsenceModal(true);
             }}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer hidden sm:flex"
           >
-            <ClipboardCheck className="w-3.5 h-3.5 text-slate-500" />
-            <span>Submit Absence Reason</span>
+            <ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Absence</span>
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Global Success Toasts */}
-      {absenceSuccessMessage && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{absenceSuccessMessage}</span>
-        </div>
-      )}
+      {/* Main Workspace Layout with Library-Style Collapsible Sidebar */}
+      <div className="flex-1 flex w-full">
+        {/* Mobile Backdrop */}
+        {isMobileSidebarOpen && (
+          <div 
+            onClick={() => setIsMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 lg:hidden"
+          />
+        )}
 
-      {gateReqSuccessMessage && (
-        <div className="p-3.5 bg-blue-50 border border-blue-300 rounded-xl text-xs font-bold text-blue-800 flex items-center gap-2 animate-in fade-in">
-          <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>{gateReqSuccessMessage}</span>
-        </div>
-      )}
-
-      {/* ========================================================
-          THE 20 EXACT VISIBLE NAVIGATION BUTTONS
-          ======================================================== */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
-          <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <Home className="w-3.5 h-3.5 text-slate-400" />
-            <span>Parent Portal Navigation Menu (20 Visible Modules)</span>
-          </span>
-          <span className="text-[11px] text-emerald-700 font-bold">
-            Active: {navigationItems.find(i => i.key === activeTab)?.label}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
-          {navigationItems.map((item) => {
-            const isActive = activeTab === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => {
-                  if (item.key === 'sign_out') {
-                    setShowSignOutConfirm(true);
-                  } else {
-                    setActiveTab(item.key);
-                  }
-                }}
-                className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 text-xs font-bold ${
-                  isActive
-                    ? 'bg-slate-900 text-white border-slate-950 shadow-sm ring-1 ring-emerald-400'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                }`}
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <div className={`p-1.5 rounded-lg shrink-0 ${isActive ? 'bg-white/20' : 'bg-white shadow-2xs'}`}>
-                    {item.icon}
+        {/* Collapsible Left Sidebar */}
+        <aside className={`
+          fixed lg:static top-0 bottom-0 left-0 z-40
+          ${isSidebarCollapsed ? 'w-20 min-w-20 max-w-20' : 'w-64 min-w-64 max-w-64'}
+          bg-slate-900 border-r border-slate-800 text-slate-300
+          flex flex-col shrink-0 transition-all duration-200 ease-in-out
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}>
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-slate-800/80 bg-slate-950/70 flex items-center justify-between">
+            <div className={`flex items-center gap-2.5 truncate ${isSidebarCollapsed ? 'justify-center w-full' : ''}`}>
+              <span className="text-xl shrink-0">👨‍👩‍👧</span>
+              {!isSidebarCollapsed && (
+                <div className="truncate">
+                  <div className="text-xs font-black text-white uppercase tracking-wider truncate">
+                    PARENT PORTAL
                   </div>
-                  <span className="truncate">{item.label}</span>
+                  <div className="text-[10px] text-slate-400 font-mono truncate">
+                    {selectedChild ? `${selectedChild.name}` : 'Family Hub'}
+                  </div>
                 </div>
-                {item.badge && (
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
-                    isActive ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}>
-                    {item.badge}
-                  </span>
+              )}
+            </div>
+            {!isSidebarCollapsed && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
+                Active
+              </span>
+            )}
+          </div>
+
+          {/* Scrollable Groups */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-5 text-xs">
+            {sidebarGroups.map((group, gIdx) => (
+              <div key={gIdx} className="space-y-1">
+                {!isSidebarCollapsed ? (
+                  <div className="px-3 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    {group.title}
+                  </div>
+                ) : (
+                  <div className="border-t border-slate-800/80 my-2" />
                 )}
+
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          if (item.id === 'sign_out') {
+                            setShowSignOutConfirm(true);
+                          } else {
+                            setActiveTab(item.id);
+                          }
+                          setIsMobileSidebarOpen(false);
+                        }}
+                        title={isSidebarCollapsed ? item.label : undefined}
+                        className={`
+                          w-full flex items-center ${isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'}
+                          rounded-xl font-bold transition-all text-left cursor-pointer
+                          ${isActive 
+                            ? 'bg-gradient-to-r from-emerald-700 to-teal-700 text-white shadow-xs' 
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }
+                        `}
+                      >
+                        <div className={`flex items-center gap-2.5 ${isSidebarCollapsed ? 'justify-center' : 'truncate'}`}>
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                          {!isSidebarCollapsed && (
+                            <span className="truncate">{item.label}</span>
+                          )}
+                        </div>
+
+                        {!isSidebarCollapsed && item.badge !== undefined && (
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black text-white shrink-0 ${item.badgeColor || 'bg-slate-700'}`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Bottom Stamp */}
+          <div className="p-3 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-400 flex items-center justify-between shrink-0">
+            {!isSidebarCollapsed ? (
+              <>
+                <span className="truncate font-mono">{currentUser.phone || '+254 722 123 456'}</span>
+                <span className="text-emerald-400 font-bold shrink-0">● Connected</span>
+              </>
+            ) : (
+              <span className="text-emerald-400 font-bold mx-auto">●</span>
+            )}
+          </div>
+        </aside>
+
+        {/* Content View Area */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+
+          {/* ========================================================
+              TOP HEADER & MULTIPLE CHILDREN SELECTOR (ALL CHILDREN ▼)
+              ======================================================== */}
+          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2 max-w-xl z-10">
+              <div className="flex items-center gap-3">
+                <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
+                  <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                </div>
+                <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-emerald-400">
+                  <Users className="w-4 h-4 text-emerald-300" />
+                  <span>Parent Portal · Family Academic Gateway</span>
+                </div>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                Welcome, {currentUser.name}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Monitor learning performance across all your children, inspect attendance registers, track fee clearances, communicate with teachers, and review official CBC progress dossiers.
+              </p>
+              <div className="text-[11px] text-emerald-300 font-mono flex items-center gap-2 pt-1">
+                <span>Primary Contact: {currentUser.phone || '+254 722 123 456'}</span>
+                <span>·</span>
+                <span>{myChildren.length} Enrolled Learners</span>
+              </div>
+            </div>
+
+            {/* Quick Child Selector */}
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 shrink-0 min-w-[280px] z-10 space-y-2">
+              <div className="text-xs font-extrabold uppercase tracking-wider text-emerald-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Viewing Child:</span>
+                </span>
+                <span className="text-[10px] text-slate-300 font-mono">{myChildren.length} Registered</span>
+              </div>
+
+              {/* Quick Child Switcher Pills */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <button
+                  onClick={() => setSelectedChildId('all')}
+                  className={`px-3 py-1.5 rounded-lg text-left text-xs font-bold transition-all flex items-center justify-between ${
+                    selectedChildId === 'all'
+                      ? 'bg-emerald-500 text-white shadow-2xs'
+                      : 'bg-white/10 hover:bg-white/15 text-slate-200'
+                  }`}
+                >
+                  <span>All Children Aggregate</span>
+                  {selectedChildId === 'all' && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                </button>
+
+                {myChildren.map((child) => (
+                  <button
+                    key={child.id}
+                    onClick={() => setSelectedChildId(child.id)}
+                    className={`px-3 py-1.5 rounded-lg text-left text-xs font-bold transition-all flex items-center justify-between ${
+                      selectedChildId === child.id
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-white/10 hover:bg-white/15 text-slate-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-extrabold">{child.name}</div>
+                      <div className="text-[10px] opacity-80 font-normal">
+                        Grade {child.grade} {child.stream} · {child.admissionNumber}
+                      </div>
+                    </div>
+                    {selectedChildId === child.id && <CheckCircle className="w-3.5 h-3.5 text-white shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Selected Child Active Context Bar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-base shadow-2xs">
+                {selectedChild ? selectedChild.name.charAt(0) : '👨‍👩‍👧'}
+              </div>
+              <div>
+                <div className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                  <span>{selectedChild ? selectedChild.name : 'All Children (Family Aggregate)'}</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold">
+                    {selectedChild ? `Grade ${selectedChild.grade} ${selectedChild.stream}` : `${myChildren.length} Learners`}
+                  </span>
+                </div>
+                <div className="text-slate-500 text-[11px] mt-0.5">
+                  {selectedChild ? (
+                    <>Admission: <span className="font-mono font-semibold text-slate-800">{selectedChild.admissionNumber || 'ADM/2023/0412'}</span> · Class Teacher: <span className="text-slate-800 font-medium">Mr. David Kiprono</span></>
+                  ) : (
+                    <>Viewing aggregated performance, attendance roll-calls, fee statements, and schedules across your family.</>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setPayChildId(selectedChild?.id || myChildren[0]?.id || '');
+                  setShowPaymentModal(true);
+                }}
+                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Pay School Fees</span>
               </button>
-            );
-          })}
-        </div>
-      </div>
+              <button
+                onClick={() => {
+                  setAbsenceChildId(selectedChild?.id || myChildren[0]?.id || '');
+                  setShowAbsenceModal(true);
+                }}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex items-center gap-1.5"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5 text-slate-500" />
+                <span>Submit Absence Reason</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Global Success Toasts */}
+          {editTicketSuccess && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{editTicketSuccess}</span>
+            </div>
+          )}
+
+          {absenceSuccessMessage && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{absenceSuccessMessage}</span>
+            </div>
+          )}
+
+          {gateReqSuccessMessage && (
+            <div className="p-3.5 bg-blue-50 border border-blue-300 rounded-xl text-xs font-bold text-blue-800 flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+              <span>{gateReqSuccessMessage}</span>
+            </div>
+          )}
 
       {/* ========================================================
           1. 🏠 DASHBOARD
@@ -723,6 +933,290 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
               </div>
             );
           })()}
+          
+          {/* ========================================================
+              PROMINENT SCHOOL EVENTS & CO-CURRICULAR PASS HUB
+              Rights to book tickets and edit ticket numbers on capacity
+              ======================================================== */}
+          <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-emerald-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-indigo-500/30 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+                    <Ticket className="w-4 h-4 text-amber-400" />
+                  </span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
+                    School Events & Ticketing Hub
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    Live Capacity Engine
+                  </span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                  Upcoming School Co-Curricular Events & Admission Passes
+                </h2>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                  Book official admission passes for upcoming inter-house sports galas, music festivals, and talent tournaments. As a parent, you have full rights to book tickets and adjust/edit ticket numbers in real-time subject to venue capacity limits.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setActiveTab('calendar')}
+                  className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/20 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <CalendarDays className="w-3.5 h-3.5 text-indigo-300" />
+                  <span>Full Calendar ({calendarEvents.length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Featured Events Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {coCurricularEvents.slice(0, 3).map((evt) => {
+                const totalCap = evt.totalCapacity || 400;
+                const sold = evt.ticketsSold || 0;
+                const remaining = Math.max(0, totalCap - sold);
+                const percentSold = Math.min(100, Math.round((sold / totalCap) * 100));
+                const isSoldOut = remaining <= 0;
+                const isPaid = evt.ticketType === 'paid' && (evt.ticketPrice || 0) > 0;
+
+                return (
+                  <div 
+                    key={evt.id}
+                    className="bg-slate-900/90 rounded-2xl border border-indigo-400/20 p-5 flex flex-col justify-between hover:border-indigo-400/50 transition-all shadow-md group relative overflow-hidden"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                          🎯 Co-Curricular Pass
+                        </span>
+                        {isPaid ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-400 text-slate-950">
+                            KES {(evt.ticketPrice || 0).toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-400 text-slate-950">
+                            Complimentary
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h3 className="font-extrabold text-white text-base leading-snug group-hover:text-emerald-300 transition-colors line-clamp-2">
+                          {evt.title}
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                          {evt.description}
+                        </p>
+                      </div>
+
+                      {/* Event Meta */}
+                      <div className="space-y-1.5 pt-1 text-xs text-slate-300">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span>{evt.startDate} {evt.endDate !== evt.startDate && `to ${evt.endDate}`}</span>
+                          {evt.startTime && <span className="font-mono text-slate-400">· {evt.startTime}</span>}
+                        </div>
+                        {evt.venue && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span className="truncate">{evt.venue}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Capacity Progress Meter */}
+                      <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium">Capacity Booked:</span>
+                          <span className="font-mono font-bold text-slate-200">
+                            {sold} / {totalCap} ({percentSold}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              isSoldOut 
+                                ? 'bg-rose-500' 
+                                : percentSold > 80 
+                                  ? 'bg-amber-400' 
+                                  : 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                            }`}
+                            style={{ width: `${percentSold}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px]">
+                          {isSoldOut ? (
+                            <span className="font-bold text-rose-400 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Sold Out (At Maximum Capacity)</span>
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>{remaining} seats available to book</span>
+                            </span>
+                          )}
+                          <span className="text-slate-500 font-mono">Term {evt.term}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Book Pass CTA */}
+                    <div className="pt-4 mt-2">
+                      <button
+                        onClick={() => setSelectedEventForBooking(evt)}
+                        disabled={isSoldOut}
+                        className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm ${
+                          isSoldOut
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer hover:shadow-emerald-600/20 shadow-md'
+                        }`}
+                      >
+                        <Ticket className="w-3.5 h-3.5" />
+                        <span>{isSoldOut ? 'Capacity Reached' : isPaid ? 'Book Ticket Pass' : 'Claim Free Pass'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* FAMILY BOOKED TICKETS & EDIT QUANTITY SECTION */}
+            <div className="bg-slate-950/80 rounded-2xl border border-white/10 p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-amber-500/20 text-amber-300 rounded-lg border border-amber-400/30">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      <span>Your Family Event Passes & Capacity Rights</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                        {ticketPurchases.length} Active Passes
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Edit ticket quantities directly to increase or decrease attendee numbers within available venue capacity.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="text-[11px] text-emerald-400 font-mono">
+                  Parent Access: Rights to Book & Edit
+                </span>
+              </div>
+
+              {ticketPurchases.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {ticketPurchases.map((ticket) => {
+                    const linkedEvt = calendarEvents.find(e => e.id === ticket.eventId);
+                    const totalCap = linkedEvt?.totalCapacity || 400;
+                    const totalSold = linkedEvt?.ticketsSold || ticket.quantity;
+                    const venueRemaining = Math.max(0, totalCap - totalSold);
+
+                    return (
+                      <div 
+                        key={ticket.id}
+                        className="bg-slate-900 rounded-xl border border-slate-800 p-4 space-y-3 hover:border-slate-700 transition-all text-xs"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="font-mono text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-400/20">
+                              {ticket.ticketCode}
+                            </span>
+                            <h4 className="font-bold text-white text-sm mt-1 leading-snug">
+                              {ticket.eventTitle}
+                            </h4>
+                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                              {ticket.eventDate} {ticket.eventVenue && `· ${ticket.eventVenue}`}
+                            </p>
+                          </div>
+
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0 ${
+                            ticket.paymentStatus === 'completed' || ticket.paymentStatus === 'free_granted'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
+                          }`}>
+                            {ticket.paymentStatus}
+                          </span>
+                        </div>
+
+                        {/* Attendee & Reservation Details */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2.5 bg-slate-950/60 rounded-lg text-[11px]">
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Attendee Name</span>
+                            <span className="font-bold text-slate-200 truncate block">{ticket.purchaserName}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Passes Reserved</span>
+                            <span className="font-bold text-emerald-400 font-mono flex items-center gap-1">
+                              <Ticket className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span>{ticket.quantity} Attendee(s)</span>
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">Total Amount</span>
+                            <span className="font-bold text-slate-200 font-mono">
+                              {ticket.ticketType === 'paid' ? `KES ${(ticket.totalAmount || 0).toLocaleString()}` : 'Free Voucher'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Venue Capacity Status Pill */}
+                        <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                          <span className="flex items-center gap-1 text-[10px]">
+                            <span>Event Capacity:</span>
+                            <strong className="text-slate-200 font-mono">{totalCap} max</strong>
+                            <span>({venueRemaining} seats free)</span>
+                          </span>
+                          {ticket.mpesaReference && (
+                            <span className="font-mono text-[10px] text-slate-500">
+                              REF: {ticket.mpesaReference}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action Buttons: Edit Quantity & View Pass */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                          <button
+                            onClick={() => {
+                              setEditingTicket(ticket);
+                              setEditingTicketQty(ticket.quantity);
+                              setEditTicketError(null);
+                            }}
+                            className="flex-1 py-1.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 hover:text-white border border-indigo-400/30 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            title="Edit the number of tickets booked based on event capacity"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span>Edit Ticket Quantity</span>
+                          </button>
+
+                          <button
+                            onClick={() => setPassToView(ticket)}
+                            className="py-1.5 px-3 bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/20 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                            title="View and print official gate pass"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">View Pass</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-900/50 rounded-xl border border-dashed border-slate-800 space-y-2">
+                  <Ticket className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="font-medium text-slate-300">No event passes booked under your account yet.</p>
+                  <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                    Select any of the upcoming co-curricular matches or drama galas above to reserve admission passes for your family.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
           
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -2091,6 +2585,9 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
         </section>
       )}
 
+        </main>
+      </div>
+
       {/* ========================================================
           20. 🚪 SIGN OUT CONFIRMATION MODAL
           ======================================================== */}
@@ -2632,6 +3129,303 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Official Gate Slip</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: BOOK CO-CURRICULAR EVENT PASS
+          ======================================================== */}
+      {selectedEventForBooking && (
+        <EventTicketModal
+          event={selectedEventForBooking}
+          currentUser={currentUser}
+          onClose={() => setSelectedEventForBooking(null)}
+          onSuccessBooking={(newTicket) => {
+            setTicketPurchases(Storage.getEventTicketPurchases());
+            setCalendarEvents(Storage.getCalendarEvents());
+            setSelectedEventForBooking(null);
+            setEditTicketSuccess(`Event pass booked successfully! Pass Code: ${newTicket.ticketCode}`);
+            setTimeout(() => setEditTicketSuccess(null), 5000);
+          }}
+        />
+      )}
+
+      {/* ========================================================
+          MODAL: EDIT TICKET QUANTITY ON VENUE CAPACITY
+          Rights to increase/decrease tickets strictly within capacity limits
+          ======================================================== */}
+      {editingTicket && (() => {
+        const linkedEvt = calendarEvents.find(e => e.id === editingTicket.eventId);
+        const totalCap = linkedEvt?.totalCapacity || 400;
+        const totalSold = linkedEvt?.ticketsSold || editingTicket.quantity;
+        const venueRemaining = Math.max(0, totalCap - totalSold);
+        // Maximum tickets this user can hold is their current quantity + any remaining venue capacity
+        const maxAllowed = editingTicket.quantity + venueRemaining;
+        const delta = editingTicketQty - editingTicket.quantity;
+        const unitPrice = editingTicket.unitPrice || 0;
+        const projectedTotal = unitPrice * editingTicketQty;
+
+        const handleSaveQty = () => {
+          setEditTicketError(null);
+          try {
+            const updated = Storage.updateEventTicketQuantity(editingTicket.id, editingTicketQty);
+            if (updated) {
+              setTicketPurchases(Storage.getEventTicketPurchases());
+              setCalendarEvents(Storage.getCalendarEvents());
+              setEditTicketSuccess(`Pass reservation updated to ${editingTicketQty} attendee pass(es) for "${editingTicket.eventTitle}".`);
+              setEditingTicket(null);
+              setTimeout(() => setEditTicketSuccess(null), 5000);
+            }
+          } catch (err: any) {
+            setEditTicketError(err.message || 'Unable to update ticket quantity');
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden space-y-0">
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-400 text-slate-950">
+                      PASS: {editingTicket.ticketCode}
+                    </span>
+                    <span className="text-xs text-indigo-300 font-bold uppercase tracking-wider">
+                      Adjust Ticket Reservation
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-white mt-1 leading-snug">
+                    {editingTicket.eventTitle}
+                  </h3>
+                  <p className="text-xs text-slate-300 font-mono mt-0.5">
+                    {editingTicket.eventDate} · Attendee: {editingTicket.purchaserName}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setEditingTicket(null)}
+                  className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 sm:p-6 space-y-5">
+                {/* Capacity Summary Box */}
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold text-slate-700">
+                    <span>Venue Total Capacity:</span>
+                    <span className="font-mono text-slate-900">{totalCap} seats</span>
+                  </div>
+                  <div className="flex items-center justify-between font-bold text-slate-700">
+                    <span>Currently Booked Across School:</span>
+                    <span className="font-mono text-slate-900">{totalSold} seats</span>
+                  </div>
+                  <div className="flex items-center justify-between font-bold border-t border-slate-200 pt-2">
+                    <span className="text-emerald-700">Available Unreserved Capacity:</span>
+                    <span className="font-mono text-emerald-800 text-sm font-black">{venueRemaining} seats left</span>
+                  </div>
+                </div>
+
+                {/* Stepper Quantity Selector */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-700">
+                    Select New Ticket Quantity
+                  </label>
+                  <div className="flex items-center justify-center gap-4 p-4 bg-slate-100 rounded-2xl border border-slate-300">
+                    <button
+                      type="button"
+                      onClick={() => setEditingTicketQty(prev => Math.max(1, prev - 1))}
+                      disabled={editingTicketQty <= 1}
+                      className="w-12 h-12 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-black text-xl text-slate-800 flex items-center justify-center shadow-xs cursor-pointer"
+                    >
+                      <Minus className="w-5 h-5" />
+                    </button>
+
+                    <div className="text-center min-w-[100px]">
+                      <span className="text-4xl font-black font-mono text-slate-900">
+                        {editingTicketQty}
+                      </span>
+                      <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
+                        Attendee Pass{editingTicketQty > 1 ? 'es' : ''}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingTicketQty(prev => Math.min(maxAllowed, prev + 1))}
+                      disabled={editingTicketQty >= maxAllowed}
+                      className="w-12 h-12 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed font-black text-xl text-slate-800 flex items-center justify-center shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dynamic Capacity Context Messages */}
+                {delta > 0 && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>
+                      Adding <strong>+{delta}</strong> pass{delta > 1 ? 'es' : ''}. Venue will have <strong>{venueRemaining - delta}</strong> seat(s) remaining on capacity.
+                    </span>
+                  </div>
+                )}
+
+                {delta < 0 && (
+                  <div className="p-3 bg-blue-50 border border-blue-300 rounded-xl text-xs text-blue-800 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>
+                      Releasing <strong>{Math.abs(delta)}</strong> pass{Math.abs(delta) > 1 ? 'es' : ''} back to the school capacity pool.
+                    </span>
+                  </div>
+                )}
+
+                {editingTicketQty >= maxAllowed && venueRemaining > 0 && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>
+                      Maximum venue capacity reached for this event ({maxAllowed} max for this booking).
+                    </span>
+                  </div>
+                )}
+
+                {editTicketError && (
+                  <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{editTicketError}</span>
+                  </div>
+                )}
+
+                {/* Amount preview */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                  <span className="text-slate-600 font-medium">Updated Total Amount:</span>
+                  <span className="font-mono font-black text-base text-slate-900">
+                    {editingTicket.ticketType === 'paid' ? `KES ${projectedTotal.toLocaleString()}` : 'Free Complimentary Pass'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingTicket(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveQty}
+                  className="px-5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Confirm & Save Pass Reservation</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========================================================
+          MODAL: VIEW & PRINT OFFICIAL EVENT ADMISSION PASS
+          ======================================================== */}
+      {passToView && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden space-y-0">
+            {/* Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-sm">Official Admission Pass</span>
+              </div>
+              <button
+                onClick={() => setPassToView(null)}
+                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Printable Pass */}
+            <div className="p-6 space-y-4 print:p-0">
+              <div className="border-2 border-dashed border-indigo-300 rounded-2xl p-6 bg-slate-50/50 space-y-4 relative overflow-hidden">
+                <div className="flex items-start justify-between border-b border-slate-200 pb-3">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700">EDUSMART ACADEMIC & CO-CURRICULAR GATE PASS</span>
+                    <h3 className="font-black text-slate-900 text-lg leading-tight mt-0.5">{passToView.eventTitle}</h3>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">{passToView.eventDate} · {passToView.eventVenue}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-mono text-slate-400 block">PASS NUMBER</span>
+                    <span className="font-mono font-black text-sm text-indigo-950 bg-indigo-100 px-2.5 py-1 rounded-md border border-indigo-200">
+                      {passToView.ticketCode}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-1 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Attendee</span>
+                    <span className="font-bold text-slate-900">{passToView.purchaserName}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Role</span>
+                    <span className="font-bold text-slate-900 capitalize">{passToView.purchaserRole || 'Parent'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Passes</span>
+                    <span className="font-bold text-emerald-700 font-mono">{passToView.quantity} Attendee(s)</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-bold uppercase">Amount</span>
+                    <span className="font-bold text-slate-900 font-mono">
+                      {passToView.ticketType === 'paid' ? `KES ${(passToView.totalAmount || 0).toLocaleString()}` : 'Complimentary'}
+                    </span>
+                  </div>
+                </div>
+
+                {passToView.notes && (
+                  <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-[11px] text-slate-600">
+                    <span className="font-bold text-slate-800">Pass Details: </span>{passToView.notes}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <QrCode className="w-8 h-8 text-slate-800" />
+                    <span>Scan at gate turnstile for venue admission</span>
+                  </div>
+                  <span className="font-mono uppercase text-emerald-700 font-bold">
+                    ✓ Verified Security Pass
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setPassToView(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold rounded-xl"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Official Pass</span>
               </button>
             </div>
           </div>

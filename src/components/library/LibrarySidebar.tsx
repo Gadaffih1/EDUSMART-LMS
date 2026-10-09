@@ -16,6 +16,7 @@ import {
   Sparkles, 
   UserCheck, 
   Calendar, 
+  DoorOpen,
   PartyPopper, 
   FileText, 
   Bell, 
@@ -78,6 +79,7 @@ export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         { id: 'reading_programme' as LibraryPortalSection, label: 'Reading Programme', icon: Sparkles },
         { id: 'attendance' as LibraryPortalSection, label: 'Library Attendance', icon: UserCheck },
         { id: 'timetable' as LibraryPortalSection, label: 'Library Timetable', icon: Calendar },
+        { id: 'room_booking' as LibraryPortalSection, label: 'Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
         { id: 'events_programmes' as LibraryPortalSection, label: 'Events & Programmes', icon: PartyPopper }
       ]
     },

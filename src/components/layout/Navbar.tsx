@@ -23,6 +23,7 @@ import {
   Phone,
   LogIn
 } from 'lucide-react';
+import { VirtualLabButton } from '../library/VirtualLabButton';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -144,6 +145,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: Actions & Quick Switcher */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {currentUser && (
+            <VirtualLabButton variant="header" label="Virtual LAB" />
+          )}
+
           {/* Centralized Notification Bell with Real-Time Unread Badge & Active Indicator */}
           {currentUser && (
             <button

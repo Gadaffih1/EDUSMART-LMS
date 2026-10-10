@@ -41,6 +41,8 @@ import {
   SubjectName
 } from '../../types';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
+import { VirtualLabButton } from './VirtualLabButton';
+import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { LibraryPortalSection } from './types';
 
 interface CollectionViewsProps {
@@ -1525,32 +1527,39 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
             </p>
           </div>
 
-          {/* Sub-tab Switcher */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 self-start sm:self-center">
-            <button
-              onClick={() => setDigitalSubTab('elinks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                digitalSubTab === 'elinks'
-                  ? 'bg-blue-700 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>E-Links Directory</span>
-            </button>
-            <button
-              onClick={() => setDigitalSubTab('ebooks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                digitalSubTab === 'ebooks'
-                  ? 'bg-blue-700 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>E-Books & Compendiums ({digitalItems.length})</span>
-            </button>
+          {/* Header Action Tools & Sub-tab Switcher */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            <VirtualLabButton variant="header" />
+            
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setDigitalSubTab('elinks')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  digitalSubTab === 'elinks'
+                    ? 'bg-blue-700 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>E-Links Directory</span>
+              </button>
+              <button
+                onClick={() => setDigitalSubTab('ebooks')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  digitalSubTab === 'ebooks'
+                    ? 'bg-blue-700 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>E-Books & Compendiums ({digitalItems.length})</span>
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Featured CBC Virtual LAB Interactive Showcase Banner */}
+        <VirtualLabButton variant="banner" />
 
         {digitalSubTab === 'elinks' ? (
           <ELinksDirectory
@@ -1588,6 +1597,15 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
           </div>
         )}
       </div>
+    );
+  }
+
+  if (section === 'virtual_lab') {
+    return (
+      <VirtualLabWorkspace
+        currentUser={currentUser}
+        isEmbedded={true}
+      />
     );
   }
 

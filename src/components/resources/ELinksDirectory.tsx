@@ -23,8 +23,10 @@ import {
   BookOpen,
   Laptop,
   Check,
-  Copy
+  Copy,
+  FlaskConical
 } from 'lucide-react';
+import { VirtualLabModal, VIRTUAL_LAB_URL } from '../library/VirtualLabModal';
 
 interface ELinksDirectoryProps {
   currentUser: User;
@@ -70,6 +72,7 @@ export const ELinksDirectory: React.FC<ELinksDirectoryProps> = ({
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isVirtualLabOpen, setIsVirtualLabOpen] = useState(false);
 
   // Form Fields
   const [formTitle, setFormTitle] = useState('');
@@ -215,6 +218,13 @@ export const ELinksDirectory: React.FC<ELinksDirectoryProps> = ({
   const handleOpenExternal = (link: ELink) => {
     // Record click count
     Storage.updateELink(link.id, { clicksCount: (link.clicksCount || 0) + 1 });
+    
+    // Check if this is the Virtual LAB link - open internally within LMS!
+    if (link.id === 'elink-vlab' || link.url.includes('t_6ac78bfad95c8191841d261117b27e60') || link.title.toLowerCase().includes('virtual lab')) {
+      setIsVirtualLabOpen(true);
+      return;
+    }
+
     window.open(link.url, '_blank', 'noopener,noreferrer');
   };
 
@@ -596,6 +606,15 @@ export const ELinksDirectory: React.FC<ELinksDirectoryProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* IN-LMS VIRTUAL LAB MODAL */}
+      {isVirtualLabOpen && (
+        <VirtualLabModal
+          isOpen={isVirtualLabOpen}
+          onClose={() => setIsVirtualLabOpen(false)}
+          currentUser={currentUser}
+        />
       )}
     </div>
   );

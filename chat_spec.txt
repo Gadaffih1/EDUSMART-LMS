@@ -1,0 +1,768 @@
+Yes. **I think this is a better structure for EduSmart.** The Virtual Laboratory should live under **Resources**, alongside other teaching and learning resources, but have enough functionality to operate as a complete interactive laboratory.\
+\
+## EduSmart Resources structure\
+\
+```text\
+RESOURCES\
+│\
+├── 📚 Digital Library\
+├── 📄 Notes \u0026 Documents\
+├── 🎥 Videos\
+├── 🖼️ Presentations\
+├── 📝 Revision Materials\
+├── 📦 Teaching Materials\
+├── 🔬 VIRTUAL LABORATORY\
+│     ├── Virtual Lab Home\
+│     ├── Experiment Library\
+│     ├── Teacher Demonstrations\
+│     ├── Learner Experiments\
+│     ├── My Experiments\
+│     ├── Lab Reports\
+│     └── Lab Results\
+│\
+└── 📊 Resource Analytics\
+```\
+\
+The key distinction should be:\
+\
+**Resources → Virtual Laboratory → Demonstrate / Conduct / Assign / Assess**\
+\
+---\
+\
+# 1. Three operating modes\
+\
+The Virtual Laboratory should have **three main modes**.\
+\
+### 👨‍🏫 Teacher Demonstration\
+\
+A teacher can project/open an experiment on a computer, smart board, tablet or classroom screen.\
+\
+The teacher controls the experiment and demonstrates it to the class.\
+\
+### 👩‍🎓 Learner Experiment\
+\
+Learners **Grade 5 and above** can independently enter an experiment and manipulate the virtual equipment.\
+\
+### 📝 Assigned Experiment\
+\
+The teacher assigns an experiment to a particular:\
+\
+- Grade\
+- Stream\
+- Class\
+- Group\
+- Individual learner\
+\
+The learner conducts it and submits the results.\
+\
+This gives you a very important distinction:\
+\
+\u003e **Demonstrate → Explore → Experiment → Record → Submit → Assess**\
+\
+---\
+\
+# 2. Grade access\
+\
+I would configure access from **Grade 5 upward**, but not give every grade the same laboratory complexity.\
+\
+| Level | Experience |\
+|---|---|\
+| Grade 5 | Guided, simple experiments |\
+| Grade 6 | Guided + basic measurements |\
+| Grade 7 | More independent experimentation |\
+| Grade 8 | Independent + data analysis |\
+| Grade 9 | Advanced experimentation + graphs |\
+| Grade 10–12 | More sophisticated simulations, calculations and investigations |\
+\
+The same simulation engine can therefore serve the whole school while the **difficulty, instructions and assessment change by grade**.\
+\
+---\
+\
+# 3. Virtual Lab Home\
+\
+The landing page should look something like:\
+\
+```text\
+🔬 VIRTUAL LABORATORY\
+Resources\
+\
+Welcome, Student\
+\
+┌──────────────────────────────────────────┐\
+│ 🔬 EXPLORE LAB                           │\
+│ Discover and conduct experiments         │\
+└──────────────────────────────────────────┘\
+\
+My Assigned Experiments       4\
+\
+┌──────────┐ ┌──────────┐ ┌──────────┐\
+│ Physics  │ │ Chemistry│ │ Biology  │\
+│    ⚡    │ │    ⚗️    │ │    🧬    │\
+└──────────┘ └──────────┘ └──────────┘\
+\
+┌──────────┐ ┌──────────��� ┌──────────┐\
+│Agriculture│ │ Earth    │ │ General  │\
+│    🌱    │ │ Science  │ │ Science  │\
+└──────────┘ └──────────┘ └──────────┘\
+```\
+\
+---\
+\
+# 4. Experiment Library\
+\
+Each experiment should have a proper resource card.\
+\
+For example:\
+\
+### ⚡ Simple Electric Circuit\
+\
+**Grade:** 6  \
+**Subject:** Integrated Science  \
+**Topic:** Electricity  \
+**Difficulty:** Beginner  \
+**Duration:** 20 minutes\
+\
+**Modes:**\
+\
+`👨‍🏫 Demonstrate`\
+\
+`👩‍🎓 Conduct`\
+\
+`📝 Assign`\
+\
+---\
+\
+# 5. Teacher Demonstration mode\
+\
+This is one of the most important additions based on your request.\
+\
+When the teacher selects:\
+\
+**Demonstrate Experiment**\
+\
+the interface becomes a **teacher-controlled laboratory**.\
+\
+For example:\
+\
+```text\
+┌────────────────────────────────────────────┐\
+│ TEACHER DEMONSTRATION                      │\
+│ Simple Electric Circuit                    │\
+├─────────────┬──────────────────────────────┤\
+│ EQUIPMENT   │                              │\
+│             │       VIRTUAL WORKBENCH      │\
+│ 🔋 Battery  │                              │\
+│ 💡 Bulb     │      🔋──────💡              │\
+│ 🔘 Switch   │       │      │               │\
+│ 🔌 Wires    │       └──────┘               │\
+│             │                              │\
+├─────────────┴──────────────────────────────┤\
+│ Voltage: 3V     Current: 0.15A             │\
+│                                             │\
+│ [Reset] [Run] [Pause] [Show Measurements]  │\
+└────────────────────────────────────────────┘\
+```\
+\
+The teacher can manipulate the experiment while explaining it.\
+\
+### Add teacher controls:\
+\
+- Show/hide instructions\
+- Show/hide measurements\
+- Slow experiment\
+- Pause\
+- Reset\
+- Highlight equipment\
+- Display labels\
+- Display answers\
+- Show expected result\
+- Annotate screen\
+- Ask question\
+- Reveal result\
+\
+---\
+\
+# 6. Classroom demonstration mode\
+\
+This can be even more powerful.\
+\
+Teacher clicks:\
+\
+**\\\"Start Classroom Demonstration\\\"**\
+\
+EduSmart can display a simplified presentation view:\
+\
+```text\
+GRADE 7 SCIENCE\
+\
+       🔬 VIRTUAL LAB\
+\
+     SERIES CIRCUIT\
+\
+     🔋────💡────💡\
+      │          │\
+      └──────────┘\
+\
+Voltage: 6V\
+Current: 0.25A\
+\
+Teacher Question:\
+What will happen if one bulb is removed?\
+\
+A. Both remain on\
+B. Both go off\
+C. One becomes brighter\
+D. Nothing changes\
+```\
+\
+Students can answer from their devices if you later enable classroom interaction.\
+\
+That effectively turns the Virtual Lab into an **interactive teaching tool**, not just a student simulator.\
+\
+---\
+\
+# 7. Learner Experiment mode\
+\
+When a Grade 5+ learner selects an experiment:\
+\
+### Stage 1 — Learn\
+\
+**What are we investigating?**\
+\
+### Stage 2 — Equipment\
+\
+The learner sees the available equipment.\
+\
+### Stage 3 — Safety\
+\
+Important safety information.\
+\
+### Stage 4 — Procedure\
+\
+Step-by-step instructions.\
+\
+### Stage 5 — Experiment\
+\
+The learner enters the interactive laboratory.\
+\
+### Stage 6 — Observe\
+\
+They record what happens.\
+\
+### Stage 7 — Measure\
+\
+They take virtual measurements.\
+\
+### Stage 8 — Analyse\
+\
+They answer questions/use graphs.\
+\
+### Stage 9 — Conclusion\
+\
+They write their conclusion.\
+\
+### Stage 10 — Submit\
+\
+The experiment becomes part of their learning record.\
+\
+---\
+\
+# 8. Virtual equipment library\
+\
+This is critical.\
+\
+Instead of creating every experiment as a completely separate application, create a **reusable equipment library**.\
+\
+### Physics\
+\
+- Batteries\
+- Cells\
+- Bulbs\
+- Switches\
+- Resistors\
+- Wires\
+- Ammeter\
+- Voltmeter\
+- Magnets\
+- Mirrors\
+- Lenses\
+- Prisms\
+- Pendulums\
+- Springs\
+- Weights\
+- Measuring rulers\
+- Stopwatches\
+\
+### Chemistry\
+\
+- Beakers\
+- Test tubes\
+- Flasks\
+- Measuring cylinders\
+- Droppers\
+- Thermometers\
+- Bunsen burner\
+- Tripod\
+- Gauze\
+- Balance\
+- Filters\
+- Indicators\
+- Chemical substances\
+\
+### Biology\
+\
+- Microscope\
+- Slides\
+- Coverslips\
+- Cells\
+- Specimens\
+- Plant structures\
+- Animal structures\
+- Human body systems\
+\
+### Agriculture\
+\
+- Soil samples\
+- Seeds\
+- Pots\
+- Water\
+- Fertilizer\
+- Measuring instruments\
+- Crop samples\
+\
+The **simulation engine combines these components** to create experiments.\
+\
+---\
+\
+# 9. Experiment Builder\
+\
+Eventually, teachers should have a feature called:\
+\
+### **Create Virtual Experiment**\
+\
+A teacher/HOD could choose:\
+\
+```text\
+Subject\
+↓\
+Grade\
+↓\
+Topic\
+↓\
+Equipment\
+↓\
+Procedure\
+↓\
+Variables\
+↓\
+Questions\
+↓\
+Marks\
+↓\
+Publish\
+```\
+\
+This would allow schools to create their own experiments instead of relying only on EduSmart's master library.\
+\
+---\
+\
+# 10. Experiment variables\
+\
+This is what makes it genuinely interactive.\
+\
+For example, in a plant-growth experiment:\
+\
+**Variables**\
+\
+- Amount of water\
+- Amount of light\
+- Temperature\
+- Fertilizer\
+\
+Learner changes:\
+\
+\u003e Water = 50 ml\
+\
+Then observes the simulated plant.\
+\
+Change it to:\
+\
+\u003e Water = 100 ml\
+\
+Observe the difference.\
+\
+This should produce **different outcomes**, not simply animations.\
+\
+---\
+\
+# 11. Measurement system\
+\
+Students should be able to use virtual instruments.\
+\
+For example:\
+\
+**Physics**\
+\
+```text\
+Ammeter\
+┌───────────┐\
+│   0.25 A  │\
+└───────────┘\
+```\
+\
+**Chemistry**\
+\
+```text\
+Thermometer\
+┌───────────┐\
+│   65°C    │\
+└───────────┘\
+```\
+\
+**Biology**\
+\
+```text\
+Microscope\
+Magnification: 400×\
+```\
+\
+This allows learners to practise actual scientific measurement.\
+\
+---\
+\
+# 12. Observation table\
+\
+Every experiment can automatically provide a laboratory notebook.\
+\
+```text\
+LABORATORY NOTEBOOK\
+\
+Experiment: Ohm's Law\
+\
+┌─────┬──────────┬──────────┬────────────┐\
+│ No. │ Voltage  │ Current  │ Resistance │\
+├─────┼──────────┼──────────┼────────────┤\
+│  1  │ 2V       │ 0.10A    │ 20Ω        │\
+│  2  │ 4V       │ 0.20A    │ 20Ω        │\
+│  3  │ 6V       │ 0.30A    │ 20Ω        │\
+└─────┴──────────┴──────────┴────────────┘\
+```\
+\
+Then:\
+\
+**Generate Graph**\
+\
+The system generates the graph from the learner's actual measurements.\
+\
+---\
+\
+# 13. Digital Lab Notebook\
+\
+I strongly recommend adding this.\
+\
+Every learner should have:\
+\
+### **My Laboratory Notebook**\
+\
+```text\
+My Experiments\
+────────────────────────────\
+✓ Simple Circuit\
+✓ Reflection\
+⏳ Acids \u0026 Bases\
+⏳ Plant Growth\
+\
+Lab Reports\
+────────────────────────────\
+Submitted: 8\
+Marked: 6\
+Pending: 2\
+\
+My Lab Score\
+────────────────────────────\
+82%\
+```\
+\
+This creates a permanent record of practical learning.\
+\
+---\
+\
+# 14. Lab report generator\
+\
+After completing an experiment, EduSmart should generate:\
+\
+**Virtual Laboratory Report**\
+\
+```text\
+Student\
+Admission Number\
+Grade\
+Stream\
+Subject\
+Experiment\
+Date\
+Teacher\
+\
+Aim\
+Equipment\
+Procedure\
+Observations\
+Results\
+Graph\
+Analysis\
+Conclusion\
+Questions\
+Score\
+Teacher Feedback\
+```\
+\
+This is particularly useful because the **Admission Number can remain the student's primary identifier across EduSmart**, including academic records. memcite\
+\
+---\
+\
+# 15. Teacher assessment\
+\
+Teacher sees:\
+\
+```text\
+VIRTUAL LAB RESULTS\
+\
+Grade 7A — Simple Circuit\
+\
+Student       Status       Score\
+────────────────────────────────\
+Amina         Submitted    18/20\
+Brian         Submitted    16/20\
+David         Pending      —\
+Faith         Submitted    20/20\
+```\
+\
+Click a student:\
+\
+**View Experiment**\
+\
+The teacher can see the learner's:\
+\
+- procedure\
+- measurements\
+- observations\
+- answers\
+- graph\
+- conclusion\
+- attempts\
+- score\
+- time spent\
+\
+---\
+\
+# 16. Resources integration\
+\
+The Virtual Lab should also connect with other resources.\
+\
+An experiment page could have:\
+\
+```text\
+RELATED RESOURCES\
+\
+📄 Class Notes\
+🎥 Video\
+📚 Digital Book\
+📝 Worksheet\
+🔬 Virtual Experiment\
+📊 Assessment\
+```\
+\
+So a teacher could structure an entire lesson:\
+\
+**Learn → Watch → Demonstrate → Experiment → Assess**\
+\
+---\
+\
+# 17. Access permissions\
+\
+### Student — Grade 5+\
+\
+Can:\
+\
+- explore permitted experiments\
+- conduct experiments\
+- save progress\
+- record observations\
+- submit reports\
+- see personal results\
+\
+### Teacher\
+\
+Can:\
+\
+- demonstrate\
+- assign\
+- monitor\
+- create experiments\
+- mark\
+- provide feedback\
+- view class analytics\
+\
+### HOD\
+\
+Can:\
+\
+- manage departmental experiments\
+- review teacher activity\
+- review performance\
+- approve/customize experiments\
+\
+### Dean/Academic Leadership\
+\
+Can:\
+\
+- view cross-grade academic laboratory analytics\
+- monitor curriculum coverage\
+- review practical learning activity\
+\
+### School Administrator\
+\
+Can:\
+\
+- manage access\
+- configure resources\
+- manage school-level settings\
+\
+### Super Admin\
+\
+Can:\
+\
+- maintain master experiment library\
+- publish new experiments\
+- manage simulation components\
+- control tenant availability\
+\
+---\
+\
+# 18. The experiment architecture\
+\
+I would structure every experiment internally like this:\
+\
+```text\
+VIRTUAL EXPERIMENT\
+│\
+├── Metadata\
+│   ├── Subject\
+│   ├── Grade\
+│   ├── Curriculum\
+│   ├── Topic\
+│   └── Difficulty\
+│\
+├── Learning\
+│   ├── Objectives\
+│   ├── Introduction\
+│   └── Safety\
+│\
+├── Laboratory\
+│   ├── Equipment\
+│   ├── Workbench\
+│   ├── Variables\
+│   ├── Rules\
+│   └── Measurements\
+│\
+├── Investigation\
+│   ├── Procedure\
+│   ├── Observations\
+│   ├── Data\
+│   └── Graphs\
+│\
+├── Assessment\
+│   ├── Questions\
+│   ├── Auto-marking\
+│   └── Teacher marking\
+│\
+└── Record\
+    ├── Attempts\
+    ├── Results\
+    ├── Lab Report\
+    └── Feedback\
+```\
+\
+---\
+\
+# 19. The most important design principle\
+\
+I would make the Virtual Laboratory operate on **one simulation engine but two interfaces**:\
+\
+### Teacher interface\
+\
+**DEMONSTRATE**\
+\
+Large controls, explanations, annotations, answer reveal, classroom presentation.\
+\
+### Learner interface\
+\
+**DISCOVER \u0026 CONDUCT**\
+\
+Interactive equipment, measurements, investigation, notebook and assessment.\
+\
+Both use the **same underlying experiment**.\
+\
+That means a teacher could demonstrate **Ohm's Law in the morning**, and then assign the exact same simulation to Grade 8 learners to conduct independently.\
+\
+---\
+\
+# 20. Recommended first release\
+\
+Rather than immediately trying to reproduce hundreds of PhET-style simulations, I recommend building the Resources module around **10 highly polished experiments first**:\
+\
+### Grade 5–6\
+1. Parts of a Plant\
+2. Seed Germination\
+3. States of Matter\
+4. Simple Machines\
+5. Simple Electric Circuit\
+\
+### Grade 7–9\
+6. Series \u0026 Parallel Circuits\
+7. Ohm's Law\
+8. Reflection \u0026 Refraction\
+9. Acids \u0026 Bases\
+10. Separation of Mixtures\
+\
+Once the underlying engine works properly, adding experiment number 11, 12, 50 or 100 becomes progressively easier.\
+\
+**The final Resources architecture should therefore be:**\
+\
+```text\
+                    EDUSMART\
+                       │\
+                  📚 RESOURCES\
+                       │\
+       ┌───────────────┼────────────────┐\
+       │               │                │\
+   Digital         Teaching         🔬 VIRTUAL\
+   Library         Materials        LABORATORY\
+                                      │\
+                     ┌────────────────┼────────────────┐\
+                     │                │                │\
+                 Demonstrate      Explore/Conduct     Assign\
+                     │                │                │\
+                 👨‍🏫 Teacher       👩‍🎓 Learner       📝 Teacher\
+                                      │\
+                                  LAB NOTEBOOK\
+                                      │\
+                                  LAB REPORT\
+                                      │\
+                                  ASSESSMENT\
+                                      │\
+                              📊 GRADES \u0026 ANALYTICS\
+```\
+\
+This is the structure I would use for **EduSmart's production design**: Virtual Laboratory remains a **Resource**, but internally behaves as a sophisticated interactive practical-learning platform for **teachers and Grade 5+ learners**.\
+\
+---\
+\
+If you want, I can:\
+\
+- Describe the Learner Experiment workflow with detailed learner stages\
+- Outline the Teacher Demonstration mode controls and classroom interaction features\
+- Explain how the Experiment Builder allows teachers to create custom virtual experiments\",\"role\",\"assistant\",\"name\",{},\"dd\",{\"_264\":265,\"_266\":267},\"disablePrefetch\",\"shouldPrefetchAccount\",\"shouldPrefetchUser\",\"shouldPrefetchSystemHints\",\"manageRootRouteStylesheet\",\"mobileWebHandoffEnabled\",\"promoteCss\",\"disableSSR\",\"stripModulepreloadImports\",\"paidCampaignAppRedirect\",\"statsigGateEvaluationsPromise\",[\"P\",263],\"traceId\",\"2577822286895902172\",\"traceTime\",1791616848573]
+");</script><!--$?--><template id="B:1"></template><!--/$--></div><script nonce="3b75f933-ddb5-4e39-b83b-5d803b2fac23">$RB=[];$RV=function(a){$RT=performance.now();for(var b=0;b<a.length;b+=2){var c=a[b],e=a[b+1];null!==e.parentNode&&e.parentNode.removeChild(e);var f=c.parentNode;if(f){var g=c.previousSibling,h=0;do{if(c&&8===c.nodeType){var d=c.data;if("/$"===d||"/&"===d)if(0===h)break;else h--;else"$"!==d&&"$?"!==d&&"$~"!==d&&"$!"!==d&&"&"!==d||h++}d=c.nextSibling;f.removeChild(c);c=d}while(c);for(;e.firstChild;)f.insertBefore(e.firstChild,c);g.data="$";g._reactRetry&&requestAnimationFrame(g._reactRetry)}}a.length=0};
+$RC=function(a,b){if(b=document.getElementById(b))(a=document.getElementById(a))?(a.previousSibling.data="$~",$RB.push(a,b),2===$RB.length&&("number"!==typeof $RT?requestAnimationFrame($RV.bind(null,$RB)):(a=performance.now(),setTimeout($RV.bind(null,$RB),2300>a&&2E3<a?2300-a:$RT+300-a)))):b.parentNode.removeChild(b)};$RC("B:0","S:0")</script><div hidden id="S:1"><script nonce="3b75f933-ddb5-4e39-b83b-5d803b2fac23">window.__reactRouterContext.streamController.enqueue("P263:[{}]
+");</script><!--$?--><template id="B:2"></template><!--/$--></div><script nonce="3b75f933-ddb5-4e39-b83b-5d803b2fac23">$RC("B:1","S:1")</script><div hidden id="S:2"><script nonce="3b75f933-ddb5-4e39-b83b-5d803b2fac23">window.__reactRouterContext.streamController.close();</script></div><script nonce="3b75f933-ddb5-4e39-b83b-5d803b2fac23">$RC("B:2","S:2")</script></body></html>

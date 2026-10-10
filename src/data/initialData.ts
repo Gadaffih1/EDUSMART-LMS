@@ -5313,6 +5313,19 @@ export const INITIAL_LESSON_IMAGES: LessonImage[] = [
 // ========================================================
 export const INITIAL_E_LINKS: ELink[] = [
   {
+    id: 'elink-vlab',
+    title: 'EduSmart Virtual LAB - Interactive CBC Science & Inquiry Laboratory',
+    url: 'https://chatgpt.com/s/t_6ac78bfad95c8191841d261117b27e60',
+    description: 'Interactive STEM and CBC virtual laboratory: safe digital simulations for chemistry titrations, Ohm electrical circuits, density experiments, compound microscopy, and teacher experiment guides.',
+    category: 'Science & STEM',
+    gradeLevel: 'All Grades',
+    subject: 'Integrated Science',
+    addedBy: 'Mrs. Florence Muthoni (Librarian)',
+    addedByRole: 'Librarian',
+    createdAt: '2026-10-09',
+    clicksCount: 520
+  },
+  {
     id: 'elink-01',
     title: 'KICD EduTV Kenya Digital Learning Broadcasting Portal',
     url: 'https://www.kicd.ac.ke/edutv',

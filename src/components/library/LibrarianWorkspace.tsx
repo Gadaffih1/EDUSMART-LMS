@@ -227,7 +227,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
 
   // Section categorize
   const isCirculation = ['issue_return', 'reservations', 'borrowers', 'overdue', 'fines_charges'].includes(currentSection);
-  const isCollection = ['catalogue', 'books_resources', 'acquisitions', 'inventory', 'shelves_locations', 'digital_library'].includes(currentSection);
+  const isCollection = ['catalogue', 'books_resources', 'acquisitions', 'inventory', 'shelves_locations', 'digital_library', 'virtual_lab'].includes(currentSection);
   const isProgrammes = ['reading_programme', 'attendance', 'timetable', 'room_booking', 'events_programmes'].includes(currentSection);
   const isGovernance = ['reports_analytics', 'notifications', 'policies', 'settings', 'audit_trail'].includes(currentSection);
 

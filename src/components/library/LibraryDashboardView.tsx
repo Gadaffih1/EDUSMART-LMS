@@ -26,6 +26,7 @@ import {
 } from '../../types';
 import { LibraryPortalSection } from './types';
 import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
+import { VirtualLabButton } from './VirtualLabButton';
 
 interface LibraryDashboardViewProps {
   currentUser?: User;
@@ -77,6 +78,7 @@ export const LibraryDashboardView: React.FC<LibraryDashboardViewProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <VirtualLabButton variant="hero" />
             <LibraryRoomBookingButton 
               currentUser={currentUser || ({ name: 'School Librarian', role: 'librarian' } as User)} 
               variant="hero" 

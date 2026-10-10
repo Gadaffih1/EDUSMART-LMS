@@ -11,6 +11,7 @@ export type LibraryPortalSection =
   | 'inventory'
   | 'shelves_locations'
   | 'digital_library'
+  | 'virtual_lab'
   | 'reading_programme'
   | 'attendance'
   | 'timetable'
@@ -27,7 +28,8 @@ export interface SectionCategory {
   items: {
     id: LibraryPortalSection;
     label: string;
-    icon: string;
+    icon: any;
     badge?: number | string;
+    badgeColor?: string;
   }[];
 }

@@ -32,6 +32,7 @@ import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
+import { VirtualLabButton } from '../library/VirtualLabButton';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -1548,6 +1549,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
           {/* CHANNEL 5: CURATED E-LINKS DIRECTORY (TEACHER RIGHTS: ADD, EDIT, REMOVE) */}
           {resourceSubTab === 'elinks' && (
             <div className="space-y-4">
+              <VirtualLabButton variant="banner" />
               <ELinksDirectory
                 currentUser={currentUser}
                 canManage={true}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LibraryPortalSection } from './types';
+import { LibraryPortalSection, SectionCategory } from './types';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -21,9 +21,10 @@ import {
   FileText, 
   Bell, 
   ShieldCheck, 
-  Settings, 
+  Settings,
   History,
-  ChevronRight
+  ChevronRight,
+  FlaskConical
 } from 'lucide-react';
 
 interface LibrarySidebarProps {
@@ -45,7 +46,7 @@ export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
   isOpenMobile,
   onCloseMobile
 }) => {
-  const groups = [
+  const groups: SectionCategory[] = [
     {
       title: 'OVERVIEW & CATALOGUE',
       items: [
@@ -70,7 +71,8 @@ export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         { id: 'acquisitions' as LibraryPortalSection, label: 'Acquisitions', icon: ShoppingBag },
         { id: 'inventory' as LibraryPortalSection, label: 'Inventory', icon: Boxes },
         { id: 'shelves_locations' as LibraryPortalSection, label: 'Shelves & Locations', icon: Compass },
-        { id: 'digital_library' as LibraryPortalSection, label: 'Digital Library', icon: Laptop }
+        { id: 'digital_library' as LibraryPortalSection, label: 'Digital Library', icon: Laptop },
+        { id: 'virtual_lab' as LibraryPortalSection, label: 'Virtual LAB (JSS)', icon: FlaskConical, badge: 'Interactive', badgeColor: 'bg-emerald-600' }
       ]
     },
     {

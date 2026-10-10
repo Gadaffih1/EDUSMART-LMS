@@ -32,6 +32,7 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
+import { VirtualLabButton } from '../library/VirtualLabButton';
 import { 
   BookOpen, 
   Bell, 
@@ -510,32 +511,35 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
               </p>
             </div>
 
-            {/* Sub-view Switcher: Topics vs Curated E-Links */}
-            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 self-start sm:self-center shrink-0">
-              <button
-                type="button"
-                onClick={() => setResourceViewMode('topics')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  resourceViewMode === 'topics'
-                    ? 'bg-emerald-700 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Topic Syllabus</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setResourceViewMode('elinks')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  resourceViewMode === 'elinks'
-                    ? 'bg-blue-700 text-white shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Globe className="w-3.5 h-3.5" />
-                <span>Curated E-Links</span>
-              </button>
+            {/* Sub-view Switcher & Virtual LAB */}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-center shrink-0">
+              <VirtualLabButton variant="header" />
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setResourceViewMode('topics')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    resourceViewMode === 'topics'
+                      ? 'bg-emerald-700 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Topic Syllabus</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResourceViewMode('elinks')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    resourceViewMode === 'elinks'
+                      ? 'bg-blue-700 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Curated E-Links</span>
+                </button>
+              </div>
             </div>
           </div>
 

@@ -5,6 +5,8 @@ import { INITIAL_USERS } from '../../data/initialData';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { EventTicketModal } from '../events/EventTicketModal';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
+import { VirtualLabSubscriptionModal } from '../virtuallab/VirtualLabSubscriptionModal';
+import { PortalAccessAppModal, PORTAL_APPS_CONFIG } from './PortalAccessAppModal';
 import { 
   GraduationCap, 
   Lock, 
@@ -45,7 +47,14 @@ import {
   Trophy,
   ClipboardCheck,
   Ticket,
-  CreditCard
+  CreditCard,
+  Smartphone,
+  Database,
+  Share2,
+  RefreshCw,
+  Zap,
+  Laptop,
+  Copy
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -89,6 +98,77 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedTicketEvent, setSelectedTicketEvent] = useState<SchoolCalendarEvent | null>(null);
   const [landingEvents, setLandingEvents] = useState<SchoolCalendarEvent[]>(() => Storage.getCalendarEvents());
+  const [isVirtualLabSubscriptionOpen, setIsVirtualLabSubscriptionOpen] = useState(false);
+  const [selectedPortalAppKey, setSelectedPortalAppKey] = useState<string | null>(null);
+  const [isPortalAppModalOpen, setIsPortalAppModalOpen] = useState(false);
+  const [processingPortalAppKey, setProcessingPortalAppKey] = useState<string | null>(null);
+  const [portalProcessingStep, setPortalProcessingStep] = useState<string>('');
+  const [portalProcessingProgress, setPortalProcessingProgress] = useState<number>(0);
+  const [copiedPortalKey, setCopiedPortalKey] = useState<string | null>(null);
+  const [isAppDirectoryOpen, setIsAppDirectoryOpen] = useState(false);
+
+  // Auto-detect portal access app from URL query parameters (e.g. ?portal=student or ?app=teacher)
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestedPortal = urlParams.get('portal') || urlParams.get('app');
+      if (requestedPortal && PORTAL_APPS_CONFIG[requestedPortal]) {
+        const app = PORTAL_APPS_CONFIG[requestedPortal];
+        setEmail(app.defaultEmail);
+        setPassword(app.defaultPassword);
+        setSelectedPortalAppKey(requestedPortal);
+        setIsPortalAppModalOpen(true);
+      }
+    } catch (e) {
+      // Ignore query param parsing errors
+    }
+  }, []);
+
+  const handleOpenPortalApp = (appKey: string) => {
+    setErrorMsg('');
+    const app = PORTAL_APPS_CONFIG[appKey];
+    if (app) {
+      setEmail(app.defaultEmail);
+      setPassword(app.defaultPassword);
+    }
+    setSelectedPortalAppKey(appKey);
+    setIsPortalAppModalOpen(true);
+  };
+
+  const handleProcessLmsAccess = (appKey: string) => {
+    const app = PORTAL_APPS_CONFIG[appKey];
+    if (!app) return;
+    setProcessingPortalAppKey(appKey);
+    setPortalProcessingProgress(25);
+    setPortalProcessingStep(`Verifying ${app.appCode} gateway credentials & encryption handshake...`);
+
+    setTimeout(() => {
+      setPortalProcessingProgress(55);
+      setPortalProcessingStep('Establishing authenticated handshake with Central LMS Cloud Core...');
+    }, 280);
+
+    setTimeout(() => {
+      setPortalProcessingProgress(85);
+      setPortalProcessingStep(`Authorizing ${app.name} workspace permissions...`);
+    }, 600);
+
+    setTimeout(() => {
+      setPortalProcessingProgress(100);
+      setPortalProcessingStep('Portal handshake verified. Launching LMS workspace...');
+      setTimeout(() => {
+        setProcessingPortalAppKey(null);
+        handleQuickDemoLogin(app.defaultEmail);
+      }, 250);
+    }, 900);
+  };
+
+  const handleCopyPortalLink = (appKey: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const url = `${window.location.origin}/?portal=${appKey}`;
+    navigator.clipboard.writeText(url);
+    setCopiedPortalKey(appKey);
+    setTimeout(() => setCopiedPortalKey(null), 2500);
+  };
 
   useEffect(() => {
     const handleEventsUpdate = () => {
@@ -343,6 +423,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <span>📞</span>
               <span>Contact School</span>
             </button>
+
+            {/* 9. 🚀 Distinctive Portal Apps Directory */}
+            <button
+              onClick={() => setIsAppDirectoryOpen(!isAppDirectoryOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 hover:bg-emerald-500/30 font-bold transition-all cursor-pointer shadow-xs ml-1"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Portal Apps (10)</span>
+              <ChevronRight className={`w-3 h-3 transition-transform ${isAppDirectoryOpen ? 'rotate-90' : ''}`} />
+            </button>
           </div>
 
           {/* MOBILE & TABLET HAMBURGER BAR (<1024px) */}
@@ -486,6 +576,79 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
         )}
+
+        {/* EXPANDABLE DISTINCTIVE PORTAL APPS DIRECTORY */}
+        {isAppDirectoryOpen && (
+          <div className="border-t border-slate-800 bg-slate-950/98 px-4 sm:px-6 lg:px-8 py-5 text-white shadow-2xl animate-in fade-in slide-in-from-top-2">
+            <div className="max-w-7xl mx-auto space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                    EduSmart Distinctive Portal Apps Directory
+                  </h4>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                    10 Apps Linked to LMS Cloud
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsAppDirectoryOpen(false)}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Close Directory</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {Object.values(PORTAL_APPS_CONFIG).map((app) => (
+                  <div
+                    key={app.id}
+                    className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between group shadow-sm hover:shadow-md"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <span className="text-xl">{app.icon}</span>
+                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-white/10 text-slate-300">
+                          {app.appCode}
+                        </span>
+                      </div>
+                      <div className="font-extrabold text-xs text-white group-hover:text-emerald-300 transition-colors">
+                        {app.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">
+                        {app.tagline}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          setIsAppDirectoryOpen(false);
+                          handleProcessLmsAccess(app.id);
+                        }}
+                        className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-extrabold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Zap className="w-3 h-3 text-amber-300 fill-amber-300" />
+                        <span>Process LMS</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsAppDirectoryOpen(false);
+                          handleOpenPortalApp(app.id);
+                        }}
+                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-[10px] transition-colors cursor-pointer"
+                        title="Dedicated App Gateway & Link"
+                      >
+                        <Smartphone className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* ========================================================
@@ -538,341 +701,1009 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               ======================================================== */}
           <div id="portal-cards-grid" className="w-full max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5 text-left">
             
-            {/* 1. STUDENT LOGIN */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('brian.otieno@student.edusmart.ac.ke');
-                setPassword('GR4@2026');
-                setActiveModal('student');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-emerald-400/30 group cursor-pointer"
+            {/* 1. STUDENT ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('student')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-emerald-400/40 ring-1 ring-emerald-400/20 group relative overflow-hidden cursor-pointer"
             >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                  👨‍🎓
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    👨‍🎓
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-200 border border-emerald-400/30 shadow-2xs">
+                      Grades 1-9
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-800/80 text-emerald-100">
-                  Grades 1-9
-                </span>
-              </div>
-              <div className="mt-4">
-                <div className="font-extrabold text-base tracking-wide flex items-center gap-1.5">
-                  <span>STUDENT LOGIN</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-                <p className="text-xs text-emerald-100 mt-1 font-medium leading-relaxed">
-                  Curriculum notes, quizzes, Safe Browser, virtual classes & e-portfolio.
-                </p>
-              </div>
-            </button>
 
-            {/* 2. TEACHER LOGIN */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('mr.kiprono@edusmart.ac.ke');
-                setPassword('teach2026');
-                setActiveModal('teacher');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-blue-500/30 group cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                  👩‍🏫
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-300 flex items-center justify-between">
+                    <span>Learner App · EDU-APP-STU</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    STUDENT PORTAL APP
+                  </h3>
+                  <p className="text-xs text-emerald-100/90 mt-1 font-medium leading-relaxed">
+                    Curriculum notes, quizzes, Safe Browser, virtual classes & e-portfolio.
+                  </p>
                 </div>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-900/80 text-blue-100">
-                  Academic Department
-                </span>
-              </div>
-              <div className="mt-4">
-                <div className="font-extrabold text-base tracking-wide flex items-center gap-1.5">
-                  <span>TEACHER LOGIN</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-                <p className="text-xs text-blue-100 mt-1 font-medium leading-relaxed">
-                  Class attendance roll, work entries, lunch register, syllabus & quiz grading.
-                </p>
-              </div>
-            </button>
 
-            {/* 3. PARENT LOGIN — DISTINCTIVE BUTTON */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('parent.otieno@edusmart.ac.ke');
-                setPassword('parent2026');
-                setActiveModal('parent');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-300/40 ring-2 ring-amber-400/20 group cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-xl shadow-xs">
-                  👨‍👩‍👧
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">CBC Notes</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Topical Quizzes</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Safe Browser</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Virtual Labs</span>
                 </div>
-                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-white text-rose-800 shadow-2xs">
-                  Distinctive Portal
-                </span>
               </div>
-              <div className="mt-4">
-                <div className="font-black text-base tracking-wide flex items-center gap-1.5">
-                  <span>PARENT LOGIN</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-                <p className="text-xs text-amber-100 mt-1 font-medium leading-relaxed">
-                  Child selector, academic reports, attendance, lunch logs, fees & teacher messaging.
-                </p>
-              </div>
-            </button>
 
-            {/* 4. LIBRARIAN LOGIN — DISTINCTIVE BUTTON */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('librarian@edusmart.ac.ke');
-                setPassword('lib2026');
-                setActiveModal('librarian');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-purple-700 to-indigo-800 hover:from-purple-600 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-purple-400/40 ring-2 ring-purple-400/20 group cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-xl shadow-xs">
-                  📖
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('student');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-emerald-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-emerald-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('student');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-emerald-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('student', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'student' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'student' ? 'Copied' : 'Link'}</span>
+                  </button>
                 </div>
-                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-white text-purple-900 shadow-2xs">
-                  Distinctive Portal
-                </span>
               </div>
-              <div className="mt-4">
-                <div className="font-black text-base tracking-wide flex items-center gap-1.5">
-                  <span>LIBRARIAN LOGIN</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-                <p className="text-xs text-purple-100 mt-1 font-medium leading-relaxed">
-                  Digital cataloging, book issuance, circulation desk & reading logs.
-                </p>
-              </div>
-            </button>
+            </div>
 
-            {/* 5. SCHOOL ADMIN STAFF LOGIN — DISTINCTIVE BUTTON */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('adminstaff@edusmart.ac.ke');
-                setPassword('staff2026');
-                setActiveModal('school_admin_staff');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-teal-800 to-slate-900 hover:from-teal-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-teal-400/50 ring-2 ring-teal-400/20 group cursor-pointer"
+            {/* 2. TEACHER ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('teacher')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-800 to-slate-900 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-blue-400/40 ring-1 ring-blue-400/20 group relative overflow-hidden cursor-pointer"
             >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                  🏛️
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    👩‍🏫
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-950/80 text-blue-200 border border-blue-400/30 shadow-2xs">
+                      Academic Dept
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-blue-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-teal-400 text-slate-950 shadow-2xs">
-                  Registrar & Secretariat
-                </span>
-              </div>
-              <div className="mt-4">
-                <div className="font-black text-base tracking-wide flex items-center gap-1.5">
-                  <span>SCHOOL ADMIN STAFF</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-teal-300" />
-                </div>
-                <p className="text-xs text-teal-100 mt-1 font-medium leading-relaxed">
-                  Work entry analysis, gate exits, lunch register audits, calendar & printables.
-                </p>
-              </div>
-            </button>
 
-            {/* 6. EXECUTIVE LEADERSHIP & ADMINISTRATION LOGIN */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('headteacher@edusmart.ac.ke');
-                setPassword('head2026');
-                setActiveModal('administration');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white shadow-md hover:shadow-lg transition-all flex flex-col justify-between border border-slate-600 group cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl shadow-xs">
-                  🏫
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-blue-300 flex items-center justify-between">
+                    <span>Faculty App · EDU-APP-TEA</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    TEACHER PRO APP
+                  </h3>
+                  <p className="text-xs text-blue-100/90 mt-1 font-medium leading-relaxed">
+                    Class attendance roll, work entries, lunch register, syllabus & quiz grading.
+                  </p>
                 </div>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-700 text-slate-200">
-                  Leadership
-                </span>
-              </div>
-              <div className="mt-4">
-                <div className="font-extrabold text-base tracking-wide flex items-center gap-1.5">
-                  <span>EXECUTIVE LEADERSHIP</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-400" />
-                </div>
-                <p className="text-xs text-slate-300 mt-1 font-medium leading-relaxed">
-                  Head Teacher, Deputy Head, Senior Teacher, Dean of Studies, HOD & System Admin.
-                </p>
-              </div>
-            </button>
 
-            {/* 7. SCHOOL SANATORIUM & HEALTHCARE BAY LOGIN */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('nurse@edusmart.ac.ke');
-                setPassword('nurse2026');
-                setActiveModal('sanatorium');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-rose-800 via-rose-900 to-slate-900 hover:from-rose-700 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-rose-400/60 ring-2 ring-rose-400/20 group cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                  🏥
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Roll Call</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Work Entry</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">CBC Marks</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Virtual Lab</span>
                 </div>
-                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-400 text-slate-950 shadow-2xs uppercase tracking-wider">
-                  Clinic & Health
-                </span>
               </div>
-              <div className="mt-4">
-                <div className="font-black text-base tracking-wide flex items-center gap-1.5 text-white">
-                  <span>SCHOOL SANATORIUM</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-rose-300" />
-                </div>
-                <p className="text-xs text-rose-100 mt-1 font-medium leading-relaxed">
-                  Student clinic visits, nurse notes, vital signs check, observation bay & medical records.
-                </p>
-              </div>
-            </button>
 
-            {/* 8. SCHOOL TRANSPORT & FLEET TEAM LOGIN */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('transport@edusmart.ac.ke');
-                setPassword('transport2026');
-                setActiveModal('transport');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-700 via-amber-800 to-slate-900 hover:from-amber-600 hover:to-slate-800 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-amber-400/60 ring-2 ring-amber-400/20 group cursor-pointer"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs">
-                  🚌
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('teacher');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-blue-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-blue-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('teacher');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-blue-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('teacher', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'teacher' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'teacher' ? 'Copied' : 'Link'}</span>
+                  </button>
                 </div>
-                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 shadow-2xs uppercase tracking-wider">
-                  Transport & Fleet
-                </span>
               </div>
-              <div className="mt-4">
-                <div className="font-black text-base tracking-wide flex items-center gap-1.5 text-white">
-                  <span>TRANSPORT TEAM</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-amber-300" />
-                </div>
-                <p className="text-xs text-amber-100 mt-1 font-medium leading-relaxed">
-                  Boarding roll call, live commuter GPS tracking, 8 routes, safety alerts & fleet logs.
-                </p>
-              </div>
-            </button>
+            </div>
 
-            {/* 9. CO-CURRICULUM TEAM LOGIN */}
-            <button
-              onClick={() => {
-                setErrorMsg('');
-                setEmail('cocurricular@edusmart.ac.ke');
-                setPassword('cocurricular2026');
-                setActiveModal('cocurricular');
-              }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-950 hover:from-emerald-700 hover:to-slate-900 text-white shadow-lg hover:shadow-xl transition-all flex flex-col justify-between border-2 border-emerald-400/60 ring-2 ring-emerald-400/20 group cursor-pointer sm:col-span-2 md:col-span-1 lg:col-span-1 xl:col-span-4 xl:flex-row xl:items-center xl:gap-6"
+            {/* 3. PARENT ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('parent')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-amber-600 via-rose-700 to-slate-900 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-amber-400/40 ring-1 ring-amber-400/20 group relative overflow-hidden cursor-pointer"
             >
-              <div className="flex items-center justify-between xl:justify-start xl:gap-4">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl shadow-xs shrink-0">
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    👨‍👩‍👧
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-950/80 text-amber-200 border border-amber-400/30 shadow-2xs">
+                      Guardians
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center justify-between">
+                    <span>Family App · EDU-APP-PAR</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    PARENT CONNECT APP
+                  </h3>
+                  <p className="text-xs text-amber-100/90 mt-1 font-medium leading-relaxed">
+                    Child selector, academic reports, attendance, lunch logs, fees & teacher messaging.
+                  </p>
+                </div>
+
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Child Switcher</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Report Cards</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Fee Balances</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Teacher Chat</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('parent');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-amber-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-rose-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('parent');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-amber-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('parent', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'parent' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'parent' ? 'Copied' : 'Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. LIBRARIAN ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('librarian')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-purple-700 via-indigo-900 to-slate-900 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-purple-400/40 ring-1 ring-purple-400/20 group relative overflow-hidden cursor-pointer"
+            >
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    📖
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-200 border border-purple-400/30 shadow-2xs">
+                      Curators
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-purple-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-purple-300 flex items-center justify-between">
+                    <span>Library Suite · EDU-APP-LIB</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    DIGITAL LIBRARY APP
+                  </h3>
+                  <p className="text-xs text-purple-100/90 mt-1 font-medium leading-relaxed">
+                    Digital cataloging, book issuance, circulation desk & reading logs.
+                  </p>
+                </div>
+
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Circulation Desk</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">OPAC Catalog</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Fines Ledger</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Room Booking</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('librarian');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-purple-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-purple-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('librarian');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-purple-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('librarian', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'librarian' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'librarian' ? 'Copied' : 'Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. SCHOOL ADMIN STAFF ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('school_admin_staff')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-teal-800 via-cyan-900 to-slate-900 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-teal-400/40 ring-1 ring-teal-400/20 group relative overflow-hidden cursor-pointer"
+            >
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    🏛️
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-950/80 text-teal-200 border border-teal-400/30 shadow-2xs">
+                      Secretariat
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-teal-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-teal-300 flex items-center justify-between">
+                    <span>Registry App · EDU-APP-ADM</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    REGISTRAR & SECRETARIAT
+                  </h3>
+                  <p className="text-xs text-teal-100/90 mt-1 font-medium leading-relaxed">
+                    Work entry analysis, gate exits, lunch register audits, calendar & printables.
+                  </p>
+                </div>
+
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Work Audits</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Gate Passes</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Lunch Audits</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Printables</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('school_admin_staff');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-teal-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-teal-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('school_admin_staff');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-teal-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('school_admin_staff', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'school_admin_staff' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'school_admin_staff' ? 'Copied' : 'Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. EXECUTIVE LEADERSHIP ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('administration')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-slate-800 via-slate-900 to-black text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-slate-600/50 ring-1 ring-slate-500/20 group relative overflow-hidden cursor-pointer"
+            >
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/20 group-hover:scale-105 transition-transform shrink-0">
+                    🏫
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-600 shadow-2xs">
+                      Leadership
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                    <span>Executive App · EDU-APP-EXE</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    EXECUTIVE LEADERSHIP
+                  </h3>
+                  <p className="text-xs text-slate-300/90 mt-1 font-medium leading-relaxed">
+                    Head Teacher, Deputy Head, Senior Teacher, Dean of Studies, HOD & System Admin.
+                  </p>
+                </div>
+
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Head Teacher</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Deputy Head</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Dean of Studies</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">HOD Dept</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('administration');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-slate-100 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-slate-900" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('administration');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-slate-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('administration', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'administration' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'administration' ? 'Copied' : 'Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 7. SCHOOL SANATORIUM ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('sanatorium')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-rose-800 via-rose-950 to-slate-950 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-rose-400/50 ring-1 ring-rose-400/20 group relative overflow-hidden cursor-pointer"
+            >
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    🏥
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-950/80 text-rose-200 border border-rose-400/30 shadow-2xs">
+                      Clinic & Health
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-rose-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center justify-between">
+                    <span>Health App · EDU-APP-MED</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    SCHOOL SANATORIUM
+                  </h3>
+                  <p className="text-xs text-rose-100/90 mt-1 font-medium leading-relaxed">
+                    Student clinic visits, nurse notes, vital signs check, observation bay & medical records.
+                  </p>
+                </div>
+
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Clinic Intake</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Vitals Monitor</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Observation Bay</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Nurse Notes</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('sanatorium');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-rose-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-rose-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('sanatorium');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-rose-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('sanatorium', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'sanatorium' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'sanatorium' ? 'Copied' : 'Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 8. SCHOOL TRANSPORT ACCESS APP */}
+            <div 
+              onClick={() => handleOpenPortalApp('transport')}
+              className="p-5 rounded-3xl bg-gradient-to-br from-amber-700 via-amber-900 to-slate-950 text-white shadow-lg hover:shadow-2xl transition-all duration-300 flex flex-col justify-between border-2 border-amber-400/50 ring-1 ring-amber-400/20 group relative overflow-hidden cursor-pointer"
+            >
+              <div className="space-y-3 relative z-10">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
+                    🚌
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-200 border border-amber-400/30 shadow-2xs">
+                      Fleet Logistics
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center justify-between">
+                    <span>Fleet App · EDU-APP-TRN</span>
+                    <span className="opacity-70 font-mono">v2.6</span>
+                  </div>
+                  <h3 className="font-black text-base tracking-wide text-white mt-0.5">
+                    TRANSPORT FLEET APP
+                  </h3>
+                  <p className="text-xs text-amber-100/90 mt-1 font-medium leading-relaxed">
+                    Boarding roll call, live commuter GPS tracking, 8 routes, safety alerts & fleet logs.
+                  </p>
+                </div>
+
+                {/* Core Module Pills */}
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">8 Bus Routes</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Live GPS Fleet</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Boarding Rolls</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/15 text-white/90">Safety Alerts</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 pt-3 border-t border-white/15 flex flex-col gap-2 relative z-10">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('transport');
+                  }}
+                  className="w-full py-2.5 px-3 bg-white text-slate-950 hover:bg-amber-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform text-amber-700" />
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('transport');
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                    title="Open Standalone App Gateway"
+                  >
+                    <Smartphone className="w-3 h-3 text-amber-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('transport', e)}
+                    className="py-1.5 px-2.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer flex items-center justify-center gap-1 shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'transport' ? (
+                      <Check className="w-3 h-3 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3 h-3 text-white/80" />
+                    )}
+                    <span className="text-[10px]">{copiedPortalKey === 'transport' ? 'Copied' : 'Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 9. CO-CURRICULUM ACCESS APP (WIDE CARD) */}
+            <div 
+              onClick={() => handleOpenPortalApp('cocurricular')}
+              className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-800 via-teal-950 to-slate-950 text-white shadow-xl hover:shadow-2xl transition-all duration-300 flex flex-col xl:flex-row xl:items-center justify-between gap-5 border-2 border-emerald-400/50 ring-1 ring-emerald-400/20 sm:col-span-2 md:col-span-3 lg:col-span-3 xl:col-span-4 group relative overflow-hidden cursor-pointer"
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 relative z-10 xl:flex-1">
+                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl shadow-md border border-white/30 group-hover:scale-105 transition-transform shrink-0">
                   🎯
                 </div>
-                <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 shadow-2xs uppercase tracking-wider">
-                  Sports & Clubs
-                </span>
-              </div>
-              <div className="mt-4 xl:mt-0 xl:flex-1">
-                <div className="font-black text-base tracking-wide flex items-center gap-1.5 text-white">
-                  <span>CO-CURRICULUM TEAM LOGIN</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-300" />
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 shadow-2xs">
+                      Sports & Societies App · EDU-APP-COC
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-300 bg-white/10 px-2 py-0.5 rounded font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>LMS Cloud Linked · v2.6</span>
+                    </span>
+                  </div>
+                  <h3 className="font-black text-lg tracking-wide text-white mt-1">
+                    CO-CURRICULUM SPORTS & SOCIETIES HUB
+                  </h3>
+                  <p className="text-xs text-emerald-100/90 mt-1 max-w-3xl leading-relaxed">
+                    Sports academy coaching, clubs & societies, talent development matrix, inter-school tournaments & official school tours.
+                  </p>
+
+                  {/* Core Module Pills */}
+                  <div className="flex flex-wrap gap-1.5 pt-2">
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-lg bg-white/15 text-white/90">12 Sports Academies</span>
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-lg bg-white/15 text-white/90">Clubs & Societies</span>
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-lg bg-white/15 text-white/90">Talent Matrix</span>
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-lg bg-white/15 text-white/90">Inter-School Tournaments</span>
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-lg bg-white/15 text-white/90">Gala Passes</span>
+                  </div>
                 </div>
-                <p className="text-xs text-emerald-100 mt-1 font-medium leading-relaxed">
-                  Sports academy coaching, clubs & societies, talent development matrix, inter-school tournaments & tours.
-                </p>
               </div>
-              <div className="mt-3 xl:mt-0 shrink-0">
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-300 group-hover:text-white px-3 py-1.5 rounded-lg bg-white/10">
-                  <span>Enter Co-Curriculum Hub</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 relative z-10 shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleProcessLmsAccess('cocurricular');
+                  }}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-white text-slate-950 hover:bg-emerald-50 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer group-hover:shadow-lg active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process LMS Access</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-emerald-700" />
+                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPortalApp('cocurricular');
+                    }}
+                    className="flex-1 sm:flex-initial px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    title="Dedicated App Gateway"
+                  >
+                    <Smartphone className="w-4 h-4 text-emerald-300" />
+                    <span>App Gateway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyPortalLink('cocurricular', e)}
+                    className="p-2.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+                    title="Copy direct standalone app URL"
+                  >
+                    {copiedPortalKey === 'cocurricular' ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </button>
+            </div>
+
+            {/* 10. CBC VIRTUAL SCIENCE & SCRATCH COMPUTER LAB (PUBLIC / NON-MEMBER ACCESS PASS) */}
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-5 border-2 border-emerald-500/40 sm:col-span-2 md:col-span-3 lg:col-span-3 xl:col-span-4 ring-2 ring-emerald-500/20 group relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 relative z-10">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-400 via-emerald-400 to-teal-400 p-0.5 shadow-md flex items-center justify-center shrink-0">
+                  <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center text-xl">
+                    🔬
+                  </div>
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-2xs">
+                      Public Portal · Non-Member Access
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-white/15 text-emerald-300 px-2 py-0.5 rounded-full">
+                      EDU-APP-VLAB · v2.6 Linked App
+                    </span>
+                    <span className="text-[10px] font-bold bg-white/10 text-slate-300 px-2 py-0.5 rounded-full">
+                      Passes from KES 150
+                    </span>
+                  </div>
+                  <h3 className="font-black text-base sm:text-lg text-white mt-1">
+                    Virtual Science Lab & Scratch Computer Coding Studio
+                  </h3>
+                  <p className="text-xs text-emerald-100/80 mt-1 max-w-3xl leading-relaxed">
+                    Visiting learners, parents, and non-members can access CBC chemistry titrations, physics circuits, biology microscopy, and Scratch block coding simulations. Subscribe for an instant digital pass or launch demonstration.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0 relative z-10">
+                <button
+                  type="button"
+                  onClick={() => handleProcessLmsAccess('virtuallab')}
+                  className="px-4 py-2.5 bg-white text-slate-950 hover:bg-emerald-50 font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-98"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                  <span>Process Demo Pass</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenPortalApp('virtuallab')}
+                  className="px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Open Dedicated Lab App Info"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>App Info</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsVirtualLabSubscriptionOpen(true)}
+                  className="px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-1.5 cursor-pointer transition-all transform hover:scale-[1.02]"
+                >
+                  <Ticket className="w-3.5 h-3.5" />
+                  <span>Subscribe via Ticketing Portal →</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleCopyPortalLink('virtuallab', e)}
+                  className="p-2.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+                  title="Copy direct standalone app URL"
+                >
+                  {copiedPortalKey === 'virtuallab' ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
 
           </div>
 
-          {/* Quick Demo Credentials Bar */}
-          <div className="mt-8 pt-6 border-t border-slate-800 w-full flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-slate-300">Quick 1-Click Role Access:</span>
+          {/* Quick Demo Credentials Bar -> Distinctive Rapid Portal Switchboard */}
+          <div className="mt-8 pt-6 border-t border-slate-800 w-full flex flex-col items-center justify-between gap-4 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center justify-between w-full gap-2">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <span className="font-extrabold text-slate-200 uppercase tracking-wider text-[11px]">
+                  Rapid Portal Switchboard · Instant 1-Click LMS Processing:
+                </span>
+              </div>
+              <span className="text-[11px] text-emerald-400 font-mono">
+                ● 10 Authenticated Gateways Active
+              </span>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5 gap-2 w-full">
+              {/* Learner */}
               <button
-                onClick={() => handleQuickDemoLogin('brian.otieno@student.edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold rounded-lg border border-slate-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('student')}
+                className="p-2.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Learner (Gr 4)
+                <div className="flex items-center gap-2">
+                  <span className="text-base">👨‍🎓</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Learner (Gr 4)</div>
+                    <div className="text-[9px] text-emerald-400 font-mono">EDU-APP-STU</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Teacher */}
               <button
-                onClick={() => handleQuickDemoLogin('parent.otieno@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-900 text-amber-300 font-bold rounded-lg border border-amber-800 transition-colors"
+                onClick={() => handleProcessLmsAccess('teacher')}
+                className="p-2.5 rounded-xl bg-blue-950/70 hover:bg-blue-900 border border-blue-500/40 text-blue-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Parent
+                <div className="flex items-center gap-2">
+                  <span className="text-base">👩‍🏫</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Teacher Pro</div>
+                    <div className="text-[9px] text-blue-400 font-mono">EDU-APP-TEA</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-blue-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Parent */}
               <button
-                onClick={() => handleQuickDemoLogin('mr.kiprono@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 font-bold rounded-lg border border-slate-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('parent')}
+                className="p-2.5 rounded-xl bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 text-amber-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Teacher
+                <div className="flex items-center gap-2">
+                  <span className="text-base">👨‍👩‍👧</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Parent Connect</div>
+                    <div className="text-[9px] text-amber-400 font-mono">EDU-APP-PAR</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-amber-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Librarian */}
               <button
-                onClick={() => handleQuickDemoLogin('nurse@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-bold rounded-lg border border-rose-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('librarian')}
+                className="p-2.5 rounded-xl bg-purple-950/70 hover:bg-purple-900 border border-purple-500/40 text-purple-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Nurse / Sanatorium
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📖</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Digital Library</div>
+                    <div className="text-[9px] text-purple-400 font-mono">EDU-APP-LIB</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-purple-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Admin Staff */}
               <button
-                onClick={() => handleQuickDemoLogin('transport@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-amber-950/80 hover:bg-amber-900 text-amber-300 font-bold rounded-lg border border-amber-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('school_admin_staff')}
+                className="p-2.5 rounded-xl bg-teal-950/70 hover:bg-teal-900 border border-teal-500/40 text-teal-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Transport Team
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🏛️</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Secretariat</div>
+                    <div className="text-[9px] text-teal-400 font-mono">EDU-APP-ADM</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-teal-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Executive Leadership */}
               <button
-                onClick={() => handleQuickDemoLogin('cocurricular@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 font-bold rounded-lg border border-emerald-600 transition-colors shadow-xs"
+                onClick={() => handleProcessLmsAccess('administration')}
+                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-600/60 text-slate-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                🎯 Co-Curricular Lead
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🏫</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Head Teacher</div>
+                    <div className="text-[9px] text-slate-400 font-mono">EDU-APP-EXE</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-slate-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Sanatorium */}
               <button
-                onClick={() => handleQuickDemoLogin('patron@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-teal-950/90 hover:bg-teal-900 text-teal-300 font-bold rounded-lg border border-teal-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('sanatorium')}
+                className="p-2.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-rose-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Debate Patron
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🏥</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Sanatorium Bay</div>
+                    <div className="text-[9px] text-rose-400 font-mono">EDU-APP-MED</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-rose-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Transport */}
               <button
-                onClick={() => handleQuickDemoLogin('adminstaff@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-teal-950/70 hover:bg-teal-900 text-teal-300 font-bold rounded-lg border border-teal-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('transport')}
+                className="p-2.5 rounded-xl bg-amber-950/70 hover:bg-amber-900 border border-amber-600/40 text-amber-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Admin Staff
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🚌</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Transport Fleet</div>
+                    <div className="text-[9px] text-amber-400 font-mono">EDU-APP-TRN</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-amber-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Co-Curricular */}
               <button
-                onClick={() => handleQuickDemoLogin('deputy@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg border border-slate-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('cocurricular')}
+                className="p-2.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Deputy Head
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🎯</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Sports & Clubs</div>
+                    <div className="text-[9px] text-emerald-400 font-mono">EDU-APP-COC</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-emerald-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
+
+              {/* Virtual Lab */}
               <button
-                onClick={() => handleQuickDemoLogin('headteacher@edusmart.ac.ke')}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg border border-slate-700 transition-colors"
+                onClick={() => handleProcessLmsAccess('virtuallab')}
+                className="p-2.5 rounded-xl bg-teal-950/70 hover:bg-teal-900 border border-teal-500/40 text-teal-200 transition-all text-left flex items-center justify-between group cursor-pointer hover:scale-[1.02] shadow-xs"
               >
-                Head Teacher
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🔬</span>
+                  <div>
+                    <div className="font-bold text-white text-[11px]">Virtual Science Lab</div>
+                    <div className="text-[9px] text-teal-400 font-mono">EDU-APP-VLAB</div>
+                  </div>
+                </div>
+                <ArrowRight className="w-3 h-3 text-teal-400 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
               </button>
             </div>
           </div>
@@ -2995,6 +3826,84 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
           event={selectedTicketEvent}
           onClose={() => setSelectedTicketEvent(null)}
         />
+      )}
+
+      {/* NON-MEMBER VIRTUAL LAB & SCRATCH CODING SUBSCRIPTION MODAL */}
+      {isVirtualLabSubscriptionOpen && (
+        <VirtualLabSubscriptionModal
+          isOpen={isVirtualLabSubscriptionOpen}
+          onClose={() => setIsVirtualLabSubscriptionOpen(false)}
+        />
+      )}
+
+      {/* DEDICATED PORTAL ACCESS APP MODAL */}
+      {isPortalAppModalOpen && selectedPortalAppKey && (
+        <PortalAccessAppModal
+          appKey={selectedPortalAppKey}
+          isOpen={isPortalAppModalOpen}
+          onClose={() => {
+            setIsPortalAppModalOpen(false);
+            setSelectedPortalAppKey(null);
+          }}
+          onLogin={(emailToUse, passwordToUse) => {
+            setIsPortalAppModalOpen(false);
+            setSelectedPortalAppKey(null);
+            handleQuickDemoLogin(emailToUse);
+          }}
+          errorMsg={errorMsg}
+        />
+      )}
+
+      {/* PROCESSING LMS HANDSHAKE OVERLAY */}
+      {processingPortalAppKey && PORTAL_APPS_CONFIG[processingPortalAppKey] && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-emerald-500/50 rounded-3xl p-6 sm:p-8 max-w-md w-full text-white shadow-2xl relative overflow-hidden flex flex-col items-center text-center">
+            {/* Background Glow */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl shadow-xl mb-4 animate-bounce">
+              {PORTAL_APPS_CONFIG[processingPortalAppKey].icon}
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-mono font-bold uppercase tracking-wider mb-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block"></span>
+              <span>Processing Portal App · {PORTAL_APPS_CONFIG[processingPortalAppKey].appCode}</span>
+            </div>
+
+            <h3 className="text-xl font-black text-white tracking-tight">
+              {PORTAL_APPS_CONFIG[processingPortalAppKey].name}
+            </h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs">
+              {PORTAL_APPS_CONFIG[processingPortalAppKey].tagline}
+            </p>
+
+            {/* Progress Bar */}
+            <div className="w-full mt-6 space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Connecting to Central LMS</span>
+                </span>
+                <span className="text-slate-300 font-bold">{portalProcessingProgress}%</span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-700">
+                <div 
+                  className="bg-gradient-to-r from-emerald-500 via-teal-400 to-indigo-500 h-full rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${portalProcessingProgress}%` }}
+                />
+              </div>
+              <div className="text-[11px] font-mono text-emerald-300/90 text-center pt-1 min-h-[1.25rem]">
+                {portalProcessingStep}
+              </div>
+            </div>
+
+            <div className="mt-5 pt-4 border-t border-slate-800/80 w-full flex items-center justify-center gap-2 text-[10px] text-slate-400">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TLS 1.3 Encryption · EduSmart Central LMS Linked</span>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

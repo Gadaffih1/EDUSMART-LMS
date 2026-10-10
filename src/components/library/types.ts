@@ -11,7 +11,6 @@ export type LibraryPortalSection =
   | 'inventory'
   | 'shelves_locations'
   | 'digital_library'
-  | 'virtual_lab'
   | 'reading_programme'
   | 'attendance'
   | 'timetable'

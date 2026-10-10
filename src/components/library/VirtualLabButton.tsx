@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
 import { FlaskConical, ExternalLink, Sparkles, Atom } from 'lucide-react';
 import { VirtualLabModal, VIRTUAL_LAB_URL } from './VirtualLabModal';
+import { User } from '../../types';
 
 interface VirtualLabButtonProps {
   variant?: 'header' | 'hero' | 'banner' | 'card' | 'compact';
   className?: string;
   label?: string;
   showBadge?: boolean;
+  currentUser?: User;
 }
 
 export const VirtualLabButton: React.FC<VirtualLabButtonProps> = ({
   variant = 'header',
   className = '',
   label = 'Virtual LAB',
-  showBadge = true
+  showBadge = true,
+  currentUser
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -42,6 +45,7 @@ export const VirtualLabButton: React.FC<VirtualLabButtonProps> = ({
           <VirtualLabModal
             isOpen={isOpen}
             onClose={() => setIsOpen(false)}
+            currentUser={currentUser}
           />
         )}
       </>
@@ -71,6 +75,7 @@ export const VirtualLabButton: React.FC<VirtualLabButtonProps> = ({
           <VirtualLabModal
             isOpen={isOpen}
             onClose={() => setIsOpen(false)}
+            currentUser={currentUser}
           />
         )}
       </>
@@ -147,6 +152,7 @@ export const VirtualLabButton: React.FC<VirtualLabButtonProps> = ({
           <VirtualLabModal
             isOpen={isOpen}
             onClose={() => setIsOpen(false)}
+            currentUser={currentUser}
           />
         )}
       </>
@@ -198,6 +204,7 @@ export const VirtualLabButton: React.FC<VirtualLabButtonProps> = ({
         <VirtualLabModal
           isOpen={isOpen}
           onClose={() => setIsOpen(false)}
+          currentUser={currentUser}
         />
       )}
     </>

@@ -1074,7 +1074,7 @@ export const JSS_LAB_REQUIREMENTS: LabApparatusItem[] = [
 export interface VirtualExperiment {
   id: string;
   title: string;
-  subject: 'Integrated Science' | 'Chemistry' | 'Physics' | 'Biology' | 'Agriculture';
+  subject: 'Integrated Science' | 'Chemistry' | 'Physics' | 'Biology' | 'Agriculture' | 'Computer Studies' | 'Pre-Technical Studies';
   strand: string;
   gradeLevel: 'Grade 5' | 'Grade 6' | 'Grade 7' | 'Grade 8' | 'Grade 9';
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
@@ -1085,7 +1085,7 @@ export interface VirtualExperiment {
   equipmentIds: number[];
   safetyPrecautions: string[];
   procedureSteps: string[];
-  simulationType: 'circuits' | 'acids_bases' | 'microscope' | 'separation' | 'density_eureka';
+  simulationType: 'circuits' | 'acids_bases' | 'microscope' | 'separation' | 'density_eureka' | 'scratch_coding';
 }
 
 export const CBC_VIRTUAL_EXPERIMENTS: VirtualExperiment[] = [
@@ -1215,5 +1215,56 @@ export const CBC_VIRTUAL_EXPERIMENTS: VirtualExperiment[] = [
       '5. Read the volume of displaced water in the measuring cylinder and calculate Density = Mass / Volume.'
     ],
     simulationType: 'density_eureka'
+  },
+  {
+    id: 'exp-06',
+    title: 'Computer Lab: Scratch Block Coding & Algorithmic Simulation',
+    subject: 'Computer Studies',
+    strand: 'Computational Thinking: Visual Programming & Simulations',
+    gradeLevel: 'Grade 7',
+    difficulty: 'Intermediate',
+    durationMinutes: 30,
+    description: 'Design interactive animations, sprite game loops, variables, and physics bouncing simulations using Scratch-style visual coding blocks in the Computer Laboratory.',
+    aim: 'To construct algorithms using sequencing, loops (repeat/forever), and conditional statements (if-then) to simulate physical motion and computational logic.',
+    hypothesis: 'Executing iterative loop blocks with incremental X/Y coordinate shifts will generate smooth sprite animation and responsive user interaction.',
+    equipmentIds: [24, 29, 64],
+    safetyPrecautions: [
+      'Observe proper ergonomics and posture in the computer laboratory workstations.',
+      'Ensure neat cable routing and safe power surge strip management.',
+      'Regularly save your visual block workspace scripts to avoid loss of code.'
+    ],
+    procedureSteps: [
+      '1. Open the Computer Lab Scratch Interactive Block Canvas.',
+      '2. Select or customize your active Sprite (Cat, Robot, Particle, or Ball).',
+      '3. Assemble execution blocks: "When Green Flag Clicked" -> "Forever" -> "Move Steps" -> "If on edge, bounce".',
+      '4. Integrate variable controls for Speed, Pen Colour, and Gravity Physics.',
+      '5. Click the Green Flag to execute the live simulation, test boundaries, and export the code script.'
+    ],
+    simulationType: 'scratch_coding'
+  },
+  {
+    id: 'exp-07',
+    title: 'Computer Lab: Scientific Motion & Gravity Simulation Script',
+    subject: 'Pre-Technical Studies',
+    strand: 'Applied Digital Systems & Automation',
+    gradeLevel: 'Grade 8',
+    difficulty: 'Advanced',
+    durationMinutes: 35,
+    description: 'Build a computational model simulating gravitational free-fall and pendulum velocity using conditional loops and Scratch block algorithms.',
+    aim: 'To model physical scientific laws through programmatic block simulations and data output loops.',
+    hypothesis: 'Applying a negative Y-velocity decrement block inside an animation loop will produce accurate quadratic parabolic motion.',
+    equipmentIds: [27, 28, 64],
+    safetyPrecautions: [
+      'Maintain adequate ambient lighting to prevent digital visual fatigue.',
+      'Check peripheral connections (mouse, keyboard, monitors) before initiating complex script loops.'
+    ],
+    procedureSteps: [
+      '1. Define simulation variables: Velocity Y, Gravity constant (-9.8), and Friction damping.',
+      '2. Link the block sequence to user keyboard inputs (Spacebar = Launch, Arrow Keys = Angle).',
+      '3. Execute the project on the stage visualizer and measure projectile trajectory.',
+      '4. Log trajectory points to verify mathematical parabolic symmetry.',
+      '5. Submit the completed computational model to your Computer Studies instructor.'
+    ],
+    simulationType: 'scratch_coding'
   }
 ];

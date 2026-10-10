@@ -23,8 +23,7 @@ import {
   ShieldCheck, 
   Settings,
   History,
-  ChevronRight,
-  FlaskConical
+  ChevronRight
 } from 'lucide-react';
 
 interface LibrarySidebarProps {
@@ -71,8 +70,7 @@ export const LibrarySidebar: React.FC<LibrarySidebarProps> = ({
         { id: 'acquisitions' as LibraryPortalSection, label: 'Acquisitions', icon: ShoppingBag },
         { id: 'inventory' as LibraryPortalSection, label: 'Inventory', icon: Boxes },
         { id: 'shelves_locations' as LibraryPortalSection, label: 'Shelves & Locations', icon: Compass },
-        { id: 'digital_library' as LibraryPortalSection, label: 'Digital Library', icon: Laptop },
-        { id: 'virtual_lab' as LibraryPortalSection, label: 'Virtual LAB (JSS)', icon: FlaskConical, badge: 'Interactive', badgeColor: 'bg-emerald-600' }
+        { id: 'digital_library' as LibraryPortalSection, label: 'Digital Library', icon: Laptop }
       ]
     },
     {

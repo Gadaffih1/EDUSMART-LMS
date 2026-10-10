@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FlaskConical, 
   Boxes, 
@@ -18,7 +18,9 @@ import {
   Zap,
   TestTube,
   Eye,
-  ArrowRight
+  ArrowRight,
+  Laptop,
+  Code2
 } from 'lucide-react';
 import { User } from '../../types';
 import { 
@@ -30,11 +32,14 @@ import { LaboratoryInventoryView } from './LaboratoryInventoryView';
 import { TeacherDemonstrationHub } from './TeacherDemonstrationHub';
 import { LearnerExperimentWorkbench } from './LearnerExperimentWorkbench';
 import { LabNotebookAndReports } from './LabNotebookAndReports';
+import { ComputerLabScratchStudio } from './ComputerLabScratchStudio';
+import { TeacherLabAssignmentModal } from './TeacherLabAssignmentModal';
 
 export type VirtualLabTab = 
   | 'home'
   | 'library'
   | 'demonstrations'
+  | 'scratch_coding'
   | 'learner_experiments'
   | 'my_experiments'
   | 'reports'
@@ -46,18 +51,40 @@ interface VirtualLabWorkspaceProps {
   initialTab?: VirtualLabTab;
   onClose?: () => void;
   isEmbedded?: boolean;
+  assignedExperimentId?: string;
+  assignedLabType?: 'science' | 'scratch';
+  onAssignmentComplete?: (submissionData: any) => void;
 }
 
 export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
   currentUser,
   initialTab = 'home',
   onClose,
-  isEmbedded = false
+  isEmbedded = false,
+  assignedExperimentId,
+  assignedLabType = 'science',
+  onAssignmentComplete
 }) => {
   const [activeTab, setActiveTab] = useState<VirtualLabTab>(initialTab);
   const [selectedExperiment, setSelectedExperiment] = useState<VirtualExperiment>(CBC_VIRTUAL_EXPERIMENTS[0]);
   const [searchExperimentQuery, setSearchExperimentQuery] = useState('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+
+  const isTeacher = !!currentUser && ['teacher', 'class_teacher', 'hod', 'dean_of_studies'].includes(currentUser.role);
+
+  // Sync if an assigned experiment/scratch is launched by learner
+  useEffect(() => {
+    if (assignedExperimentId) {
+      if (assignedLabType === 'scratch') {
+        setActiveTab('scratch_coding');
+      } else {
+        const found = CBC_VIRTUAL_EXPERIMENTS.find(e => e.id === assignedExperimentId);
+        if (found) setSelectedExperiment(found);
+        setActiveTab('learner_experiments');
+      }
+    }
+  }, [assignedExperimentId, assignedLabType]);
 
   const filteredExperiments = CBC_VIRTUAL_EXPERIMENTS.filter(exp => {
     const matchSearch = exp.title.toLowerCase().includes(searchExperimentQuery.toLowerCase()) ||
@@ -106,14 +133,26 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
         </div>
 
         {/* Global Action Tools */}
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer self-start md:self-center"
-          >
-            Back to LMS
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+          {isTeacher && (
+            <button
+              onClick={() => setIsAssignModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Give Lab/Scratch Assignment</span>
+            </button>
+          )}
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+            >
+              Back to LMS
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Primary Section Switcher Tabs */}
@@ -122,6 +161,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
           { id: 'home', label: 'Lab Home', icon: Sparkles },
           { id: 'library', label: 'Experiment Library', icon: BookOpen },
           { id: 'demonstrations', label: 'Teacher Demonstrations', icon: Presentation },
+          { id: 'scratch_coding', label: 'Computer Lab (Scratch)', icon: Laptop },
           { id: 'learner_experiments', label: 'Learner Experiments (10-Stage)', icon: FlaskConical },
           { id: 'my_experiments', label: 'My Notebook & Reports', icon: FileText },
           { id: 'inventory', label: 'Apparatus Requirements (75 Items)', icon: Boxes },
@@ -349,7 +389,21 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
       {activeTab === 'demonstrations' && (
         <TeacherDemonstrationHub
           onAssignExperiment={(exp) => {
-            alert(`Assigned "${exp.title}" to Grade 7 Science classes!`);
+            setSelectedExperiment(exp);
+            setIsAssignModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* ============================================================== */}
+      {/* SECTION 3B: COMPUTER LAB & SCRATCH CODING STUDIO */}
+      {/* ============================================================== */}
+      {activeTab === 'scratch_coding' && (
+        <ComputerLabScratchStudio
+          currentUser={currentUser}
+          isTeacher={isTeacher}
+          onAssignProject={(proj) => {
+            setIsAssignModalOpen(true);
           }}
         />
       )}
@@ -362,6 +416,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
           currentUser={currentUser}
           initialExperiment={selectedExperiment}
           onCompleteSubmission={(rep) => {
+            if (onAssignmentComplete) onAssignmentComplete(rep);
             setActiveTab('my_experiments');
           }}
         />
@@ -419,6 +474,19 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Teacher Lab & Scratch Assignment Modal */}
+      {isAssignModalOpen && currentUser && (
+        <TeacherLabAssignmentModal
+          currentUser={currentUser}
+          initialLabType={activeTab === 'scratch_coding' ? 'scratch' : 'science'}
+          initialExperiment={selectedExperiment}
+          onClose={() => setIsAssignModalOpen(false)}
+          onSuccess={() => {
+            setIsAssignModalOpen(false);
+          }}
+        />
       )}
     </div>
   );

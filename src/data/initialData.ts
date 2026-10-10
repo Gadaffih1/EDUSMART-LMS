@@ -987,6 +987,40 @@ export const INITIAL_ASSIGNMENTS: Assignment[] = [
     teacherName: 'Mr. David Kiprono',
     teacherId: 'usr-teach-kiprono',
     submissionsCount: 3
+  },
+  {
+    id: 'asg-gr4-vlab-chem',
+    grade: 4,
+    stream: 'Dove',
+    subject: 'Integrated Science',
+    title: 'Virtual Lab: Acid-Base Indicator & Neutralization Practical',
+    instructions: 'Launch the assigned Virtual Science Lab. Test hydrochloric acid and sodium hydroxide with litmus paper and phenolphthalein. Record color changes and submit your digital lab observation report.',
+    dueDate: '2026-10-18',
+    maxScore: 30,
+    teacherName: 'Mr. David Kiprono',
+    teacherId: 'usr-teach-kiprono',
+    submissionsCount: 2,
+    isVirtualLab: true,
+    virtualLabType: 'science',
+    labExperimentId: 'exp-chem-acid-base',
+    labTitle: 'Acid-Base Titration & pH Indicator Neutralization'
+  },
+  {
+    id: 'asg-gr4-vlab-scratch',
+    grade: 4,
+    stream: 'Dove',
+    subject: 'Computer Studies',
+    title: 'Scratch Coding Challenge: Maze Navigator & Collision Sensing',
+    instructions: 'Open the assigned Scratch Computer Lab. Build the block script with Green Flag start, coordinates, and collision sensing. Test the sprite on stage, note down your algorithm score, and submit work.',
+    dueDate: '2026-10-20',
+    maxScore: 30,
+    teacherName: 'Mr. David Kiprono',
+    teacherId: 'usr-teach-kiprono',
+    submissionsCount: 1,
+    isVirtualLab: true,
+    virtualLabType: 'scratch',
+    labExperimentId: 'scratch-maze-game',
+    labTitle: 'Interactive Maze Navigator & Collision Sensing'
   }
 ];
 

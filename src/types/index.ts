@@ -62,12 +62,13 @@ export type PrimaryStream = typeof PRIMARY_STREAMS[number];
 export type JuniorStream = typeof JUNIOR_STREAMS[number];
 export type StreamName = PrimaryStream | JuniorStream;
 
-// Primary Subjects (Grades 1 to 6 - 8 subjects + PHE)
+// Primary Subjects (Grades 1 to 6 - 8 subjects + PHE + Computer Studies)
 export const PRIMARY_SUBJECTS = [
   'Mathematics',
   'English',
   'Kiswahili',
   'Integrated Science',
+  'Computer Studies',
   'Agriculture and Nutrition',
   'Social Studies',
   'Religious Education',
@@ -75,12 +76,13 @@ export const PRIMARY_SUBJECTS = [
   'Physical and Health Education'
 ] as const;
 
-// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE)
+// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies)
 export const JUNIOR_SUBJECTS = [
   'Mathematics',
   'English',
   'Kiswahili',
   'Integrated Science',
+  'Computer Studies',
   'Agriculture and Nutrition',
   'Agriculture',
   'Social Studies',
@@ -264,6 +266,10 @@ export interface Assignment {
   teacherName: string;
   teacherId: string;
   submissionsCount?: number;
+  isVirtualLab?: boolean;
+  virtualLabType?: 'science' | 'scratch';
+  labExperimentId?: string;
+  labTitle?: string;
 }
 
 export interface AssignmentSubmission {

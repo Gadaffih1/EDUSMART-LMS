@@ -527,6 +527,7 @@ export interface ReportCard {
   headTeacherRemarks: string;
   deanRemarks?: string;
   deputyRemarks?: string;
+  curriculumCoordinatorRemarks?: string;
   publicationStatus?: 'Draft' | 'Published' | 'Republished';
   republishedAt?: string;
   republishedBy?: string;
@@ -535,6 +536,39 @@ export interface ReportCard {
   attendanceDays: number;
   totalSchoolDays: number;
   nextTermBegins: string;
+}
+
+export interface CurriculumReportComment {
+  id: string;
+  author: string;
+  authorRole: string;
+  comment: string;
+  createdAt: string;
+}
+
+export interface CurriculumWrittenReport {
+  id: string;
+  title: string;
+  reportType: 
+    | 'Curriculum Implementation' 
+    | 'Syllabus Pacing & Audit' 
+    | 'CBA Moderation & Attainment' 
+    | 'Departmental Faculty Review' 
+    | 'BoM Executive Briefing' 
+    | 'Remedial & Special Intervention';
+  targetGrade?: GradeLevel | 'All Grades';
+  term: 1 | 2 | 3;
+  academicYear: number;
+  authorName: string;
+  authorRole: string;
+  executiveSummary: string;
+  keyFindings: string[];
+  recommendations: string[];
+  qualitativeComments: CurriculumReportComment[];
+  status: 'draft' | 'published' | 'submitted_to_bom';
+  createdAt: string;
+  updatedAt?: string;
+  publishedAt?: string;
 }
 
 export type AssessmentCycle = 
@@ -619,6 +653,207 @@ export function getCbcAttainmentFromScore(score: number): {
   } else {
     return { level: 'Below Expectations', points: 1, code: 'BE', color: 'rose' };
   }
+}
+
+export type CBACoreCompetency = 
+  | 'Critical Thinking & Problem Solving'
+  | 'Digital Literacy'
+  | 'Imagination & Creativity'
+  | 'Communication & Collaboration'
+  | 'Self-Efficacy'
+  | 'Learning to Learn'
+  | 'Citizenship';
+
+export type CBABloomDomain = 
+  | 'Remembering & Recalling'
+  | 'Understanding & Explaining'
+  | 'Applying & Calculating'
+  | 'Analyzing & Deconstructing'
+  | 'Evaluating & Justifying'
+  | 'Creating & Designing'
+  | 'Psychomotor & Practical Execution';
+
+export type CBAAssessmentType = 
+  | 'Authentic Performance Task'
+  | 'Practical Lab Experiment'
+  | 'Formative Classwork & Checklist'
+  | 'Observation Checklist'
+  | 'Topical Diagnostic Quiz'
+  | 'Digital Coding Project'
+  | 'Portfolio Artifact Review'
+  | 'Oral Presentation & Rubric'
+  | 'Fieldwork & Practical Observation';
+
+export interface CBARubricCriterion {
+  id: string;
+  criterionTitle: string;
+  eeDescriptor: string; // Exceeding Expectations (4)
+  meDescriptor: string; // Meeting Expectations (3)
+  aeDescriptor: string; // Approaching Expectations (2)
+  beDescriptor: string; // Below Expectations (1)
+}
+
+export interface CBATaskMapping {
+  id: string;
+  grade: GradeLevel;
+  stream: StreamName | 'all' | string;
+  subject: SubjectName;
+  term: 1 | 2 | 3;
+  academicYear: number;
+  strand: string;
+  subStrand: string;
+  objectiveCode: string; // e.g. "MAT-G4-O3"
+  curriculumObjective: string; // Specific Learning Outcome (SLO)
+  coreCompetency: CBACoreCompetency;
+  bloomDomain: CBABloomDomain;
+  taskTitle: string;
+  taskDescription: string;
+  assessmentType: CBAAssessmentType;
+  assessmentCycle: AssessmentCycle | 'Weekly Formative';
+  leadTeacherId?: string;
+  leadTeacherName: string;
+  weightagePercent: number; // e.g., 20%
+  rubricCriteria: CBARubricCriterion[];
+  alignmentStatus: 'verified' | 'pending_verification' | 'needs_remediation' | 'unmapped_gap';
+  alignmentScore: number; // 0 - 100
+  attainmentDistribution: {
+    eeCount: number;
+    meCount: number;
+    aeCount: number;
+    beCount: number;
+    totalLearners: number;
+  };
+  evidenceArtifactUrl?: string;
+  coordinatorNotes?: string;
+  comments?: CurriculumReportComment[];
+  lastVerifiedBy?: string;
+  lastVerifiedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CoordinatorSchemeOfWork {
+  id: string;
+  teacher: string;
+  grade: GradeLevel;
+  subject: SubjectName | string;
+  term: 1 | 2 | 3;
+  academicYear: number;
+  submittedDate: string;
+  status: 'approved' | 'pending_revision' | 'under_review' | 'remediation_planned';
+  feedback: string;
+  reviewedBy: string;
+  comments?: CurriculumReportComment[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CoordinatorSyllabusTopic {
+  id: string;
+  grade: GradeLevel;
+  subject: SubjectName | string;
+  strand: string;
+  subStrand: string;
+  expectedWeek: number;
+  completedWeek: number;
+  status: 'on_schedule' | 'ahead' | 'lagging';
+  leadTeacher: string;
+  competencyTarget: string;
+  coordinatorRemarks?: string;
+  comments?: CurriculumReportComment[];
+  updatedAt?: string;
+}
+
+export interface CoordinatorCBAModeration {
+  id: string;
+  grade: GradeLevel;
+  stream: StreamName | 'all' | string;
+  subject: SubjectName | string;
+  assessmentTitle: string;
+  moderator: string;
+  moderatedDate: string;
+  consensusLevel: 'EE' | 'ME' | 'AE' | 'BE';
+  sampleSize: number;
+  eeCount: number;
+  meCount: number;
+  aeCount: number;
+  beCount: number;
+  varianceNotes: string;
+  consensusStatus: 'verified' | 'action_required' | 'escalated';
+  comments?: CurriculumReportComment[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface TPADStandardRating {
+  standardId: string;
+  standardNumber: number;
+  standardTitle: string;
+  subStandards: string[];
+  selfScore: number; // 1 to 5
+  appraiserScore: number; // 1 to 5
+  agreedScore: number; // 1 to 5
+  evidenceDescription: string;
+  evidenceArtifactUrl?: string;
+  appraiserRemarks?: string;
+}
+
+export interface LessonObservationRecord {
+  id: string;
+  date: string;
+  subject: SubjectName;
+  grade: GradeLevel;
+  stream?: StreamName | 'all' | string;
+  strandOrTopic: string;
+  observationScore: number; // 0 to 100%
+  strengths: string[];
+  areasForGrowth: string[];
+  observerName: string;
+}
+
+export type StaffAppraisalStatus = 
+  | 'draft' 
+  | 'submitted_for_appraisal' 
+  | 'appraisal_meeting_pending' 
+  | 'completed' 
+  | 'countersigned';
+
+export type AppraisalPerformanceGrade = 
+  | 'Exemplary (90-100%)' 
+  | 'Very Good (80-89%)' 
+  | 'Good (60-79%)' 
+  | 'Fair (40-59%)' 
+  | 'Needs Improvement (0-39%)';
+
+export interface StaffAppraisalRecord {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  tscNumber: string;
+  designation: string;
+  department: string;
+  subjectsTaught: SubjectName[];
+  term: 1 | 2 | 3;
+  academicYear: number;
+  status: StaffAppraisalStatus;
+  standards: TPADStandardRating[];
+  lessonObservations: LessonObservationRecord[];
+  tpdGapIdentified: string;
+  targetInterventions: string;
+  appraiserId?: string;
+  appraiserName: string;
+  appraiserRole: string;
+  countersigningOfficerName?: string;
+  overallPercentage: number;
+  performanceGrade: AppraisalPerformanceGrade;
+  teacherComments?: string;
+  appraiserGeneralRemarks?: string;
+  countersigningRemarks?: string;
+  submittedAt?: string;
+  completedAt?: string;
+  countersignedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface GradePassword {

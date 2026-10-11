@@ -83,7 +83,13 @@ import {
   DocumentSubmission,
   PostCategory,
   PortalSection,
-  ExtraAdminRoleType
+  ExtraAdminRoleType,
+  CBATaskMapping,
+  StaffAppraisalRecord,
+  CurriculumWrittenReport,
+  CoordinatorSchemeOfWork,
+  CoordinatorSyllabusTopic,
+  CoordinatorCBAModeration
 } from '../types';
 import { INITIAL_CODING_CHALLENGES } from '../data/codingChallengeData';
 import {
@@ -92,6 +98,14 @@ import {
   INITIAL_DOCUMENT_REQUESTS,
   INITIAL_DOCUMENT_SUBMISSIONS
 } from '../data/extraRolesData';
+import { INITIAL_CBA_TASK_MAPPINGS } from '../data/cbaTaskMappingData';
+import { INITIAL_STAFF_APPRAISALS } from '../data/staffAppraisalData';
+import { INITIAL_CURRICULUM_WRITTEN_REPORTS } from '../data/curriculumWrittenReportsData';
+import {
+  INITIAL_COORDINATOR_SCHEMES_OF_WORK,
+  INITIAL_COORDINATOR_SYLLABUS_TRACKING,
+  INITIAL_COORDINATOR_CBA_MODERATIONS
+} from '../data/coordinatorCurriculumData';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
   INITIAL_SHARED_FACILITIES
@@ -241,6 +255,12 @@ const KEYS = {
   DOCUMENT_SUBMISSIONS: 'edusmart_document_submissions_v1',
   POST_CATEGORIES: 'edusmart_post_categories_v1',
   PORTAL_SECTIONS: 'edusmart_portal_sections_v1',
+  CBA_TASK_MAPPINGS: 'edusmart_cba_task_mappings_v1',
+  STAFF_APPRAISALS: 'edusmart_staff_appraisals_v1',
+  CURRICULUM_WRITTEN_REPORTS: 'edusmart_curriculum_written_reports_v1',
+  COORDINATOR_SCHEMES_OF_WORK: 'edusmart_coordinator_schemes_of_work_v1',
+  COORDINATOR_SYLLABUS_TRACKING: 'edusmart_coordinator_syllabus_tracking_v1',
+  COORDINATOR_CBA_MODERATIONS: 'edusmart_coordinator_cba_moderations_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -3212,6 +3232,432 @@ export const Storage = {
     setToStorage(KEYS.USERS, users);
     window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
     return users[idx];
+  },
+
+  // ========================================================
+  // 6. CBA TASK MAPPING & CURRICULUM ALIGNMENT
+  // ========================================================
+  getCBATaskMappings(): CBATaskMapping[] {
+    return getFromStorage<CBATaskMapping[]>(KEYS.CBA_TASK_MAPPINGS, INITIAL_CBA_TASK_MAPPINGS);
+  },
+
+  saveCBATaskMappings(mappings: CBATaskMapping[]): void {
+    setToStorage(KEYS.CBA_TASK_MAPPINGS, mappings);
+    window.dispatchEvent(new CustomEvent('cba-task-mappings-updated', { detail: mappings }));
+  },
+
+  addCBATaskMapping(mapping: CBATaskMapping): CBATaskMapping {
+    const list = this.getCBATaskMappings();
+    const updated = [mapping, ...list];
+    this.saveCBATaskMappings(updated);
+    return mapping;
+  },
+
+  updateCBATaskMapping(id: string, updates: Partial<CBATaskMapping>): CBATaskMapping | null {
+    const list = this.getCBATaskMappings();
+    const idx = list.findIndex(m => m.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.saveCBATaskMappings(list);
+    return list[idx];
+  },
+
+  deleteCBATaskMapping(id: string): void {
+    const list = this.getCBATaskMappings();
+    const updated = list.filter(m => m.id !== id);
+    this.saveCBATaskMappings(updated);
+  },
+
+  verifyCBATaskMapping(id: string, verifiedBy: string, notes?: string, alignmentScore?: number): CBATaskMapping | null {
+    const list = this.getCBATaskMappings();
+    const idx = list.findIndex(m => m.id === id);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      alignmentStatus: 'verified',
+      alignmentScore: alignmentScore !== undefined ? alignmentScore : (list[idx].alignmentScore || 95),
+      lastVerifiedBy: verifiedBy,
+      lastVerifiedAt: new Date().toISOString(),
+      coordinatorNotes: notes || list[idx].coordinatorNotes,
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCBATaskMappings(list);
+    return list[idx];
+  },
+
+  addCommentToCBATaskMapping(mappingId: string, commentData: { author: string; authorRole: string; comment: string }): CBATaskMapping | null {
+    const list = this.getCBATaskMappings();
+    const idx = list.findIndex(m => m.id === mappingId);
+    if (idx === -1) return null;
+    const newComment = {
+      id: `comm-cba-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      author: commentData.author,
+      authorRole: commentData.authorRole,
+      comment: commentData.comment,
+      createdAt: new Date().toISOString()
+    };
+    list[idx] = {
+      ...list[idx],
+      comments: [...(list[idx].comments || []), newComment],
+      coordinatorNotes: commentData.comment,
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCBATaskMappings(list);
+    return list[idx];
+  },
+
+  removeCommentFromCBATaskMapping(mappingId: string, commentId: string): CBATaskMapping | null {
+    const list = this.getCBATaskMappings();
+    const idx = list.findIndex(m => m.id === mappingId);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      comments: (list[idx].comments || []).filter(c => c.id !== commentId),
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCBATaskMappings(list);
+    return list[idx];
+  },
+
+  // ========================================================
+  // 7. STAFF PERFORMANCE APPRAISAL & DEVELOPMENT (TSC TPAD)
+  // ========================================================
+  getStaffAppraisals(): StaffAppraisalRecord[] {
+    return getFromStorage<StaffAppraisalRecord[]>(KEYS.STAFF_APPRAISALS, INITIAL_STAFF_APPRAISALS);
+  },
+
+  saveStaffAppraisals(appraisals: StaffAppraisalRecord[]): void {
+    setToStorage(KEYS.STAFF_APPRAISALS, appraisals);
+    window.dispatchEvent(new CustomEvent('staff-appraisals-updated', { detail: appraisals }));
+  },
+
+  addStaffAppraisal(appraisal: StaffAppraisalRecord): StaffAppraisalRecord {
+    const list = this.getStaffAppraisals();
+    const updated = [appraisal, ...list];
+    this.saveStaffAppraisals(updated);
+    return appraisal;
+  },
+
+  updateStaffAppraisal(id: string, updates: Partial<StaffAppraisalRecord>): StaffAppraisalRecord | null {
+    const list = this.getStaffAppraisals();
+    const idx = list.findIndex(a => a.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.saveStaffAppraisals(list);
+    return list[idx];
+  },
+
+  countersignStaffAppraisal(id: string, countersignedBy: string, remarks?: string): StaffAppraisalRecord | null {
+    const list = this.getStaffAppraisals();
+    const idx = list.findIndex(a => a.id === id);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      status: 'countersigned',
+      countersigningOfficerName: countersignedBy,
+      countersigningRemarks: remarks || list[idx].countersigningRemarks || 'Appraisal verified and ratified by Executive Headship.',
+      countersignedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    this.saveStaffAppraisals(list);
+    return list[idx];
+  },
+
+  deleteStaffAppraisal(id: string): void {
+    const list = this.getStaffAppraisals();
+    const updated = list.filter(a => a.id !== id);
+    this.saveStaffAppraisals(updated);
+  },
+
+  // ========================================================
+  // 8. CURRICULUM WRITTEN REPORTS & QUALITATIVE COMMENTS
+  // ========================================================
+  getCurriculumWrittenReports(): CurriculumWrittenReport[] {
+    return getFromStorage<CurriculumWrittenReport[]>(KEYS.CURRICULUM_WRITTEN_REPORTS, INITIAL_CURRICULUM_WRITTEN_REPORTS);
+  },
+
+  saveCurriculumWrittenReports(reports: CurriculumWrittenReport[]): void {
+    setToStorage(KEYS.CURRICULUM_WRITTEN_REPORTS, reports);
+    window.dispatchEvent(new CustomEvent('curriculum-written-reports-updated', { detail: reports }));
+  },
+
+  addCurriculumWrittenReport(report: CurriculumWrittenReport): CurriculumWrittenReport {
+    const list = this.getCurriculumWrittenReports();
+    const updated = [report, ...list];
+    this.saveCurriculumWrittenReports(updated);
+    return report;
+  },
+
+  updateCurriculumWrittenReport(id: string, updates: Partial<CurriculumWrittenReport>): CurriculumWrittenReport | null {
+    const list = this.getCurriculumWrittenReports();
+    const idx = list.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.saveCurriculumWrittenReports(list);
+    return list[idx];
+  },
+
+  deleteCurriculumWrittenReport(id: string): void {
+    const list = this.getCurriculumWrittenReports();
+    const updated = list.filter(r => r.id !== id);
+    this.saveCurriculumWrittenReports(updated);
+  },
+
+  addCommentToCurriculumReport(reportId: string, commentData: { author: string; authorRole: string; comment: string }): CurriculumWrittenReport | null {
+    const list = this.getCurriculumWrittenReports();
+    const idx = list.findIndex(r => r.id === reportId);
+    if (idx === -1) return null;
+
+    const newComment = {
+      id: `comm-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      author: commentData.author,
+      authorRole: commentData.authorRole,
+      comment: commentData.comment,
+      createdAt: new Date().toISOString()
+    };
+
+    list[idx] = {
+      ...list[idx],
+      qualitativeComments: [...(list[idx].qualitativeComments || []), newComment],
+      updatedAt: new Date().toISOString()
+    };
+
+    this.saveCurriculumWrittenReports(list);
+    return list[idx];
+  },
+
+  removeCommentFromCurriculumReport(reportId: string, commentId: string): CurriculumWrittenReport | null {
+    const list = this.getCurriculumWrittenReports();
+    const idx = list.findIndex(r => r.id === reportId);
+    if (idx === -1) return null;
+
+    list[idx] = {
+      ...list[idx],
+      qualitativeComments: (list[idx].qualitativeComments || []).filter(c => c.id !== commentId),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.saveCurriculumWrittenReports(list);
+    return list[idx];
+  },
+
+  editCommentInCurriculumReport(reportId: string, commentId: string, newCommentText: string): CurriculumWrittenReport | null {
+    const list = this.getCurriculumWrittenReports();
+    const idx = list.findIndex(r => r.id === reportId);
+    if (idx === -1) return null;
+
+    list[idx] = {
+      ...list[idx],
+      qualitativeComments: (list[idx].qualitativeComments || []).map(c => 
+        c.id === commentId ? { ...c, comment: newCommentText } : c
+      ),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.saveCurriculumWrittenReports(list);
+    return list[idx];
+  },
+
+  // ========================================================
+  // 9. COORDINATOR SCHEMES OF WORK & PEDAGOGICAL VERIFICATION
+  // ========================================================
+  getCoordinatorSchemesOfWork(): CoordinatorSchemeOfWork[] {
+    return getFromStorage<CoordinatorSchemeOfWork[]>(KEYS.COORDINATOR_SCHEMES_OF_WORK, INITIAL_COORDINATOR_SCHEMES_OF_WORK);
+  },
+
+  saveCoordinatorSchemesOfWork(schemes: CoordinatorSchemeOfWork[]): void {
+    setToStorage(KEYS.COORDINATOR_SCHEMES_OF_WORK, schemes);
+    window.dispatchEvent(new CustomEvent('coordinator-schemes-updated', { detail: schemes }));
+  },
+
+  addCoordinatorSchemeOfWork(scheme: CoordinatorSchemeOfWork): CoordinatorSchemeOfWork {
+    const list = this.getCoordinatorSchemesOfWork();
+    const updated = [scheme, ...list];
+    this.saveCoordinatorSchemesOfWork(updated);
+    return scheme;
+  },
+
+  updateCoordinatorSchemeOfWork(id: string, updates: Partial<CoordinatorSchemeOfWork>): CoordinatorSchemeOfWork | null {
+    const list = this.getCoordinatorSchemesOfWork();
+    const idx = list.findIndex(s => s.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.saveCoordinatorSchemesOfWork(list);
+    return list[idx];
+  },
+
+  deleteCoordinatorSchemeOfWork(id: string): void {
+    const list = this.getCoordinatorSchemesOfWork();
+    const updated = list.filter(s => s.id !== id);
+    this.saveCoordinatorSchemesOfWork(updated);
+  },
+
+  addCommentToCoordinatorScheme(schemeId: string, commentData: { author: string; authorRole: string; comment: string }): CoordinatorSchemeOfWork | null {
+    const list = this.getCoordinatorSchemesOfWork();
+    const idx = list.findIndex(s => s.id === schemeId);
+    if (idx === -1) return null;
+    const newComment = {
+      id: `comm-sch-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      author: commentData.author,
+      authorRole: commentData.authorRole,
+      comment: commentData.comment,
+      createdAt: new Date().toISOString()
+    };
+    list[idx] = {
+      ...list[idx],
+      comments: [...(list[idx].comments || []), newComment],
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCoordinatorSchemesOfWork(list);
+    return list[idx];
+  },
+
+  removeCommentFromCoordinatorScheme(schemeId: string, commentId: string): CoordinatorSchemeOfWork | null {
+    const list = this.getCoordinatorSchemesOfWork();
+    const idx = list.findIndex(s => s.id === schemeId);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      comments: (list[idx].comments || []).filter(c => c.id !== commentId),
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCoordinatorSchemesOfWork(list);
+    return list[idx];
+  },
+
+  // ========================================================
+  // 10. COORDINATOR SYLLABUS PACING & TOPIC TRACKING
+  // ========================================================
+  getCoordinatorSyllabusTracking(): CoordinatorSyllabusTopic[] {
+    return getFromStorage<CoordinatorSyllabusTopic[]>(KEYS.COORDINATOR_SYLLABUS_TRACKING, INITIAL_COORDINATOR_SYLLABUS_TRACKING);
+  },
+
+  saveCoordinatorSyllabusTracking(topics: CoordinatorSyllabusTopic[]): void {
+    setToStorage(KEYS.COORDINATOR_SYLLABUS_TRACKING, topics);
+    window.dispatchEvent(new CustomEvent('coordinator-syllabus-updated', { detail: topics }));
+  },
+
+  addCoordinatorSyllabusTopic(topic: CoordinatorSyllabusTopic): CoordinatorSyllabusTopic {
+    const list = this.getCoordinatorSyllabusTracking();
+    const updated = [topic, ...list];
+    this.saveCoordinatorSyllabusTracking(updated);
+    return topic;
+  },
+
+  updateCoordinatorSyllabusTopic(id: string, updates: Partial<CoordinatorSyllabusTopic>): CoordinatorSyllabusTopic | null {
+    const list = this.getCoordinatorSyllabusTracking();
+    const idx = list.findIndex(t => t.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.saveCoordinatorSyllabusTracking(list);
+    return list[idx];
+  },
+
+  deleteCoordinatorSyllabusTopic(id: string): void {
+    const list = this.getCoordinatorSyllabusTracking();
+    const updated = list.filter(t => t.id !== id);
+    this.saveCoordinatorSyllabusTracking(updated);
+  },
+
+  addCommentToCoordinatorSyllabusTopic(topicId: string, commentData: { author: string; authorRole: string; comment: string }): CoordinatorSyllabusTopic | null {
+    const list = this.getCoordinatorSyllabusTracking();
+    const idx = list.findIndex(t => t.id === topicId);
+    if (idx === -1) return null;
+    const newComment = {
+      id: `comm-syl-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      author: commentData.author,
+      authorRole: commentData.authorRole,
+      comment: commentData.comment,
+      createdAt: new Date().toISOString()
+    };
+    list[idx] = {
+      ...list[idx],
+      comments: [...(list[idx].comments || []), newComment],
+      coordinatorRemarks: commentData.comment,
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCoordinatorSyllabusTracking(list);
+    return list[idx];
+  },
+
+  removeCommentFromCoordinatorSyllabusTopic(topicId: string, commentId: string): CoordinatorSyllabusTopic | null {
+    const list = this.getCoordinatorSyllabusTracking();
+    const idx = list.findIndex(t => t.id === topicId);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      comments: (list[idx].comments || []).filter(c => c.id !== commentId),
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCoordinatorSyllabusTracking(list);
+    return list[idx];
+  },
+
+  // ========================================================
+  // 11. COORDINATOR CBA MODERATION & ATTAINMENT HARMONIZATION
+  // ========================================================
+  getCoordinatorCBAModerations(): CoordinatorCBAModeration[] {
+    return getFromStorage<CoordinatorCBAModeration[]>(KEYS.COORDINATOR_CBA_MODERATIONS, INITIAL_COORDINATOR_CBA_MODERATIONS);
+  },
+
+  saveCoordinatorCBAModerations(records: CoordinatorCBAModeration[]): void {
+    setToStorage(KEYS.COORDINATOR_CBA_MODERATIONS, records);
+    window.dispatchEvent(new CustomEvent('coordinator-moderations-updated', { detail: records }));
+  },
+
+  addCoordinatorCBAModeration(record: CoordinatorCBAModeration): CoordinatorCBAModeration {
+    const list = this.getCoordinatorCBAModerations();
+    const updated = [record, ...list];
+    this.saveCoordinatorCBAModerations(updated);
+    return record;
+  },
+
+  updateCoordinatorCBAModeration(id: string, updates: Partial<CoordinatorCBAModeration>): CoordinatorCBAModeration | null {
+    const list = this.getCoordinatorCBAModerations();
+    const idx = list.findIndex(m => m.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...updates, updatedAt: new Date().toISOString() };
+    this.saveCoordinatorCBAModerations(list);
+    return list[idx];
+  },
+
+  deleteCoordinatorCBAModeration(id: string): void {
+    const list = this.getCoordinatorCBAModerations();
+    const updated = list.filter(m => m.id !== id);
+    this.saveCoordinatorCBAModerations(updated);
+  },
+
+  addCommentToCoordinatorCBAModeration(modId: string, commentData: { author: string; authorRole: string; comment: string }): CoordinatorCBAModeration | null {
+    const list = this.getCoordinatorCBAModerations();
+    const idx = list.findIndex(m => m.id === modId);
+    if (idx === -1) return null;
+    const newComment = {
+      id: `comm-mod-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      author: commentData.author,
+      authorRole: commentData.authorRole,
+      comment: commentData.comment,
+      createdAt: new Date().toISOString()
+    };
+    list[idx] = {
+      ...list[idx],
+      comments: [...(list[idx].comments || []), newComment],
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCoordinatorCBAModerations(list);
+    return list[idx];
+  },
+
+  removeCommentFromCoordinatorCBAModeration(modId: string, commentId: string): CoordinatorCBAModeration | null {
+    const list = this.getCoordinatorCBAModerations();
+    const idx = list.findIndex(m => m.id === modId);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      comments: (list[idx].comments || []).filter(c => c.id !== commentId),
+      updatedAt: new Date().toISOString()
+    };
+    this.saveCoordinatorCBAModerations(list);
+    return list[idx];
   }
 };
 

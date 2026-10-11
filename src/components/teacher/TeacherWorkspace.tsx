@@ -34,6 +34,7 @@ import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSide
 import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { ComputerLabModule } from './ComputerLabModule';
+import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -78,6 +79,7 @@ interface TeacherWorkspaceProps {
 
 type TeacherTab = 
   | 'cbc_results'
+  | 'staff_appraisal'
   | 'work_entry' 
   | 'gate_exit' 
   | 'class_register'
@@ -484,11 +486,12 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
     {
       title: 'TIMETABLE & GOVERNANCE',
       items: [
-        { id: 'timetable', label: '8. Teaching Timetable', icon: Calendar },
-        { id: 'library_booking', label: '8b. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
-        { id: 'gate_exit', label: '9. Student Gate Exit Passes', icon: LogOut },
-        { id: 'reporting_hub', label: '10. Academic Reporting Hub', icon: FileSpreadsheet },
-        { id: 'reminders', label: '11. Lesson Reminders', icon: Bell }
+        { id: 'staff_appraisal', label: '8. My Appraisal (TSC TPAD)', icon: Award, badge: 'TPAD' },
+        { id: 'timetable', label: '9. Teaching Timetable', icon: Calendar },
+        { id: 'library_booking', label: '9b. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
+        { id: 'gate_exit', label: '10. Student Gate Exit Passes', icon: LogOut },
+        { id: 'reporting_hub', label: '11. Academic Reporting Hub', icon: FileSpreadsheet },
+        { id: 'reminders', label: '12. Lesson Reminders', icon: Bell }
       ]
     }
   ];
@@ -586,6 +589,13 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             viewMode="teacher"
             defaultGrade={defaultGrade}
           />
+        )}
+
+        {/* ========================================================
+            TAB: MY STAFF PERFORMANCE APPRAISAL (TSC TPAD)
+            ======================================================== */}
+        {activeTab === 'staff_appraisal' && (
+          <StaffAppraisalModule currentUser={currentUser} />
         )}
 
       {/* ========================================================

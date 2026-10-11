@@ -58,7 +58,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 }) => {
   const isParent = currentUser.role === 'parent';
   const isStudent = currentUser.role === 'student';
-  const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'head_teacher', 'admin'].includes(currentUser.role);
+  const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
 
   // Period Type
   const [periodType, setPeriodType] = useState<'Monthly' | 'Termly' | 'Annually'>(defaultPeriod);
@@ -114,8 +114,8 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 
   const activeStudent = eligibleStudents.find(s => s.id === selectedStudentId) || eligibleStudents[0] || allStudents[0];
 
-  // Executive Moderation & Republishing Rights (Deputy, Dean, Admin)
-  const canRepublishReports = ['deputy_head', 'dean_of_studies', 'head_teacher', 'admin'].includes(currentUser.role);
+  // Executive Moderation & Republishing Rights (Deputy, Dean, Curriculum Coordinator, Admin, Head Teacher)
+  const canRepublishReports = ['deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
   const [isExecutiveEditMode, setIsExecutiveEditMode] = useState<boolean>(false);
   const [editedTeacherRemarks, setEditedTeacherRemarks] = useState<string>('');
   const [editedDeanRemarks, setEditedDeanRemarks] = useState<string>('');
@@ -139,6 +139,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
     const existing = reports[0];
     const publisherRoleLabel = currentUser.role === 'deputy_head' ? 'Deputy Head Teacher' :
                                currentUser.role === 'dean_of_studies' ? 'Dean of Studies' :
+                               currentUser.role === 'curriculum_coordinator' ? 'Curriculum Coordinator' :
                                currentUser.role === 'admin' ? 'System Administrator' : 'Head Teacher';
 
     const updatedSubjects = (existing?.subjects || []).map(s => {
@@ -158,6 +159,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
         classTeacherRemarks: editedTeacherRemarks || existing?.classTeacherRemarks || aggregatedStudentData.teacherRemarks,
         deanRemarks: currentUser.role === 'dean_of_studies' ? (editedDeanRemarks || existing?.deanRemarks) : existing?.deanRemarks,
         deputyRemarks: currentUser.role === 'deputy_head' ? (editedDeanRemarks || existing?.deputyRemarks) : existing?.deputyRemarks,
+        curriculumCoordinatorRemarks: currentUser.role === 'curriculum_coordinator' ? (editedDeanRemarks || existing?.curriculumCoordinatorRemarks) : existing?.curriculumCoordinatorRemarks,
         subjects: updatedSubjects.length > 0 ? updatedSubjects : undefined
       },
       currentUser.name,

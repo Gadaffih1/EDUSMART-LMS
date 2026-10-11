@@ -17,6 +17,7 @@ import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
+import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
 import { 
   School, 
   Users, 
@@ -46,7 +47,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'analytics' | 'executive' | 'announcements' | 'staff_governance' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
+  type HeadTab = 'analytics' | 'executive' | 'announcements' | 'staff_governance' | 'staff_appraisal' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
   const [activeTab, setActiveTab] = useState<HeadTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -113,6 +114,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
       title: 'ACADEMIC DEPARTMENT & STAFF',
       items: [
         { id: 'staff_governance', label: 'Academic Dept Allocations', icon: Users, badge: `${teachers.length}` },
+        { id: 'staff_appraisal', label: 'Teacher Appraisal (TSC TPAD)', icon: Award, badge: 'TPAD' },
         { id: 'timetable', label: 'Master School Timetable', icon: CalendarDays },
         { id: 'work_entry_audit', label: 'Staff Work Entry Sign-Ins', icon: FileText, badge: `${workLogs.length}` },
         { id: 'reporting_hub', label: 'Institutional Reporting Hub', icon: FileSpreadsheet }
@@ -383,6 +385,13 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
             ))}
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB: TEACHER PERFORMANCE APPRAISAL (TSC TPAD) & RATIFICATION
+          ======================================================== */}
+      {activeTab === 'staff_appraisal' && (
+        <StaffAppraisalModule currentUser={currentUser} />
       )}
 
       {/* ========================================================

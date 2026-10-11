@@ -22,8 +22,10 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { ExtraRolesManager } from './ExtraRolesManager';
 import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
+import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
 import { 
   Users, 
+  Award,
   UserPlus, 
   KeyRound, 
   ShieldCheck, 
@@ -72,6 +74,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     | 'extra_roles'
     | 'cms_hub'
     | 'doc_requests'
+    | 'staff_appraisal'
     | 'permissions'
     | 'passwords' 
     | 'virtual_rooms' 
@@ -399,6 +402,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <FileText className="w-3.5 h-3.5 text-blue-600" />
           <span>Document Requests Hub</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('staff_appraisal')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'staff_appraisal' ? 'bg-indigo-900 text-white shadow-xs' : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5 text-indigo-600" />
+          <span>Staff Appraisal (TSC TPAD)</span>
         </button>
 
         <button
@@ -1406,6 +1419,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           ======================================================== */}
       {activeTab === 'doc_requests' && (
         <DocumentRequestsHub currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB: TEACHER & STAFF PERFORMANCE APPRAISAL (TSC TPAD)
+          ======================================================== */}
+      {activeTab === 'staff_appraisal' && (
+        <StaffAppraisalModule currentUser={currentUser} />
       )}
 
       {/* ========================================================

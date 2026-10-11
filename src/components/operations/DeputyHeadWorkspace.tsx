@@ -42,7 +42,8 @@ import {
   X,
   PlusCircle,
   CheckCircle2,
-  TrendingUp
+  TrendingUp,
+  Award
 } from 'lucide-react';
 import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { ReportingHub } from '../reports/ReportingHub';
@@ -56,6 +57,7 @@ import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
+import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
 import { 
   Bus,
   Trophy,
@@ -89,6 +91,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
     | 'analytics'
     | 'results_upload' 
     | 'operations' 
+    | 'staff_appraisal'
     | 'reports_moderation'
     | 'discipline' 
     | 'online_discipline' 
@@ -400,7 +403,8 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       title: 'OPERATIONS & GATE PASSES',
       items: [
         { id: 'operations', label: 'Gate Security & Operations', icon: ShieldCheck, badge: gatePasses.length },
-        { id: 'staff_duty', label: 'Staff Duty Rosters', icon: Calendar, badge: dutyRosters.length }
+        { id: 'staff_duty', label: 'Staff Duty Rosters', icon: Calendar, badge: dutyRosters.length },
+        { id: 'staff_appraisal', label: 'Teacher Appraisal (TSC TPAD)', icon: Award, badge: 'TPAD' }
       ]
     },
     {
@@ -1618,6 +1622,13 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
             </div>
           )}
         </section>
+      )}
+
+      {/* ========================================================
+          TAB: TEACHER & STAFF PERFORMANCE APPRAISAL (TSC TPAD)
+          ======================================================== */}
+      {activeTab === 'staff_appraisal' && (
+        <StaffAppraisalModule currentUser={currentUser} />
       )}
 
       {/* ========================================================

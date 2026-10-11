@@ -19,6 +19,7 @@ import { LibrarianWorkspace } from './components/library/LibrarianWorkspace';
 import { DeputyHeadWorkspace } from './components/operations/DeputyHeadWorkspace';
 import { DeanOfStudiesWorkspace } from './components/academic/DeanOfStudiesWorkspace';
 import { HeadTeacherWorkspace } from './components/leadership/HeadTeacherWorkspace';
+import { CurriculumCoordinatorWorkspace } from './components/leadership/CurriculumCoordinatorWorkspace';
 import { SchoolAdminStaffWorkspace } from './components/admin/SchoolAdminStaffWorkspace';
 import { SanatoriumWorkspace } from './components/sanatorium/SanatoriumWorkspace';
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
@@ -106,6 +107,9 @@ function AppContent({
             ) : currentUser.role === 'dean_of_studies' ? (
               /* Dean of Studies: Academic/assessment */
               <DeanOfStudiesWorkspace currentUser={currentUser} />
+            ) : currentUser.role === 'curriculum_coordinator' ? (
+              /* Curriculum Coordinator: Executive leadership - CBC curriculum, CBA & syllabi */
+              <CurriculumCoordinatorWorkspace currentUser={currentUser} onLogout={onLogout} />
             ) : currentUser.role === 'librarian' ? (
               /* Librarian: Library */
               <LibrarianWorkspace currentUser={currentUser} onLogout={onLogout} />

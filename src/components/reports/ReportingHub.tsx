@@ -392,8 +392,8 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
       <div class="kpi-lbl">Quizzes Taken</div>
     </div>
     <div class="kpi-box">
-      <div class="kpi-val">${aggregatedStudentData.totalXP} XP</div>
-      <div class="kpi-lbl">Badges & XP</div>
+      <div class="kpi-val">${aggregatedStudentData.totalXP} BP</div>
+      <div class="kpi-lbl">Badges & Bonus Points (BP)</div>
     </div>
   </div>
 
@@ -891,7 +891,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 col-span-2 sm:col-span-1">
                 <div className="text-[10px] uppercase font-bold text-slate-500">Recognition & Badges</div>
                 <div className="text-xl font-bold font-mono text-amber-600 mt-1">
-                  {aggregatedStudentData.totalXP} XP
+                  {aggregatedStudentData.totalXP} BP
                 </div>
                 <div className="text-[11px] text-amber-700 font-semibold">{aggregatedStudentData.badgesEarned} Badges Unlocked</div>
               </div>

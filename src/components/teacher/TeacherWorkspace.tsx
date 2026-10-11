@@ -33,6 +33,7 @@ import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
+import { ComputerLabModule } from './ComputerLabModule';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -67,7 +68,8 @@ import {
   FolderTree,
   Utensils,
   DoorOpen,
-  FlaskConical
+  FlaskConical,
+  Laptop
 } from 'lucide-react';
 
 interface TeacherWorkspaceProps {
@@ -81,6 +83,7 @@ type TeacherTab =
   | 'class_register'
   | 'lunch_register'
   | 'assignments' 
+  | 'computer_lab'
   | 'virtual_lab'
   | 'resources' 
   | 'quizzes'
@@ -106,9 +109,11 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'virtual_lab', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub'].includes(tab)) {
+        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'computer_lab', 'virtual_lab', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub'].includes(tab)) {
           setActiveTab(tab as TeacherTab);
-        } else if (tab === 'virtual_lab' || tab === 'vlab' || tab === 'virtuallab' || tab === 'scratch' || tab === 'science_lab') {
+        } else if (tab === 'computer_lab' || tab === 'scratch' || tab === 'cs_lab' || tab === 'coding') {
+          setActiveTab('computer_lab');
+        } else if (tab === 'virtual_lab' || tab === 'vlab' || tab === 'virtuallab' || tab === 'science_lab') {
           setActiveTab('virtual_lab');
         } else if (tab === 'results' || tab === 'assessments') {
           setActiveTab('cbc_results');
@@ -469,7 +474,8 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       title: 'LEARNING & TASKS',
       items: [
         { id: 'assignments', label: '4. Homework Assignments', icon: BookOpen },
-        { id: 'virtual_lab', label: '4b. Subject & Computer Virtual LAB', icon: FlaskConical, badge: 'Demonstration & Scratch', badgeColor: 'bg-emerald-600' },
+        { id: 'computer_lab', label: '4b. CS Computer Lab & Scratch', icon: Laptop, badge: 'Projector & Challenges', badgeColor: 'bg-indigo-600' },
+        { id: 'virtual_lab', label: '4c. Science Virtual Lab', icon: FlaskConical, badge: 'Demonstrations', badgeColor: 'bg-emerald-600' },
         { id: 'quizzes', label: '5. CBC Topical Quizzes', icon: CheckSquare },
         { id: 'resources', label: '6. Curriculum Resources & Links', icon: FolderTree },
         { id: 'virtual_class', label: '7. Virtual Class (Meet)', icon: Video }
@@ -825,9 +831,20 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          TAB 3B: SUBJECT TEACHER VIRTUAL LAB & COMPUTER SCRATCH STUDIO
-          Directly rendered in the workspace layout without modals,
-          backdrop overlays, or double-screen background blockage.
+          TAB 3B: COMPUTER LAB MODULE (FOR CS TEACHERS & SCRATCH)
+          Dedicated live Scratch projector, Challenge Library & class push
+          ======================================================== */}
+      {activeTab === 'computer_lab' && (
+        <section className="space-y-6">
+          <ComputerLabModule
+            currentUser={currentUser}
+            onNavigateToTab={(tab) => setActiveTab(tab as any)}
+          />
+        </section>
+      )}
+
+      {/* ========================================================
+          TAB 3C: SUBJECT TEACHER VIRTUAL LAB & SCIENCE EXPERIMENTS
           ======================================================== */}
       {activeTab === 'virtual_lab' && (
         <section className="space-y-6">

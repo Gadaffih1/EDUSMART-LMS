@@ -142,7 +142,7 @@ export const EPortfolioModule: React.FC<EPortfolioModuleProps> = ({ currentUser 
                   {item.category}
                 </span>
                 <span className="absolute top-3 right-3 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-600 text-white shadow-xs">
-                  +{item.awardedPoints} XP
+                  +{item.awardedPoints} BP
                 </span>
               </div>
             )}
@@ -301,7 +301,7 @@ export const EPortfolioModule: React.FC<EPortfolioModuleProps> = ({ currentUser 
               {addSuccess && (
                 <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
                   <CheckCircle className="w-4 h-4 text-emerald-600" />
-                  <span>Portfolio artifact published successfully! Earned +50 XP.</span>
+                  <span>Portfolio artifact published successfully! Earned +50 Bonus Points (BP).</span>
                 </div>
               )}
 

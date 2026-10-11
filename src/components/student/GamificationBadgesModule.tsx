@@ -63,18 +63,18 @@ export const GamificationBadgesModule: React.FC<GamificationBadgesModuleProps> =
             <span>Learner Recognition & Certification Rewards</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Competency Badges & XP Points
+            Competency Badges & Bonus Points (BP)
           </h2>
           <p className="text-xs sm:text-sm text-slate-100 mt-1 max-w-2xl leading-relaxed">
-            Earn certification points by completing topical quizzes, turning in assignments on time, contributing practical projects, and demonstrating positive online citizenship.
+            Earn bonus points (BP) by completing topical quizzes, turning in assignments on time, contributing practical projects, and demonstrating positive online citizenship.
           </p>
         </div>
 
-        {/* Level & XP Capsule */}
+        {/* Level & BP Capsule */}
         <div className="bg-white/15 backdrop-blur-md p-4 rounded-2xl border border-white/30 text-center shrink-0 min-w-[200px] space-y-1">
           <div className="text-[10px] uppercase font-bold text-amber-200">Current Rank</div>
           <div className="text-2xl font-black text-white">Level {currentLevel} Scholar</div>
-          <div className="text-xs font-mono font-bold text-emerald-200">{totalXP} Total XP Earned</div>
+          <div className="text-xs font-mono font-bold text-emerald-200">{totalXP} Total BP Earned</div>
           
           <div className="w-full bg-black/20 h-2 rounded-full overflow-hidden mt-2">
             <div 
@@ -83,7 +83,7 @@ export const GamificationBadgesModule: React.FC<GamificationBadgesModuleProps> =
             />
           </div>
           <div className="text-[10px] text-slate-200 font-mono text-right">
-            {100 - xpInCurrentLevel} XP to Level {currentLevel + 1}
+            {100 - xpInCurrentLevel} BP to Level {currentLevel + 1}
           </div>
         </div>
       </div>
@@ -127,7 +127,7 @@ export const GamificationBadgesModule: React.FC<GamificationBadgesModuleProps> =
                 <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
                   badge.unlocked ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
                 }`}>
-                  +{badge.xpPoints} XP
+                  +{badge.xpPoints} BP
                 </span>
                 {badge.dateUnlocked && (
                   <div className="text-[10px] text-slate-400 font-mono mt-0.5">
@@ -208,7 +208,7 @@ export const GamificationBadgesModule: React.FC<GamificationBadgesModuleProps> =
             </div>
 
             <div className="text-xs text-slate-600 max-w-lg mx-auto leading-relaxed">
-              In formal recognition of distinguished mastery in <strong>Fractions & Mathematics Operations</strong>, outstanding completion of <strong>Digital Safe Search & Ethics</strong>, and faithful compilation of the <strong>Grade 4 CBC Practical E-Portfolio</strong> with <strong>{totalXP} Certification Points</strong>.
+              In formal recognition of distinguished mastery in <strong>Fractions & Mathematics Operations</strong>, outstanding completion of <strong>Digital Safe Search & Ethics</strong>, and faithful compilation of the <strong>Grade 4 CBC Practical E-Portfolio</strong> with <strong>{totalXP} Certification Bonus Points (BP)</strong>.
             </div>
 
             {/* Signatures */}

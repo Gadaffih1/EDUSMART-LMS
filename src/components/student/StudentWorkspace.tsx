@@ -26,6 +26,7 @@ import { EPortfolioModule } from './EPortfolioModule';
 import { PeriodicReportsModule } from './PeriodicReportsModule';
 import { GamificationBadgesModule } from './GamificationBadgesModule';
 import { AchievementSystem } from './AchievementSystem';
+import { LearnerBadgesAndStreaks } from './LearnerBadgesAndStreaks';
 import { ExternalToolsHub } from './ExternalToolsHub';
 import { SafeBrowser } from './SafeBrowser';
 import { ReportingHub } from '../reports/ReportingHub';
@@ -69,7 +70,8 @@ import {
   X,
   ChevronLeft,
   FlaskConical,
-  Laptop
+  Laptop,
+  Flame
 } from 'lucide-react';
 
 interface StudentWorkspaceProps {
@@ -98,6 +100,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('resources');
   const [showSafeSearch, setShowSafeSearch] = useState(false);
   const [reportViewType, setReportViewType] = useState<'hub' | 'periodic' | 'termly'>('hub');
+  const [badgeSubView, setBadgeSubView] = useState<'streaks' | 'matrix'>('streaks');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -240,7 +243,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
         { id: 'announcements' as WorkspaceTab, label: '7. Announcements & Notices', icon: Bell, badge: gradeAnnouncements.length > 0 ? `${gradeAnnouncements.length}` : undefined, badgeColor: 'bg-rose-600' },
         { id: 'virtual_class' as WorkspaceTab, label: '8. Virtual Class (Meet Live)', icon: Video },
         { id: 'grade_chats' as WorkspaceTab, label: '9. Stream & Teacher Chats', icon: MessageSquare },
-        { id: 'badges' as WorkspaceTab, label: '10. Badges & XP Matrix', icon: Trophy, badge: `${learnerTotalXP} XP`, badgeColor: 'bg-amber-600' },
+        { id: 'badges' as WorkspaceTab, label: '10. Badges & Streaks Matrix', icon: Flame, badge: `${learnerTotalXP} BP · 🔥`, badgeColor: 'bg-orange-600' },
         { id: 'browser' as WorkspaceTab, label: '11. Safe Browser (AI Guarded)', icon: Globe },
         { id: 'integrations' as WorkspaceTab, label: '12. External Learning Hubs', icon: Layers }
       ]
@@ -312,14 +315,15 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             <span className="hidden sm:inline">Safe Search</span>
           </button>
 
-          {/* XP & Badges Capsule */}
+          {/* Streaks, Badges & BP Capsule */}
           <button
             onClick={() => setActiveTab('badges')}
-            className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-            title="View Badges & Certification XP"
+            className="px-3 py-1.5 bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="View Learner Badges, Streaks & Progress Milestones"
           >
-            <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>{learnerTotalXP} XP</span>
+            <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400 shrink-0 animate-pulse" />
+            <span className="hidden sm:inline">Streak ·</span>
+            <span>{learnerTotalXP} BP</span>
           </button>
         </div>
       </header>
@@ -491,7 +495,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
                 <div>
                   <div className="font-extrabold text-xs text-slate-900 truncate">{badge.title}</div>
-                  <div className="text-[10px] text-slate-500 truncate">+{badge.xpPoints} XP</div>
+                  <div className="text-[10px] text-slate-500 truncate">+{badge.xpPoints} BP</div>
                 </div>
               </button>
             ))}
@@ -1565,13 +1569,56 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          ADDITIONAL TAB: ACHIEVEMENT SYSTEM & DIGITAL BADGES
+          ADDITIONAL TAB: LEARNER BADGES & STREAKS (QUIZ & ACADEMIC PROGRESS)
           ======================================================== */}
       {activeTab === 'badges' && (
-        <AchievementSystem 
-          currentUser={currentUser} 
-          onNavigateToTab={(tab) => setActiveTab(tab as any)}
-        />
+        <section className="space-y-6">
+          {/* Sub-view Switcher: Badges & Streaks vs Competency Recognition */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-bold">
+              <button
+                onClick={() => setBadgeSubView('streaks')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  badgeSubView === 'streaks'
+                    ? 'bg-white text-orange-600 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
+                <span>Learner Badges & Streaks</span>
+              </button>
+
+              <button
+                onClick={() => setBadgeSubView('matrix')}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  badgeSubView === 'matrix'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                <span>Competency Badges & Certificates</span>
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500 hidden sm:block">
+              {badgeSubView === 'streaks' ? 'Daily quiz rhythm & academic milestones' : 'Full curriculum competency awards'}
+            </div>
+          </div>
+
+          {badgeSubView === 'streaks' ? (
+            <LearnerBadgesAndStreaks
+              currentUser={currentUser}
+              onLaunchQuiz={() => setActiveTab('quiz_results')}
+              onNavigateToTab={(tab) => setActiveTab(tab as any)}
+            />
+          ) : (
+            <AchievementSystem 
+              currentUser={currentUser} 
+              onNavigateToTab={(tab) => setActiveTab(tab as any)}
+            />
+          )}
+        </section>
       )}
 
       {/* ========================================================

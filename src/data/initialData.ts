@@ -188,6 +188,17 @@ export const INITIAL_USERS: User[] = [
     tscNumber: 'TSC/38910/ED',
     avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
   },
+  // Curriculum Coordinator (Executive Leadership)
+  {
+    id: 'usr-coord-curriculum',
+    name: 'Mrs. Beatrice Omari',
+    email: 'curriculum@edusmart.ac.ke',
+    password: 'coord2026',
+    role: 'curriculum_coordinator',
+    tscNumber: 'TSC/41029/ED',
+    designation: 'Director of Curriculum Coordination & CBC Assessment',
+    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+  },
   // Head of Department (HOD) - Sciences & Mathematics
   {
     id: 'usr-hod-sciences',

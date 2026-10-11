@@ -52,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'senior_teacher': return 'Senior Teacher';
       case 'deputy_head': return 'Deputy Head Teacher';
       case 'dean_of_studies': return 'Dean of Studies';
+      case 'curriculum_coordinator': return 'Curriculum Coordinator (Executive Leadership)';
       case 'librarian': return 'Librarian';
       case 'head_teacher': return 'Head Teacher';
       case 'school_admin_staff': return 'School Admin Staff / Registrar';
@@ -344,12 +345,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* 4. Executive Leadership & Administration */}
               <div>
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>4. Executive Management & Administration</span>
-                  <span className="text-[10px] text-slate-400 font-normal">School Operations & Admin</span>
+                  <span>4. Executive Leadership & Administration</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Governance, Curriculum & Operations</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {allUsers
-                    .filter(u => ['deputy_head', 'head_teacher', 'admin'].includes(u.role) || (u.role === 'school_admin_staff' && u.email !== 'nurse@edusmart.ac.ke'))
+                    .filter(u => ['curriculum_coordinator', 'deputy_head', 'head_teacher', 'admin'].includes(u.role) || (u.role === 'school_admin_staff' && u.email !== 'nurse@edusmart.ac.ke'))
                     .map(user => (
                       <button
                         key={user.id}
@@ -368,6 +369,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="text-[11px] text-slate-800 font-bold">{getRoleLabel(user.role)}</div>
                           <div className="text-[10px] text-slate-500 mt-0.5">
                             Main Access: {
+                              user.role === 'curriculum_coordinator' ? 'CBC Curriculum, CBA Moderation & Pacing' :
                               user.role === 'deputy_head' ? 'Operations/discipline/staff' :
                               user.role === 'head_teacher' ? 'School-wide management' :
                               user.role === 'school_admin_staff' ? 'Work entry, gate exits, registers, calendar & printables' :

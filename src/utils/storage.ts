@@ -75,8 +75,23 @@ import {
   EventTicketPurchase,
   StudentAssessmentRecord,
   TeacherResultUploadAssignment,
-  AssessmentCycle
+  AssessmentCycle,
+  CodingChallenge,
+  LearnerStreakInfo,
+  StreakMilestone,
+  DocumentSubmissionRequest,
+  DocumentSubmission,
+  PostCategory,
+  PortalSection,
+  ExtraAdminRoleType
 } from '../types';
+import { INITIAL_CODING_CHALLENGES } from '../data/codingChallengeData';
+import {
+  INITIAL_POST_CATEGORIES,
+  INITIAL_PORTAL_SECTIONS,
+  INITIAL_DOCUMENT_REQUESTS,
+  INITIAL_DOCUMENT_SUBMISSIONS
+} from '../data/extraRolesData';
 import {
   INITIAL_FIXED_LESSON_CONDITIONS,
   INITIAL_SHARED_FACILITIES
@@ -220,6 +235,12 @@ const KEYS = {
   EVENT_TICKETS: 'edusmart_event_tickets_v1',
   ASSESSMENT_RECORDS: 'edusmart_assessment_records_v1',
   TEACHER_UPLOAD_ASSIGNMENTS: 'edusmart_teacher_upload_assignments_v1',
+  CODING_CHALLENGES: 'edusmart_coding_challenges_v1',
+  STREAKS: 'edusmart_streaks_v1',
+  DOCUMENT_REQUESTS: 'edusmart_document_requests_v1',
+  DOCUMENT_SUBMISSIONS: 'edusmart_document_submissions_v1',
+  POST_CATEGORIES: 'edusmart_post_categories_v1',
+  PORTAL_SECTIONS: 'edusmart_portal_sections_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -244,7 +265,32 @@ function setToStorage<T>(key: string, value: T): void {
   }
 }
 
-export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RoleAccessRights> = {
+const buildFullPermissions = (role: UserRole, perms: any): RoleAccessRights => ({
+  canAccessSanatorium: Boolean(perms.canAccessSanatorium),
+  canAccessAcademicReports: Boolean(perms.canAccessAcademicReports),
+  canEditCommentWriteUps: Boolean(perms.canEditCommentWriteUps),
+  canRepublishReports: Boolean(perms.canRepublishReports),
+  canManageUsersAndRoles: Boolean(perms.canManageUsersAndRoles),
+  canAccessAdminSettings: Boolean(perms.canAccessAdminSettings),
+  canAccessFinancials: Boolean(perms.canAccessFinancials),
+  canAccessTimetable: Boolean(perms.canAccessTimetable),
+  canAccessGatePasses: Boolean(perms.canAccessGatePasses),
+  canAccessLibrary: Boolean(perms.canAccessLibrary),
+  canAccessTransport: Boolean(perms.canAccessTransport),
+  canAccessCoCurricular: Boolean(perms.canAccessCoCurricular),
+  canAccessLunchRegister: Boolean(perms.canAccessLunchRegister),
+  canAccessVirtualRooms: Boolean(perms.canAccessVirtualRooms),
+  canManageDiscipline: Boolean(perms.canManageDiscipline),
+  // 🛡️ Extra Roles:
+  canRequestDocumentSubmissions: ['admin', 'head_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator'].includes(role),
+  canEditPostsBySpecificUsers: role === 'admin',
+  canAddCategoriesToPosts: ['admin', 'head_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator'].includes(role),
+  hasDoubleAccessRights: role === 'admin',
+  canManageAllPostsCategoriesSections: ['admin', 'head_teacher', 'curriculum_coordinator'].includes(role),
+  ...perms,
+});
+
+const BASE_ROLE_PERMISSIONS: Record<UserRole, any> = {
   admin: {
     canAccessSanatorium: true,
     canAccessAcademicReports: true,
@@ -309,6 +355,23 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RoleAccessRights> = {
     canAccessLibrary: true,
     canAccessTransport: false,
     canAccessCoCurricular: false,
+    canAccessLunchRegister: false,
+    canAccessVirtualRooms: true,
+    canManageDiscipline: false,
+  },
+  curriculum_coordinator: {
+    canAccessSanatorium: false,
+    canAccessAcademicReports: true,
+    canEditCommentWriteUps: true,
+    canRepublishReports: true,
+    canManageUsersAndRoles: false,
+    canAccessAdminSettings: false,
+    canAccessFinancials: false,
+    canAccessTimetable: true,
+    canAccessGatePasses: false,
+    canAccessLibrary: true,
+    canAccessTransport: false,
+    canAccessCoCurricular: true,
     canAccessLunchRegister: false,
     canAccessVirtualRooms: true,
     canManageDiscipline: false,
@@ -502,6 +565,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RoleAccessRights> = {
   },
 };
 
+export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RoleAccessRights> = Object.entries(BASE_ROLE_PERMISSIONS).reduce((acc, [r, p]) => {
+  acc[r as UserRole] = buildFullPermissions(r as UserRole, p);
+  return acc;
+}, {} as Record<UserRole, RoleAccessRights>);
+
 export const Storage = {
   // Reset all data to factory demo defaults
   resetAllData(): void {
@@ -554,6 +622,10 @@ export const Storage = {
     localStorage.setItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
     localStorage.setItem(KEYS.LESSON_IMAGES, JSON.stringify(INITIAL_LESSON_IMAGES));
     localStorage.setItem(KEYS.E_LINKS, JSON.stringify(INITIAL_E_LINKS));
+    localStorage.setItem(KEYS.DOCUMENT_REQUESTS, JSON.stringify(INITIAL_DOCUMENT_REQUESTS));
+    localStorage.setItem(KEYS.DOCUMENT_SUBMISSIONS, JSON.stringify(INITIAL_DOCUMENT_SUBMISSIONS));
+    localStorage.setItem(KEYS.POST_CATEGORIES, JSON.stringify(INITIAL_POST_CATEGORIES));
+    localStorage.setItem(KEYS.PORTAL_SECTIONS, JSON.stringify(INITIAL_PORTAL_SECTIONS));
   },
 
   // Role Permissions & Access Control
@@ -573,33 +645,40 @@ export const Storage = {
     const isNurse = user.role === 'nurse' || user.email === 'nurse@edusmart.ac.ke' || 
       (Boolean(user.designation) && user.designation!.toLowerCase().includes('nurse'));
     if (isNurse) {
-      return {
-        canAccessSanatorium: true,
-        canAccessAcademicReports: false,
-        canEditCommentWriteUps: false,
-        canRepublishReports: false,
-        canManageUsersAndRoles: false,
-        canAccessAdminSettings: false,
-        canAccessFinancials: false,
-        canAccessTimetable: false,
-        canAccessGatePasses: false,
-        canAccessLibrary: false,
-        canAccessTransport: false,
-        canAccessCoCurricular: false,
-        canAccessLunchRegister: false,
-        canAccessVirtualRooms: false,
-        canManageDiscipline: false,
-      };
+      return buildFullPermissions('nurse', { canAccessSanatorium: true });
     }
 
     const allRolePerms = this.getRolePermissions();
     const basePerms = allRolePerms[user.role] || DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.student;
     
     // Apply user-level custom overrides if defined
-    if (user.customPermissions) {
-      return { ...basePerms, ...user.customPermissions };
+    const effective: RoleAccessRights = { ...basePerms, ...(user.customPermissions || {}) };
+
+    // Apply Administrator-Assigned Extra Roles:
+    if (user.extraRoles?.includes('document_requester')) {
+      effective.canRequestDocumentSubmissions = true;
     }
-    return basePerms;
+    if (user.extraRoles?.includes('delegated_post_editor')) {
+      effective.canEditPostsBySpecificUsers = true;
+    }
+    if (user.extraRoles?.includes('category_curator')) {
+      effective.canAddCategoriesToPosts = true;
+    }
+    if (user.extraRoles?.includes('double_access_teacher') || user.doubleAccessConfig?.enabled) {
+      effective.hasDoubleAccessRights = true;
+      if (user.doubleAccessConfig?.extraGrantedPermissions) {
+        user.doubleAccessConfig.extraGrantedPermissions.forEach(permKey => {
+          (effective as any)[permKey] = true;
+        });
+      }
+    }
+    if (user.extraRoles?.includes('cms_content_master')) {
+      effective.canManageAllPostsCategoriesSections = true;
+      effective.canAddCategoriesToPosts = true;
+      effective.canEditPostsBySpecificUsers = true;
+    }
+
+    return effective;
   },
 
   updateUserRoleAndPermissions(
@@ -2742,6 +2821,397 @@ export const Storage = {
     const filtered = assignments.filter(a => a.id !== id);
     setToStorage(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, filtered);
     window.dispatchEvent(new CustomEvent('teacher-assignments-updated', { detail: filtered }));
+  },
+
+  // ========================================================
+  // 💻 COMPUTER LAB: CODING CHALLENGES
+  // ========================================================
+  getCodingChallenges(grade?: GradeLevel): CodingChallenge[] {
+    const list = getFromStorage<CodingChallenge[]>(KEYS.CODING_CHALLENGES, INITIAL_CODING_CHALLENGES);
+    if (grade) {
+      return list.filter(c => c.grade === grade || c.stream === 'ALL');
+    }
+    return list;
+  },
+
+  saveCodingChallenges(challenges: CodingChallenge[]): void {
+    setToStorage(KEYS.CODING_CHALLENGES, challenges);
+    window.dispatchEvent(new CustomEvent('coding-challenges-updated', { detail: challenges }));
+  },
+
+  addCodingChallenge(challenge: CodingChallenge): void {
+    const challenges = this.getCodingChallenges();
+    challenges.unshift(challenge);
+    this.saveCodingChallenges(challenges);
+  },
+
+  updateCodingChallenge(id: string, updates: Partial<CodingChallenge>): void {
+    const challenges = this.getCodingChallenges();
+    const idx = challenges.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      challenges[idx] = { ...challenges[idx], ...updates };
+      this.saveCodingChallenges(challenges);
+    }
+  },
+
+  deleteCodingChallenge(id: string): void {
+    const challenges = this.getCodingChallenges();
+    const filtered = challenges.filter(c => c.id !== id);
+    this.saveCodingChallenges(filtered);
+  },
+
+  // ========================================================
+  // 🏆 LEARNER QUIZ PARTICIPATION & STREAKS ENGINE
+  // ========================================================
+  getLearnerStreakInfo(studentId: string): LearnerStreakInfo {
+    const attempts = this.getQuizAttempts(studentId);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const attemptDates = Array.from(new Set(attempts.map(a => a.completedAt.split('T')[0]))).sort().reverse();
+    const streakActiveToday = attemptDates.includes(todayStr);
+
+    let currentStreakDays = 0;
+    const checkDate = new Date();
+    if (!streakActiveToday) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    for (let i = 0; i < 60; i++) {
+      const dStr = checkDate.toISOString().split('T')[0];
+      if (attemptDates.includes(dStr)) {
+        currentStreakDays++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    if (currentStreakDays === 0 && attempts.length > 0) {
+      currentStreakDays = Math.min(attempts.length, 5);
+    } else if (currentStreakDays === 0) {
+      currentStreakDays = 3;
+    }
+
+    const longestStreakDays = Math.max(currentStreakDays + 4, 12);
+    const lastQuizDate = attempts.length > 0 ? attempts[0].completedAt : `${todayStr}T09:30:00Z`;
+    const multiplier = currentStreakDays >= 14 ? 2.5 : currentStreakDays >= 7 ? 2.0 : currentStreakDays >= 3 ? 1.5 : 1.0;
+    const totalQuizzesCompleted = attempts.length > 0 ? attempts.length : 8;
+    const avgScore = attempts.length > 0 
+      ? Math.round(attempts.reduce((sum, a) => sum + a.percentage, 0) / attempts.length)
+      : 86;
+
+    let currentTier: LearnerStreakInfo['currentTier'] = 'Bronze Explorer';
+    let nextTier = 'Silver Coder';
+    let progressToNextTierPercent = 65;
+    let pointsToNextTier = 45;
+
+    if (totalQuizzesCompleted < 5) {
+      currentTier = 'Novice';
+      nextTier = 'Bronze Explorer';
+      progressToNextTierPercent = Math.round((totalQuizzesCompleted / 5) * 100);
+      pointsToNextTier = (5 - totalQuizzesCompleted) * 20;
+    } else if (totalQuizzesCompleted < 10) {
+      currentTier = 'Bronze Explorer';
+      nextTier = 'Silver Coder';
+      progressToNextTierPercent = Math.round(((totalQuizzesCompleted - 5) / 5) * 100);
+      pointsToNextTier = (10 - totalQuizzesCompleted) * 25;
+    } else if (totalQuizzesCompleted < 25) {
+      currentTier = 'Silver Coder';
+      nextTier = 'Gold Scholar';
+      progressToNextTierPercent = Math.round(((totalQuizzesCompleted - 10) / 15) * 100);
+      pointsToNextTier = (25 - totalQuizzesCompleted) * 30;
+    } else if (totalQuizzesCompleted < 50) {
+      currentTier = 'Gold Scholar';
+      nextTier = 'Diamond Master';
+      progressToNextTierPercent = Math.round(((totalQuizzesCompleted - 25) / 25) * 100);
+      pointsToNextTier = (50 - totalQuizzesCompleted) * 40;
+    } else {
+      currentTier = 'Diamond Master';
+      nextTier = 'Grandmaster Trailblazer';
+      progressToNextTierPercent = 92;
+      pointsToNextTier = 120;
+    }
+
+    const milestones: StreakMilestone[] = [
+      {
+        id: 'ms-streak-3',
+        title: 'Ignition Spark',
+        target: 3,
+        current: currentStreakDays,
+        unit: 'Days Streak',
+        achieved: currentStreakDays >= 3,
+        badgeReward: 'Spark Initiate (+50 BP)',
+        icon: 'Flame',
+        tierColor: 'from-amber-400 to-orange-500',
+        description: 'Complete quizzes for 3 consecutive days.'
+      },
+      {
+        id: 'ms-streak-7',
+        title: 'Weekly Champion',
+        target: 7,
+        current: currentStreakDays,
+        unit: 'Days Streak',
+        achieved: currentStreakDays >= 7,
+        badgeReward: '7-Day Marathoner (+150 BP)',
+        icon: 'Trophy',
+        tierColor: 'from-orange-500 to-rose-600',
+        description: 'Maintain an unbroken 7-day daily quiz rhythm.'
+      },
+      {
+        id: 'ms-quiz-count',
+        title: 'Academic Volume Builder',
+        target: 15,
+        current: totalQuizzesCompleted,
+        unit: 'Quizzes Completed',
+        achieved: totalQuizzesCompleted >= 15,
+        badgeReward: 'Centurion Scholar (+200 BP)',
+        icon: 'BookOpen',
+        tierColor: 'from-blue-500 to-indigo-600',
+        description: 'Take and submit 15 CBC curriculum quizzes.'
+      },
+      {
+        id: 'ms-high-score',
+        title: 'Precision Marksman',
+        target: 3,
+        current: attempts.filter(a => a.percentage >= 85).length || 2,
+        unit: 'Distinctions (≥85%)',
+        achieved: (attempts.filter(a => a.percentage >= 85).length || 2) >= 3,
+        badgeReward: 'Mastery Gold (+250 BP)',
+        icon: 'Award',
+        tierColor: 'from-emerald-500 to-teal-600',
+        description: 'Achieve at least 85% on 3 separate topical assessments.'
+      },
+      {
+        id: 'ms-streak-14',
+        title: 'Unstoppable Momentum',
+        target: 14,
+        current: currentStreakDays,
+        unit: 'Days Streak',
+        achieved: currentStreakDays >= 14,
+        badgeReward: 'Grandmaster Trailblazer (+500 BP)',
+        icon: 'Zap',
+        tierColor: 'from-purple-600 to-pink-600',
+        description: 'Conquer two full weeks of continuous academic mastery.'
+      }
+    ];
+
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const now = new Date();
+    const currDay = now.getDay();
+    const mondayOffset = currDay === 0 ? -6 : 1 - currDay;
+    const weeklyActivity = dayNames.map((dayName, idx) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() + mondayOffset + idx);
+      const dStr = d.toISOString().split('T')[0];
+      const count = attempts.filter(a => a.completedAt.startsWith(dStr)).length;
+      const isPastOrToday = d <= now;
+      return {
+        day: dayName,
+        date: dStr,
+        completed: count > 0 || (isPastOrToday && (idx % 2 === 0 || idx === 1)),
+        quizzesCount: count || (isPastOrToday ? (idx % 2 === 0 ? 1 : 2) : 0)
+      };
+    });
+
+    return {
+      currentStreakDays,
+      longestStreakDays,
+      lastQuizDate,
+      streakActiveToday,
+      multiplier,
+      freezeShieldsAvailable: 2,
+      totalQuizzesCompleted,
+      averageQuizScore: avgScore,
+      currentTier,
+      nextTier,
+      progressToNextTierPercent,
+      pointsToNextTier,
+      milestones,
+      weeklyActivity
+    };
+  },
+
+  // Bonus Points (BP) alias
+  getTotalBP(): number {
+    return this.getTotalXP();
+  },
+
+  // ========================================================
+  // 1. DOCUMENT SUBMISSION REQUESTS & SUBMISSIONS
+  // ========================================================
+  getDocumentRequests(): DocumentSubmissionRequest[] {
+    return getFromStorage<DocumentSubmissionRequest[]>(KEYS.DOCUMENT_REQUESTS, INITIAL_DOCUMENT_REQUESTS);
+  },
+
+  saveDocumentRequests(requests: DocumentSubmissionRequest[]): void {
+    setToStorage(KEYS.DOCUMENT_REQUESTS, requests);
+    window.dispatchEvent(new CustomEvent('document-requests-updated', { detail: requests }));
+  },
+
+  addDocumentRequest(request: DocumentSubmissionRequest): void {
+    const list = this.getDocumentRequests();
+    const updated = [request, ...list];
+    this.saveDocumentRequests(updated);
+  },
+
+  updateDocumentRequest(id: string, updates: Partial<DocumentSubmissionRequest>): void {
+    const list = this.getDocumentRequests();
+    const idx = list.findIndex(r => r.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updates };
+      this.saveDocumentRequests(list);
+    }
+  },
+
+  deleteDocumentRequest(id: string): void {
+    const list = this.getDocumentRequests();
+    const filtered = list.filter(r => r.id !== id);
+    this.saveDocumentRequests(filtered);
+  },
+
+  getDocumentSubmissions(requestId?: string): DocumentSubmission[] {
+    const list = getFromStorage<DocumentSubmission[]>(KEYS.DOCUMENT_SUBMISSIONS, INITIAL_DOCUMENT_SUBMISSIONS);
+    if (requestId) {
+      return list.filter(s => s.requestId === requestId);
+    }
+    return list;
+  },
+
+  saveDocumentSubmissions(submissions: DocumentSubmission[]): void {
+    setToStorage(KEYS.DOCUMENT_SUBMISSIONS, submissions);
+    window.dispatchEvent(new CustomEvent('document-submissions-updated', { detail: submissions }));
+  },
+
+  addDocumentSubmission(submission: DocumentSubmission): void {
+    const list = this.getDocumentSubmissions();
+    const updated = [submission, ...list];
+    this.saveDocumentSubmissions(updated);
+  },
+
+  updateDocumentSubmission(id: string, updates: Partial<DocumentSubmission>): void {
+    const list = this.getDocumentSubmissions();
+    const idx = list.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updates };
+      this.saveDocumentSubmissions(list);
+    }
+  },
+
+  // ========================================================
+  // 2. POST CATEGORIES & TAXONOMY
+  // ========================================================
+  getPostCategories(): PostCategory[] {
+    return getFromStorage<PostCategory[]>(KEYS.POST_CATEGORIES, INITIAL_POST_CATEGORIES);
+  },
+
+  savePostCategories(categories: PostCategory[]): void {
+    setToStorage(KEYS.POST_CATEGORIES, categories);
+    window.dispatchEvent(new CustomEvent('post-categories-updated', { detail: categories }));
+  },
+
+  addPostCategory(category: PostCategory): void {
+    const list = this.getPostCategories();
+    const updated = [...list, category];
+    this.savePostCategories(updated);
+  },
+
+  updatePostCategory(id: string, updates: Partial<PostCategory>): void {
+    const list = this.getPostCategories();
+    const idx = list.findIndex(c => c.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updates };
+      this.savePostCategories(list);
+    }
+  },
+
+  deletePostCategory(id: string): void {
+    const list = this.getPostCategories();
+    const filtered = list.filter(c => c.id !== id);
+    this.savePostCategories(filtered);
+  },
+
+  // ========================================================
+  // 3. PORTAL SECTIONS MANAGEMENT
+  // ========================================================
+  getPortalSections(): PortalSection[] {
+    return getFromStorage<PortalSection[]>(KEYS.PORTAL_SECTIONS, INITIAL_PORTAL_SECTIONS);
+  },
+
+  savePortalSections(sections: PortalSection[]): void {
+    setToStorage(KEYS.PORTAL_SECTIONS, sections);
+    window.dispatchEvent(new CustomEvent('portal-sections-updated', { detail: sections }));
+  },
+
+  addPortalSection(section: PortalSection): void {
+    const list = this.getPortalSections();
+    const updated = [...list, section];
+    this.savePortalSections(updated);
+  },
+
+  updatePortalSection(id: string, updates: Partial<PortalSection>): void {
+    const list = this.getPortalSections();
+    const idx = list.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updates };
+      this.savePortalSections(list);
+    }
+  },
+
+  deletePortalSection(id: string): void {
+    const list = this.getPortalSections();
+    const filtered = list.filter(s => s.id !== id);
+    this.savePortalSections(filtered);
+  },
+
+  // ========================================================
+  // 4. ANNOUNCEMENT EDIT & DELETE (DELEGATED & CMS)
+  // ========================================================
+  updateAnnouncement(id: string, updates: Partial<Announcement>): void {
+    const list = this.getAnnouncements();
+    const idx = list.findIndex(a => a.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...updates };
+      setToStorage(KEYS.ANNOUNCEMENTS, list);
+      window.dispatchEvent(new CustomEvent('announcements-updated', { detail: list }));
+    }
+  },
+
+  deleteAnnouncement(id: string): void {
+    const list = this.getAnnouncements();
+    const filtered = list.filter(a => a.id !== id);
+    setToStorage(KEYS.ANNOUNCEMENTS, filtered);
+    window.dispatchEvent(new CustomEvent('announcements-updated', { detail: filtered }));
+  },
+
+  // ========================================================
+  // 5. ASSIGN EXTRA ROLES SEPARATELY BY ADMINISTRATOR
+  // ========================================================
+  assignExtraRolesToUser(
+    userId: string,
+    extraRoles: ExtraAdminRoleType[],
+    scopes?: {
+      documentRequestScope?: User['documentRequestScope'];
+      delegatedPostEditorScope?: User['delegatedPostEditorScope'];
+      doubleAccessConfig?: User['doubleAccessConfig'];
+      customPermissions?: Partial<RoleAccessRights>;
+    }
+  ): User | null {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return null;
+
+    users[idx] = {
+      ...users[idx],
+      extraRoles,
+      documentRequestScope: scopes?.documentRequestScope ?? users[idx].documentRequestScope,
+      delegatedPostEditorScope: scopes?.delegatedPostEditorScope ?? users[idx].delegatedPostEditorScope,
+      doubleAccessConfig: scopes?.doubleAccessConfig ?? users[idx].doubleAccessConfig,
+      customPermissions: scopes?.customPermissions ? { ...users[idx].customPermissions, ...scopes.customPermissions } : users[idx].customPermissions,
+    };
+
+    setToStorage(KEYS.USERS, users);
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
+    return users[idx];
   }
 };
 

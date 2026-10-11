@@ -19,6 +19,9 @@ import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { ReportingHub } from '../reports/ReportingHub';
+import { ExtraRolesManager } from './ExtraRolesManager';
+import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
+import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { 
   Users, 
   UserPlus, 
@@ -66,6 +69,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [activeTab, setActiveTab] = useState<
     | 'users' 
     | 'create_user' 
+    | 'extra_roles'
+    | 'cms_hub'
+    | 'doc_requests'
     | 'permissions'
     | 'passwords' 
     | 'virtual_rooms' 
@@ -362,6 +368,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           <Shield className="w-3.5 h-3.5 text-indigo-500" />
           <span>Role Permissions & Access Matrix</span>
           <span className="text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.2 rounded font-bold">Admin Control</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('extra_roles')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'extra_roles' ? 'bg-purple-900 text-white shadow-xs' : 'bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+          <span>Extra Roles & Delegations (5 Roles)</span>
+          <span className="text-[10px] bg-purple-200 text-purple-900 px-1.5 py-0.2 rounded font-bold">Admin Assigned</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cms_hub')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'cms_hub' ? 'bg-amber-900 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+          <span>CMS Posts, Categories & Sections</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('doc_requests')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'doc_requests' ? 'bg-blue-900 text-white shadow-xs' : 'bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 text-blue-600" />
+          <span>Document Requests Hub</span>
         </button>
 
         <button
@@ -1347,6 +1384,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       )}
 
       {/* ========================================================
+          TAB: EXTRA ROLES & DELEGATIONS (5 ROLES ASSIGNED BY ADMIN)
+          ======================================================== */}
+      {activeTab === 'extra_roles' && (
+        <ExtraRolesManager 
+          currentUser={currentUser} 
+          onNavigateToDocs={() => setActiveTab('doc_requests')}
+          onNavigateToCMS={() => setActiveTab('cms_hub')}
+        />
+      )}
+
+      {/* ========================================================
+          TAB: CMS POSTS, CATEGORIES & SECTIONS HUB
+          ======================================================== */}
+      {activeTab === 'cms_hub' && (
+        <CMSPostsSectionsHub currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB: DOCUMENT REQUESTS & SUBMISSIONS HUB
+          ======================================================== */}
+      {activeTab === 'doc_requests' && (
+        <DocumentRequestsHub currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
           MODAL: EDIT USER ACCOUNT & ASSIGN ROLE & ACCESS RIGHTS
           ======================================================== */}
       {editingUser && (
@@ -1501,6 +1563,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     <option value="head_teacher">Head Teacher / Principal (School-Wide Management)</option>
                     <option value="deputy_head">Deputy Head Teacher (Operations, Discipline & Full Report Moderation)</option>
                     <option value="dean_of_studies">Dean of Studies (Academics, Curriculum & Full Report Moderation)</option>
+                    <option value="curriculum_coordinator">Curriculum Coordinator (Executive Leadership: CBC Curriculum, CBA & Syllabi)</option>
                     <option value="senior_teacher">Senior Teacher (Supervision & Mentorship)</option>
                     <option value="hod">Head of Department (Curriculum Moderation)</option>
                     <option value="class_teacher">Class Teacher (Stream & Learner Dossiers)</option>
@@ -1568,6 +1631,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     { key: 'canAccessLunchRegister', label: 'Learner Lunch Register', icon: '🍱' },
                     { key: 'canAccessVirtualRooms', label: 'Virtual Classrooms (Meet)', icon: '🎥' },
                     { key: 'canManageDiscipline', label: 'Student Discipline & Pastoral', icon: '⚖️' },
+                    { key: 'canRequestDocumentSubmissions', label: '1. Request Document Submissions', icon: '📑' },
+                    { key: 'canEditPostsBySpecificUsers', label: '2. Edit Posts by Specific Users', icon: '📝' },
+                    { key: 'canAddCategoriesToPosts', label: '3. Add Categories Under Posts', icon: '🏷️' },
+                    { key: 'hasDoubleAccessRights', label: '4. Double Access Rights (Specific Teachers)', icon: '⚡' },
+                    { key: 'canManageAllPostsCategoriesSections', label: '5. Manage Posts, Categories, Sections', icon: '🗂️' },
                   ] as const).map(({ key, label, icon }) => {
                     const effective = Storage.getUserEffectivePermissions({
                       ...editingUser,

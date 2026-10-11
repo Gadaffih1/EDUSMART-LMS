@@ -413,7 +413,7 @@ export const SafeBrowser: React.FC<SafeBrowserProps> = ({
       });
     }
 
-    setPortfolioNotice("Saved to your E-Portfolio (+25 XP)!");
+    setPortfolioNotice("Saved to your E-Portfolio (+25 BP)!");
     setTimeout(() => setPortfolioNotice(null), 3500);
   };
 

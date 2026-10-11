@@ -7,6 +7,7 @@ export type UserRole =
   | 'senior_teacher' // Senior Teacher: Academic/learner supervision
   | 'deputy_head'    // Deputy Head: Operations/discipline/staff
   | 'dean_of_studies'// Dean of Studies: Academic/assessment
+  | 'curriculum_coordinator' // Curriculum Coordinator: Executive leadership - CBC curriculum, CBA & syllabi
   | 'librarian'      // Librarian: Library
   | 'head_teacher'   // Head Teacher: School-wide management
   | 'school_admin_staff' // School Admin Staff: Secretarial, registers, gate exits, work analysis, calendar
@@ -31,6 +32,12 @@ export interface RoleAccessRights {
   canAccessLunchRegister: boolean;
   canAccessVirtualRooms: boolean;
   canManageDiscipline: boolean;
+  // 🛡️ EXTRA ADMINISTRATOR-ASSIGNED ROLES:
+  canRequestDocumentSubmissions: boolean;      // 1. Request for documents submission from specific users
+  canEditPostsBySpecificUsers: boolean;        // 2. Edit posts by specific users
+  canAddCategoriesToPosts: boolean;            // 3. Add categories under different posts
+  hasDoubleAccessRights: boolean;              // 4. Double Access rights for specific teachers
+  canManageAllPostsCategoriesSections: boolean; // 5. Add, remove, edit posts, Categories, sections
 }
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -132,6 +139,23 @@ export interface User {
   tscNumber?: string; // Teachers Service Commission ID
   designation?: string;
   customPermissions?: Partial<RoleAccessRights>;
+  // 🛡️ EXTRA ADMINISTRATOR ASSIGNMENTS:
+  extraRoles?: ('document_requester' | 'delegated_post_editor' | 'category_curator' | 'double_access_teacher' | 'cms_content_master')[];
+  documentRequestScope?: {
+    allowedUserIds?: string[]; // Specific users they can request docs from (or empty/['*'] for any)
+    allowedRoles?: UserRole[];
+    allowAll?: boolean;
+  };
+  delegatedPostEditorScope?: {
+    editableAuthorIds: string[]; // Specific user IDs whose posts they can edit
+    allowAll?: boolean;
+  };
+  doubleAccessConfig?: {
+    enabled: boolean;
+    secondaryRole: UserRole;
+    secondaryDesignation?: string;
+    extraGrantedPermissions?: (keyof RoleAccessRights)[];
+  };
 }
 
 export interface Topic {
@@ -294,10 +318,21 @@ export interface Announcement {
   targetGrade?: GradeLevel; // If undefined, whole school
   targetStream?: StreamName;
   author: string;
+  authorId?: string;
   authorRole: string;
   createdAt: string;
   meetLink?: string;
   scheduledTime?: string;
+  // 🏷️ Categorization & Section CMS Support:
+  categories?: string[]; // IDs or names of categories
+  sectionId?: string;    // Associated portal section
+  lastEditedBy?: string;
+  lastEditedAt?: string;
+  editHistory?: {
+    editedBy: string;
+    editedAt: string;
+    note?: string;
+  }[];
 }
 
 export interface VirtualClassRoom {
@@ -1405,4 +1440,149 @@ export interface TransportDropoffVerification {
   releasedAt?: string;
   verifiedBy?: string;          // Chaperone name
   parentConsentConfirmed?: boolean;
+}
+
+// ========================================================
+// 💻 COMPUTER LAB: CODING CHALLENGE LIBRARY & DISTRIBUTION
+// ========================================================
+export interface CodingChallengeCriteria {
+  id: string;
+  label: string;
+  type: 'blocks_used' | 'variable_score' | 'broadcast_message' | 'timer_condition' | 'loop_execution' | 'custom_rubric';
+  targetValue?: string | number;
+  points: number;
+  description?: string;
+}
+
+export interface CodingChallenge {
+  id: string;
+  title: string;
+  description: string;
+  grade: GradeLevel;
+  stream?: StreamName | 'ALL';
+  targetGroup: string; // e.g. "Grade 7 CS All", "Advanced Robotics Group", "Grade 8 Block Pioneers"
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  strand: string;
+  scratchEmbedUrl?: string;
+  scratchProjectId?: string;
+  starterCodeHint?: string;
+  completionCriteria: CodingChallengeCriteria[];
+  instructions: string[];
+  rubricCriteria?: string[];
+  maxPoints: number;
+  dueDate: string;
+  assignedBy: string;
+  assignedAt: string;
+  assignedToClasses: string[];
+  status: 'active' | 'draft' | 'archived';
+  submissionsCount?: number;
+  featured?: boolean;
+}
+
+// ========================================================
+// 🏆 LEARNER BADGES & STREAKS: QUIZ PARTICIPATION & MILESTONES
+// ========================================================
+export interface StreakMilestone {
+  id: string;
+  title: string;
+  target: number;
+  current: number;
+  unit: string;
+  achieved: boolean;
+  badgeReward: string;
+  icon: string;
+  tierColor: string;
+  description: string;
+}
+
+export interface LearnerStreakInfo {
+  currentStreakDays: number;
+  longestStreakDays: number;
+  lastQuizDate: string;
+  streakActiveToday: boolean;
+  multiplier: number;
+  freezeShieldsAvailable: number;
+  totalQuizzesCompleted: number;
+  averageQuizScore: number;
+  currentTier: 'Novice' | 'Bronze Explorer' | 'Silver Coder' | 'Gold Scholar' | 'Diamond Master' | 'Grandmaster Trailblazer';
+  nextTier: string;
+  progressToNextTierPercent: number;
+  pointsToNextTier: number;
+  milestones: StreakMilestone[];
+  weeklyActivity: {
+    day: string;
+    date: string;
+    completed: boolean;
+    quizzesCount: number;
+  }[];
+}
+
+// ========================================================
+// 🛡️ EXTRA ADMINISTRATOR ASSIGNED ROLES & CAPABILITIES
+// ========================================================
+
+export type ExtraAdminRoleType = 
+  | 'document_requester'      // 1. Request for documents submission from specific users
+  | 'delegated_post_editor'   // 2. Edit posts by specific users
+  | 'category_curator'        // 3. Add categories under different posts
+  | 'double_access_teacher'   // 4. Double Access rights for specific teachers
+  | 'cms_content_master';     // 5. Add, remove, edit posts, Categories, sections
+
+export interface DocumentSubmissionRequest {
+  id: string;
+  title: string;
+  description: string;
+  requestedByUserId: string;
+  requestedByUserName: string;
+  requestedByUserRole: string;
+  targetUserIds: string[]; // Specific users targeted for submission
+  targetGrade?: GradeLevel;
+  targetRole?: UserRole;
+  dueDate: string;
+  requiredDocTypes: string[]; // e.g. ['Birth Certificate (PDF/Image)', 'Immunization Card']
+  mandatory: boolean;
+  createdAt: string;
+  status: 'active' | 'closed';
+  instructions?: string;
+}
+
+export interface DocumentSubmission {
+  id: string;
+  requestId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userRole: UserRole;
+  fileName: string;
+  fileUrl?: string;
+  fileSize?: string;
+  fileType?: string;
+  notes?: string;
+  status: 'submitted' | 'verified' | 'rejected' | 'resubmit_requested';
+  submittedAt: string;
+  reviewedBy?: string;
+  reviewNotes?: string;
+  reviewedAt?: string;
+}
+
+export interface PostCategory {
+  id: string;
+  name: string;
+  slug: string;
+  color: 'emerald' | 'indigo' | 'amber' | 'rose' | 'purple' | 'blue' | 'teal' | 'orange' | 'cyan';
+  description?: string;
+  icon?: string;
+  isSystemDefault?: boolean;
+}
+
+export interface PortalSection {
+  id: string;
+  title: string;
+  description: string;
+  categoryKey: string;
+  isVisible: boolean;
+  order: number;
+  targetAudience: 'all' | 'students' | 'teachers' | 'parents' | 'staff';
+  icon?: string;
+  badge?: string;
 }

@@ -218,8 +218,8 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs font-mono text-emerald-200">
-              <span>{totalXP} Total XP</span>
-              <span>{xpInCurrentLevel}/100 XP</span>
+              <span>{totalXP} Total BP</span>
+              <span>{xpInCurrentLevel}/100 BP</span>
             </div>
             <div className="w-full bg-black/25 h-2.5 rounded-full overflow-hidden p-0.5">
               <div 
@@ -228,7 +228,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
               />
             </div>
             <div className="text-[10px] text-slate-200 font-mono text-right">
-              {100 - xpInCurrentLevel} XP to Level {currentLevel + 1}
+              {100 - xpInCurrentLevel} BP to Level {currentLevel + 1}
             </div>
           </div>
 
@@ -293,7 +293,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
                 <span>1. Submit 100% Quiz</span>
                 <Trophy className="w-3.5 h-3.5 text-amber-500" />
               </div>
-              <p className="text-[11px] text-slate-500">Awards 'Top Scorer' badge (+150 XP)</p>
+              <p className="text-[11px] text-slate-500">Awards 'Top Scorer' badge (+150 BP)</p>
             </button>
 
             <button
@@ -304,7 +304,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
                 <span>2. Study Curriculum Resource</span>
                 <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
               </div>
-              <p className="text-[11px] text-slate-500">Awards 'Resource Explorer' badge (+120 XP)</p>
+              <p className="text-[11px] text-slate-500">Awards 'Resource Explorer' badge (+120 BP)</p>
             </button>
 
             <button
@@ -315,7 +315,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
                 <span>3. Upload Portfolio Project</span>
                 <Sparkles className="w-3.5 h-3.5 text-purple-500" />
               </div>
-              <p className="text-[11px] text-slate-500">Awards 'Portfolio Artisan' badge (+130 XP)</p>
+              <p className="text-[11px] text-slate-500">Awards 'Portfolio Artisan' badge (+130 BP)</p>
             </button>
           </div>
         </div>
@@ -330,7 +330,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
             </div>
             <div>
               <div className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider">Next Target in Progress</div>
-              <h4 className="text-sm font-extrabold text-slate-900">{nextBadge.title} (+{nextBadge.xpPoints} XP)</h4>
+              <h4 className="text-sm font-extrabold text-slate-900">{nextBadge.title} (+{nextBadge.xpPoints} BP)</h4>
               <p className="text-xs text-slate-600 mt-0.5">{nextBadge.activityCriteria || nextBadge.description}</p>
             </div>
           </div>
@@ -455,7 +455,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
                         : 'bg-slate-200 text-slate-600'
                     }`}>
-                      +{badge.xpPoints} XP
+                      +{badge.xpPoints} BP
                     </span>
                     {badge.dateUnlocked && (
                       <div className="text-[10px] text-slate-400 font-mono mt-1">
@@ -564,7 +564,7 @@ export const AchievementSystem: React.FC<AchievementSystemProps> = ({
             </div>
 
             <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 inline-block font-mono font-bold text-emerald-800 text-sm">
-              +{newlyAwarded.xpPoints} Certification XP Added
+              +{newlyAwarded.xpPoints} Certification Bonus Points (BP) Added
             </div>
 
             <div className="pt-2">

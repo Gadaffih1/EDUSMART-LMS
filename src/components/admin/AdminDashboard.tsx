@@ -104,6 +104,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     };
   }, []);
 
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['users', 'create_user', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports'].includes(tab)) {
+          setActiveTab(tab as any);
+        } else if (tab === 'logs' || tab === 'audit') {
+          setActiveTab('oversight');
+        } else if (tab === 'analytics' || tab === 'gradebook') {
+          setActiveTab('oversight');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Edit User & Assign Role Modal State
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');

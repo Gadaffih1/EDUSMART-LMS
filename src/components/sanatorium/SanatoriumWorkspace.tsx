@@ -30,6 +30,23 @@ export const SanatoriumWorkspace: React.FC<SanatoriumWorkspaceProps> = ({
   onLogout
 }) => {
   const [activeTab, setActiveTab] = useState<'clinic_register' | 'duty_protocols' | 'emergency_contacts'>('clinic_register');
+
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['clinic_register', 'duty_protocols', 'emergency_contacts'].includes(tab)) {
+          setActiveTab(tab as 'clinic_register' | 'duty_protocols' | 'emergency_contacts');
+        } else if (tab === 'triage' || tab === 'dispensary' || tab === 'reports' || tab === 'attendance') {
+          setActiveTab('clinic_register');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   const sanatoriumRecords = Storage.getSanatoriumRecords();
   
   const admittedInBay = sanatoriumRecords.filter(r => r.disposition === 'admitted_observation_bay' || r.disposition === 'under_monitoring');

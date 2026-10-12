@@ -49,6 +49,24 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
   const [currentSection, setCurrentSection] = useState<LibraryPortalSection>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['dashboard', 'catalogue', 'books_resources', 'issue_return', 'reservations', 'borrowers', 'overdue', 'fines_charges', 'acquisitions', 'inventory', 'shelves_locations', 'digital_library', 'reading_programme', 'attendance', 'timetable', 'room_booking', 'events_programmes', 'reports_analytics', 'notifications', 'policies', 'settings', 'audit_trail'].includes(tab)) {
+          setCurrentSection(tab as LibraryPortalSection);
+        } else if (tab === 'circulation' || tab === 'issue' || tab === 'return') {
+          setCurrentSection('issue_return');
+        } else if (tab === 'rooms' || tab === 'room') {
+          setCurrentSection('room_booking');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Storage states
   const [books, setBooks] = useState<LibraryBook[]>(() => Storage.getLibraryBooks());
   const [borrowRecords, setBorrowRecords] = useState<LibraryBorrowRecord[]>(() => Storage.getBorrowRecords());

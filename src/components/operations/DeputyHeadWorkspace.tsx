@@ -122,8 +122,27 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
     const handleReportUpdate = () => {
       setReportCards(Storage.getReportCards());
     };
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['analytics', 'results_upload', 'reports_moderation', 'operations', 'discipline', 'online_discipline', 'staff_duty', 'staff_appraisal', 'timetable', 'work_ledger', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
+          setActiveTab(tab as DeputyTab);
+        } else if (tab === 'attendance' || tab === 'roll_call') {
+          setActiveTab('staff_duty');
+        } else if (tab === 'report' || tab === 'reports') {
+          setActiveTab('reports_moderation');
+        } else if (tab === 'gradebook' || tab === 'marks' || tab === 'results') {
+          setActiveTab('results_upload');
+        }
+      }
+    };
     window.addEventListener('report-cards-updated', handleReportUpdate);
-    return () => window.removeEventListener('report-cards-updated', handleReportUpdate);
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => {
+      window.removeEventListener('report-cards-updated', handleReportUpdate);
+      window.removeEventListener('workspace-nav-tab', handleNavEvent);
+    };
   }, []);
 
   const showDeputyToast = (msg: string) => {

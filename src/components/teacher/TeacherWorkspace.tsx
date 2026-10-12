@@ -114,16 +114,20 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'computer_lab', 'virtual_lab', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub'].includes(tab)) {
+        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'computer_lab', 'virtual_lab', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub', 'lunch_register'].includes(tab)) {
           setActiveTab(tab as TeacherTab);
         } else if (tab === 'computer_lab' || tab === 'scratch' || tab === 'cs_lab' || tab === 'coding') {
           setActiveTab('computer_lab');
         } else if (tab === 'virtual_lab' || tab === 'vlab' || tab === 'virtuallab' || tab === 'science_lab') {
           setActiveTab('virtual_lab');
-        } else if (tab === 'results' || tab === 'assessments') {
+        } else if (tab === 'results' || tab === 'assessments' || tab === 'gradebook' || tab === 'marks') {
           setActiveTab('cbc_results');
-        } else if (tab === 'attendance' || tab === 'register') {
+        } else if (tab === 'attendance' || tab === 'register' || tab === 'roll_call') {
           setActiveTab('class_register');
+        } else if (tab === 'work_entries' || tab === 'work_entry') {
+          setActiveTab('work_entry');
+        } else if (tab === 'report' || tab === 'reports' || tab === 'reporting') {
+          setActiveTab('reporting_hub');
         } else if (tab === 'notes' || tab === 'videos' || tab === 'audio') {
           setActiveTab('resources');
         }

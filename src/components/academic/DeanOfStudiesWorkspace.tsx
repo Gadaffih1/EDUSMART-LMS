@@ -114,6 +114,24 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
   const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
   const workLogs = Storage.getWorkEntryLogs();
 
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['analytics', 'results_upload', 'assessments', 'report_cards', 'curriculum', 'timetable', 'faculty_allocations', 'fixed_lessons', 'work_entries', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
+          setActiveTab(tab as DeanTab);
+        } else if (tab === 'gradebook' || tab === 'marks' || tab === 'results') {
+          setActiveTab('results_upload');
+        } else if (tab === 'reports' || tab === 'report') {
+          setActiveTab('report_cards');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
 
   // Exam Schedules

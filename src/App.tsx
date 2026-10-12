@@ -25,6 +25,7 @@ import { SanatoriumWorkspace } from './components/sanatorium/SanatoriumWorkspace
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
 import { CoCurricularWorkspace } from './components/cocurricular/CoCurricularWorkspace';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloatingMenu';
 import { Maximize2, CheckCheck } from 'lucide-react';
 
 function AppContent({
@@ -140,6 +141,14 @@ function AppContent({
           <NotificationDrawer currentUser={currentUser} />
         )}
       </div>
+
+      {/* Role-Specific Quick Actions Floating Menu in Main Viewport */}
+      {currentUser && (
+        <QuickActionsFloatingMenu 
+          currentUser={currentUser} 
+          onSwitchUser={onSwitchUser}
+        />
+      )}
     </div>
   );
 }

@@ -110,8 +110,12 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['resources', 'browser', 'timetable', 'assignments', 'results', 'eportfolio', 'reports', 'badges', 'chat'].includes(tab)) {
+        if (['resources', 'browser', 'timetable', 'assignments', 'reports', 'badges', 'portfolio'].includes(tab)) {
           setActiveTab(tab as WorkspaceTab);
+        } else if (tab === 'results' || tab === 'gradebook' || tab === 'grades' || tab === 'marks') {
+          setActiveTab('reports');
+        } else if (tab === 'eportfolio') {
+          setActiveTab('portfolio');
         } else if (['notes', 'videos', 'audio', 'quizzes', 'portal'].includes(tab)) {
           setActiveTab('resources');
         }

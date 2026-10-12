@@ -61,6 +61,24 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
   const gatePasses = Storage.getGatePasses();
   const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
 
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['analytics', 'executive', 'announcements', 'staff_governance', 'staff_appraisal', 'timetable', 'work_entry_audit', 'lunch_register', 'transport', 'cocurricular', 'bom_report', 'reporting_hub', 'events'].includes(tab)) {
+          setActiveTab(tab as HeadTab);
+        } else if (tab === 'bom' || tab === 'report' || tab === 'reports') {
+          setActiveTab('bom_report');
+        } else if (tab === 'work_ledger' || tab === 'work_entries') {
+          setActiveTab('work_entry_audit');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Announcements state
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => Storage.getAnnouncements());
   const [newAnnTitle, setNewAnnTitle] = useState('');

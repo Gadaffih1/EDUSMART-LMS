@@ -64,6 +64,24 @@ export const CoCurricularWorkspace: React.FC<CoCurricularWorkspaceProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<CoCurricularTab>('dashboard');
 
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['dashboard', 'activities', 'portfolio', 'attendance', 'competitions', 'trips', 'equipment_budget', 'reports'].includes(tab)) {
+          setActiveTab(tab as CoCurricularTab);
+        } else if (tab === 'log-attendance') {
+          setActiveTab('attendance');
+        } else if (tab === 'submit-report') {
+          setActiveTab('reports');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher', 'hod', 'school_admin_staff', 'admin'].includes(currentUser.role);
   const isReadOnly = readOnly !== undefined ? readOnly : (currentUser.role !== 'cocurricular_team' || isExecutiveOrAdmin);
 

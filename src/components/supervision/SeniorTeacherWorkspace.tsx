@@ -53,6 +53,26 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
   const [activeTab, setActiveTab] = useState<SupervisionTab>('gate_safety');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['gate_safety', 'staff_appraisal', 'work_entry_audit', 'sanatorium', 'transport', 'cocurricular', 'attendance_monitor', 'mentorship', 'curriculum_coordination', 'reporting_hub'].includes(tab)) {
+          setActiveTab(tab as SupervisionTab);
+        } else if (tab === 'attendance' || tab === 'roll_call' || tab === 'register') {
+          setActiveTab('attendance_monitor');
+        } else if (tab === 'report' || tab === 'reports') {
+          setActiveTab('reporting_hub');
+        } else if (tab === 'work_ledger' || tab === 'work_entries') {
+          setActiveTab('work_entry_audit');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Mentorship log state
   interface MentorshipLog {
     id: string;

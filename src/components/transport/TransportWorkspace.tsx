@@ -70,6 +70,22 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
   type TransportTab = 'dashboard' | 'students' | 'fleet' | 'routes' | 'trip_manifest' | 'incidents' | 'alerts' | 'fees' | 'reports';
   const [activeTab, setActiveTab] = useState<TransportTab>('dashboard');
 
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['dashboard', 'students', 'fleet', 'routes', 'trip_manifest', 'incidents', 'alerts', 'fees', 'reports'].includes(tab)) {
+          setActiveTab(tab as TransportTab);
+        } else if (tab === 'trips' || tab === 'trip' || tab === 'attendance' || tab === 'log-attendance') {
+          setActiveTab('trip_manifest');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   const isExecutiveOrAdmin = ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher', 'hod', 'school_admin_staff', 'admin'].includes(currentUser.role);
   const isReadOnly = readOnly !== undefined ? readOnly : (currentUser.role !== 'transport_team' || isExecutiveOrAdmin);
 

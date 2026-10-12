@@ -75,6 +75,26 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
   const [selectedTerm, setSelectedTerm] = useState<1 | 2 | 3>(2);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['pacing', 'schemes', 'cba_mapping', 'cba_moderation', 'appraisal', 'computer_lab', 'doc_requests', 'directives', 'reports_suite'].includes(tab)) {
+          setActiveTab(tab as any);
+        } else if (tab === 'reports' || tab === 'report' || tab === 'curriculum_reports') {
+          setActiveTab('reports_suite');
+        } else if (tab === 'schemes_of_work') {
+          setActiveTab('schemes');
+        } else if (tab === 'strands_matrix' || tab === 'pacing_matrix') {
+          setActiveTab('pacing');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   // Storage Data State
   const [syllabusTracking, setSyllabusTracking] = useState<CoordinatorSyllabusTopic[]>(() => Storage.getCoordinatorSyllabusTracking());
   const [schemesOfWork, setSchemesOfWork] = useState<CoordinatorSchemeOfWork[]>(() => Storage.getCoordinatorSchemesOfWork());

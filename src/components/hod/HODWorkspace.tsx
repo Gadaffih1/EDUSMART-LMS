@@ -59,6 +59,26 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState<HODTab>('syllabus');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail;
+      if (tab) {
+        if (['syllabus', 'work_logs', 'quiz_audit', 'subject_analytics', 'curriculum_resources', 'sanatorium', 'transport', 'cocurricular', 'reporting_hub'].includes(tab)) {
+          setActiveTab(tab as HODTab);
+        } else if (tab === 'reports' || tab === 'report') {
+          setActiveTab('reporting_hub');
+        } else if (tab === 'work_audit' || tab === 'work_entry' || tab === 'work_entries') {
+          setActiveTab('work_logs');
+        } else if (tab === 'gradebook' || tab === 'results' || tab === 'analytics') {
+          setActiveTab('subject_analytics');
+        }
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
   const [selectedSubject, setSelectedSubject] = useState<SubjectName>(departmentSubjects[0]);
 

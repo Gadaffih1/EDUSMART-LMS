@@ -39,7 +39,9 @@ import {
   Trophy,
   CalendarDays,
   Utensils,
-  Menu
+  Menu,
+  UserCheck,
+  ShieldAlert
 } from 'lucide-react';
 
 interface HeadTeacherWorkspaceProps {
@@ -57,6 +59,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
   const parents = allUsers.filter(u => u.role === 'parent');
   const workLogs = Storage.getWorkEntryLogs();
   const gatePasses = Storage.getGatePasses();
+  const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
 
   // Announcements state
   const [announcements, setAnnouncements] = useState<Announcement[]>(() => Storage.getAnnouncements());
@@ -398,9 +401,47 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           TAB: MASTER TIMETABLE & BELL SCHEDULE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <TimetablePortal 
-          currentUser={currentUser} 
-        />
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider mb-0.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Executive School Governance & Operations</span>
+              </div>
+              <h3 className="text-base font-black text-slate-900">
+                Institutional Master Timetable & Faculty Relief Oversight
+              </h3>
+              <p className="text-xs text-slate-500">
+                School-wide routine schedules, bell periods, reported teacher absences, and relief teaching coverage.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTimetablePerspective('relief')}
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                  timetablePerspective === 'relief'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                }`}
+                title="Review teacher absences and assigned relief coverage"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Faculty Relief & Absence Desk</span>
+                {Storage.getTeacherAbsenceReports().length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                    {Storage.getTeacherAbsenceReports().length} Absent
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <TimetablePortal 
+            currentUser={currentUser} 
+            initialPerspective={timetablePerspective}
+          />
+        </div>
       )}
 
       {/* ========================================================

@@ -32,7 +32,8 @@ import {
   HeartPulse,
   Bus,
   Trophy,
-  Menu
+  Menu,
+  ShieldAlert
 } from 'lucide-react';
 import { ReportingHub } from '../reports/ReportingHub';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
@@ -470,6 +471,63 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
               <div className="text-3xl font-mono font-black text-purple-900">{mentorshipList.length}</div>
               <div className="text-purple-700">Learners supported this term</div>
             </div>
+          </div>
+
+          {/* FACULTY ABSENCE & RELIEF COVER WATCH (NOTIFIED TO SENIOR TEACHER) */}
+          <div className="pt-4 border-t border-slate-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600" />
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                  Reported Faculty Absences & Relief Alerts
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-slate-500">
+                Official notifications dispatched to Senior Teacher
+              </span>
+            </div>
+
+            {Storage.getTeacherAbsenceReports().length === 0 ? (
+              <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 text-center">
+                All teaching faculty are on duty today. Zero reported absences.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {Storage.getTeacherAbsenceReports().map(rep => (
+                  <div key={rep.id} className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-black text-slate-900 text-sm">{rep.teacherName}</span>
+                        <div className="text-[11px] text-amber-800 font-semibold mt-0.5">
+                          {rep.leaveType.replace('_', ' ').toUpperCase()} · {rep.startDate} to {rep.endDate}
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        rep.reliefStatus === 'fully_assigned'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {rep.reliefStatus === 'fully_assigned' ? 'Covered' : 'Relief Needed'}
+                      </span>
+                    </div>
+
+                    <div className="text-slate-700 bg-white/80 p-2.5 rounded-lg border border-amber-100">
+                      <strong>Reason:</strong> {rep.reason}
+                      {rep.handoverNotes && (
+                        <div className="mt-1 text-[11px] text-slate-600">
+                          <strong>Handover:</strong> {rep.handoverNotes}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-amber-200/50">
+                      <span>Affected: {rep.affectedClasses?.length || 0} classes</span>
+                      <span>Dispatched to: Head, Deputy, Dean, Senior Teacher</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}

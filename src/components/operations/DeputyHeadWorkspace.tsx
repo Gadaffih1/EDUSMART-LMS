@@ -43,7 +43,8 @@ import {
   PlusCircle,
   CheckCircle2,
   TrendingUp,
-  Award
+  Award,
+  UserCheck
 } from 'lucide-react';
 import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { ReportingHub } from '../reports/ReportingHub';
@@ -106,6 +107,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
     | 'events';
   const [activeTab, setActiveTab] = useState<DeputyTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
 
   // Report Cards & Moderation states
   const [reportCards, setReportCards] = useState<ReportCard[]>(() => Storage.getReportCards());
@@ -1635,9 +1637,47 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           TAB: MASTER TIMETABLE & BELL SCHEDULE
           ======================================================== */}
       {activeTab === 'timetable' && (
-        <TimetablePortal 
-          currentUser={currentUser} 
-        />
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wider mb-0.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Deputy Head Operations & Curriculum Continuity</span>
+              </div>
+              <h3 className="text-base font-black text-slate-900">
+                Master Institutional Timetable & Faculty Relief Desk
+              </h3>
+              <p className="text-xs text-slate-500">
+                Oversee school schedules, monitor curriculum contact hours, and book relief teachers for absent colleagues.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTimetablePerspective('relief')}
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                  timetablePerspective === 'relief'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                }`}
+                title="Book available teachers for relief when colleagues are absent"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Book Relief Teachers (Colleague Absent)</span>
+                {Storage.getTeacherAbsenceReports().length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                    {Storage.getTeacherAbsenceReports().length} Absent
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <TimetablePortal 
+            currentUser={currentUser} 
+            initialPerspective={timetablePerspective}
+          />
+        </div>
       )}
 
       {/* ========================================================

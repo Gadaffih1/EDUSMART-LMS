@@ -540,9 +540,9 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
         </div>
       )}
 
-      {/* TOP EXECUTIVE LEADERSHIP HEADER */}
-      <header className="bg-white border-b border-slate-200 sticky top-16 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* TOP EXECUTIVE LEADERSHIP HEADER & MODULE TABS (UNIFIED TO PREVENT OVERLAPPING) */}
+      <div className="bg-white border-b border-slate-200 sticky top-16 z-20 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100">
           
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
@@ -589,11 +589,10 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
           </div>
 
         </div>
-      </header>
 
-      {/* HORIZONTAL WORKSPACE MODULE TABS */}
-      <div className="bg-white border-b border-slate-200 sticky top-30 z-10 overflow-x-auto shadow-2xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 py-2">
+        {/* HORIZONTAL WORKSPACE MODULE TABS */}
+        <div className="overflow-x-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 py-2">
           
           <button
             onClick={() => setActiveTab('pacing')}
@@ -684,6 +683,7 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>9. Write & Manage Reports (BOM, Quality Audits & Cards)</span>
           </button>
+          </div>
         </div>
       </div>
 

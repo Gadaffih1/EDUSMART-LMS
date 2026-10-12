@@ -89,7 +89,9 @@ import {
   CurriculumWrittenReport,
   CoordinatorSchemeOfWork,
   CoordinatorSyllabusTopic,
-  CoordinatorCBAModeration
+  CoordinatorCBAModeration,
+  TeacherAbsenceReport,
+  AffectedLessonSlot
 } from '../types';
 import { INITIAL_CODING_CHALLENGES } from '../data/codingChallengeData';
 import {
@@ -261,6 +263,7 @@ const KEYS = {
   COORDINATOR_SCHEMES_OF_WORK: 'edusmart_coordinator_schemes_of_work_v1',
   COORDINATOR_SYLLABUS_TRACKING: 'edusmart_coordinator_syllabus_tracking_v1',
   COORDINATOR_CBA_MODERATIONS: 'edusmart_coordinator_cba_moderations_v1',
+  TEACHER_ABSENCE_REPORTS: 'edusmart_teacher_absence_reports_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -3658,7 +3661,197 @@ export const Storage = {
     };
     this.saveCoordinatorCBAModerations(list);
     return list[idx];
+  },
+
+  // ========================================================
+  // 12. TEACHER ABSENCE REPORTING & DEAN/DEPUTY RELIEF BOOKING
+  // ========================================================
+
+  getTeacherAbsenceReports(): TeacherAbsenceReport[] {
+    return getFromStorage<TeacherAbsenceReport[]>(KEYS.TEACHER_ABSENCE_REPORTS, INITIAL_TEACHER_ABSENCE_REPORTS);
+  },
+
+  saveTeacherAbsenceReports(reports: TeacherAbsenceReport[]): void {
+    setToStorage(KEYS.TEACHER_ABSENCE_REPORTS, reports);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('teacher-absence-reports-updated', { detail: reports }));
+    }
+  },
+
+  addTeacherAbsenceReport(report: TeacherAbsenceReport): void {
+    const list = this.getTeacherAbsenceReports();
+    const updated = [report, ...list];
+    this.saveTeacherAbsenceReports(updated);
+
+    // Broadcast high-priority notification to Head Teacher, Deputy, Dean, and Senior Teacher
+    try {
+      const recipientRoles = report.notifiedRoles || ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher'];
+      const users = this.getUsers();
+      const targetUsers = users.filter(u => recipientRoles.includes(u.role as any));
+
+      targetUsers.forEach(u => {
+        this.addNotification({
+          id: `notif-abs-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+          targetUserId: u.id,
+          targetRole: u.role,
+          title: `URGENT: Teacher Absence Report · ${report.teacherName}`,
+          message: `${report.teacherName} reported absent (${report.leaveType.replace('_', ' ').toUpperCase()}) from ${report.startDate} to ${report.endDate}. ${report.affectedClasses?.length || 0} classes need relief cover.`,
+          category: 'academic',
+          urgency: 'urgent',
+          linkTab: 'timetable',
+          createdAt: new Date().toISOString(),
+          readByUserIds: []
+        });
+      });
+    } catch (e) {
+      console.warn('Failed to dispatch absence notifications', e);
+    }
+  },
+
+  updateTeacherAbsenceReport(id: string, updates: Partial<TeacherAbsenceReport>): TeacherAbsenceReport | null {
+    const list = this.getTeacherAbsenceReports();
+    const idx = list.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    list[idx] = {
+      ...list[idx],
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+    this.saveTeacherAbsenceReports(list);
+    return list[idx];
+  },
+
+  deleteTeacherAbsenceReport(id: string): void {
+    const list = this.getTeacherAbsenceReports().filter(r => r.id !== id);
+    this.saveTeacherAbsenceReports(list);
+  },
+
+  bookReliefTeacher(slotId: string, reliefData: {
+    reliefTeacherName: string;
+    reliefTeacherEmail?: string;
+    bookedBy: string;
+    reason?: string;
+    instructions?: string;
+    absentTeacherName?: string;
+  }): TimetableSlot | null {
+    const allSlots = this.getAllTimetableSlots();
+    const idx = allSlots.findIndex(s => s.id === slotId);
+    if (idx === -1) return null;
+
+    const originalSlot = allSlots[idx];
+    const updatedSlot: TimetableSlot = {
+      ...originalSlot,
+      isReliefCover: true,
+      reliefTeacherName: reliefData.reliefTeacherName,
+      reliefTeacherEmail: reliefData.reliefTeacherEmail,
+      reliefBookedBy: reliefData.bookedBy,
+      reliefBookedAt: new Date().toISOString(),
+      reliefReason: reliefData.reason || 'Colleague absence cover',
+      reliefInstructions: reliefData.instructions,
+      absentTeacherName: reliefData.absentTeacherName || originalSlot.teacherName
+    };
+
+    allSlots[idx] = updatedSlot;
+    this.setAllTimetableSlots(allSlots);
+
+    // Notify booked relief teacher
+    try {
+      const users = this.getUsers();
+      const bookedUser = users.find(u => u.name.toLowerCase() === reliefData.reliefTeacherName.toLowerCase());
+      if (bookedUser) {
+        this.addNotification({
+          id: `notif-rel-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+          targetUserId: bookedUser.id,
+          targetRole: bookedUser.role,
+          title: `Relief Lesson Assignment: Grade ${originalSlot.grade} ${originalSlot.stream}`,
+          message: `You have been assigned by ${reliefData.bookedBy} to cover ${originalSlot.subject} for Grade ${originalSlot.grade} ${originalSlot.stream} on ${originalSlot.dayOfWeek} Period ${originalSlot.period} (${originalSlot.startTime}–${originalSlot.endTime}) substituting for ${updatedSlot.absentTeacherName}.`,
+          category: 'academic',
+          urgency: 'high',
+          linkTab: 'timetable',
+          createdAt: new Date().toISOString(),
+          readByUserIds: []
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to dispatch relief assignment notification', e);
+    }
+
+    // Check if this fulfills an absence report and update status
+    try {
+      const reports = this.getTeacherAbsenceReports();
+      const report = reports.find(r => r.teacherName.toLowerCase() === (updatedSlot.absentTeacherName || '').toLowerCase());
+      if (report) {
+        this.updateTeacherAbsenceReport(report.id, {
+          reliefStatus: 'partially_assigned'
+        });
+      }
+    } catch {}
+
+    return updatedSlot;
+  },
+
+  cancelReliefBooking(slotId: string): TimetableSlot | null {
+    const allSlots = this.getAllTimetableSlots();
+    const idx = allSlots.findIndex(s => s.id === slotId);
+    if (idx === -1) return null;
+
+    const updatedSlot: TimetableSlot = {
+      ...allSlots[idx],
+      isReliefCover: false,
+      reliefTeacherName: undefined,
+      reliefTeacherEmail: undefined,
+      reliefBookedBy: undefined,
+      reliefBookedAt: undefined,
+      reliefReason: undefined,
+      reliefInstructions: undefined,
+      absentTeacherName: undefined
+    };
+
+    allSlots[idx] = updatedSlot;
+    this.setAllTimetableSlots(allSlots);
+    return updatedSlot;
   }
 };
+
+export const INITIAL_TEACHER_ABSENCE_REPORTS: TeacherAbsenceReport[] = [
+  {
+    id: 'abs-rep-01',
+    teacherId: 'usr-tea-01',
+    teacherName: 'Mr. David Kiprono',
+    teacherEmail: 'mr.kiprono@edusmart.ac.ke',
+    leaveType: 'sick_leave',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    dayOfWeek: 'Monday',
+    reason: 'Severe acute laryngitis and fever; doctor ordered 48-hour vocal rest and medication.',
+    handoverNotes: 'Grade 4 Dove (Period 3): Textbook Page 52 Exercise 4 on Proper Fractions. Grade 5 Eagle (Period 6): Complete science lab reflection in notebooks.',
+    contactNumber: '+254 712 345 678',
+    affectedClasses: [
+      {
+        dayOfWeek: 'Monday',
+        period: 3,
+        grade: 4,
+        stream: 'Dove',
+        subject: 'Integrated Science',
+        time: '09:40 – 10:20',
+        roomName: 'Junior Science Lab 1',
+        strandTopic: 'Living Things: Plant Classification and Habitats'
+      },
+      {
+        dayOfWeek: 'Monday',
+        period: 6,
+        grade: 5,
+        stream: 'Eagle',
+        subject: 'Mathematics',
+        time: '12:00 – 12:40',
+        roomName: 'Room 5E',
+        strandTopic: 'Decimals and Currency Operations'
+      }
+    ],
+    notifiedRoles: ['head_teacher', 'deputy_head', 'dean_of_studies', 'senior_teacher'],
+    reliefStatus: 'pending',
+    createdAt: new Date().toISOString()
+  }
+];
 
 

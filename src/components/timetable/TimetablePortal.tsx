@@ -10,11 +10,15 @@ import {
   PRIMARY_SUBJECTS,
   JUNIOR_SUBJECTS,
   ExamTimetableEntry,
-  BellPeriodDef
+  BellPeriodDef,
+  TeacherAbsenceReport
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
+import { TeacherAbsenceReportModal } from './TeacherAbsenceReportModal';
+import { ReliefBookingModal } from './ReliefBookingModal';
+import { TeacherTimetableCaptureModal } from './TeacherTimetableCaptureModal';
 import { 
   Calendar, 
   Clock, 
@@ -30,6 +34,7 @@ import {
   BookOpen, 
   Sparkles, 
   AlertTriangle, 
+  AlertCircle,
   CheckCircle2, 
   X, 
   Edit3, 
@@ -46,17 +51,25 @@ import {
   Shield,
   Lock,
   Save,
-  RotateCcw
+  RotateCcw,
+  UserCheck,
+  ShieldAlert,
+  ArrowRight,
+  Check,
+  Send,
+  CalendarCheck,
+  ListTodo
 } from 'lucide-react';
 
 interface TimetablePortalProps {
   currentUser: User;
   initialGrade?: GradeLevel;
   initialStream?: StreamName;
+  initialPerspective?: TimetablePerspective;
   readOnly?: boolean;
 }
 
-type TimetablePerspective = 'grid' | 'today' | 'teacher' | 'rooms' | 'exams';
+type TimetablePerspective = 'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief';
 
 const DAYS_OF_WEEK: Array<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'> = [
   'Monday', 
@@ -72,6 +85,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   currentUser,
   initialGrade,
   initialStream,
+  initialPerspective,
   readOnly = false
 }) => {
   // Timetable slots & exams state from Storage (placed early for RBAC lookup)
@@ -90,13 +104,33 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     const handleBellUpdate = () => {
       setBellSchedule(Storage.getBellSchedule());
     };
+    const handleAbsenceUpdate = () => {
+      setAbsenceReports(Storage.getTeacherAbsenceReports());
+    };
     window.addEventListener('timetable-updated', handleTimetableUpdate);
     window.addEventListener('bell-schedule-updated', handleBellUpdate);
+    window.addEventListener('teacher-absence-reports-updated', handleAbsenceUpdate);
     return () => {
       window.removeEventListener('timetable-updated', handleTimetableUpdate);
       window.removeEventListener('bell-schedule-updated', handleBellUpdate);
+      window.removeEventListener('teacher-absence-reports-updated', handleAbsenceUpdate);
     };
   }, []);
+
+  // Absence Reporting & Relief Management States
+  const [absenceReports, setAbsenceReports] = useState<TeacherAbsenceReport[]>(() => Storage.getTeacherAbsenceReports());
+  const [showAbsenceModal, setShowAbsenceModal] = useState<boolean>(false);
+  const [reliefBookingSlot, setReliefBookingSlot] = useState<TimetableSlot | null>(null);
+  const [showCaptureModal, setShowCaptureModal] = useState<boolean>(false);
+  const [captureModalMode, setCaptureModalMode] = useState<'daily' | 'weekly'>('daily');
+  const [teacherViewMode, setTeacherViewMode] = useState<'daily' | 'weekly'>('daily');
+  const [selectedTeacherDay, setSelectedTeacherDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>(() => {
+    const todayIndex = new Date().getDay();
+    if (todayIndex >= 1 && todayIndex <= 5) {
+      return DAYS_OF_WEEK[todayIndex - 1];
+    }
+    return 'Monday';
+  });
 
   // Role-Based Access Control Classification
   // 1. Executive Leadership: can access master timetable (unrestricted null)
@@ -305,14 +339,18 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Core filter states
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(defaultGrade);
   const [selectedStream, setSelectedStream] = useState<StreamName>(defaultStream);
-  const [perspective, setPerspective] = useState<TimetablePerspective>('grid');
+  const [perspective, setPerspective] = useState<TimetablePerspective>(() => {
+    if (initialPerspective) return initialPerspective;
+    if (isClassTeacher || isSubjectTeacher) return 'teacher';
+    return 'grid';
+  });
   const [selectedDay, setSelectedDay] = useState<'All' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Allowed perspectives based on role
   const availablePerspectives: TimetablePerspective[] = useMemo(() => {
     if (isExecutiveLeadership) {
-      return ['grid', 'today', 'teacher', 'rooms', 'exams'];
+      return ['grid', 'today', 'teacher', 'rooms', 'exams', 'relief'];
     }
     if (isClassTeacher || isSubjectTeacher) {
       return ['grid', 'today', 'teacher', 'exams'];
@@ -321,10 +359,17 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     return ['grid', 'today', 'exams'];
   }, [isExecutiveLeadership, isClassTeacher, isSubjectTeacher]);
 
+  // Synchronize initialPerspective prop if updated from parent component
+  useEffect(() => {
+    if (initialPerspective && availablePerspectives.includes(initialPerspective)) {
+      setPerspective(initialPerspective);
+    }
+  }, [initialPerspective, availablePerspectives]);
+
   // Enforce selected perspective within available list
   useEffect(() => {
     if (!availablePerspectives.includes(perspective)) {
-      setPerspective('grid');
+      setPerspective(availablePerspectives.includes('teacher') ? 'teacher' : 'grid');
     }
   }, [availablePerspectives, perspective]);
 
@@ -971,6 +1016,26 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               <span>Exam Schedule</span>
             </button>
           )}
+
+          {availablePerspectives.includes('relief') && (
+            <button
+              onClick={() => setPerspective('relief')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                perspective === 'relief'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200'
+              }`}
+              title="Dean of Studies & Deputy Head: Book teachers when colleagues are absent"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Relief & Absence Desk</span>
+              {absenceReports.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                  {absenceReports.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Global Search Bar */}
@@ -1523,116 +1588,860 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       )}
 
       {/* ========================================================
-          PERSPECTIVE 3: FACULTY WORKLOAD & SCHEDULE MATRIX
+          PERSPECTIVE 3: FACULTY WORKLOAD, DAILY ROUTE & WEEKLY MATRIX
           ======================================================== */}
       {perspective === 'teacher' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-6">
+            
+            {/* TOP HEADER & INSTRUCTOR SELECTOR */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">
-                  {isExecutiveLeadership ? 'Academic Dept Teaching Allocations & Workload Matrix' : 'My Academic Dept Teaching Allocation & Workload'}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md">
+                    Faculty Timetable & Itinerary
+                  </span>
+                  <span className="text-xs font-bold text-slate-500">
+                    Term 3 (Academic Year 2026)
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-1">
+                  {isExecutiveLeadership ? 'Academic Dept Teaching Allocations & Workload Matrix' : 'My Teaching Schedule & Daily Classroom Route'}
                 </h3>
                 <p className="text-xs text-slate-500">
                   {isExecutiveLeadership 
-                    ? 'Executive Master Oversight: Select an instructor to audit total contact periods, free periods, assigned grades, and weekly distribution.' 
-                    : 'Audit your personal weekly contact periods, preparation windows, assigned streams, and classroom schedule.'}
+                    ? 'Executive Master Oversight: Audit classes to visit per day, weekly matrix, and assign relief teachers for absent colleagues.' 
+                    : 'View all classes and streams to visit per day, full weekly schedule matrix, and report absence to leadership.'}
                 </p>
               </div>
 
-              {/* Teacher Selector */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-600">
-                  {isExecutiveLeadership ? 'Select Instructor:' : 'Assigned Instructor:'}
-                </span>
-                {isExecutiveLeadership ? (
-                  <select
-                    value={selectedTeacher}
-                    onChange={(e) => setSelectedTeacher(e.target.value)}
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                  >
-                    {distinctTeachers.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
-                    <Lock className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{currentUser.name}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
-                      My Workload
-                    </span>
+              {/* Action Controls & Teacher Selector */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Teacher Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-600">
+                    {isExecutiveLeadership ? 'Select Faculty:' : 'Assigned Faculty:'}
+                  </span>
+                  {isExecutiveLeadership ? (
+                    <select
+                      value={selectedTeacher}
+                      onChange={(e) => setSelectedTeacher(e.target.value)}
+                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+                    >
+                      {distinctTeachers.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
+                      <Lock className="w-3.5 h-3.5 text-slate-500" />
+                      <span>{currentUser.name}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
+                        My Workload
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Report Absence Button (For Any Teacher or Leadership) */}
+                <button
+                  onClick={() => setShowAbsenceModal(true)}
+                  className="px-3.5 py-2 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white rounded-xl text-xs font-black shadow-md shadow-amber-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Report absence status to Head Teacher, Deputy Head, Dean of Studies, and Senior Teacher"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  <span>Report Absence to Leadership</span>
+                </button>
+
+                {/* Full View Capture Button */}
+                <button
+                  onClick={() => {
+                    setCaptureModalMode(teacherViewMode);
+                    setShowCaptureModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black shadow-md shadow-indigo-600/20 flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Full View Capture: Clean printable and exportable snapshot of classes and streams to visit"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Full View Capture</span>
+                </button>
+
+                {/* Print / Capture Full Schedule */}
+                <button
+                  onClick={() => {
+                    setCaptureModalMode(teacherViewMode);
+                    setShowCaptureModal(true);
+                  }}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Print / Save Timetable Schedule Capture"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden sm:inline">Print Capture</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Active Absence Report Status Notification Banner */}
+            {(() => {
+              const activeReport = absenceReports.find(r => r.teacherName.toLowerCase() === selectedTeacher.toLowerCase());
+              if (!activeReport) return null;
+
+              const totalAffected = activeReport.affectedClasses?.length || 0;
+              const coveredCount = activeReport.affectedClasses?.filter(cls => {
+                return allSlots.some(s => 
+                  s.teacherName?.toLowerCase() === activeReport.teacherName.toLowerCase() &&
+                  s.dayOfWeek === cls.dayOfWeek &&
+                  s.period === cls.period &&
+                  s.isReliefCover
+                );
+              }).length || 0;
+
+              return (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 mt-0.5">
+                      <ShieldAlert className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-amber-900 uppercase">
+                          Absence Report Logged ({activeReport.leaveType.replace('_', ' ').toUpperCase()})
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                          {activeReport.startDate} to {activeReport.endDate}
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-800 mt-0.5">
+                        Broadcasted to: <strong>Head Teacher, Deputy Head, Dean of Studies & Senior Teacher</strong>.
+                        Reason: {activeReport.reason}
+                      </p>
+                      <div className="text-[11px] text-amber-900 font-bold mt-1">
+                        Relief Coverage: {coveredCount} of {totalAffected} classes covered by relief colleagues.
+                      </div>
+                    </div>
                   </div>
+
+                  {isExecutiveLeadership && (
+                    <button
+                      onClick={() => setPerspective('relief')}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer"
+                    >
+                      Open Relief Desk
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* FULL VIEW MODE SWITCHER TABS (DAY VIEW vs WHOLE WEEK VIEW) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setTeacherViewMode('daily')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                    teacherViewMode === 'daily'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <CalendarCheck className="w-4 h-4 text-emerald-400" />
+                  <span>1. Daily View: Classes & Streams to Visit ({selectedTeacherDay})</span>
+                </button>
+
+                <button
+                  onClick={() => setTeacherViewMode('weekly')}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                    teacherViewMode === 'weekly'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  <CalendarDays className="w-4 h-4 text-blue-400" />
+                  <span>2. Whole Week's View: Full Matrix (Mon–Fri)</span>
+                </button>
+              </div>
+
+              {/* Quick View Stat Pill */}
+              <div className="text-xs font-bold text-slate-600 px-3 py-1">
+                {teacherViewMode === 'daily' ? (
+                  <span>
+                    Selected: <strong className="text-slate-900">{selectedTeacherDay}</strong> ({teacherSlots.filter(s => s.dayOfWeek === selectedTeacherDay).length} lessons scheduled)
+                  </span>
+                ) : (
+                  <span>
+                    Total: <strong className="text-slate-900">{teacherSlots.length} weekly contact periods</strong> ({teacherSlots.length * 40} mins)
+                  </span>
                 )}
               </div>
             </div>
 
-            {/* Workload Stats Card */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-6">
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            {/* WORKLOAD SUMMARY METRICS CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
                 <div className="text-[10px] uppercase font-bold text-slate-500">Weekly Contact Periods</div>
                 <div className="text-2xl font-black text-slate-900 mt-1">{teacherSlots.length} periods</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">{teacherSlots.length * 40} minutes instructional delivery</div>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="text-[10px] uppercase font-bold text-slate-500">Free / Preparation Periods</div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Daily Lessons ({selectedTeacherDay})</div>
+                <div className="text-2xl font-black text-indigo-700 mt-1">
+                  {teacherSlots.filter(s => s.dayOfWeek === selectedTeacherDay).length} classes
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {teacherSlots.filter(s => s.dayOfWeek === selectedTeacherDay).length * 40} mins delivery on {selectedTeacherDay}
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Free / Prep Periods</div>
                 <div className="text-2xl font-black text-emerald-800 mt-1">{Math.max(0, 40 - teacherSlots.length)} periods</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">Lesson planning & rubric assessment marking</div>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                <div className="text-[10px] uppercase font-bold text-slate-500">Assigned Classes</div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="text-[10px] uppercase font-bold text-slate-500">Assigned Classes & Streams</div>
                 <div className="text-sm font-bold text-slate-900 mt-2 truncate">
-                  {Array.from(new Set(teacherSlots.map(s => `Gr ${s.grade} ${s.stream}`))).join(', ') || 'No classes assigned'}
+                  {Array.from(new Set(teacherSlots.map(s => `Gr ${s.grade} ${s.stream}`))).join(', ') || 'None assigned'}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Active timetable assignments</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Active curriculum streams</div>
               </div>
             </div>
 
-            {/* Teacher Weekly Table */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="py-2.5 px-4">Day</th>
-                    <th className="py-2.5 px-4 text-center">Period</th>
-                    <th className="py-2.5 px-4">Time</th>
-                    <th className="py-2.5 px-4">Class</th>
-                    <th className="py-2.5 px-4">Subject</th>
-                    <th className="py-2.5 px-4">Room Location</th>
-                    <th className="py-2.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {teacherSlots.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 italic">
-                        No instructional slots on record for {selectedTeacher}.
-                      </td>
-                    </tr>
-                  ) : (
-                    teacherSlots.map(slot => (
-                      <tr key={slot.id} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-4 font-bold text-slate-900">{slot.dayOfWeek}</td>
-                        <td className="py-2.5 px-4 text-center font-mono font-semibold">Period {slot.period}</td>
-                        <td className="py-2.5 px-4 font-mono text-slate-600">{slot.startTime} – {slot.endTime}</td>
-                        <td className="py-2.5 px-4 font-bold text-slate-800">Grade {slot.grade} {slot.stream}</td>
-                        <td className="py-2.5 px-4 font-bold text-emerald-800">{slot.subject}</td>
-                        <td className="py-2.5 px-4 text-slate-600 font-mono text-[11px]">{slot.roomName || 'Classroom'}</td>
-                        <td className="py-2.5 px-4 text-right">
-                          <button
-                            onClick={() => setSelectedSlotForDetail(slot)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded text-[11px]"
-                          >
-                            Inspect
-                          </button>
-                        </td>
+            {/* ========================================================
+                VIEW MODE 1: DAILY VIEW (CLASSES TO VISIT PER DAY)
+                ======================================================== */}
+            {teacherViewMode === 'daily' && (
+              <div className="space-y-4">
+                
+                {/* Day of Week Selector Bar */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  <span className="text-xs font-bold text-slate-500 mr-1 shrink-0">Select Day:</span>
+                  {DAYS_OF_WEEK.map(d => {
+                    const countForDay = teacherSlots.filter(s => s.dayOfWeek === d).length;
+                    const isSelected = selectedTeacherDay === d;
+
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => setSelectedTeacherDay(d)}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        <span>{d}</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {countForDay}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Day Summary Itinerary Banner */}
+                {(() => {
+                  const daySlots = teacherSlots
+                    .filter(s => s.dayOfWeek === selectedTeacherDay)
+                    .sort((a, b) => a.period - b.period);
+                  const distinctClassesToday = Array.from(new Set(daySlots.map(s => `Grade ${s.grade} (${s.stream})`)));
+                  const freePeriodsToday = Math.max(0, 8 - daySlots.length);
+
+                  return (
+                    <div className="bg-gradient-to-r from-indigo-50 via-slate-50 to-emerald-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black uppercase text-indigo-900 bg-indigo-100 px-2 py-0.5 rounded-md">
+                            {selectedTeacherDay} Itinerary
+                          </span>
+                          <span className="text-xs font-extrabold text-slate-800">
+                            Visiting {daySlots.length} classes across {distinctClassesToday.length} streams
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          {distinctClassesToday.length > 0 
+                            ? `Classes on route: ${distinctClassesToday.join(', ')}`
+                            : 'No scheduled teaching lessons for this day.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                          {daySlots.length * 40} mins delivery · {freePeriodsToday} free periods
+                        </span>
+                        <button
+                          onClick={() => {
+                            setCaptureModalMode('daily');
+                            setShowCaptureModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                          title="Open Full View Capture for this day"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Capture Day Itinerary</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Chronological List of All Classes to Visit */}
+                {(() => {
+                  const daySlots = teacherSlots
+                    .filter(s => s.dayOfWeek === selectedTeacherDay)
+                    .sort((a, b) => a.period - b.period);
+
+                  // Generate full 8 periods breakdown for this day
+                  const periodsList = [1, 2, 3, 4, 5, 6, 7, 8];
+
+                  return (
+                    <div className="space-y-3">
+                      {periodsList.map(periodNum => {
+                        const slot = daySlots.find(s => s.period === periodNum);
+                        const bell = bellSchedule.find(b => b.period === periodNum && !b.isBreak);
+                        const timeStr = bell ? `${bell.startTime} – ${bell.endTime}` : `Period ${periodNum}`;
+
+                        if (slot) {
+                          return (
+                            <div
+                              key={slot.id}
+                              className={`rounded-2xl border p-4 sm:p-5 transition-all shadow-2xs hover:shadow-xs ${
+                                slot.isReliefCover 
+                                  ? 'bg-amber-50/70 border-amber-300' 
+                                  : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                
+                                {/* Left Info: Class and Stream Badge */}
+                                <div className="flex items-start gap-3.5">
+                                  <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex flex-col items-center justify-center font-black shadow-xs shrink-0">
+                                    <span className="text-[10px] uppercase font-bold opacity-80">Period</span>
+                                    <span className="text-base leading-none">{slot.period}</span>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {/* CLASS & STREAM BADGE */}
+                                      <span className="text-sm font-black text-slate-900 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-lg">
+                                        Grade {slot.grade} ({slot.stream})
+                                      </span>
+
+                                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                        {slot.subject}
+                                      </span>
+
+                                      <span className="text-xs font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                                        {slot.startTime} – {slot.endTime}
+                                      </span>
+
+                                      {slot.isReliefCover && (
+                                        <span className="text-[10px] font-black uppercase text-amber-900 bg-amber-200 border border-amber-400 px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
+                                          <AlertTriangle className="w-3 h-3 text-amber-700" />
+                                          <span>Relief Cover (Substituting for {slot.absentTeacherName})</span>
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Topic / Strand */}
+                                    <p className="text-xs text-slate-700 font-medium">
+                                      <strong>Strand / Topic:</strong> {slot.strandTopic || 'Core CBC Curriculum Unit'}
+                                    </p>
+
+                                    {/* Location & Handover */}
+                                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-0.5">
+                                      <span className="flex items-center gap-1 font-mono">
+                                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                        <span>Room: <strong>{slot.roomName || 'Allocated Classroom'}</strong></span>
+                                      </span>
+
+                                      {slot.materialsNeeded && slot.materialsNeeded.length > 0 && (
+                                        <span>
+                                          Materials: <em>{slot.materialsNeeded.join(', ')}</em>
+                                        </span>
+                                      )}
+
+                                      {slot.reliefInstructions && (
+                                        <span className="text-amber-800 font-medium">
+                                          Relief Notes: {slot.reliefInstructions}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right Actions */}
+                                <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                                  {isExecutiveLeadership && (
+                                    <button
+                                      onClick={() => setReliefBookingSlot(slot)}
+                                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                                      title="Dean of Studies & Deputy Head: Book relief teacher for absent colleague"
+                                    >
+                                      <UserCheck className="w-3.5 h-3.5" />
+                                      <span>{slot.isReliefCover ? 'Change Relief' : 'Book Relief Teacher'}</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => setSelectedSlotForDetail(slot)}
+                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                                  >
+                                    Inspect Dossier
+                                  </button>
+                                </div>
+
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          // Free / Prep Period Row
+                          return (
+                            <div
+                              key={`free-${periodNum}`}
+                              className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-3.5 flex items-center justify-between text-xs text-slate-500"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-xs">
+                                  P{periodNum}
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-700 block">
+                                    Free Period / Lesson Preparation & Grading
+                                  </span>
+                                  <span className="font-mono text-[11px] text-slate-400">
+                                    {timeStr} · Staff Room / Resource Library
+                                  </span>
+                                </div>
+                              </div>
+
+                              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                Open Window
+                              </span>
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  );
+                })()}
+
+              </div>
+            )}
+
+            {/* ========================================================
+                VIEW MODE 2: WHOLE WEEK'S VIEW (FULL WEEKLY SCHEDULE MATRIX)
+                ======================================================== */}
+            {teacherViewMode === 'weekly' && (
+              <div className="space-y-4">
+                
+                <div className="flex items-center justify-between pb-1">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900">
+                      Master Weekly Teaching Matrix (Monday to Friday)
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Full 5-day panoramic grid of all class visits, stream rotations, and free prep windows.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                      {teacherSlots.length} Total Contact Periods
+                    </span>
+                    <button
+                      onClick={() => {
+                        setCaptureModalMode('weekly');
+                        setShowCaptureModal(true);
+                      }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                      title="Open Full View Capture for the whole week"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Capture Weekly Matrix</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Weekly Grid Table */}
+                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-900 text-white font-bold border-b border-slate-800">
+                      <tr>
+                        <th className="py-3 px-3.5 w-28 text-center uppercase tracking-wider font-extrabold text-[11px]">
+                          Day
+                        </th>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(pNum => {
+                          const bell = bellSchedule.find(b => b.period === pNum && !b.isBreak);
+                          return (
+                            <th key={pNum} className="py-3 px-2.5 text-center min-w-[130px] border-l border-slate-800">
+                              <div className="font-black text-white">Period {pNum}</div>
+                              <div className="text-[10px] text-slate-400 font-mono font-normal">
+                                {bell ? `${bell.startTime}–${bell.endTime}` : ''}
+                              </div>
+                            </th>
+                          );
+                        })}
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {DAYS_OF_WEEK.map(d => {
+                        const daySlots = teacherSlots.filter(s => s.dayOfWeek === d);
+
+                        return (
+                          <tr key={d} className="hover:bg-slate-50/60 transition-colors">
+                            {/* Day Header */}
+                            <td className="py-3 px-3.5 font-black text-slate-900 text-center bg-slate-100 border-r border-slate-200">
+                              <div className="text-xs">{d}</div>
+                              <div className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded mt-1">
+                                {daySlots.length} classes
+                              </div>
+                            </td>
+
+                            {/* Periods 1 to 8 */}
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map(pNum => {
+                              const slot = daySlots.find(s => s.period === pNum);
+
+                              if (slot) {
+                                return (
+                                  <td 
+                                    key={pNum} 
+                                    className={`p-2 border-l border-slate-200 align-top ${
+                                      slot.isReliefCover ? 'bg-amber-50/60' : 'bg-indigo-50/30'
+                                    }`}
+                                  >
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-black text-slate-900 text-[11px] bg-white border border-slate-200 px-1.5 py-0.2 rounded shadow-2xs">
+                                          Gr {slot.grade} {slot.stream}
+                                        </span>
+                                        {slot.isReliefCover && (
+                                          <span className="text-[9px] font-extrabold uppercase bg-amber-200 text-amber-900 px-1 rounded">
+                                            Relief
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      <div className="font-bold text-emerald-800 text-[11px] truncate">
+                                        {slot.subject}
+                                      </div>
+
+                                      <div className="text-[10px] text-slate-500 font-mono truncate">
+                                        {slot.roomName || 'Room'}
+                                      </div>
+
+                                      <div className="flex items-center gap-1 pt-0.5">
+                                        <button
+                                          onClick={() => setSelectedSlotForDetail(slot)}
+                                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-900 cursor-pointer"
+                                        >
+                                          Dossier
+                                        </button>
+                                        {isExecutiveLeadership && (
+                                          <>
+                                            <span className="text-slate-300">·</span>
+                                            <button
+                                              onClick={() => setReliefBookingSlot(slot)}
+                                              className="text-[10px] font-bold text-amber-700 hover:text-amber-900 cursor-pointer"
+                                            >
+                                              Relief
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                );
+                              }
+
+                              // Free Period
+                              return (
+                                <td key={pNum} className="p-2 border-l border-slate-200 text-center bg-slate-50/30 align-middle">
+                                  <span className="text-[10px] font-semibold text-slate-400 italic">
+                                    Free / Prep
+                                  </span>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          PERSPECTIVE: FACULTY RELIEF & ABSENCE MANAGEMENT DESK
+          (Executive Leadership: Dean of Studies, Deputy Head, Head Teacher)
+          ======================================================== */}
+      {perspective === 'relief' && isExecutiveLeadership && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+            
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md">
+                      Dean of Studies & Deputy Head Operations
+                    </span>
+                    <span className="text-xs font-bold text-slate-500">
+                      Curriculum Delivery Continuity
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                    Faculty Relief & Teacher Absence Management Desk
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAbsenceModal(true)}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <ShieldAlert className="w-4 h-4" />
+                  <span>+ Record Faculty Absence</span>
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION 1: ACTIVE TEACHER ABSENCE REPORTS */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  <span>Reported Faculty Absences ({absenceReports.length} Reports)</span>
+                </h4>
+                <span className="text-xs text-slate-500 font-medium">
+                  Dean / Deputy action: Assign relief teachers for affected lesson slots
+                </span>
+              </div>
+
+              {absenceReports.length === 0 ? (
+                <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200 text-center text-slate-500 text-xs">
+                  All faculty members are currently on duty. Zero pending absence reports.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {absenceReports.map(report => (
+                    <div 
+                      key={report.id}
+                      className="bg-white rounded-2xl border border-amber-200 p-5 shadow-2xs space-y-3.5"
+                    >
+                      <div className="flex items-start justify-between gap-3 pb-2 border-b border-slate-100">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className="text-sm font-black text-slate-900">{report.teacherName}</h5>
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                              {report.leaveType.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Absence Window: <strong className="text-slate-800">{report.startDate} to {report.endDate}</strong>
+                          </p>
+                        </div>
+
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          report.reliefStatus === 'fully_assigned'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {report.reliefStatus === 'fully_assigned' ? 'Covered' : 'Relief Needed'}
+                        </span>
+                      </div>
+
+                      {/* Reason & Handover Note */}
+                      <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+                        <div>
+                          <span className="font-bold text-slate-700">Reason: </span>
+                          <span className="text-slate-600">{report.reason}</span>
+                        </div>
+                        {report.handoverNotes && (
+                          <div className="pt-1 border-t border-slate-200/60 text-slate-600">
+                            <strong className="text-indigo-900">Handover Notes:</strong> {report.handoverNotes}
+                          </div>
+                        )}
+                        {report.contactNumber && (
+                          <div className="text-[11px] text-slate-500 pt-0.5">
+                            Emergency Phone: <strong className="font-mono text-slate-700">{report.contactNumber}</strong>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Affected Classes to Visit & Relief Booking Action */}
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold text-slate-800 block">
+                          Affected Classes & Streams ({report.affectedClasses.length} Lessons):
+                        </span>
+
+                        <div className="space-y-1.5">
+                          {report.affectedClasses.map((cls, i) => {
+                            // Find corresponding slot in allSlots
+                            const matchedSlot = allSlots.find(s => 
+                              s.teacherName.toLowerCase() === report.teacherName.toLowerCase() &&
+                              s.dayOfWeek === cls.dayOfWeek &&
+                              s.period === cls.period
+                            );
+
+                            const isCovered = matchedSlot?.isReliefCover;
+
+                            return (
+                              <div 
+                                key={i}
+                                className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900">
+                                      Grade {cls.grade} {cls.stream}
+                                    </span>
+                                    <span className="font-semibold text-emerald-800">
+                                      · {cls.subject}
+                                    </span>
+                                    <span className="font-mono text-[11px] text-slate-500">
+                                      (P{cls.period}: {cls.time})
+                                    </span>
+                                  </div>
+                                  {isCovered && (
+                                    <span className="text-[10px] font-bold text-emerald-700 block mt-0.5">
+                                      ✓ Covered by: <strong>{matchedSlot?.reliefTeacherName}</strong>
+                                    </span>
+                                  )}
+                                </div>
+
+                                <button
+                                  onClick={() => {
+                                    if (matchedSlot) {
+                                      setReliefBookingSlot(matchedSlot);
+                                    } else {
+                                      // Fallback dummy slot for booking
+                                      const dummySlot: TimetableSlot = {
+                                        id: `slot-rel-${Date.now()}`,
+                                        grade: cls.grade,
+                                        stream: cls.stream,
+                                        dayOfWeek: cls.dayOfWeek,
+                                        period: cls.period,
+                                        startTime: cls.time.split('–')[0]?.trim() || '08:20',
+                                        endTime: cls.time.split('–')[1]?.trim() || '09:00',
+                                        subject: cls.subject,
+                                        teacherName: report.teacherName,
+                                        absentTeacherName: report.teacherName,
+                                        notes: report.handoverNotes
+                                      };
+                                      setReliefBookingSlot(dummySlot);
+                                    }
+                                  }}
+                                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                    isCovered
+                                      ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                                      : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-2xs'
+                                  }`}
+                                >
+                                  {isCovered ? 'Change Relief' : 'Book Relief Teacher'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 2: ACTIVE RELIEF ASSIGNMENTS TABLE */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Currently Booked Relief Teachers Across the School</span>
+                </h4>
+                <span className="text-xs text-slate-500 font-medium">
+                  {allSlots.filter(s => s.isReliefCover).length} Active Substitutions
+                </span>
+              </div>
+
+              {allSlots.filter(s => s.isReliefCover).length === 0 ? (
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center text-slate-500 text-xs">
+                  No active relief covers currently assigned.
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-4">Day & Period</th>
+                        <th className="py-2.5 px-4">Class & Stream</th>
+                        <th className="py-2.5 px-4">Subject</th>
+                        <th className="py-2.5 px-4">Absent Colleague</th>
+                        <th className="py-2.5 px-4">Relief Teacher Booked</th>
+                        <th className="py-2.5 px-4">Booked By</th>
+                        <th className="py-2.5 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {allSlots.filter(s => s.isReliefCover).map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 px-4 font-bold text-slate-900">
+                            {s.dayOfWeek} · P{s.period} ({s.startTime}–{s.endTime})
+                          </td>
+                          <td className="py-2.5 px-4 font-extrabold text-slate-900">
+                            Grade {s.grade} {s.stream}
+                          </td>
+                          <td className="py-2.5 px-4 font-bold text-emerald-800">
+                            {s.subject}
+                          </td>
+                          <td className="py-2.5 px-4 text-rose-700 font-semibold">
+                            {s.absentTeacherName || s.teacherName}
+                          </td>
+                          <td className="py-2.5 px-4 text-indigo-700 font-black">
+                            {s.reliefTeacherName}
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-500 text-[11px]">
+                            {s.reliefBookedBy || 'Dean of Studies'}
+                          </td>
+                          <td className="py-2.5 px-4 text-right">
+                            <button
+                              onClick={() => setReliefBookingSlot(s)}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded text-[11px] cursor-pointer mr-1"
+                            >
+                              Modify
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Cancel this relief cover?')) {
+                                  Storage.cancelReliefBooking(s.id);
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded text-[11px] cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
           </div>
@@ -2560,6 +3369,42 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           }}
         />
       )}
+
+      {/* Teacher Absence Reporting Modal */}
+      <TeacherAbsenceReportModal
+        currentUser={currentUser}
+        isOpen={showAbsenceModal}
+        onClose={() => setShowAbsenceModal(false)}
+        onReportSubmitted={(report) => {
+          setNotificationMsg(`Absence notification dispatched to Head Teacher, Deputy, Dean, and Senior Teacher. ${report.affectedClasses.length} classes flagged for relief cover.`);
+          setTimeout(() => setNotificationMsg(null), 5000);
+        }}
+      />
+
+      {/* Relief Teacher Booking Modal (Dean / Deputy / Executive Leadership) */}
+      {reliefBookingSlot && (
+        <ReliefBookingModal
+          currentUser={currentUser}
+          slot={reliefBookingSlot}
+          isOpen={!!reliefBookingSlot}
+          onClose={() => setReliefBookingSlot(null)}
+          onSuccess={(updatedSlot) => {
+            setNotificationMsg(`Relief teacher ${updatedSlot.reliefTeacherName} successfully booked for Grade ${updatedSlot.grade} ${updatedSlot.stream} Period ${updatedSlot.period}!`);
+            setTimeout(() => setNotificationMsg(null), 5000);
+          }}
+        />
+      )}
+
+      {/* Teacher Timetable Full View Capture Modal */}
+      <TeacherTimetableCaptureModal
+        isOpen={showCaptureModal}
+        onClose={() => setShowCaptureModal(false)}
+        teacherName={selectedTeacher}
+        allSlots={allSlots}
+        bellSchedule={bellSchedule}
+        initialMode={captureModalMode}
+        initialDay={selectedTeacherDay}
+      />
 
     </div>
   );

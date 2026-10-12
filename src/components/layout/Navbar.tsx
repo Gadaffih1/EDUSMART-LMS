@@ -21,8 +21,11 @@ import {
   Megaphone,
   Calendar,
   Phone,
-  LogIn
+  LogIn,
+  Settings
 } from 'lucide-react';
+import { OfflineSyncIndicator } from './OfflineSyncIndicator';
+import { SettingsModal } from '../settings/SettingsModal';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -38,7 +41,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome
 }) => {
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const { isNotificationOpen, toggleNotifications, unreadCount } = useNotificationLayout();
+
+  useEffect(() => {
+    const handleOpenSettings = () => setShowSettingsModal(true);
+    window.addEventListener('open-storage-settings', handleOpenSettings);
+    return () => window.removeEventListener('open-storage-settings', handleOpenSettings);
+  }, []);
 
   const allUsers = Storage.getUsers();
 
@@ -144,7 +154,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Zone 3: Actions & Quick Switcher */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Offline Sync Status Indicator with Progress Bar & Status Dot */}
+          <OfflineSyncIndicator onOpenStorageManagement={() => setShowSettingsModal(true)} />
+
+          {/* Settings & Storage Management Button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Settings & CBC Storage Management"
+            aria-label="Settings and Storage Management"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+
           {/* Centralized Notification Bell with Real-Time Unread Badge & Active Indicator */}
           {currentUser && (
             <button
@@ -459,7 +482,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
       )}
-
+ 
+      {/* Settings & Storage Management Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
 
     </header>
   );

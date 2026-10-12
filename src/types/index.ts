@@ -455,6 +455,53 @@ export interface TimetableSlot {
   notes?: string;
   materialsNeeded?: string[];
   competencies?: string[];
+  // Relief & Substitution Tracking
+  isReliefCover?: boolean;
+  reliefTeacherName?: string;
+  reliefTeacherEmail?: string;
+  reliefBookedBy?: string;
+  reliefBookedAt?: string;
+  reliefReason?: string;
+  reliefInstructions?: string;
+  absentTeacherName?: string;
+}
+
+export type TeacherLeaveType = 
+  | 'sick_leave' 
+  | 'emergency' 
+  | 'tsc_official' 
+  | 'bereavement' 
+  | 'personal' 
+  | 'medical_appointment';
+
+export interface AffectedLessonSlot {
+  dayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  period: number;
+  grade: GradeLevel;
+  stream: StreamName;
+  subject: SubjectName;
+  time: string;
+  roomName?: string;
+  strandTopic?: string;
+}
+
+export interface TeacherAbsenceReport {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  teacherEmail: string;
+  leaveType: TeacherLeaveType;
+  startDate: string;
+  endDate: string;
+  dayOfWeek?: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
+  reason: string;
+  handoverNotes?: string;
+  contactNumber?: string;
+  affectedClasses: AffectedLessonSlot[];
+  notifiedRoles: Array<'head_teacher' | 'deputy_head' | 'dean_of_studies' | 'senior_teacher'>;
+  reliefStatus: 'pending' | 'partially_assigned' | 'fully_assigned';
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export type LunchStatus = 'taken' | 'not_taken' | 'special_diet' | 'absent';
@@ -1094,7 +1141,7 @@ export interface LibraryRoomBooking {
   notes?: string;
 }
 
-export type NotificationCategory = 'assignment' | 'grade' | 'announcement' | 'system' | 'safety' | 'transport';
+export type NotificationCategory = 'assignment' | 'grade' | 'announcement' | 'system' | 'safety' | 'transport' | 'academic';
 
 export interface AppNotification {
   id: string;

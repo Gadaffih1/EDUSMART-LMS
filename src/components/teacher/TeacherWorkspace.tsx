@@ -35,6 +35,7 @@ import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { ComputerLabModule } from './ComputerLabModule';
 import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -50,6 +51,7 @@ import {
   Clock, 
   ExternalLink,
   ShieldCheck,
+  ShieldAlert,
   Award,
   Users,
   Search,
@@ -104,6 +106,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
     isClassTeacher ? 'class_register' : 'work_entry'
   );
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [showAbsenceModal, setShowAbsenceModal] = useState(false);
 
   // Handle direct tab navigation from notification items
   React.useEffect(() => {
@@ -536,6 +539,16 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             <Award className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">CBC Assessment Results</span>
             <span className="sm:hidden">CBC Marks</span>
+          </button>
+
+          {/* Report Absence to Leadership */}
+          <button
+            onClick={() => setShowAbsenceModal(true)}
+            className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Report your absence directly to Head Teacher, Deputy Head, Dean of Studies, and Senior Teacher"
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Report Absence</span>
           </button>
 
           {/* Library Room Booking Button */}
@@ -1936,10 +1949,44 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             />
           </div>
 
+          {/* Staff Absence Reporting to Leadership Banner */}
+          <div className="bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-white/20 text-white flex items-center justify-center font-bold shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-white/25 text-white">
+                    Official Staff Absence Protocol
+                  </span>
+                  <span className="text-xs text-amber-100 font-bold">
+                    TSC & School Governance
+                  </span>
+                </div>
+                <h4 className="text-base font-black tracking-tight mt-0.5">
+                  Report Absence Status to School Leadership
+                </h4>
+                <p className="text-xs text-amber-100/90 max-w-xl">
+                  Notify Head Teacher, Deputy Head, Dean of Studies, and Senior Teacher immediately for medical, emergency, or official duties so relief coverage can be booked for your classes.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAbsenceModal(true)}
+              className="px-4 py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-xl text-xs font-black shadow-md flex items-center gap-2 transition-all shrink-0 cursor-pointer"
+            >
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span>Report Absence to Leadership</span>
+            </button>
+          </div>
+
           <TimetablePortal
             currentUser={currentUser}
             initialGrade={defaultGrade}
             initialStream={defaultStream}
+            initialPerspective="teacher"
           />
         </div>
       )}
@@ -2115,6 +2162,14 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       )}
         </main>
       </div>
+
+      {/* Teacher Absence Reporting Modal */}
+      <TeacherAbsenceReportModal
+        currentUser={currentUser}
+        isOpen={showAbsenceModal}
+        onClose={() => setShowAbsenceModal(false)}
+      />
+
     </div>
   );
 };

@@ -57,7 +57,9 @@ import {
   Edit2,
   Save,
   Send,
-  CheckCircle2
+  CheckCircle2,
+  UserCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -109,6 +111,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [analyticsSubView, setAnalyticsSubView] = useState<'school_health' | 'exam_means'>('school_health');
   const [showAutoGenModal, setShowAutoGenModal] = useState(false);
+  const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
   const workLogs = Storage.getWorkEntryLogs();
 
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(4);
@@ -1062,6 +1065,24 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
               </button>
 
               <button
+                onClick={() => setTimetablePerspective('relief')}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                  timetablePerspective === 'relief'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                }`}
+                title="Dean of Studies: Book teachers when colleagues are absent"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Book Relief Teachers</span>
+                {Storage.getTeacherAbsenceReports().length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                    {Storage.getTeacherAbsenceReports().length} Absent
+                  </span>
+                )}
+              </button>
+
+              <button
                 onClick={() => setShowAutoGenModal(true)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
               >
@@ -1074,6 +1095,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           <TimetablePortal 
             currentUser={currentUser} 
             initialGrade={selectedGrade} 
+            initialPerspective={timetablePerspective}
           />
         </div>
       )}

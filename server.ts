@@ -355,6 +355,44 @@ Remember to follow standard laboratory safety and field study precautions when c
 
   if (process.env.NODE_ENV === 'production' || hasDist) {
     app.use(express.static(distPath));
+
+    // Helper to find active compiled bundle assets
+    const getBundledAssets = () => {
+      try {
+        if (fs.existsSync(indexHtmlPath)) {
+          const html = fs.readFileSync(indexHtmlPath, 'utf-8');
+          const jsMatch = html.match(/src="(\/assets\/index-[^"]+\.js)"/);
+          const cssMatch = html.match(/href="(\/assets\/index-[^"]+\.css)"/);
+          return {
+            js: jsMatch ? jsMatch[1] : null,
+            css: cssMatch ? cssMatch[1] : null,
+          };
+        }
+      } catch (e) {}
+      return { js: null, css: null };
+    };
+
+    // Prevent MIME-type mismatch crashes if a client has cached dev HTML requesting /src/main.tsx
+    app.get('/src/main.tsx', (_req: Request, res: Response) => {
+      const assets = getBundledAssets();
+      if (assets.js) {
+        return res.redirect(302, assets.js);
+      }
+      res.type('application/javascript').send('console.warn("Bundle loading...");');
+    });
+
+    app.get('/src/index.css', (_req: Request, res: Response) => {
+      const assets = getBundledAssets();
+      if (assets.css) {
+        return res.redirect(302, assets.css);
+      }
+      res.type('text/css').send('');
+    });
+
+    app.get(['/@vite/client', '/@vite/*'], (_req: Request, res: Response) => {
+      res.type('application/javascript').send('export default {};');
+    });
+
     app.get('*', (_req: Request, res: Response) => {
       if (fs.existsSync(indexHtmlPath)) {
         res.sendFile(indexHtmlPath);
@@ -368,6 +406,22 @@ Remember to follow standard laboratory safety and field study precautions when c
       appType: 'spa'
     });
     app.use(vite.middlewares);
+    app.use('*', async (req: Request, res: Response, next) => {
+      try {
+        const url = req.originalUrl;
+        const indexHtmlFile = path.resolve(rootDir, 'index.html');
+        if (fs.existsSync(indexHtmlFile)) {
+          const rawHtml = fs.readFileSync(indexHtmlFile, 'utf-8');
+          const transformedHtml = await vite.transformIndexHtml(url, rawHtml);
+          res.status(200).set({ 'Content-Type': 'text/html' }).end(transformedHtml);
+        } else {
+          next();
+        }
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   }
 
   const server = app.listen(PORT, HOST, () => {

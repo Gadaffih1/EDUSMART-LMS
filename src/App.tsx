@@ -26,6 +26,7 @@ import { TransportWorkspace } from './components/transport/TransportWorkspace';
 import { CoCurricularWorkspace } from './components/cocurricular/CoCurricularWorkspace';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloatingMenu';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Maximize2, CheckCheck } from 'lucide-react';
 
 function AppContent({
@@ -178,14 +179,16 @@ export default function App() {
   };
 
   return (
-    <NotificationLayoutProvider currentUser={currentUser}>
-      <AppContent
-        currentUser={currentUser}
-        onLoginSuccess={handleLoginSuccess}
-        onLogout={handleLogout}
-        onSwitchUser={handleSwitchUser}
-        onNavigateHome={handleNavigateHome}
-      />
-    </NotificationLayoutProvider>
+    <ErrorBoundary>
+      <NotificationLayoutProvider currentUser={currentUser}>
+        <AppContent
+          currentUser={currentUser}
+          onLoginSuccess={handleLoginSuccess}
+          onLogout={handleLogout}
+          onSwitchUser={handleSwitchUser}
+          onNavigateHome={handleNavigateHome}
+        />
+      </NotificationLayoutProvider>
+    </ErrorBoundary>
   );
 }

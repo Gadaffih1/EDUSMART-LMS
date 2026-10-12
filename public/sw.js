@@ -3,16 +3,15 @@
  * Enables offline access to critical lesson notes, syllabi, and learning resources.
  */
 
-const CACHE_NAME = 'edusmart-cbc-offline-v1';
+const CACHE_NAME = 'edusmart-cbc-offline-v5';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/edusmart-logo.svg',
   '/logo.svg',
   '/GADSA-SYSTEMS.jpeg'
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS).catch((err) => {
@@ -20,7 +19,6 @@ self.addEventListener('install', (event) => {
       });
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -29,6 +27,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('Purging obsolete cache:', cache);
             return caches.delete(cache);
           }
         })
@@ -42,41 +41,56 @@ self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip chrome-extension or external analytics
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Cache-First for static and cached CBC materials, Network-First fallback
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+  // For HTML document navigation: ALWAYS NETWORK FIRST
+  // This prevents stale HTML/JS mismatches that cause blank screen errors.
+  const isHtmlNavigation = 
+    event.request.mode === 'navigate' || 
+    (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'));
 
-      return fetch(event.request)
+  if (isHtmlNavigation) {
+    event.respondWith(
+      fetch(event.request)
         .then((networkResponse) => {
-          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-            return networkResponse;
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           }
-
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-
           return networkResponse;
         })
         .catch(() => {
-          // If offline and request is HTML document, return root cache
-          if (event.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('/');
-          }
-          return new Response('Offline: Material not yet cached for offline use.', {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: new Headers({ 'Content-Type': 'text/plain' })
+          // Fallback to cached offline version only when truly offline
+          return caches.match(event.request).then((cached) => {
+            return cached || caches.match('/');
           });
+        })
+    );
+    return;
+  }
+
+  // For static hashed assets (e.g. /assets/*.js, /assets/*.css): Cache-first with network fallback
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((res) => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return res;
         });
+      })
+    );
+    return;
+  }
+
+  // Default network fetch
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      return cached || fetch(event.request);
     })
   );
 });

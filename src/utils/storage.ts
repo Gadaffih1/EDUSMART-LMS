@@ -268,12 +268,24 @@ const KEYS = {
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
-    const item = localStorage.getItem(key);
-    if (!item) {
-      localStorage.setItem(key, JSON.stringify(defaultValue));
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
       return defaultValue;
     }
-    return JSON.parse(item) as T;
+    const item = localStorage.getItem(key);
+    if (!item || item === 'undefined' || item === 'null') {
+      try {
+        localStorage.setItem(key, JSON.stringify(defaultValue));
+      } catch (e) {}
+      return defaultValue;
+    }
+    const parsed = JSON.parse(item);
+    if (parsed === null && defaultValue !== null) {
+      return defaultValue;
+    }
+    if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
+      return defaultValue;
+    }
+    return parsed as T;
   } catch (err) {
     console.error(`Error reading ${key} from localStorage`, err);
     return defaultValue;
@@ -282,6 +294,7 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
 
 function setToStorage<T>(key: string, value: T): void {
   try {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
     localStorage.setItem(key, JSON.stringify(value));
   } catch (err) {
     console.error(`Error writing ${key} to localStorage`, err);

@@ -72,9 +72,11 @@ import {
   FlaskConical,
   Flame,
   Printer,
-  Laptop
+  Laptop,
+  Atom
 } from 'lucide-react';
 import { PrintReportModal } from '../common/PrintReportModal';
+import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 
 interface StudentWorkspaceProps {
   currentUser: User;
@@ -180,6 +182,8 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'labs'>('all');
   // Print Report modal state
   const [printModalReportCard, setPrintModalReportCard] = useState<ReportCard | null>(null);
+  // CBC Science Explorer Modal state (in E-Resources)
+  const [showScienceModal, setShowScienceModal] = useState(false);
 
   // Fetch strictly grade-filtered data (NO cross-grade data allowed)
   const gradeTopics = Storage.getTopics(studentGrade).filter(t => t.subject === selectedSubject);
@@ -554,6 +558,15 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   <Globe className="w-3.5 h-3.5" />
                   <span>Curated E-Links</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowScienceModal(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-teal-700 to-cyan-800 hover:from-teal-800 hover:to-cyan-900 text-white shadow-2xs"
+                  title="Launch CBC Science Explorer: 3D Molecular Simulation, formulas and CBC competencies"
+                >
+                  <Atom className="w-3.5 h-3.5 text-cyan-200" />
+                  <span>CBC Science Explorer (3D)</span>
+                </button>
               </div>
             </div>
           </div>
@@ -585,6 +598,36 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   </button>
                 ))}
               </div>
+
+              {/* CBC Science Explorer Spotlight Card inside E-Resources */}
+              {(selectedSubject === 'Integrated Science' || selectedSubject === 'Agriculture' || selectedSubject === 'Agriculture and Nutrition') && (
+                <div className="p-4 bg-gradient-to-r from-teal-950 via-slate-900 to-cyan-950 rounded-2xl border border-teal-500/30 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center shrink-0">
+                      <Atom className="w-5 h-5 text-cyan-300" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>CBC Science Explorer & 3D Molecular Simulation</span>
+                        <span className="text-[10px] bg-teal-500/30 text-teal-200 border border-teal-400/30 px-2 py-0.5 rounded-full font-mono font-bold">
+                          Interactive 3D Tool
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Examine rotateable 3D molecules (Water, Carbon Dioxide, Sodium Chloride, Chlorophyll) and study chemical formulas for Grade {studentGrade}.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowScienceModal(true)}
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer self-start sm:self-center"
+                  >
+                    <Atom className="w-3.5 h-3.5 text-white" />
+                    <span>Launch 3D Explorer →</span>
+                  </button>
+                </div>
+              )}
 
               {/* Topics and Resources Breakdown for Selected Subject */}
               <div className="space-y-6">
@@ -1883,6 +1926,12 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           showSignatures={true}
         />
       )}
+
+      {/* CBC Science Explorer & 3D Molecular Simulation Modal */}
+      <ScienceViewerModal
+        isOpen={showScienceModal}
+        onClose={() => setShowScienceModal(false)}
+      />
         </main>
       </div>
     </div>

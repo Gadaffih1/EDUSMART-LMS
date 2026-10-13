@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { StorageManagementDashboard } from './StorageManagementDashboard';
 import { 
   Settings, 
@@ -13,7 +14,9 @@ import {
   Smartphone,
   ShieldCheck,
   School,
-  CheckCircle2
+  CheckCircle2,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { useTenant } from '../../context/TenantContext';
@@ -30,39 +33,94 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   defaultTab = 'storage'
 }) => {
   const [activeTab, setActiveTab] = useState<'storage' | 'connectivity' | 'preferences'>(defaultTab);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { isMobileOverlapProtectionEnabled, setMobileOverlapProtection } = useMobileLayout();
   const { currentTenant, allTenants, switchTenant } = useTenant();
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150">
+  const modalContent = (
+    <div 
+      className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md transition-all duration-200 ${
+        isFullscreen ? 'p-0 overflow-hidden' : 'p-2 sm:p-4 md:p-6 overflow-hidden'
+      }`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="System and Portal Settings"
+    >
+      <div 
+        className={`bg-white shadow-2xl flex flex-col overflow-hidden border border-slate-700/50 transition-all duration-200 ${
+          isFullscreen ? 'w-screen h-screen rounded-none border-0' : 'max-w-5xl w-full h-[90vh] max-h-[92vh] rounded-2xl'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         
-        {/* MODAL TOP HEADER */}
-        <div className="p-3 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold shadow-xs">
+        {/* MODAL TOP HEADER WITH FULL PAGE VIEW AND UNMISSABLE CLOSE BUTTON */}
+        <div className="p-3 sm:px-6 sm:py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0 gap-2">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold shadow-xs shrink-0">
               <Settings className="w-4 h-4 text-slate-100" />
             </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-black text-slate-900">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm sm:text-base font-black text-slate-900 truncate">
                 System & Portal Settings
               </h3>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-500 truncate hidden sm:block">
                 Device storage, offline sync management, and application preferences
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-            aria-label="Close Settings"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Full Page View Button */}
+            <button
+              onClick={() => setIsFullscreen(prev => !prev)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-200 hover:bg-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+              title={isFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+              aria-label={isFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+            >
+              {isFullscreen ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">Exit Full Page</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-emerald-700" />
+                  <span className="hidden sm:inline">Full Page View</span>
+                </>
+              )}
+            </button>
+
+            {/* UNMISSABLE CLOSE BUTTON */}
+            <button
+              onClick={onClose}
+              className="px-3 sm:px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95 shrink-0"
+              title="Close Settings (Esc)"
+              aria-label="Close Settings"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Close</span>
+            </button>
+          </div>
         </div>
 
         {/* HORIZONTAL SETTINGS TABS */}
@@ -106,8 +164,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         </div>
 
-        {/* MODAL BODY (SCROLLABLE) */}
-        <div className="flex-1 overflow-y-auto">
+        {/* MODAL BODY (SCROLLABLE WITH MIN-H-0) */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {activeTab === 'storage' && (
             <StorageManagementDashboard onClose={onClose} />
           )}
@@ -254,19 +312,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* MODAL FOOTER */}
-        <div className="p-3 sm:px-6 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-          <span className="text-[11px] text-slate-500 font-semibold">
+        <div className="p-3 sm:px-6 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0 gap-2">
+          <span className="text-[11px] text-slate-500 font-semibold truncate">
             EduSmart PORTAL · CBC Offline Caching & Storage Subsystem
           </span>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-          >
-            Done
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsFullscreen(prev => !prev)}
+              className="px-3 py-1.5 bg-white hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 transition-colors inline-flex items-center gap-1 cursor-pointer shrink-0"
+              title={isFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-600" /> : <Maximize2 className="w-3.5 h-3.5 text-emerald-700" />}
+              <span>{isFullscreen ? 'Exit Full Page' : 'Full Page'}</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+            >
+              Close Settings
+            </button>
+          </div>
         </div>
 
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

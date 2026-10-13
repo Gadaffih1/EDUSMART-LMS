@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { User, UserRole, AppNotification } from '../../types';
 import { Storage } from '../../utils/storage';
 import { useNotificationLayout } from '../../context/NotificationLayoutContext';
@@ -24,17 +25,19 @@ import {
   LogIn,
   Settings,
   Sparkles,
-  Atom,
   Layers,
   Smartphone,
-  Check
+  Check,
+  Maximize2,
+  Minimize2,
+  X
 } from 'lucide-react';
 import { OfflineSyncIndicator } from './OfflineSyncIndicator';
 import { SettingsModal } from '../settings/SettingsModal';
 import { useTenant } from '../../context/TenantContext';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
-import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
+import { CampusSwitcherWindow } from './CampusSwitcherWindow';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -53,10 +56,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { isMobileOverlapProtectionEnabled, toggleMobileOverlapProtection } = useMobileLayout();
 
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [isSwitchModalFullscreen, setIsSwitchModalFullscreen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [showGeminiModal, setShowGeminiModal] = useState(false);
-  const [showScienceModal, setShowScienceModal] = useState(false);
 
   const { isNotificationOpen, toggleNotifications, unreadCount } = useNotificationLayout();
 
@@ -65,6 +68,21 @@ export const Navbar: React.FC<NavbarProps> = ({
     window.addEventListener('open-storage-settings', handleOpenSettings);
     return () => window.removeEventListener('open-storage-settings', handleOpenSettings);
   }, []);
+
+  // Keyboard shortcut & body scroll lock for Account Switcher Modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowSwitchModal(false);
+    };
+    if (showSwitchModal) {
+      window.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    }
+  }, [showSwitchModal]);
 
   const allUsers = Storage.getUsers();
 
@@ -90,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
         
         {/* Zone 1: Current School Branding (Multi-Tenancy) & Campus Selector */}
@@ -229,16 +247,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden sm:inline">Gemini AI</span>
           </button>
 
-          {/* CBC Science Explorer & 3D Molecular Viewer */}
-          <button
-            onClick={() => setShowScienceModal(true)}
-            className="p-2 rounded-lg text-slate-600 hover:text-cyan-700 hover:bg-cyan-50 transition-colors cursor-pointer"
-            title="CBC Science Explorer & 3D Molecular Simulation"
-            aria-label="CBC Science Explorer"
-          >
-            <Atom className="w-4 h-4 text-cyan-600" />
-          </button>
-
           {/* Mobile Screen Overlap Protection Toggle */}
           <button
             onClick={toggleMobileOverlapProtection}
@@ -343,23 +351,106 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Account Switcher Modal */}
-      {showSwitchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Instant Demo Account Switcher</h3>
-                <p className="text-xs text-slate-500">Test different permissions and workspaces across the entire platform.</p>
+      {/* Account Switcher Dedicated Window via Portal */}
+      {showSwitchModal && createPortal(
+        <div 
+          className={`fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center transition-all duration-200 ${
+            isSwitchModalFullscreen ? 'p-0 overflow-hidden' : 'p-2 sm:p-4 md:p-6 overflow-hidden'
+          }`}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowSwitchModal(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="EduSmart Instant Demo Account Switcher"
+        >
+          <div 
+            className={`w-full bg-white shadow-2xl flex flex-col overflow-hidden transition-all duration-200 border border-slate-700/60 ${
+              isSwitchModalFullscreen ? 'h-screen w-screen rounded-none border-0' : 'max-w-3xl h-[88vh] max-h-[92vh] rounded-2xl'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* WINDOW TITLE BAR WITH TRAFFIC CONTROLS, FULL PAGE TOGGLE & CLOSE BUTTON */}
+            <div className="bg-slate-900 text-white px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between border-b border-slate-800 select-none shrink-0 gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                {/* Traffic Light Window Controls */}
+                <div className="flex items-center gap-1.5 mr-1 shrink-0">
+                  <button 
+                    onClick={() => setShowSwitchModal(false)}
+                    className="w-3.5 h-3.5 rounded-full bg-rose-500 hover:bg-rose-600 transition-colors flex items-center justify-center text-[9px] text-white font-bold cursor-pointer"
+                    title="Close Window (Esc)"
+                    aria-label="Close Window"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                  <button 
+                    onClick={() => setIsSwitchModalFullscreen(prev => !prev)}
+                    className="w-3.5 h-3.5 rounded-full bg-amber-400 hover:bg-amber-500 transition-colors flex items-center justify-center cursor-pointer"
+                    title="Toggle Window Size"
+                    aria-label="Toggle Window Size"
+                  />
+                  <button 
+                    onClick={() => setIsSwitchModalFullscreen(prev => !prev)}
+                    className="w-3.5 h-3.5 rounded-full bg-emerald-500 hover:bg-emerald-600 transition-colors flex items-center justify-center text-[8px] text-emerald-950 cursor-pointer"
+                    title={isSwitchModalFullscreen ? 'Restore Window Size' : 'Expand to Full Page'}
+                    aria-label="Expand Window"
+                  >
+                    <Maximize2 className="w-2 h-2" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="p-1.5 rounded-lg bg-slate-800 text-emerald-400 border border-slate-700 shrink-0 hidden xs:flex">
+                    <UserCheck className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide truncate block">
+                      Instant Demo Account Switcher
+                    </h3>
+                    <p className="text-[10px] text-slate-400 truncate hidden sm:block">
+                      Test permissions and workspaces across all school departments
+                    </p>
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={() => setShowSwitchModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 text-sm font-semibold"
-              >
-                ✕
-              </button>
+
+              {/* Title Bar Actions */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* Full Page View Button */}
+                <button
+                  onClick={() => setIsSwitchModalFullscreen(prev => !prev)}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-700 shrink-0"
+                  title={isSwitchModalFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+                  aria-label={isSwitchModalFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+                >
+                  {isSwitchModalFullscreen ? (
+                    <>
+                      <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden sm:inline">Exit Full Page</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="hidden sm:inline">Full Page View</span>
+                    </>
+                  )}
+                </button>
+
+                {/* UNMISSABLE CLOSE BUTTON */}
+                <button
+                  onClick={() => setShowSwitchModal(false)}
+                  className="px-3 sm:px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer active:scale-95 shrink-0"
+                  title="Close Window (Esc)"
+                  aria-label="Close Window"
+                >
+                  <X className="w-4 h-4 text-white" />
+                  <span>Close</span>
+                </button>
+              </div>
             </div>
 
-            <div className="p-4 overflow-y-auto space-y-4 max-h-[70vh]">
+            {/* SCROLLABLE BODY WITH MIN-H-0 */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 min-h-0 bg-slate-50/60">
               
               {/* 1. Learners & Parents */}
               <div>
@@ -573,26 +664,41 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             </div>
 
-            <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+            {/* DEDICATED WINDOW FOOTER */}
+            <div className="p-3 sm:px-5 border-t border-slate-200 bg-slate-100 flex items-center justify-between text-xs text-slate-600 shrink-0 gap-2">
               <button
                 onClick={() => {
                   Storage.resetAllData();
                   window.location.reload();
                 }}
-                className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition-colors"
+                className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition-colors font-medium text-xs cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reset to Default Demo Data</span>
+                <span>Reset Demo Data</span>
               </button>
-              <button
-                onClick={() => setShowSwitchModal(false)}
-                className="px-3 py-1 bg-slate-200 hover:bg-slate-300 rounded font-medium text-slate-800"
-              >
-                Close
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsSwitchModalFullscreen(prev => !prev)}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors inline-flex items-center gap-1 cursor-pointer shrink-0"
+                  title={isSwitchModalFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+                  aria-label={isSwitchModalFullscreen ? 'Restore standard view' : 'Expand to full page view'}
+                >
+                  {isSwitchModalFullscreen ? <Minimize2 className="w-3 h-3 text-amber-600" /> : <Maximize2 className="w-3 h-3 text-emerald-600" />}
+                  <span>{isSwitchModalFullscreen ? 'Exit Full Page' : 'Full Page'}</span>
+                </button>
+
+                <button
+                  onClick={() => setShowSwitchModal(false)}
+                  className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
  
       {/* Settings & Storage Management Modal */}
@@ -601,153 +707,17 @@ export const Navbar: React.FC<NavbarProps> = ({
         onClose={() => setShowSettingsModal(false)}
       />
 
-      {/* Multi-Tenancy Campus Switcher Modal */}
-      {showTenantModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
-            {/* Modal Header */}
-            <div className="p-4 sm:px-6 bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300">
-                  <School className="w-5 h-5 text-emerald-300" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black tracking-tight text-white flex items-center gap-2">
-                    <span>Multi-Tenancy School Selector</span>
-                    <span className="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-1.5 py-0.2 rounded font-mono font-bold">
-                      {allTenants.length} Campuses
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-300">
-                    Switch between isolated school campuses without cross-school data interference
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowTenantModal(false)}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                aria-label="Close Campus Switcher"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Tenant Campus Cards */}
-            <div className="p-4 sm:p-6 overflow-y-auto space-y-3 max-h-[65vh] bg-slate-50/50">
-              {allTenants.map((tenant) => {
-                const isActive = tenant.id === currentTenant.id;
-                return (
-                  <div
-                    key={tenant.id}
-                    className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white ${
-                      isActive 
-                        ? 'border-emerald-500 ring-2 ring-emerald-500/30 shadow-sm' 
-                        : 'border-slate-200 hover:border-slate-300 hover:shadow-2xs'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {tenant.logoUrl ? (
-                        <div className="w-12 h-12 rounded-xl overflow-hidden shadow-xs shrink-0 border border-slate-200 bg-white flex items-center justify-center p-1">
-                          <img 
-                            src={tenant.logoUrl} 
-                            alt={`${tenant.name} Logo`} 
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex flex-col items-center justify-center p-1.5 shrink-0 border border-slate-700">
-                          {tenant.crestIcon === 'school' ? (
-                            <School className="w-6 h-6 text-sky-400" />
-                          ) : tenant.crestIcon === 'book-open' ? (
-                            <BookOpen className="w-6 h-6 text-indigo-400" />
-                          ) : tenant.crestIcon === 'shield' ? (
-                            <Shield className="w-6 h-6 text-amber-400" />
-                          ) : (
-                            <GraduationCap className="w-6 h-6 text-amber-400" />
-                          )}
-                          <span className="text-[7px] font-mono tracking-widest uppercase mt-0.5 text-slate-300">EST. {tenant.establishedYear}</span>
-                        </div>
-                      )}
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-black text-slate-950 font-serif">
-                            {tenant.name}
-                          </h4>
-                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                            {tenant.code}
-                          </span>
-                          {isActive && (
-                            <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                              <Check className="w-3 h-3 text-emerald-600" />
-                              <span>Active Campus</span>
-                            </span>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-slate-600 italic mt-0.5">
-                          "{tenant.motto}"
-                        </p>
-
-                        <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span>📍 {tenant.address}, {tenant.city}</span>
-                          <span>·</span>
-                          <span>👨‍🏫 {tenant.principalName} ({tenant.principalTitle})</span>
-                          <span>·</span>
-                          <span className="font-mono">🎓 {tenant.totalStudents} Learners</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      <button
-                        onClick={() => {
-                          switchTenant(tenant.id);
-                          setShowTenantModal(false);
-                        }}
-                        disabled={isActive}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-slate-100 text-slate-400 cursor-default'
-                            : 'bg-emerald-700 hover:bg-emerald-600 text-white shadow-xs'
-                        }`}
-                      >
-                        {isActive ? 'Current Session' : 'Switch to Campus'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-3 sm:px-6 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-              <span className="text-[11px]">
-                Each school maintains completely isolated student rosters, CBC grading rubrics, and schedules.
-              </span>
-              <button
-                onClick={() => setShowTenantModal(false)}
-                className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Dedicated Desktop-Style Campus Switcher Window */}
+      <CampusSwitcherWindow
+        isOpen={showTenantModal}
+        onClose={() => setShowTenantModal(false)}
+      />
 
       {/* Gemini AI Multi-Turn Chatbot Modal */}
       <GeminiChatbotModal
         isOpen={showGeminiModal}
         onClose={() => setShowGeminiModal(false)}
         currentUser={currentUser}
-      />
-
-      {/* CBC Science Explorer & 3D Molecular Simulation Modal */}
-      <ScienceViewerModal
-        isOpen={showScienceModal}
-        onClose={() => setShowScienceModal(false)}
       />
 
     </header>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Atom, 
   FlaskConical, 
@@ -12,7 +13,9 @@ import {
   CheckCircle2, 
   Layers,
   Search,
-  ExternalLink
+  ExternalLink,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { PrintReportModal } from '../common/PrintReportModal';
@@ -167,8 +170,24 @@ export const ScienceViewerModal: React.FC<ScienceViewerModalProps> = ({
   const [isAutoRotating, setIsAutoRotating] = useState(true);
   const [searchFilter, setSearchFilter] = useState('');
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [isFullPage, setIsFullPage] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Keyboard shortcut to close on Escape and prevent body scroll
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen, onClose]);
 
   // Auto-rotation animation loop
   useEffect(() => {
@@ -278,49 +297,85 @@ export const ScienceViewerModal: React.FC<ScienceViewerModalProps> = ({
     m.cbcTopic.toLowerCase().includes(searchFilter.toLowerCase())
   );
 
-  return (
-    <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/70 backdrop-blur-xs">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden border border-slate-200">
-          
-          {/* TOP HEADER */}
-          <div className="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
-                <Atom className="w-5 h-5 text-cyan-300 animate-spin" />
-              </div>
-              <div>
-                <h3 className="text-sm sm:text-base font-black tracking-tight text-white flex items-center gap-2">
-                  <span>CBC Science Explorer & Molecular Viewer</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
-                    Science Skills
-                  </span>
-                </h3>
-                <p className="text-[11px] text-slate-300">
-                  {currentTenant.name} · Interactive Chemical Structure & Practical Inquiry Subsystem
-                </p>
-              </div>
+  const modalContent = (
+    <div 
+      className={`fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center transition-all duration-200 ${
+        isFullPage ? 'p-0 overflow-hidden' : 'p-2 sm:p-4 overflow-hidden'
+      }`}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="CBC Science Explorer"
+    >
+      <div 
+        className={`bg-white shadow-2xl flex flex-col overflow-hidden border border-slate-700/60 transition-all duration-200 ${
+          isFullPage ? 'w-screen h-screen rounded-none border-0' : 'max-w-5xl w-full h-[90vh] max-h-[92vh] rounded-2xl'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* TOP HEADER */}
+        <div className="p-3 sm:px-5 sm:py-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0 border-b border-slate-800 gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shrink-0">
+              <Atom className="w-5 h-5 text-cyan-300 animate-spin" />
             </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowPrintModal(true)}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Generate Official Printable Science Report"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Print Report</span>
-              </button>
-
-              <button
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                aria-label="Close Science Explorer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-xs sm:text-base font-black tracking-tight text-white flex items-center gap-2 truncate">
+                <span>CBC Science Explorer & 3D Molecular Simulation</span>
+                <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 hidden xs:inline">
+                  Science Skills
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-300 truncate">
+                {currentTenant.name} · Interactive Chemical Structure & Practical Inquiry Subsystem
+              </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Full Page View Button */}
+            <button
+              onClick={() => setIsFullPage(prev => !prev)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-700 shrink-0"
+              title={isFullPage ? 'Restore standard view' : 'Expand to full page view'}
+              aria-label={isFullPage ? 'Restore standard view' : 'Expand to full page view'}
+            >
+              {isFullPage ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Exit Full Page</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Full Page View</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setShowPrintModal(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+              title="Generate Official Printable Science Report"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Print Report</span>
+            </button>
+
+            {/* UNMISSABLE CLOSE BUTTON */}
+            <button
+              onClick={onClose}
+              className="px-3 sm:px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer active:scale-95 shrink-0"
+              title="Close Science Explorer (Esc)"
+              aria-label="Close Science Explorer"
+            >
+              <X className="w-4 h-4 text-white" />
+              <span>Close</span>
+            </button>
+          </div>
+        </div>
 
           {/* MAIN MODAL BODY: SIDEBAR + 3D VIEWER */}
           <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
@@ -471,9 +526,13 @@ export const ScienceViewerModal: React.FC<ScienceViewerModalProps> = ({
               </button>
             </div>
           </div>
-
-        </div>
       </div>
+    </div>
+  );
+
+  return (
+    <>
+      {createPortal(modalContent, document.body)}
 
       {/* PRINT REPORT MODAL FOR SCIENCE EXPERIMENT */}
       {showPrintModal && (

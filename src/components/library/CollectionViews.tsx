@@ -28,8 +28,10 @@ import {
   Eye,
   Barcode,
   Printer,
-  Info
+  Info,
+  Atom
 } from 'lucide-react';
+import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 import { 
   LibraryBook, 
   LibraryBorrowRecord,
@@ -80,6 +82,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [showAddBookModal, setShowAddBookModal] = useState(false);
   const [showAddAcqModal, setShowAddAcqModal] = useState(false);
+  const [showScienceModal, setShowScienceModal] = useState(false);
 
   // Inventory Specific States
   const [inventorySearch, setInventorySearch] = useState('');
@@ -1525,30 +1528,41 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
             </p>
           </div>
 
-          {/* Sub-tab Switcher */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 self-start sm:self-center">
+          {/* Actions & Sub-tab Switcher */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
             <button
-              onClick={() => setDigitalSubTab('elinks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                digitalSubTab === 'elinks'
-                  ? 'bg-blue-700 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => setShowScienceModal(true)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-teal-700 to-cyan-800 hover:from-teal-800 hover:to-cyan-900 text-white shadow-2xs shrink-0"
+              title="Launch CBC Science Explorer: 3D Molecular Simulation & CBC Competencies"
             >
-              <Globe className="w-3.5 h-3.5" />
-              <span>E-Links Directory</span>
+              <Atom className="w-3.5 h-3.5 text-cyan-200" />
+              <span>CBC Science Explorer (3D)</span>
             </button>
-            <button
-              onClick={() => setDigitalSubTab('ebooks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                digitalSubTab === 'ebooks'
-                  ? 'bg-blue-700 text-white shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>E-Books & Compendiums ({digitalItems.length})</span>
-            </button>
+
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setDigitalSubTab('elinks')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  digitalSubTab === 'elinks'
+                    ? 'bg-blue-700 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>E-Links Directory</span>
+              </button>
+              <button
+                onClick={() => setDigitalSubTab('ebooks')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  digitalSubTab === 'ebooks'
+                    ? 'bg-blue-700 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>E-Books & Compendiums ({digitalItems.length})</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1587,6 +1601,12 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
             ))}
           </div>
         )}
+
+        {/* CBC Science Explorer & 3D Molecular Simulation Modal */}
+        <ScienceViewerModal
+          isOpen={showScienceModal}
+          onClose={() => setShowScienceModal(false)}
+        />
       </div>
     );
   }

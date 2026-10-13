@@ -72,8 +72,10 @@ import {
   Utensils,
   DoorOpen,
   FlaskConical,
-  Laptop
+  Laptop,
+  Atom
 } from 'lucide-react';
+import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 
 interface TeacherWorkspaceProps {
   currentUser: User;
@@ -136,6 +138,9 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
     window.addEventListener('workspace-nav-tab', handleNavEvent);
     return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
   }, []);
+
+  // CBC Science Explorer Modal State
+  const [showScienceModal, setShowScienceModal] = useState(false);
 
   // Assignment Creation Form State
   const [asgTitle, setAsgTitle] = useState('');
@@ -973,6 +978,16 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
               >
                 <Globe className="w-3.5 h-3.5 text-blue-600" />
                 <span>5. Curated E-Links</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowScienceModal(true)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer bg-gradient-to-r from-teal-700 to-cyan-800 hover:from-teal-800 hover:to-cyan-900 text-white shadow-2xs"
+                title="Launch CBC Science Explorer: 3D Molecular Simulation, formulas & CBC inquiry competencies"
+              >
+                <Atom className="w-3.5 h-3.5 text-cyan-200 animate-pulse" />
+                <span>6. Science Explorer (3D)</span>
               </button>
             </div>
           </div>
@@ -2172,6 +2187,12 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
         currentUser={currentUser}
         isOpen={showAbsenceModal}
         onClose={() => setShowAbsenceModal(false)}
+      />
+
+      {/* CBC Science Explorer & 3D Molecular Simulation Modal */}
+      <ScienceViewerModal
+        isOpen={showScienceModal}
+        onClose={() => setShowScienceModal(false)}
       />
 
     </div>

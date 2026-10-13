@@ -70,9 +70,11 @@ import {
   X,
   ChevronLeft,
   FlaskConical,
-  Laptop,
-  Flame
+  Flame,
+  Printer,
+  Laptop
 } from 'lucide-react';
+import { PrintReportModal } from '../common/PrintReportModal';
 
 interface StudentWorkspaceProps {
   currentUser: User;
@@ -176,6 +178,8 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const [assignmentSubmittedSuccess, setAssignmentSubmittedSuccess] = useState(false);
   const [activeAssignedLab, setActiveAssignedLab] = useState<Assignment | null>(null);
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'labs'>('all');
+  // Print Report modal state
+  const [printModalReportCard, setPrintModalReportCard] = useState<ReportCard | null>(null);
 
   // Fetch strictly grade-filtered data (NO cross-grade data allowed)
   const gradeTopics = Storage.getTopics(studentGrade).filter(t => t.subject === selectedSubject);
@@ -258,7 +262,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
       {/* Top Navbar Header */}
-      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+      <header className="relative lg:sticky lg:top-16 z-20 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
@@ -970,6 +974,16 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   </h3>
                   <div className="text-xs text-slate-600 font-medium">
                     {rc.term} · Academic Year {rc.academicYear} · Grade {rc.grade} (Stream: {rc.stream})
+                  </div>
+                  <div className="pt-2 flex justify-center no-print">
+                    <button
+                      onClick={() => setPrintModalReportCard(rc)}
+                      className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                      title="Generate and preview clean printer-friendly version"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Print Official CBC Report</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1825,6 +1839,49 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Student Official Print Report Modal */}
+      {printModalReportCard && (
+        <PrintReportModal
+          isOpen={!!printModalReportCard}
+          onClose={() => setPrintModalReportCard(null)}
+          title="Official Learner Progress Report Card"
+          subtitle={`${printModalReportCard.term} · Academic Year ${printModalReportCard.academicYear}`}
+          documentRef={`EDUSMART/CBC/G${printModalReportCard.grade}/${printModalReportCard.admissionNumber || 'ADM'}`}
+          metadata={{
+            studentName: printModalReportCard.studentName,
+            admissionNumber: printModalReportCard.admissionNumber,
+            grade: String(printModalReportCard.grade),
+            stream: String(printModalReportCard.stream),
+            term: printModalReportCard.term,
+            academicYear: String(printModalReportCard.academicYear),
+            reportDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+          }}
+          columns={[
+            { header: 'Subject / Learning Area', accessor: 'subject' },
+            { header: 'Opener (30)', accessor: 'openerScore', align: 'center' },
+            { header: 'Mid-Term (30)', accessor: 'midTermScore', align: 'center' },
+            { header: 'End-Term (40)', accessor: 'endTermScore', align: 'center' },
+            { header: 'Total (100)', accessor: 'total', align: 'center' },
+            { header: 'Grade', accessor: 'gradeLetter', align: 'center' },
+            { header: 'CBC Competency Rubric', accessor: 'competencyLevel' },
+            { header: 'Remarks', accessor: 'remarks' }
+          ]}
+          data={printModalReportCard.subjects.map(s => ({
+            ...s,
+            competencyLevel: s.rubricLevel || 'Meeting Expectations (ME)'
+          }))}
+          summaryHighlights={[
+            { label: 'Overall Average', value: `${printModalReportCard.overallAverage}%`, badge: printModalReportCard.overallRubric },
+            { label: 'Stream Position', value: `${printModalReportCard.streamPosition} of ${printModalReportCard.totalStudentsInStream}` },
+            { label: 'Verified Attendance', value: `${printModalReportCard.attendanceDays} / ${printModalReportCard.totalSchoolDays} Days` },
+            { label: 'Next Term Resumes', value: printModalReportCard.nextTermBegins || '04 May 2026' }
+          ]}
+          teacherRemarks={printModalReportCard.classTeacherRemarks}
+          principalRemarks={printModalReportCard.headTeacherRemarks}
+          showSignatures={true}
+        />
       )}
         </main>
       </div>

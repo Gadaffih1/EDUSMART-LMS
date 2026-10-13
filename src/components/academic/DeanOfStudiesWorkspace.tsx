@@ -374,7 +374,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
       {/* Top Navbar */}
-      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
+      <header className="relative lg:sticky lg:top-16 z-20 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}

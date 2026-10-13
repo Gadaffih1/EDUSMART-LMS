@@ -7,6 +7,8 @@ import React, { useState } from 'react';
 import { User } from './types';
 import { Storage } from './utils/storage';
 import { NotificationLayoutProvider, useNotificationLayout } from './context/NotificationLayoutContext';
+import { TenantProvider } from './context/TenantContext';
+import { MobileLayoutProvider, useMobileLayout } from './context/MobileLayoutContext';
 import { Navbar } from './components/layout/Navbar';
 import { NotificationDrawer } from './components/layout/NotificationDrawer';
 import { LandingPage } from './components/landing/LandingPage';
@@ -43,6 +45,7 @@ function AppContent({
   onNavigateHome: () => void;
 }) {
   const { isNotificationOpen, closeNotifications } = useNotificationLayout();
+  const { isMobileOverlapProtectionEnabled } = useMobileLayout();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
@@ -85,7 +88,7 @@ function AppContent({
             </div>
           )}
 
-          <main className="w-full flex-1">
+          <main className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 sm:pb-8' : ''}`}>
             {!currentUser ? (
               <LandingPage onLoginSuccess={onLoginSuccess} />
             ) : currentUser.role === 'student' ? (
@@ -180,15 +183,19 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <NotificationLayoutProvider currentUser={currentUser}>
-        <AppContent
-          currentUser={currentUser}
-          onLoginSuccess={handleLoginSuccess}
-          onLogout={handleLogout}
-          onSwitchUser={handleSwitchUser}
-          onNavigateHome={handleNavigateHome}
-        />
-      </NotificationLayoutProvider>
+      <TenantProvider>
+        <MobileLayoutProvider>
+          <NotificationLayoutProvider currentUser={currentUser}>
+            <AppContent
+              currentUser={currentUser}
+              onLoginSuccess={handleLoginSuccess}
+              onLogout={handleLogout}
+              onSwitchUser={handleSwitchUser}
+              onNavigateHome={handleNavigateHome}
+            />
+          </NotificationLayoutProvider>
+        </MobileLayoutProvider>
+      </TenantProvider>
     </ErrorBoundary>
   );
 }

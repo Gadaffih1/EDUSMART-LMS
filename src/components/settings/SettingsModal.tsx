@@ -11,8 +11,12 @@ import {
   Sun, 
   Database,
   Smartphone,
-  ShieldCheck
+  ShieldCheck,
+  School,
+  CheckCircle2
 } from 'lucide-react';
+import { useMobileLayout } from '../../context/MobileLayoutContext';
+import { useTenant } from '../../context/TenantContext';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -26,6 +30,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   defaultTab = 'storage'
 }) => {
   const [activeTab, setActiveTab] = useState<'storage' | 'connectivity' | 'preferences'>(defaultTab);
+
+  const { isMobileOverlapProtectionEnabled, setMobileOverlapProtection } = useMobileLayout();
+  const { currentTenant, allTenants, switchTenant } = useTenant();
 
   if (!isOpen) return null;
 
@@ -182,6 +189,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                       Active & Protected
                     </span>
+                  </div>
+
+                  {/* Mobile Screen Overlap Protection Setting */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Smartphone className="w-4 h-4 text-emerald-700" />
+                        <span className="font-bold text-emerald-950 block">Mobile Screen Overlap Protection</span>
+                      </div>
+                      <span className="text-[11px] text-emerald-800 mt-0.5 block">
+                        Disables screen overlapping and floating item collisions on mobile phones across all pages
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isMobileOverlapProtectionEnabled}
+                        onChange={(e) => setMobileOverlapProtection(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+
+                  {/* Multi-Tenancy School Campus Configuration */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <School className="w-4 h-4 text-indigo-700" />
+                        <span className="font-bold text-slate-900">Multi-Tenancy Active Campus</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold">
+                        {currentTenant.code}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {allTenants.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => switchTenant(t.id)}
+                          className={`text-left p-2.5 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between ${
+                            currentTenant.id === t.id
+                              ? 'bg-white border-emerald-500 shadow-2xs font-bold text-emerald-950 ring-1 ring-emerald-500'
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-bold text-[12px] text-slate-900">{t.name}</div>
+                            <div className="text-[10px] text-slate-500">{t.city} · {t.totalStudents} Learners</div>
+                          </div>
+                          {currentTenant.id === t.id && (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

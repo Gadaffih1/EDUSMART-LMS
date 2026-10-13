@@ -14,6 +14,7 @@ import {
 import { Storage } from '../../utils/storage';
 import { exportToPdf } from '../../utils/pdfExport';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { PrintReportModal } from '../common/PrintReportModal';
 import { 
   FileText, 
   Download, 
@@ -70,6 +71,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 
   // Scope: Individual Learner vs Class Aggregate (for Teachers/Deans)
   const [reportScope, setReportScope] = useState<'individual' | 'class_aggregate'>('individual');
+  const [showPrintReportModal, setShowPrintReportModal] = useState<boolean>(false);
 
   // Grade & Stream Filters
   const allUsers = Storage.getUsers();
@@ -510,6 +512,15 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 
         {/* Global Hub Export Actions */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowPrintReportModal(true)}
+            className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
+            title="Generate and preview clean printer-friendly document using school letterhead"
+          >
+            <Printer className="w-3.5 h-3.5 text-emerald-300" />
+            <span>Official Letterhead Print Report</span>
+          </button>
+
           <button
             onClick={() => {
               const docTitle = aggregatedStudentData 
@@ -1227,6 +1238,73 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Official Printer-Friendly Dossier Modal */}
+      {showPrintReportModal && (
+        <PrintReportModal
+          isOpen={showPrintReportModal}
+          onClose={() => setShowPrintReportModal(false)}
+          title={
+            aggregatedStudentData
+              ? `Official CBC Learner Academic Dossier`
+              : `Official Grade ${selectedGrade} Class Performance Ledger`
+          }
+          subtitle={`${selectedTerm} · Academic Year ${selectedYear}`}
+          documentRef={`EDUSMART/RPT/${selectedYear}/G${selectedGrade}/${Math.floor(1000 + Math.random() * 9000)}`}
+          metadata={{
+            studentName: aggregatedStudentData?.student.name || `Grade ${selectedGrade} (${selectedStream}) Cohort`,
+            admissionNumber: aggregatedStudentData?.student.admissionNumber || `CLASS-G${selectedGrade}-${selectedStream}`,
+            grade: selectedGrade,
+            stream: selectedStream,
+            term: selectedTerm,
+            academicYear: selectedYear,
+            reportDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+          }}
+          columns={
+            aggregatedStudentData
+              ? [
+                  { header: 'Subject / Learning Area', accessor: 'subject' },
+                  { header: 'Formative (50)', accessor: 'formativeScore', align: 'center' },
+                  { header: 'Summative (50)', accessor: 'summativeScore', align: 'center' },
+                  { header: 'Composite Mean (%)', accessor: 'meanScore', align: 'center' },
+                  { header: 'CBC Competency Rubric', accessor: 'rubric' },
+                  { header: 'Subject Remarks', accessor: 'remarks' }
+                ]
+              : [
+                  { header: 'Learning Area / Strand', accessor: 'subject' },
+                  { header: 'Class Mean (%)', accessor: 'meanScore', align: 'center' },
+                  { header: 'Distinction Count', accessor: 'distinctionCount', align: 'center' },
+                  { header: 'Remedial Focus Count', accessor: 'remedialCount', align: 'center' }
+                ]
+          }
+          data={
+            aggregatedStudentData
+              ? aggregatedStudentData.subjectBreakdown
+              : classAggregateData.subjectAverages
+          }
+          summaryHighlights={
+            aggregatedStudentData
+              ? [
+                  { label: 'Overall Academic Mean', value: `${aggregatedStudentData.overallAcademicMean}%` },
+                  { label: 'Verified Attendance', value: `${aggregatedStudentData.daysPresent} / ${aggregatedStudentData.totalMarkedDays} Days (${aggregatedStudentData.attendanceRate}%)` },
+                  { label: 'Quizzes Completed', value: aggregatedStudentData.quizzesCompleted },
+                  { label: 'Portfolio Projects', value: aggregatedStudentData.portfolioProjects }
+                ]
+              : [
+                  { label: 'Enrolled Class Size', value: `${classAggregateData.totalLearners} Learners` },
+                  { label: 'Class Mean Score', value: `${classAggregateData.classMean}%` },
+                  { label: 'Average Attendance', value: `${classAggregateData.attendanceMean}%` },
+                  { label: 'Evaluation Period', value: classAggregateData.periodLabel }
+                ]
+          }
+          teacherRemarks={
+            aggregatedStudentData?.teacherRemarks ||
+            `Grade ${selectedGrade} (${selectedStream}) cohort exhibits consistent mastery across primary CBC core competency descriptors.`
+          }
+          principalRemarks="Certified and confirmed by School Leadership Administration."
+          showSignatures={true}
+        />
       )}
     </div>
   );

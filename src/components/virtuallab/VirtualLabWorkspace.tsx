@@ -34,6 +34,9 @@ import { LearnerExperimentWorkbench } from './LearnerExperimentWorkbench';
 import { LabNotebookAndReports } from './LabNotebookAndReports';
 import { ComputerLabScratchStudio } from './ComputerLabScratchStudio';
 import { TeacherLabAssignmentModal } from './TeacherLabAssignmentModal';
+import { ScienceViewerModal } from './ScienceViewerModal';
+import { PrintReportModal } from '../common/PrintReportModal';
+import { Printer } from 'lucide-react';
 
 export type VirtualLabTab = 
   | 'home'
@@ -70,6 +73,8 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
   const [searchExperimentQuery, setSearchExperimentQuery] = useState('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isScienceViewerOpen, setIsScienceViewerOpen] = useState(false);
+  const [isPrintReportOpen, setIsPrintReportOpen] = useState(false);
 
   const isTeacher = !!currentUser && ['teacher', 'class_teacher', 'hod', 'dean_of_studies'].includes(currentUser.role);
 
@@ -134,6 +139,26 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
 
         {/* Global Action Tools */}
         <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+          {/* 3D Science & Molecular Viewer Button */}
+          <button
+            onClick={() => setIsScienceViewerOpen(true)}
+            className="px-3.5 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Launch 3D Molecular and Chemistry Explorer"
+          >
+            <Atom className="w-4 h-4 text-cyan-200 animate-spin" />
+            <span>3D Science Explorer</span>
+          </button>
+
+          {/* Printable Lab Report Button */}
+          <button
+            onClick={() => setIsPrintReportOpen(true)}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Generate Printer-Friendly Official Science Lab Report"
+          >
+            <Printer className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Print Lab Report</span>
+          </button>
+
           {isTeacher && (
             <button
               onClick={() => setIsAssignModalOpen(true)}
@@ -486,6 +511,41 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
           onSuccess={() => {
             setIsAssignModalOpen(false);
           }}
+        />
+      )}
+
+      {/* 3D Science & Molecular Simulation Modal */}
+      <ScienceViewerModal
+        isOpen={isScienceViewerOpen}
+        onClose={() => setIsScienceViewerOpen(false)}
+      />
+
+      {/* Printable Science Laboratory Report Modal */}
+      {isPrintReportOpen && (
+        <PrintReportModal
+          isOpen={isPrintReportOpen}
+          onClose={() => setIsPrintReportOpen(false)}
+          title="CBC Integrated Science Laboratory Practical Report"
+          subtitle={`Experiment: ${selectedExperiment.title} · Grade ${selectedExperiment.gradeLevel} CBC`}
+          metadata={{
+            reportTitle: 'Practical Science Investigation Report',
+            reportDate: new Date().toLocaleDateString('en-GB'),
+            grade: selectedExperiment.gradeLevel,
+            classTeacher: 'Mr. Dennis Koech, B.Ed Science'
+          }}
+          columns={[
+            { header: 'Investigation Stage', accessor: 'stage', width: '25%' },
+            { header: 'Scientific Observation & Apparatus', accessor: 'details', width: '50%' },
+            { header: 'Performance Rubric', accessor: 'competency', width: '25%' }
+          ]}
+          data={[
+            { stage: '1. Objective & Hypothesis', details: `${selectedExperiment.aim} Hypothesis: ${selectedExperiment.hypothesis}`, competency: 'Scientific Inquiry' },
+            { stage: '2. Apparatus Setup', details: `${selectedExperiment.equipmentIds.length} Verified Laboratory items. Safety Precautions: ${selectedExperiment.safetyPrecautions.join('; ')}`, competency: 'Equipment Manipulation' },
+            { stage: '3. Procedure & Method', details: selectedExperiment.procedureSteps.slice(0, 3).join(' -> '), competency: 'Empirical Data Analysis' },
+            { stage: '4. Curriculum Strand Link', details: `Strand: ${selectedExperiment.strand} · Competency: Critical Thinking & Problem Solving`, competency: 'Meeting Expectation (ME)' }
+          ]}
+          teacherRemarks="Practical experiment procedure executed safely and accurately recorded. Meets Grade Level CBC inquiry standards."
+          principalRemarks="Approved for inclusion in student's academic science records."
         />
       )}
     </div>

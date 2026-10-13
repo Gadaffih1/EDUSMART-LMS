@@ -56,7 +56,7 @@ export const SanatoriumWorkspace: React.FC<SanatoriumWorkspaceProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans selection:bg-rose-500 selection:text-white">
       {/* Top Professional Healthcare Header */}
-      <header className="bg-white border-b border-rose-100 shadow-xs sticky top-0 z-30">
+      <header className="bg-white border-b border-rose-100 shadow-xs relative lg:sticky lg:top-16 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
             {/* Branding & Logo */}

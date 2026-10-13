@@ -347,7 +347,163 @@ Remember to follow standard laboratory safety and field study precautions when c
     }
   });
 
-  // Setup Vite dev middleware or serve static production build
+  // ========================================================
+  // MULTI-TURN GEMINI CHATBOT ENDPOINT
+  // Supports role-based pedagogical guidance & dynamic model routing:
+  // - 'gemini-3.1-pro-preview' for complex tasks (deep STEM, lab synthesis, rubrics)
+  // - 'gemini-3.5-flash' for general tasks (interactive tutoring, lesson plans)
+  // - 'gemini-3.1-flash-lite' for fast tasks (rapid definitions, quick Q&A)
+  // ========================================================
+  app.post('/api/chat', async (req: Request, res: Response) => {
+    try {
+      const {
+        messages = [],
+        role = 'student',
+        complexity = 'general',
+        grade = 4,
+        subject = 'General Studies',
+        tenantName = "St. Austin's Academy",
+        systemPromptOverride = ''
+      } = req.body;
+
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return res.status(400).json({ error: 'Messages array is required' });
+      }
+
+      // Choose model according to task complexity specification
+      let targetModel = 'gemini-3.5-flash';
+      if (complexity === 'complex') {
+        targetModel = 'gemini-3.1-pro-preview';
+      } else if (complexity === 'fast') {
+        targetModel = 'gemini-3.1-flash-lite';
+      }
+
+      // Build role-specific system instruction
+      let systemInstruction = systemPromptOverride;
+      if (!systemInstruction) {
+        if (role === 'science_lab') {
+          systemInstruction = `You are the EduSmart Virtual Science Laboratory Mentor at ${tenantName}. You specialize in Kenyan CBC Integrated Science (Grades 5-9) and STEM practical inquiry.
+You guide learners through scientific investigations, hypothesis testing, physics circuits, chemistry safety protocols, biology cell structures, and agriculture soil investigations.
+Always emphasize laboratory safety, correct metric units (SI units), clear observation recording, and connecting classroom science to real-world Kenyan conservation and technology.`;
+        } else if (role === 'teacher' || role === 'hod' || role === 'dean_of_studies') {
+          systemInstruction = `You are the EduSmart Senior CBC Curriculum & Pedagogical Consultant for faculty at ${tenantName}.
+You support Kenyan Competency-Based Curriculum (CBC) teachers across Primary and Junior Secondary School (JSS).
+Help with:
+1. Lesson plans with clear specific learning outcomes, key inquiry questions, learning experiences, and core competencies (Communication & Collaboration, Critical Thinking, Digital Literacy).
+2. CBA assessment rubrics based on the 4 KICD performance levels: Exceeding Expectation (EE - 4), Meeting Expectation (ME - 3), Approaching Expectation (AE - 2), Below Expectation (BE - 1).
+3. Practical laboratory setups, differentiated learning, and parental engagement.`;
+        } else if (role === 'parent') {
+          systemInstruction = `You are the EduSmart Parent Guidance Counselor at ${tenantName}.
+You communicate warmly and clearly with parents about their children's CBC learning journey.
+Explain CBC assessment rubrics in plain terms, suggest home-based extension activities for holistic development, and support positive learner well-being.`;
+        } else {
+          // Default: Learner / Student
+          systemInstruction = `You are EduSmart AI Learning Buddy for a Grade ${grade} learner at ${tenantName}.
+Your tone is friendly, encouraging, curious, and age-appropriate for Kenyan CBC Grade ${grade}.
+Core rules:
+1. Guide the student step-by-step using gentle Socratic questions instead of just giving answers.
+2. Use examples familiar to learners in Kenya (wildlife, solar power, farming, East African geography, sports, cultural heritage).
+3. Foster CBC core values: Love, Responsibility, Respect, Unity, Peace, Patriotism, and Integrity.
+4. Keep explanations clear, well-structured, and easy to read.`;
+        }
+      }
+
+      // Format conversation history for @google/genai contents
+      const formattedContents = messages.map((m: any) => {
+        const role = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
+        return {
+          role,
+          parts: [{ text: String(m.text || m.content || '') }]
+        };
+      });
+
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (apiKey) {
+        const ai = new GoogleGenAI({
+          apiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            }
+          }
+        });
+
+        try {
+          const response = await ai.models.generateContent({
+            model: targetModel,
+            contents: formattedContents,
+            config: {
+              systemInstruction,
+              temperature: 0.7
+            }
+          });
+
+          const replyText = response.text || '';
+          if (replyText) {
+            return res.json({
+              reply: replyText,
+              modelUsed: targetModel,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch (apiError: any) {
+          console.warn(`Gemini call failed with model ${targetModel}, attempting fallback:`, apiError?.message || apiError);
+          // If complex pro model failed (e.g. rate limit / tier), fallback to gemini-3.5-flash
+          if (targetModel !== 'gemini-3.5-flash') {
+            try {
+              const fallbackResponse = await ai.models.generateContent({
+                model: 'gemini-3.5-flash',
+                contents: formattedContents,
+                config: {
+                  systemInstruction,
+                  temperature: 0.7
+                }
+              });
+              if (fallbackResponse.text) {
+                return res.json({
+                  reply: fallbackResponse.text,
+                  modelUsed: 'gemini-3.5-flash',
+                  fallback: true,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            } catch (fallbackError) {
+              console.warn('Fallback Gemini call also failed:', fallbackError);
+            }
+          }
+        }
+      }
+
+      // Pedagogical Fallback when API key is missing or service unreachable
+      const lastMessage = messages[messages.length - 1];
+      const query = String(lastMessage?.text || lastMessage?.content || '').toLowerCase();
+      let fallbackReply = `Hello! I am your EduSmart AI Assistant for ${tenantName}. `;
+
+      if (query.includes('experiment') || query.includes('lab') || query.includes('science')) {
+        fallbackReply += `In Grade ${grade} Science, practical investigations help us understand the world! Remember to check your apparatus, record your measurements systematically in your lab notebook, and link your observations to the CBC core competencies. Would you like to review the step-by-step procedure or test your hypothesis?`;
+      } else if (query.includes('rubric') || query.includes('assessment') || query.includes('cba')) {
+        fallbackReply += `For CBC assessment, remember the 4-tier rubric scale: Exceeding Expectation (EE - Level 4), Meeting Expectation (ME - Level 3), Approaching Expectation (AE - Level 2), and Below Expectation (BE - Level 1). Assessment tasks should measure application of knowledge, values, and core competencies.`;
+      } else if (query.includes('fraction') || query.includes('math') || query.includes('calculate')) {
+        fallbackReply += `In Mathematics, breaking problems into smaller steps makes problem-solving enjoyable. Let's look at the given values: what information do we already have, and what is the target value we want to find?`;
+      } else {
+        fallbackReply += `That's a thoughtful question! In our CBC curriculum, learning through inquiry and critical reflection leads to deeper understanding. What are your initial thoughts, and how can we connect this to what you've learned in class?`;
+      }
+
+      return res.json({
+        reply: fallbackReply,
+        modelUsed: `${targetModel} (local pedagogical engine)`,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error('Error in /api/chat:', err);
+      return res.status(500).json({
+        error: 'Failed to process chat message',
+        message: err?.message || 'Internal server error'
+      });
+    }
+  });
+
   const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
   const distPath = path.resolve(rootDir, 'dist');
   const indexHtmlPath = path.resolve(distPath, 'index.html');

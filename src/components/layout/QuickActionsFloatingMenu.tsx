@@ -38,6 +38,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
+import { useMobileLayout } from '../../context/MobileLayoutContext';
 
 export interface QuickActionItem {
   id: string;
@@ -1186,20 +1187,42 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
     }
   }, [currentUser]);
 
+  const { 
+    isMobileOverlapProtectionEnabled, 
+    isQuickActionsDocked, 
+    toggleQuickActionsDocked, 
+    isMobileViewport 
+  } = useMobileLayout();
+
+  // If docked or minimized on mobile to prevent overlapping
+  const isMinimizedOnMobile = isMobileViewport && (isQuickActionsDocked || isMobileOverlapProtectionEnabled);
+
   return (
     <>
-      {/* FLOATING ACTION TRIGGER BUTTON (BOTTOM-RIGHT MAIN VIEWPORT) */}
-      <aside aria-label="Quick Actions Floating Menu" className="fixed bottom-6 right-6 z-40 print:hidden flex items-center gap-2">
-        
+      {/* ACTION TRIGGER BUTTON (BOTTOM-RIGHT MAIN VIEWPORT OR DOCKED BOTTOM STRIP) */}
+      <aside 
+        aria-label="Quick Actions Floating Menu" 
+        className={`fixed z-40 print:hidden flex items-center gap-1.5 transition-all duration-300 ${
+          isMinimizedOnMobile
+            ? 'bottom-3 right-3 sm:bottom-6 sm:right-6'
+            : 'bottom-4 right-4 sm:bottom-6 sm:right-6'
+        }`}
+      >
         {/* Floating Quick Actions Trigger Pill */}
         <button
           onClick={() => setIsOpen(prev => !prev)}
-          className={`group flex items-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-2xl shadow-xl transition-all duration-300 cursor-pointer ${
-            isOpen 
-              ? 'bg-slate-900 text-white ring-2 ring-indigo-500 shadow-indigo-500/25' 
-              : 'bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 text-white hover:from-indigo-900 hover:to-slate-900 shadow-slate-900/40 hover:shadow-2xl hover:scale-105 active:scale-95 border border-indigo-500/30'
+          className={`group flex items-center gap-2 rounded-2xl shadow-xl transition-all duration-300 cursor-pointer ${
+            isMinimizedOnMobile
+              ? 'p-2 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl bg-slate-900/90 backdrop-blur-xs text-white border border-indigo-400/40 shadow-lg hover:scale-105 active:scale-95'
+              : isOpen 
+              ? 'px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-900 text-white ring-2 ring-indigo-500 shadow-indigo-500/25' 
+              : 'px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 text-white hover:from-indigo-900 hover:to-slate-900 shadow-slate-900/40 hover:shadow-2xl hover:scale-105 active:scale-95 border border-indigo-500/30'
           }`}
-          title="Quick Actions floating menu (Press Ctrl+K or Cmd+K)"
+          title={
+            isMinimizedOnMobile
+              ? `Quick Actions (${currentUser.role.replace('_', ' ')}) · Press to open`
+              : "Quick Actions floating menu (Press Ctrl+K or Cmd+K)"
+          }
           aria-expanded={isOpen}
         >
           <div className="relative">
@@ -1212,24 +1235,39 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             </div>
           </div>
 
-          <div className="text-left">
-            <div className="text-xs font-black tracking-tight flex items-center gap-1.5">
-              <span>Quick Actions</span>
-              <span className="hidden sm:inline-block text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                {currentUser.role.replace('_', ' ')}
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-300 leading-none mt-0.5 hidden sm:block">
-              Perform role-specific tasks
-            </div>
-          </div>
+          {!isMinimizedOnMobile && (
+            <>
+              <div className="text-left">
+                <div className="text-xs font-black tracking-tight flex items-center gap-1.5">
+                  <span>Quick Actions</span>
+                  <span className="hidden sm:inline-block text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                    {currentUser.role.replace('_', ' ')}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-300 leading-none mt-0.5 hidden sm:block">
+                  Perform role-specific tasks
+                </div>
+              </div>
 
-          <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-mono font-bold text-slate-300 bg-slate-800/80 rounded border border-slate-700 ml-1">
-            <span>⌘</span>
-            <span>K</span>
-          </kbd>
+              <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-mono font-bold text-slate-300 bg-slate-800/80 rounded border border-slate-700 ml-1">
+                <span>⌘</span>
+                <span>K</span>
+              </kbd>
+            </>
+          )}
         </button>
 
+        {/* Mobile Overlap Protection Minimize/Dock Toggle Icon */}
+        {isMobileViewport && (
+          <button
+            onClick={toggleQuickActionsDocked}
+            className="w-7 h-7 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-[10px] font-mono shadow-xs border border-slate-600 cursor-pointer"
+            title={isQuickActionsDocked ? "Expand Quick Actions pill" : "Dock pill to prevent screen overlapping"}
+            aria-label="Toggle Quick Actions size"
+          >
+            {isQuickActionsDocked ? '↗' : '↙'}
+          </button>
+        )}
       </aside>
 
       {/* FLOATING ACTION MENU POPOVER MODAL */}

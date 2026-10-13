@@ -146,7 +146,7 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
       {/* Top Navbar Header */}
-      <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
+      <header className="relative lg:sticky lg:top-16 z-20 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}

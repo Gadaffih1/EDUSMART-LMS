@@ -7,6 +7,7 @@ import { EventTicketModal } from '../events/EventTicketModal';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { VirtualLabSubscriptionModal } from '../virtuallab/VirtualLabSubscriptionModal';
 import { PortalAccessAppModal, PORTAL_APPS_CONFIG } from './PortalAccessAppModal';
+import { SuperAdminDashboard } from '../admin/SuperAdminDashboard';
 import { 
   GraduationCap, 
   Lock, 
@@ -106,6 +107,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
   const [portalProcessingProgress, setPortalProcessingProgress] = useState<number>(0);
   const [copiedPortalKey, setCopiedPortalKey] = useState<string | null>(null);
   const [isAppDirectoryOpen, setIsAppDirectoryOpen] = useState(false);
+  const [isSuperAdminOpen, setIsSuperAdminOpen] = useState(false);
+
+  const adminUser = Storage.getUsers().find(u => u.role === 'admin') || INITIAL_USERS.find(u => u.role === 'admin') || ({
+    id: 'usr-admin-1',
+    name: 'Super Administrator',
+    email: 'admin@edusmart.ac.ke',
+    role: 'admin'
+  } as User);
 
   // Auto-detect portal access app from URL query parameters (e.g. ?portal=student or ?app=teacher)
   useEffect(() => {
@@ -183,16 +192,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
     const handleNavEvent = (e: any) => {
       const target = e.detail;
       if (target === 'home') {
+        setIsSuperAdminOpen(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (target === 'super_admin') {
+        setIsSuperAdminOpen(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else if (target === 'announcements') {
+        setIsSuperAdminOpen(false);
         const el = document.getElementById('announcements-section');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       } else if (target === 'calendar') {
+        setIsSuperAdminOpen(false);
         const el = document.getElementById('calendar-section');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       } else if (target === 'contact') {
         setActiveModal('contact_us');
       } else if (target === 'signin') {
+        setIsSuperAdminOpen(false);
         const el = document.getElementById('portal-login-section');
         if (el) el.scrollIntoView({ behavior: 'smooth' });
       }
@@ -352,9 +368,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
+                setIsSuperAdminOpen(false);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/90 text-white font-bold hover:bg-emerald-500 transition-colors cursor-pointer"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition-colors cursor-pointer ${
+                !isSuperAdminOpen ? 'bg-emerald-600/90 text-white hover:bg-emerald-500' : 'text-slate-200 hover:text-white hover:bg-slate-800'
+              }`}
             >
               <span>🏠</span>
               <span>Home</span>
@@ -432,6 +451,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
               <span>Portal Apps (10)</span>
               <ChevronRight className={`w-3 h-3 transition-transform ${isAppDirectoryOpen ? 'rotate-90' : ''}`} />
+            </button>
+
+            {/* 10. 🛡️ Super Admin Command Hub */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setIsSuperAdminOpen(true);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer shadow-xs ml-1 ${
+                isSuperAdminOpen
+                  ? 'bg-amber-400 text-slate-950 shadow-md ring-2 ring-amber-300'
+                  : 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-slate-950 hover:from-amber-400 hover:to-amber-500'
+              }`}
+              title="Super Admin Command Hub (Register Schools, Customizer, Users, Spelling, Categories, Notify)"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
+              <span>Super Admin Command Hub</span>
+              <span className="text-[9px] bg-slate-950 text-amber-300 font-mono font-black px-1.5 py-0.2 rounded">ROOT</span>
             </button>
           </div>
 
@@ -561,6 +599,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
               <span>Contact Administration</span>
             </button>
 
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setIsSuperAdminOpen(true);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/20 text-amber-300 border border-amber-400/30 hover:bg-amber-500/30 text-left text-xs font-black shadow-xs"
+            >
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>Super Admin Command Hub</span>
+              </div>
+              <span className="text-[9px] bg-amber-400 text-slate-950 font-mono font-black px-1.5 py-0.2 rounded">ROOT</span>
+            </button>
+
             <div className="pt-2 border-t border-slate-800 mt-2">
               <button
                 onClick={() => {
@@ -652,13 +705,59 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
       </nav>
 
       {/* ========================================================
-          RECOMMENDED LANDING PAGE STRUCTURE: CENTRAL HERO SECTION
-          SCHOOL LOGO + SCHOOL NAME
-          Learner Management System
-          > Welcome to the School Portal
-          > A secure digital platform connecting learners, teachers, parents and school leadership.
+          SUPER ADMIN COMMAND HUB (EXCLUSIVE TO LANDING PAGE)
           ======================================================== */}
-      <section id="portal-login-section" className="relative bg-slate-900 text-white overflow-hidden py-16 lg:py-24">
+      {isSuperAdminOpen ? (
+        <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-6 animate-in fade-in duration-200">
+          {/* Header Return Banner */}
+          <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 p-4 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-amber-300">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow-sm shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                  <span>Central Multi-Tenant Governance</span>
+                  <span className="bg-slate-950 text-amber-300 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded">ROOT CONSOLE</span>
+                </div>
+                <div className="text-sm font-black text-slate-950 font-serif">
+                  Super Administrator Command Hub (Landing Page Terminal)
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setIsSuperAdminOpen(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="px-4 py-2 bg-slate-950 hover:bg-slate-900 text-white text-xs font-black rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>✕ Exit to School Landing Page</span>
+              </button>
+            </div>
+          </div>
+
+          <SuperAdminDashboard 
+            currentUser={adminUser}
+            onNavigateTab={(tab) => {
+              if (tab === 'home' || tab === 'landing') {
+                setIsSuperAdminOpen(false);
+              }
+            }}
+          />
+        </main>
+      ) : (
+        <>
+          {/* ========================================================
+              RECOMMENDED LANDING PAGE STRUCTURE: CENTRAL HERO SECTION
+              SCHOOL LOGO + SCHOOL NAME
+              Learner Management System
+              > Welcome to the School Portal
+              > A secure digital platform connecting learners, teachers, parents and school leadership.
+              ======================================================== */}
+          <section id="portal-login-section" className="relative bg-slate-900 text-white overflow-hidden py-16 lg:py-24">
         {/* Background Image Scrim */}
         <div className="absolute inset-0 z-0 opacity-20">
           <img
@@ -2513,6 +2612,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLoginSuccess }) => {
 
         </div>
       </footer>
+        </>
+      )}
 
       {/* ========================================================
           LOGIN MODALS & PUBLIC INFO DIALOGS

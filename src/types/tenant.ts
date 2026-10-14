@@ -25,12 +25,22 @@ export interface Tenant {
   academicYear: string;
   totalStudents: number;
   totalFaculty: number;
+  backgroundColor?: string; // Hex color for entire school background (e.g. '#0f172a', '#f8fafc')
+  bgCustomHex?: string;
+  accentColor?: string;     // Primary highlight/brand color
+  status?: 'active' | 'deactivated' | 'provisioning';
+  categories?: string[];    // Custom school categories (e.g. STEM, Athletics, Boarding, Music)
+  registeredAt?: string;
+  superAdminNotes?: string;
 }
 
 export interface TenantContextType {
   currentTenant: Tenant;
   allTenants: Tenant[];
   switchTenant: (tenantId: string) => void;
-  updateTenantBranding: (updates: Partial<Tenant>) => void;
+  updateTenantBranding: (updates: Partial<Tenant>, tenantId?: string) => void;
+  registerTenant: (newTenant: Tenant) => void;
+  updateTenant: (tenantId: string, updates: Partial<Tenant>) => void;
+  deleteTenant: (tenantId: string) => void;
   isMultiTenancyEnabled: boolean;
 }

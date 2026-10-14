@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { User } from './types';
 import { Storage } from './utils/storage';
 import { NotificationLayoutProvider, useNotificationLayout } from './context/NotificationLayoutContext';
-import { TenantProvider } from './context/TenantContext';
+import { TenantProvider, useTenant } from './context/TenantContext';
 import { MobileLayoutProvider, useMobileLayout } from './context/MobileLayoutContext';
 import { Navbar } from './components/layout/Navbar';
 import { NotificationDrawer } from './components/layout/NotificationDrawer';
@@ -44,11 +44,17 @@ function AppContent({
   onSwitchUser: (user: User) => void;
   onNavigateHome: () => void;
 }) {
+  const { currentTenant } = useTenant();
   const { isNotificationOpen, closeNotifications } = useNotificationLayout();
   const { isMobileOverlapProtectionEnabled } = useMobileLayout();
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+    <div 
+      className="min-h-screen text-slate-900 flex flex-col font-sans selection:bg-emerald-500 selection:text-white transition-colors duration-300"
+      style={{
+        backgroundColor: currentTenant.backgroundColor || '#f8fafc'
+      }}
+    >
       <Navbar
         currentUser={currentUser}
         onLogout={onLogout}

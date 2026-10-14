@@ -23,6 +23,7 @@ import { ExtraRolesManager } from './ExtraRolesManager';
 import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { BulkUserImportModule } from './BulkUserImportModule';
 import { 
   Users, 
   Award,
@@ -64,13 +65,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const isDeputyHead = currentUser.role === 'deputy_head';
   const isDean = currentUser.role === 'dean_of_studies';
 
-  // Sub-tabs: Default to oversight for leadership, users for system admin
+  // Sub-tabs: Default to oversight for leadership, users for school admin
   const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
     ? 'oversight'
     : 'users';
   const [activeTab, setActiveTab] = useState<
     | 'users' 
     | 'create_user' 
+    | 'bulk_import'
     | 'extra_roles'
     | 'cms_hub'
     | 'doc_requests'
@@ -109,7 +111,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['users', 'create_user', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports'].includes(tab)) {
+        if (['users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports'].includes(tab)) {
           setActiveTab(tab as any);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
@@ -378,6 +380,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <UserPlus className="w-3.5 h-3.5" />
           <span>Create New User Account</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('bulk_import')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'bulk_import' ? 'bg-indigo-700 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+          <span>Bulk Onboarding & Admissions</span>
+          <span className="text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.2 rounded font-bold">Term Opening</span>
         </button>
 
         <button
@@ -872,6 +885,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </form>
         </section>
+      )}
+
+      {/* ========================================================
+          TAB: BULK ONBOARDING & ADMISSIONS (TERM OPENING)
+          ======================================================== */}
+      {activeTab === 'bulk_import' && (
+        <BulkUserImportModule 
+          currentUser={currentUser} 
+          onSuccessNotification={(msg) => showToast(msg, 'success')} 
+        />
       )}
 
       {/* ========================================================

@@ -560,13 +560,6 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             <span className="hidden sm:inline">Report Absence</span>
           </button>
 
-          {/* Library Room Booking Button */}
-          <LibraryRoomBookingButton 
-            currentUser={currentUser} 
-            variant="header" 
-            label="Book Library Room" 
-          />
-
           <button
             onClick={() => setActiveTab('virtual_class')}
             className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"

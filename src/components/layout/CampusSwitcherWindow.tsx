@@ -296,17 +296,24 @@ export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
         <div className="p-3 sm:p-5 md:p-6 overflow-y-auto space-y-5 flex-1 min-h-0 bg-slate-100/70">
           
           {/* CURRENTLY ACTIVE INSTITUTION BANNER */}
-          <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 rounded-2xl p-4 sm:p-5 text-white shadow-md border border-emerald-500/30 relative overflow-hidden">
+          <div 
+            style={currentTenant.customBgColor ? { backgroundColor: currentTenant.customBgColor } : undefined}
+            className={`rounded-2xl p-4 sm:p-5 text-white shadow-md border relative overflow-hidden transition-all ${
+              currentTenant.customBgColor 
+                ? 'border-white/20' 
+                : 'bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 border-emerald-500/30'
+            }`}
+          >
             <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-44 h-44 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
             
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
               <div className="flex items-start sm:items-center gap-3 sm:gap-4">
                 
                 {/* Active School Logo */}
-                {currentTenant.logoUrl ? (
+                {currentTenant.customLogoBase64 || currentTenant.logoUrl ? (
                   <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-white p-1 border-2 border-emerald-400/40 shadow-md shrink-0 flex items-center justify-center">
                     <img 
-                      src={currentTenant.logoUrl} 
+                      src={currentTenant.customLogoBase64 || currentTenant.logoUrl} 
                       alt={`${currentTenant.name} Crest`} 
                       className="w-full h-full object-contain"
                     />
@@ -396,10 +403,10 @@ export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
                         <div className="flex items-center gap-3">
                           
                           {/* Logo */}
-                          {tenant.logoUrl ? (
+                          {tenant.customLogoBase64 || tenant.logoUrl ? (
                             <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-xl overflow-hidden bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center">
                               <img 
-                                src={tenant.logoUrl} 
+                                src={tenant.customLogoBase64 || tenant.logoUrl} 
                                 alt={`${tenant.name} Logo`} 
                                 className="w-full h-full object-contain"
                               />

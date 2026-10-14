@@ -156,6 +156,11 @@ export interface User {
     secondaryDesignation?: string;
     extraGrantedPermissions?: (keyof RoleAccessRights)[];
   };
+  // 🏢 MULTI-SCHOOL ASSIGNMENT & ACCOUNT STATUS (Super Admin Control)
+  schoolId?: string;           // Assigned Tenant ID
+  isActive?: boolean;          // Active (true) or Deactivated (false) - controlled by Super Admin
+  deactivatedReason?: string;
+  lastActive?: string;
 }
 
 export interface Topic {
@@ -1867,4 +1872,30 @@ export interface PortalSection {
   targetAudience: 'all' | 'students' | 'teachers' | 'parents' | 'staff';
   icon?: string;
   badge?: string;
+}
+
+// -------------------------------------------------------------
+// SCHOOL TERM OPENING ONBOARDING & BULK USER IMPORT TYPES
+// -------------------------------------------------------------
+export interface OnboardingBatchRecord {
+  id: string;
+  batchReference: string;
+  timestamp: string;
+  importedBy: string;
+  term: number;
+  academicYear: number;
+  totalRecords: number;
+  studentCount: number;
+  staffCount: number;
+  parentCount: number;
+  fileName?: string;
+  status: 'Completed' | 'Partial';
+  summaryNotes?: string;
+  recordsSample?: {
+    name: string;
+    role: UserRole;
+    grade?: GradeLevel;
+    stream?: StreamName;
+    admissionNumber?: string;
+  }[];
 }

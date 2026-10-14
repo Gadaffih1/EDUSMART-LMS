@@ -9,6 +9,7 @@ import {
   LogOut, 
   UserCheck, 
   Shield, 
+  ShieldCheck,
   ChevronDown, 
   RefreshCw, 
   School,
@@ -230,6 +231,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Phone className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Contact School</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'super_admin' }));
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 rounded-lg transition-all shadow-xs cursor-pointer ml-1"
+                title="Open Super Admin Command Hub (Schools, Customizer, Users, Speller, Notify)"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
+                <span>Super Admin</span>
+                <span className="text-[9px] bg-slate-950 text-amber-300 font-mono font-black px-1.5 py-0.2 rounded">ROOT</span>
               </button>
             </nav>
           )}

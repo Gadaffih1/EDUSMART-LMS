@@ -25,7 +25,6 @@ import { CirculationViews } from './CirculationViews';
 import { CollectionViews } from './CollectionViews';
 import { ProgrammesViews } from './ProgrammesViews';
 import { GovernanceViews } from './GovernanceViews';
-import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
 import { 
   LogOut, 
   Menu, 
@@ -284,12 +283,6 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            <LibraryRoomBookingButton 
-              currentUser={currentUser} 
-              variant="header" 
-              label="Book Library Room" 
-            />
-
             <div className="text-right hidden sm:block">
               <div className="font-bold text-xs text-white">
                 {currentUser.name}

@@ -91,7 +91,8 @@ import {
   CoordinatorSyllabusTopic,
   CoordinatorCBAModeration,
   TeacherAbsenceReport,
-  AffectedLessonSlot
+  AffectedLessonSlot,
+  OnboardingBatchRecord
 } from '../types';
 import { INITIAL_CODING_CHALLENGES } from '../data/codingChallengeData';
 import {
@@ -264,6 +265,7 @@ const KEYS = {
   COORDINATOR_SYLLABUS_TRACKING: 'edusmart_coordinator_syllabus_tracking_v1',
   COORDINATOR_CBA_MODERATIONS: 'edusmart_coordinator_cba_moderations_v1',
   TEACHER_ABSENCE_REPORTS: 'edusmart_teacher_absence_reports_v1',
+  ONBOARDING_BATCHES: 'edusmart_onboarding_batches_v1',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
@@ -606,6 +608,29 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, RoleAccessRights> = Obje
   return acc;
 }, {} as Record<UserRole, RoleAccessRights>);
 
+export const INITIAL_ONBOARDING_BATCHES: OnboardingBatchRecord[] = [
+  {
+    id: 'onb-batch-term1-2026-001',
+    batchReference: 'ONB-2026-T1-01',
+    timestamp: '2026-01-08 08:30:00',
+    importedBy: 'Mrs. Sarah Cherono (Registrar)',
+    term: 1,
+    academicYear: 2026,
+    totalRecords: 48,
+    studentCount: 42,
+    staffCount: 6,
+    parentCount: 42,
+    fileName: 'term_1_opening_admissions_2026.csv',
+    status: 'Completed',
+    summaryNotes: 'Term 1 2026 Inaugural Admission Batch. Primary Grade 1-6 & Junior School Grade 7 intake successfully enrolled.',
+    recordsSample: [
+      { name: 'Faith Nduta', role: 'student', grade: 4, stream: 'Dove', admissionNumber: 'ADM/2026/0401' },
+      { name: 'Brian Kiprono', role: 'student', grade: 7, stream: 'Mara', admissionNumber: 'ADM/2026/0702' },
+      { name: 'Mr. David Omondi', role: 'teacher', admissionNumber: undefined }
+    ]
+  }
+];
+
 export const Storage = {
   // Reset all data to factory demo defaults
   resetAllData(): void {
@@ -790,11 +815,24 @@ export const Storage = {
     if (current && current.id === id) {
       this.setCurrentUser(users[idx]);
     }
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
+    return users[idx];
+  },
+  toggleUserStatus(id: string, active?: boolean): User | null {
+    const users = this.getUsers();
+    const idx = users.findIndex(u => u.id === id);
+    if (idx === -1) return null;
+    const currentActive = users[idx].isActive !== false;
+    const nextActive = typeof active === 'boolean' ? active : !currentActive;
+    users[idx] = { ...users[idx], isActive: nextActive };
+    setToStorage(KEYS.USERS, users);
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
     return users[idx];
   },
   deleteUser(id: string): void {
     const users = this.getUsers().filter(u => u.id !== id);
     setToStorage(KEYS.USERS, users);
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
   },
   findUserByEmail(email: string): User | undefined {
     const cleanEmail = email.trim().toLowerCase();
@@ -807,6 +845,78 @@ export const Storage = {
       return userInInitial;
     }
     return undefined;
+  },
+
+  // Bulk User & Student Import for Term Openings
+  bulkImportUsers(
+    usersToImport: User[], 
+    overwriteExisting: boolean = true
+  ): { imported: number; updated: number; skipped: number } {
+    const existing = this.getUsers();
+    let importedCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+
+    const existingByEmail = new Map<string, number>();
+    const existingByAdm = new Map<string, number>();
+    existing.forEach((u, i) => {
+      if (u.email) existingByEmail.set(u.email.toLowerCase(), i);
+      if (u.admissionNumber) existingByAdm.set(u.admissionNumber.toLowerCase(), i);
+    });
+
+    const userList = [...existing];
+
+    for (const newUser of usersToImport) {
+      const emailKey = newUser.email ? newUser.email.toLowerCase() : '';
+      const admKey = newUser.admissionNumber ? newUser.admissionNumber.toLowerCase() : '';
+      
+      let existingIdx = -1;
+      if (admKey && existingByAdm.has(admKey)) {
+        existingIdx = existingByAdm.get(admKey)!;
+      } else if (emailKey && existingByEmail.has(emailKey)) {
+        existingIdx = existingByEmail.get(emailKey)!;
+      }
+
+      if (existingIdx !== -1) {
+        if (overwriteExisting) {
+          userList[existingIdx] = { 
+            ...userList[existingIdx], 
+            ...newUser, 
+            id: userList[existingIdx].id 
+          };
+          updatedCount++;
+        } else {
+          skippedCount++;
+        }
+      } else {
+        userList.push(newUser);
+        if (emailKey) existingByEmail.set(emailKey, userList.length - 1);
+        if (admKey) existingByAdm.set(admKey, userList.length - 1);
+        importedCount++;
+      }
+    }
+
+    setToStorage(KEYS.USERS, userList);
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: userList }));
+    return { imported: importedCount, updated: updatedCount, skipped: skippedCount };
+  },
+
+  // Onboarding Batches
+  getOnboardingBatches(): OnboardingBatchRecord[] {
+    return getFromStorage<OnboardingBatchRecord[]>(KEYS.ONBOARDING_BATCHES, INITIAL_ONBOARDING_BATCHES);
+  },
+
+  saveOnboardingBatch(batch: OnboardingBatchRecord): void {
+    const batches = this.getOnboardingBatches();
+    batches.unshift(batch);
+    setToStorage(KEYS.ONBOARDING_BATCHES, batches);
+    window.dispatchEvent(new CustomEvent('onboarding-batches-updated', { detail: batches }));
+  },
+
+  deleteOnboardingBatch(batchId: string): void {
+    const batches = this.getOnboardingBatches().filter(b => b.id !== batchId);
+    setToStorage(KEYS.ONBOARDING_BATCHES, batches);
+    window.dispatchEvent(new CustomEvent('onboarding-batches-updated', { detail: batches }));
   },
 
   // Grade Passwords
@@ -1653,12 +1763,14 @@ export const Storage = {
     const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
     all.unshift(notif);
     setToStorage(KEYS.NOTIFICATIONS, all);
+    window.dispatchEvent(new CustomEvent('notifications-updated', { detail: all }));
   },
 
   deleteNotification(notificationId: string): void {
     const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
     const updated = all.filter(n => n.id !== notificationId);
     setToStorage(KEYS.NOTIFICATIONS, updated);
+    window.dispatchEvent(new CustomEvent('notifications-updated', { detail: updated }));
   },
 
   // 1. Gamification: Badges & Certification Points

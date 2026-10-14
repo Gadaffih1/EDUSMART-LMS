@@ -22,6 +22,7 @@ import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
+import { BulkUserImportModule } from './BulkUserImportModule';
 import { 
   Calendar, 
   Clock, 
@@ -35,6 +36,7 @@ import {
   CheckCircle, 
   AlertCircle, 
   Users, 
+  UserPlus,
   Send, 
   MessageSquare, 
   Lock, 
@@ -59,7 +61,8 @@ import {
   Sparkles,
   HeartPulse,
   Bus,
-  Trophy
+  Trophy,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface SchoolAdminStaffWorkspaceProps {
@@ -69,6 +72,7 @@ interface SchoolAdminStaffWorkspaceProps {
 
 type AdminTab = 
   | 'work_entries'
+  | 'bulk_import'
   | 'sanatorium'
   | 'lunch_register'
   | 'transport'
@@ -405,10 +409,18 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               </div>
               
               <button 
+                onClick={() => setActiveTab('bulk_import')}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Bulk Onboarding</span>
+              </button>
+
+              <button 
                 onClick={() => {
                   setPrintModalType('timetable');
                 }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Timetables</span>
@@ -416,7 +428,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
 
               <button 
                 onClick={handleOpenAddEvent}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors shadow-xs"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Update Calendar</span>
@@ -431,7 +443,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             <nav className="flex space-x-1 sm:space-x-4 overflow-x-auto scrollbar-none py-2 text-xs font-semibold">
               <button
                 onClick={() => setActiveTab('work_entries')}
-                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === 'work_entries'
                     ? 'border-emerald-400 text-emerald-400 font-bold'
                     : 'border-transparent text-slate-300 hover:text-white'
@@ -443,15 +455,28 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               </button>
 
               <button
+                onClick={() => setActiveTab('bulk_import')}
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+                  activeTab === 'bulk_import'
+                    ? 'border-indigo-400 text-indigo-400 font-bold'
+                    : 'border-transparent text-slate-300 hover:text-white'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                <span>2. Bulk Onboarding & Admissions</span>
+                <span className="ml-1 text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-mono font-bold">Term Opening</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('sanatorium')}
-                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === 'sanatorium'
                     ? 'border-rose-400 text-rose-400 font-bold'
                     : 'border-transparent text-slate-300 hover:text-white'
                 }`}
               >
                 <HeartPulse className="w-4 h-4 text-rose-400" />
-                <span>2. School Sanatorium</span>
+                <span>3. School Sanatorium</span>
                 <span className="ml-1 text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded font-mono font-bold">Entry & Logs</span>
               </button>
 
@@ -590,7 +615,17 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
         )}
 
         {/* ========================================================
-            TAB 2: SCHOOL SANATORIUM REGISTER (ENTRY FORM & AUDIT LOG)
+            TAB 2: TERM OPENING BULK USER & STUDENT ONBOARDING
+            ======================================================== */}
+        {activeTab === 'bulk_import' && (
+          <BulkUserImportModule 
+            currentUser={currentUser} 
+            onSuccessNotification={showSuccess}
+          />
+        )}
+
+        {/* ========================================================
+            TAB 3: SCHOOL SANATORIUM REGISTER (ENTRY FORM & AUDIT LOG)
             ======================================================== */}
         {activeTab === 'sanatorium' && (
           <SanatoriumSection 

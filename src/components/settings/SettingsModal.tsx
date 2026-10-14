@@ -36,7 +36,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { isMobileOverlapProtectionEnabled, setMobileOverlapProtection } = useMobileLayout();
-  const { currentTenant, allTenants, switchTenant } = useTenant();
+  const { currentTenant } = useTenant();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -271,39 +271,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </label>
                   </div>
 
-                  {/* Multi-Tenancy School Campus Configuration */}
+                  {/* Multi-Tenancy School Campus Institutional Info */}
                   <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <School className="w-4 h-4 text-indigo-700" />
-                        <span className="font-bold text-slate-900">Multi-Tenancy Active Campus</span>
+                        <School className="w-4 h-4 text-emerald-700" />
+                        <span className="font-bold text-slate-900">Current Institution Campus</span>
                       </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-bold">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
                         {currentTenant.code}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {allTenants.map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => switchTenant(t.id)}
-                          className={`text-left p-2.5 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between ${
-                            currentTenant.id === t.id
-                              ? 'bg-white border-emerald-500 shadow-2xs font-bold text-emerald-950 ring-1 ring-emerald-500'
-                              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                          }`}
-                        >
-                          <div>
-                            <div className="font-bold text-[12px] text-slate-900">{t.name}</div>
-                            <div className="text-[10px] text-slate-500">{t.city} · {t.totalStudents} Learners</div>
-                          </div>
-                          {currentTenant.id === t.id && (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          )}
-                        </button>
-                      ))}
+                    <div className="p-3 rounded-lg bg-white border border-slate-200 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{currentTenant.name}</div>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {currentTenant.city}, {currentTenant.county} · {currentTenant.motto}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                        Active Campus
+                      </span>
                     </div>
+                    <p className="text-[10px] text-slate-400">
+                      Multi-institution campus switching is managed exclusively from the central Super Administrator Portal.
+                    </p>
                   </div>
                 </div>
               </div>

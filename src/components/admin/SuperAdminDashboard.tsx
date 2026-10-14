@@ -38,7 +38,8 @@ import {
   Sliders,
   ChevronRight,
   Info,
-  Check
+  Check,
+  ArrowRight
 } from 'lucide-react';
 import { User, UserRole, GradeLevel, StreamName, AppNotification, PostCategory } from '../../types';
 import { Tenant } from '../../types/tenant';
@@ -49,6 +50,7 @@ import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 interface SuperAdminDashboardProps {
   currentUser: User;
   onNavigateTab?: (tab: string) => void;
+  onEnterSchoolPortal?: (schoolId: string) => void;
 }
 
 type SuperTab = 'schools' | 'branding' | 'users' | 'categories' | 'spelling' | 'notify';
@@ -98,7 +100,8 @@ const HEADER_GRADIENTS = [
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   currentUser,
-  onNavigateTab
+  onNavigateTab,
+  onEnterSchoolPortal
 }) => {
   const { currentTenant, allTenants, switchTenant, updateTenantBranding, registerTenant, updateTenant, deleteTenant } = useTenant();
 
@@ -834,6 +837,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <Plus className="w-3.5 h-3.5" />
                 <span>Register New School</span>
               </button>
+
+              {onEnterSchoolPortal && (
+                <button
+                  onClick={() => {
+                    switchTenant(targetSchool.id);
+                    onEnterSchoolPortal(targetSchool.id);
+                  }}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                  title={`Enter ${targetSchool.name} LMS Main Page`}
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Enter {targetSchool.shortName || targetSchool.name} Portal →</span>
+                </button>
+              )}
             </div>
           </div>
       </div>
@@ -1039,20 +1056,37 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <span className="text-[11px] text-slate-500 font-mono">{school.backgroundColor || '#f8fafc'}</span>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setSelectedSchoolId(school.id);
-                        switchTenant(school.id);
-                        showToast(`Switched active workspace to "${school.name}".`);
-                      }}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                        isCurrent 
-                          ? 'bg-slate-100 text-slate-600 cursor-default'
-                          : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700'
-                      }`}
-                    >
-                      {isCurrent ? 'Current Campus' : 'Switch to This Campus'}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => {
+                          setSelectedSchoolId(school.id);
+                          switchTenant(school.id);
+                          showToast(`Switched active context to "${school.name}".`);
+                        }}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                          isCurrent 
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700'
+                        }`}
+                      >
+                        {isCurrent ? 'Context Selected' : 'Select'}
+                      </button>
+
+                      {onEnterSchoolPortal && (
+                        <button
+                          onClick={() => {
+                            setSelectedSchoolId(school.id);
+                            switchTenant(school.id);
+                            onEnterSchoolPortal(school.id);
+                          }}
+                          className="px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black rounded-lg shadow-2xs flex items-center gap-1 transition-all cursor-pointer"
+                          title={`Launch ${school.name} LMS Main Page`}
+                        >
+                          <span>Launch Portal</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1250,7 +1284,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               </div>
 
               {/* Save & Apply Action Button */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={handleSaveBranding}
@@ -1259,6 +1293,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <Save className="w-4 h-4" />
                   <span>Save & Apply Branding to {targetSchool.name}</span>
                 </button>
+
+                {onEnterSchoolPortal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSaveBranding();
+                      switchTenant(targetSchool.id);
+                      onEnterSchoolPortal(targetSchool.id);
+                    }}
+                    className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-black text-xs shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <span>Save & Enter {targetSchool.shortName || targetSchool.name} Portal →</span>
+                  </button>
+                )}
 
                 <button
                   type="button"

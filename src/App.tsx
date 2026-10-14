@@ -27,6 +27,7 @@ import { SanatoriumWorkspace } from './components/sanatorium/SanatoriumWorkspace
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
 import { CoCurricularWorkspace } from './components/cocurricular/CoCurricularWorkspace';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { SuperAdminPortalView } from './components/admin/SuperAdminPortalView';
 import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloatingMenu';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Maximize2, CheckCheck } from 'lucide-react';
@@ -47,6 +48,18 @@ function AppContent({
   const { currentTenant } = useTenant();
   const { isNotificationOpen, closeNotifications } = useNotificationLayout();
   const { isMobileOverlapProtectionEnabled } = useMobileLayout();
+  const [portalView, setPortalView] = useState<'super_admin' | 'school_lms'>('super_admin');
+
+  // Starting point for this LMS: Dedicated Super Admin Portal as the 1st Landing page
+  if (!currentUser && portalView === 'super_admin') {
+    return (
+      <SuperAdminPortalView
+        onEnterSchool={(schoolId) => {
+          setPortalView('school_lms');
+        }}
+      />
+    );
+  }
 
   return (
     <div 
@@ -59,7 +72,13 @@ function AppContent({
         currentUser={currentUser}
         onLogout={onLogout}
         onSwitchUser={onSwitchUser}
-        onNavigateHome={onNavigateHome}
+        onNavigateHome={() => {
+          if (currentUser) {
+            onNavigateHome();
+          } else {
+            setPortalView('super_admin');
+          }
+        }}
       />
 
       {/* Main Viewport Container: Dynamic Side-by-Side Flex Layout */}
@@ -96,7 +115,10 @@ function AppContent({
 
           <main className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 sm:pb-8' : ''}`}>
             {!currentUser ? (
-              <LandingPage onLoginSuccess={onLoginSuccess} />
+              <LandingPage 
+                onLoginSuccess={onLoginSuccess} 
+                onReturnToSuperAdmin={() => setPortalView('super_admin')}
+              />
             ) : currentUser.role === 'student' ? (
               /* Learner: Own academic and school information */
               <StudentWorkspace currentUser={currentUser} />

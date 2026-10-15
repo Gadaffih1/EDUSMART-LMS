@@ -55,21 +55,23 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 
+import { useTenant } from '../../context/TenantContext';
+
 interface AdminDashboardProps {
   currentUser: User;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) => {
+  const { currentTenant } = useTenant();
   const isSuperAdmin = currentUser.role === 'admin';
   const isHeadTeacher = currentUser.role === 'head_teacher';
   const isDeputyHead = currentUser.role === 'deputy_head';
   const isDean = currentUser.role === 'dean_of_studies';
 
-  // Sub-tabs: Default to oversight for leadership, users for school admin
-  const defaultTab = ['head_teacher', 'deputy_head', 'dean_of_studies'].includes(currentUser.role)
-    ? 'oversight'
-    : 'users';
+  // Sub-tabs: Default to overview (Panel 3 School Dashboard)
+  const defaultTab = 'overview';
   const [activeTab, setActiveTab] = useState<
+    | 'overview'
     | 'users' 
     | 'create_user' 
     | 'bulk_import'
@@ -363,8 +365,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       {/* Navigation Sub-Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
         <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'overview' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <School className="w-3.5 h-3.5" />
+          <span>Dashboard Overview</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('users')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'users' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
@@ -546,6 +558,245 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           <span>Reports & Dossiers (Print / PDF)</span>
         </button>
       </div>
+
+      {/* ========================================================
+          OVERVIEW TAB (MATCHING PANEL 3 IN USER ARCHITECTURAL DIAGRAM)
+          Tenant School Dashboard (e.g. Riara School)
+          ======================================================== */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          
+          {/* School Hero Branded Banner (Panel 3) */}
+          <div className="relative rounded-3xl overflow-hidden bg-slate-900 border border-slate-200/90 shadow-xl">
+            {/* Campus Background Photo with Subtle Dark Gradient */}
+            <div className="absolute inset-0">
+              <img
+                src="/src/assets/images/edusmart_campus_banner_1790859700873.jpg"
+                alt={`${currentTenant.name} Campus Grounds`}
+                className="w-full h-full object-cover object-center opacity-30"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-blue-950/80" />
+            </div>
+
+            <div className="relative p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center gap-5">
+                {/* Crest Logo */}
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white p-2 shadow-xl border-2 border-amber-400/80 flex items-center justify-center shrink-0">
+                  {currentTenant.logoUrl ? (
+                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-full h-full object-contain" />
+                  ) : (
+                    <School className="w-10 h-10 text-blue-700" />
+                  )}
+                </div>
+
+                <div className="text-left space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-black uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded">
+                      {currentTenant.code} · ACTIVE TENANT
+                    </span>
+                    <span className="text-xs text-slate-400">Term 1, 2026 Academic Session</span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white font-serif tracking-tight">
+                    {currentTenant.name}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-amber-300 font-medium">
+                    {currentTenant.motto || 'Learn · Grow · Succeed'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Manage Users</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('reports')}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  <span>Academic Dossiers</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Stat KPI Cards (Panel 3: Total Students 1,248 | Total Teachers 86 | Classes 42 | Attendance Today 96%) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-1 text-left">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Students</span>
+                <Users className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900 font-mono">
+                {(currentTenant.totalStudents || 1248).toLocaleString()}
+              </div>
+              <div className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                <span>↑ 4.2% from last term</span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-1 text-left">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Teachers</span>
+                <Award className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900 font-mono">
+                {currentTenant.totalFaculty || 86}
+              </div>
+              <div className="text-[11px] text-slate-500 font-medium">
+                100% TSC & CBA Accredited
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-1 text-left">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Classes</span>
+                <School className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="text-3xl font-black text-slate-900 font-mono">
+                {currentTenant.totalClasses || 42}
+              </div>
+              <div className="text-[11px] text-slate-500 font-medium">
+                PP1 to Grade 9 Junior Secondary
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-1 text-left">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Attendance Today</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-3xl font-black text-emerald-700 font-mono">
+                {currentTenant.attendanceToday || 96}%
+              </div>
+              <div className="text-[11px] text-slate-500 font-medium">
+                Perimeter GPS & Gate verified
+              </div>
+            </div>
+
+          </div>
+
+          {/* 2-Column Section: Recent Activities (Left) & Upcoming Events (Right) - Matching Panel 3 */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Left 7 Cols: Recent Activities */}
+            <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-5 text-left">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 font-serif">Recent Activities</h3>
+                  <p className="text-xs text-slate-500">Live feed of institutional assessments and student updates</p>
+                </div>
+                <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                  Real-Time
+                </span>
+              </div>
+
+              <div className="space-y-3.5">
+                
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900">New assignment posted</div>
+                    <div className="text-[11px] text-slate-600">Mathematics – Form 2 / Grade 7 (Linear Equations & Graphs)</div>
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-400 shrink-0">2 hours ago</span>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900">Attendance updated</div>
+                    <div className="text-[11px] text-slate-600">Form 1A / Grade 7A register submitted by Class Teacher</div>
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-400 shrink-0">3 hours ago</span>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900">Parent message</div>
+                    <div className="text-[11px] text-slate-600">From Jane Wanjiru regarding transport drop-off stop change</div>
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-400 shrink-0">4 hours ago</span>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <UserPlus className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900">New student enrolled</div>
+                    <div className="text-[11px] text-slate-600">Form 3B / Grade 8B admitted under NEMIS registration clearance</div>
+                  </div>
+                  <span className="text-[10px] font-medium text-slate-400 shrink-0">5 hours ago</span>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Right 5 Cols: Upcoming Events */}
+            <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-5 text-left">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 font-serif">Upcoming Events</h3>
+                  <p className="text-xs text-slate-500">Institutional calendar & assembly schedules</p>
+                </div>
+                <CalendarDays className="w-4 h-4 text-blue-600" />
+              </div>
+
+              <div className="space-y-3.5">
+                
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex flex-col items-center justify-center shrink-0 font-bold">
+                    <span className="text-sm font-black leading-none">12</span>
+                    <span className="text-[9px] uppercase tracking-wider font-mono">APR</span>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">School Assembly</div>
+                    <div className="text-[11px] text-slate-500">8:00 AM – 9:00 AM · Main Assembly Quad</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex flex-col items-center justify-center shrink-0 font-bold">
+                    <span className="text-sm font-black leading-none">14</span>
+                    <span className="text-[9px] uppercase tracking-wider font-mono">APR</span>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">Parent-Teacher Meeting</div>
+                    <div className="text-[11px] text-slate-500">10:00 AM – 1:00 PM · CBC Consultation Hall</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="w-12 h-12 rounded-xl bg-purple-600 text-white flex flex-col items-center justify-center shrink-0 font-bold">
+                    <span className="text-sm font-black leading-none">18</span>
+                    <span className="text-[9px] uppercase tracking-wider font-mono">APR</span>
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">Mid-Term Exams</div>
+                    <div className="text-[11px] text-slate-500">All Day · Formative & Summative CBA Papers</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      )}
 
       {/* ========================================================
           TAB 1: USER DIRECTORY

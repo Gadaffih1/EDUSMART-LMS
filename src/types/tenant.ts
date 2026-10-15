@@ -27,8 +27,14 @@ export interface Tenant {
   totalFaculty: number;
   backgroundColor?: string; // Hex color for entire school background (e.g. '#0f172a', '#f8fafc')
   bgCustomHex?: string;
+  customBgColor?: string;
+  customLogoBase64?: string;
   accentColor?: string;     // Primary highlight/brand color
-  status?: 'active' | 'deactivated' | 'provisioning';
+  status?: 'active' | 'deactivated' | 'provisioning' | 'pending';
+  plan?: 'Pro' | 'Standard' | 'Basic';
+  expiryDate?: string;
+  totalClasses?: number;
+  attendanceToday?: number;
   categories?: string[];    // Custom school categories (e.g. STEM, Athletics, Boarding, Music)
   registeredAt?: string;
   superAdminNotes?: string;

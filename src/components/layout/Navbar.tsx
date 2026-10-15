@@ -27,9 +27,9 @@ import {
   Sparkles,
   Layers,
   Smartphone,
-  Check,
   Maximize2,
   Minimize2,
+  ArrowLeft,
   X
 } from 'lucide-react';
 import { OfflineSyncIndicator } from './OfflineSyncIndicator';
@@ -43,13 +43,17 @@ interface NavbarProps {
   onLogout: () => void;
   onSwitchUser: (user: User) => void;
   onNavigateHome: () => void;
+  isPlatformAdminSession?: boolean;
+  onReturnToSuperAdmin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onLogout,
   onSwitchUser,
-  onNavigateHome
+  onNavigateHome,
+  isPlatformAdminSession = false,
+  onReturnToSuperAdmin
 }) => {
   const { currentTenant } = useTenant();
   const { isMobileOverlapProtectionEnabled, toggleMobileOverlapProtection } = useMobileLayout();
@@ -302,10 +306,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             <ChevronDown className="w-3 h-3 text-slate-500" />
           </button>
 
+          {/* Return to Super Admin Button (Matching Panel 3): Visible ONLY to platform-owner accounts while inside a tenant */}
+          {isPlatformAdminSession && onReturnToSuperAdmin && (
+            <div className="relative group">
+              <button
+                onClick={onReturnToSuperAdmin}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm hover:shadow transition-all cursor-pointer"
+                title="Return to Super Admin Console"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Return to Super Admin</span>
+              </button>
+              <div className="absolute right-0 top-full mt-1.5 hidden group-hover:block z-50 w-64 p-2 bg-slate-900 text-white text-[10px] rounded-lg shadow-xl border border-slate-700 pointer-events-none leading-tight text-center">
+                Return to Super Admin is visible only to platform-owner accounts, while inside a tenant.
+              </div>
+            </div>
+          )}
+
           {currentUser ? (
             <button
               onClick={onLogout}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg border border-rose-200 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg border border-rose-200 transition-colors cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out</span>

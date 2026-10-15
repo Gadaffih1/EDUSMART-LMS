@@ -179,10 +179,20 @@ export interface GlobalPlatformSettings {
   primaryBrandColor: string;
 }
 
+export interface ClassTeacherModulePolicy {
+  allowRemarksEditing: boolean;
+  allowGatePassAuth: boolean;
+  allowLunchRegister: boolean;
+  allowParentBroadcast: boolean;
+  morningRollCallDeadline: string;
+  isRegisterLocked: boolean;
+}
+
 export interface PlatformCustomizationState {
   landingPage: LandingPageConfig;
   workspaces: WorkspaceModuleConfig[];
   globalSettings: GlobalPlatformSettings;
+  classTeacherPolicy?: ClassTeacherModulePolicy;
   schoolOverrides: Record<string, {
     disabledWorkspaceIds?: string[];
     customNotice?: string;

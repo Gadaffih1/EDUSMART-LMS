@@ -379,16 +379,29 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
     },
     {
       id: 'teacher',
-      name: 'Teacher & Class Faculty Workspace',
+      name: 'Teacher & Subject Faculty Workspace',
       shortName: 'Teacher Workspace',
-      description: 'Teachers record student attendance, CBC formative assessment scores, lesson plans, and learner comments.',
+      description: 'Subject teachers record lesson plans, schemes of work, assignments, pedagogical work entries, and classroom assessments.',
       category: 'Academics',
       icon: 'BookOpen',
       enabled: true,
       badgeText: 'Active',
       accentColor: '#059669',
       customNotice: 'Remember to finalize Strand & Sub-strand formative rubrics before week 9.',
-      allowedRoles: ['teacher', 'class_teacher']
+      allowedRoles: ['teacher']
+    },
+    {
+      id: 'class_teacher',
+      name: 'Class Teacher Command Centre',
+      shortName: 'Class Teacher Portal',
+      description: 'Designated Class Teachers oversee morning & afternoon roll-call registers, termly CBC assessment remarks, parent comms, pupil discipline records, and learner lunch dining registers.',
+      category: 'Academics',
+      icon: 'UserCheck',
+      enabled: true,
+      badgeText: 'Official',
+      accentColor: '#059669',
+      customNotice: 'Ensure daily morning attendance roll-call and termly CBC report card remarks are recorded on time.',
+      allowedRoles: ['class_teacher', 'admin']
     },
     {
       id: 'hod',
@@ -559,6 +572,14 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
     maintenanceMode: false,
     allowPublicRegistration: true,
     primaryBrandColor: '#2563eb'
+  },
+  classTeacherPolicy: {
+    allowRemarksEditing: true,
+    allowGatePassAuth: true,
+    allowLunchRegister: true,
+    allowParentBroadcast: true,
+    morningRollCallDeadline: '08:30 AM',
+    isRegisterLocked: false
   },
   schoolOverrides: {}
 };

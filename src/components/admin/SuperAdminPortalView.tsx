@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   School, 
@@ -19,16 +19,22 @@ import {
   Bell,
   Search,
   Filter,
-  DollarSign
+  DollarSign,
+  UserCheck,
+  Edit3,
+  X,
+  Save,
+  Maximize2
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
 import { INITIAL_USERS } from '../../data/initialData';
-import { User } from '../../types';
+import { User, GradeLevel, StreamName, PRIMARY_STREAMS, getStreamsForGrade } from '../../types';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SuperAdminDashboard } from './SuperAdminDashboard';
 import { CampusSwitcherWindow } from '../layout/CampusSwitcherWindow';
 import { PlatformStudioCustomizer } from './PlatformStudioCustomizer';
+import { ClassTeacherWorkspace } from '../teacher/ClassTeacherWorkspace';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool: (schoolId: string) => void;
@@ -41,17 +47,73 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
-  const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'customizer' | 'settings_hub'>('overview');
+  const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'class_teachers' | 'customizer' | 'settings_hub'>('overview');
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');
+  const [classTeacherSearchQuery, setClassTeacherSearchQuery] = useState<string>('');
+  const [selectedCampusFilter, setSelectedCampusFilter] = useState<string>('all');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const superAdminUser: User = Storage.getUsers().find(u => u.role === 'admin') || INITIAL_USERS.find(u => u.role === 'admin') || {
+  // Appoint / Reassign Modal State
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState<boolean>(false);
+  const [targetTeacherId, setTargetTeacherId] = useState<string>('');
+  const [assignGrade, setAssignGrade] = useState<GradeLevel>(4);
+  const [assignStream, setAssignStream] = useState<StreamName>('Dove');
+
+  // Preview Class Teacher Workspace Modal
+  const [previewingTeacher, setPreviewingTeacher] = useState<User | null>(null);
+
+  const [allUsersState, setAllUsersState] = useState<User[]>(() => Storage.getUsers());
+
+  useEffect(() => {
+    const handleUsersUpdated = () => {
+      setAllUsersState(Storage.getUsers());
+    };
+    window.addEventListener('users-updated', handleUsersUpdated);
+    return () => window.removeEventListener('users-updated', handleUsersUpdated);
+  }, []);
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const superAdminUser: User = allUsersState.find(u => u.role === 'admin') || INITIAL_USERS.find(u => u.role === 'admin') || {
     id: 'usr-admin-root',
     name: 'Super Administrator',
     email: 'admin@edusmart.ac.ke',
     role: 'admin'
   };
 
-  const allUsers = Storage.getUsers();
+  const classTeachers = allUsersState.filter(u => u.role === 'class_teacher');
+  const availableTeachers = allUsersState.filter(u => ['teacher', 'class_teacher', 'hod', 'senior_teacher'].includes(u.role));
+
+  const handleAssignClassTeacher = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetTeacherId) return;
+
+    const teacher = allUsersState.find(u => u.id === targetTeacherId);
+    if (!teacher) return;
+
+    Storage.updateUser(targetTeacherId, {
+      role: 'class_teacher',
+      grade: assignGrade,
+      stream: assignStream,
+      assignedStreams: [{ grade: assignGrade, stream: assignStream }]
+    });
+
+    setIsAssignModalOpen(false);
+    triggerToast(`Successfully assigned ${teacher.name} as Class Teacher for Grade ${assignGrade} (${assignStream})!`);
+  };
+
+  const handleDemoteToSubjectTeacher = (teacherId: string) => {
+    const teacher = allUsersState.find(u => u.id === teacherId);
+    if (!teacher) return;
+
+    Storage.updateUser(teacherId, {
+      role: 'teacher'
+    });
+    triggerToast(`${teacher.name} reassigned to Subject Faculty.`);
+  };
 
   const activeSchoolsCount = allTenants.filter(t => t.status !== 'pending').length;
   const pendingSchoolsCount = allTenants.filter(t => t.status === 'pending').length;
@@ -177,8 +239,8 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
               </p>
             </div>
 
-            {/* Switch between Overview, Customizer Studio and Schools Hub */}
-            <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
+            {/* Switch between Overview, Class Teacher Hub, Customizer Studio and Schools Hub */}
+            <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800">
               <button
                 onClick={() => setActiveConsoleTab('overview')}
                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
@@ -188,6 +250,20 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                 }`}
               >
                 Platform Overview
+              </button>
+              <button
+                onClick={() => setActiveConsoleTab('class_teachers')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeConsoleTab === 'class_teachers'
+                    ? 'bg-emerald-500 text-slate-950 shadow-sm font-black'
+                    : 'text-emerald-400 hover:text-emerald-300'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Class Teacher Hub</span>
+                <span className="text-[10px] bg-emerald-950/70 text-emerald-300 px-1.5 py-0.2 rounded font-mono">
+                  {classTeachers.length}
+                </span>
               </button>
               <button
                 onClick={() => setActiveConsoleTab('customizer')}

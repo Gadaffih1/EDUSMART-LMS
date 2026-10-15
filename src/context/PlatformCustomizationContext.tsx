@@ -12,13 +12,13 @@ import {
   LandingContactConfig,
   LandingFooterConfig,
   LandingSectionsVisibility,
-  LandingNavLink,
   WorkspaceModuleConfig,
-  GlobalPlatformSettings
+  GlobalPlatformSettings,
+  ClassTeacherModulePolicy
 } from '../types/customization';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 
-const STORAGE_KEY = 'edusmart_platform_customization_v4';
+const STORAGE_KEY = 'edusmart_platform_customization_v5';
 
 interface PlatformCustomizationContextType {
   customization: PlatformCustomizationState;
@@ -54,6 +54,7 @@ interface PlatformCustomizationContextType {
   addCustomWorkspace: (workspace: WorkspaceModuleConfig) => void;
   removeCustomWorkspace: (id: string) => void;
   updateGlobalSettings: (settings: Partial<GlobalPlatformSettings>) => void;
+  updateClassTeacherPolicy: (policy: Partial<ClassTeacherModulePolicy>) => void;
   updateSchoolOverride: (schoolId: string, override: { disabledWorkspaceIds?: string[]; customNotice?: string }) => void;
   resetToDefaults: () => void;
   exportConfiguration: () => string;
@@ -468,6 +469,16 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
     }));
   };
 
+  const updateClassTeacherPolicy = (policy: Partial<ClassTeacherModulePolicy>) => {
+    setCustomization(prev => ({
+      ...prev,
+      classTeacherPolicy: {
+        ...(prev.classTeacherPolicy || DEFAULT_PLATFORM_CUSTOMIZATION.classTeacherPolicy!),
+        ...policy
+      }
+    }));
+  };
+
   const updateSchoolOverride = (schoolId: string, override: { disabledWorkspaceIds?: string[]; customNotice?: string }) => {
     setCustomization(prev => ({
       ...prev,
@@ -553,6 +564,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
         addCustomWorkspace,
         removeCustomWorkspace,
         updateGlobalSettings,
+        updateClassTeacherPolicy,
         updateSchoolOverride,
         resetToDefaults,
         exportConfiguration,

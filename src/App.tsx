@@ -18,6 +18,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { StudentWorkspace } from './components/student/StudentWorkspace';
 import { ParentWorkspace } from './components/parent/ParentWorkspace';
 import { TeacherWorkspace } from './components/teacher/TeacherWorkspace';
+import { ClassTeacherWorkspace } from './components/teacher/ClassTeacherWorkspace';
 import { HODWorkspace } from './components/hod/HODWorkspace';
 import { SeniorTeacherWorkspace } from './components/supervision/SeniorTeacherWorkspace';
 import { LibrarianWorkspace } from './components/library/LibrarianWorkspace';
@@ -218,8 +219,11 @@ function AppContent({
             ) : currentUser.role === 'parent' ? (
               /* Parent: Their children's information */
               <ParentWorkspace currentUser={currentUser} onLogout={onLogout} />
-            ) : ['teacher', 'class_teacher'].includes(currentUser.role) ? (
-              /* Teacher: Assigned classes and subjects / Class Teacher: Assigned class + learners */
+            ) : currentUser.role === 'class_teacher' ? (
+              /* Class Teacher: Dedicated Class Teacher Command Centre & Form Lead Desk */
+              <ClassTeacherWorkspace currentUser={currentUser} />
+            ) : currentUser.role === 'teacher' ? (
+              /* Teacher: Assigned classes and subjects */
               <TeacherWorkspace currentUser={currentUser} />
             ) : currentUser.role === 'hod' ? (
               /* HOD: Department */

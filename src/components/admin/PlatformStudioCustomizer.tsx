@@ -96,6 +96,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     addCustomWorkspace,
     removeCustomWorkspace,
     updateGlobalSettings,
+    updateClassTeacherPolicy,
     updateSchoolOverride,
     resetToDefaults,
     exportConfiguration,
@@ -1477,6 +1478,183 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                 </div>
               </div>
             ))}
+          </div>
+          {/* =========================================================================
+              CLASS TEACHER MODULE GOVERNANCE & INSTITUTIONAL POLICY (SUPER ADMIN CONTROL)
+              ========================================================================= */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-emerald-950/40 rounded-2xl p-5 sm:p-6 border border-emerald-500/30 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white font-serif flex items-center gap-2">
+                    <span>Class Teacher Module Global Policies</span>
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-1.5 py-0.5 rounded border border-emerald-400/30 uppercase">
+                      Super Admin Managed
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Define institutional governance rules, roll-call deadlines, and permissions for all class teachers.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium">Status:</span>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                  customization.workspaces.find(w => w.id === 'class_teacher')?.enabled !== false
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-red-500/10 text-red-400 border-red-500/30'
+                }`}>
+                  {customization.workspaces.find(w => w.id === 'class_teacher')?.enabled !== false ? 'Module Active' : 'Module Inactive'}
+                </span>
+              </div>
+            </div>
+
+            {/* Policy Toggles Grid */}
+            {(() => {
+              const policy = customization.classTeacherPolicy || {
+                allowRemarksEditing: true,
+                allowGatePassAuth: true,
+                allowLunchRegister: true,
+                allowParentBroadcast: true,
+                morningRollCallDeadline: '08:30 AM',
+                isRegisterLocked: false
+              };
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                  
+                  {/* Policy 1: Report Card Remarks */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">CBC Report Remarks</div>
+                      <div className="text-[11px] text-slate-400">Allow Class Teachers to write & edit termly remarks</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateClassTeacherPolicy({ allowRemarksEditing: !policy.allowRemarksEditing });
+                        triggerToast(`Report card remarks editing ${!policy.allowRemarksEditing ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        policy.allowRemarksEditing
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {policy.allowRemarksEditing ? 'Allowed' : 'Locked'}
+                    </button>
+                  </div>
+
+                  {/* Policy 2: Gate Passes */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Gate Pass Authorization</div>
+                      <div className="text-[11px] text-slate-400">Class Teachers can sign student exit slips</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateClassTeacherPolicy({ allowGatePassAuth: !policy.allowGatePassAuth });
+                        triggerToast(`Gate pass authorization ${!policy.allowGatePassAuth ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        policy.allowGatePassAuth
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {policy.allowGatePassAuth ? 'Allowed' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {/* Policy 3: Lunch Dining Register */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Learner Lunch Register</div>
+                      <div className="text-[11px] text-slate-400">Midday dining attendance marked by form lead</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateClassTeacherPolicy({ allowLunchRegister: !policy.allowLunchRegister });
+                        triggerToast(`Lunch register marking ${!policy.allowLunchRegister ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        policy.allowLunchRegister
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {policy.allowLunchRegister ? 'Allowed' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {/* Policy 4: Parent Broadcasts */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Direct Parent SMS Notices</div>
+                      <div className="text-[11px] text-slate-400">Send class-level announcements to parents</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateClassTeacherPolicy({ allowParentBroadcast: !policy.allowParentBroadcast });
+                        triggerToast(`Parent broadcasts ${!policy.allowParentBroadcast ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        policy.allowParentBroadcast
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {policy.allowParentBroadcast ? 'Allowed' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {/* Policy 5: Roll-Call Submission Deadline */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                    <div className="font-bold text-white">Morning Roll-Call Deadline</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={policy.morningRollCallDeadline}
+                        onChange={(e) => updateClassTeacherPolicy({ morningRollCallDeadline: e.target.value })}
+                        className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs w-28 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        placeholder="08:30 AM"
+                      />
+                      <span className="text-[10px] text-slate-400">Daily cutoff</span>
+                    </div>
+                  </div>
+
+                  {/* Policy 6: Lock Class Registers */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Term Register Lock</div>
+                      <div className="text-[11px] text-slate-400">Prevent historical modifications for audit</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateClassTeacherPolicy({ isRegisterLocked: !policy.isRegisterLocked });
+                        triggerToast(`Registers ${!policy.isRegisterLocked ? 'locked' : 'unlocked'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        policy.isRegisterLocked
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {policy.isRegisterLocked ? 'Locked' : 'Open'}
+                    </button>
+                  </div>
+
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

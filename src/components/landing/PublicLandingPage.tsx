@@ -38,7 +38,9 @@ import {
   ChevronUp,
   RotateCcw,
   Check,
-  MessageSquare
+  MessageSquare,
+  Rocket,
+  Handshake
 } from 'lucide-react';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { useTenant } from '../../context/TenantContext';
@@ -157,13 +159,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   
   // Registration modal state
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [studentEstimatorCount, setStudentEstimatorCount] = useState<number>(450);
   const [regForm, setRegForm] = useState({
     schoolName: '',
     county: 'Nairobi County',
     curriculum: 'Kenyan CBC Curriculum',
     adminEmail: '',
     phone: '',
-    estimatedStudents: '800'
+    estimatedStudents: '450',
+    selectedPlanId: 'plan-standard'
   });
   const [regSuccess, setRegSuccess] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -177,10 +182,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setRegSuccess(true);
+    const chosenPlan = pricing.find(p => p.id === regForm.selectedPlanId) || pricing[0];
     setTimeout(() => {
       setRegSuccess(false);
       setShowRegisterModal(false);
-      setToastMessage(`Registration request for "${regForm.schoolName}" submitted successfully! Our onboarding team will contact ${regForm.adminEmail} within 2 hours.`);
+      setToastMessage(`Registration request for "${regForm.schoolName}" with ${chosenPlan?.name || 'Selected'} Package (${chosenPlan?.price || ''}) submitted successfully! Our onboarding team will contact ${regForm.adminEmail} within 2 hours.`);
       setTimeout(() => setToastMessage(null), 5000);
     }, 1000);
   };
@@ -1038,31 +1044,34 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
       )}
 
       {/* ========================================================
-          7. PRICING SECTION
+          7. OUR PACKAGES & PRICING SECTION (SYNCED WITH MARKETING BROCHURE)
           ======================================================== */}
       {visibility.pricing && (
-        <section id="pricing-section" className="py-16 sm:py-24 bg-slate-50 border-b border-slate-100 relative group">
+        <section id="pricing-section" className="py-16 sm:py-24 bg-gradient-to-b from-slate-50 via-white to-slate-50 border-b border-slate-200 relative group">
           
           {isSuperAdminEditMode && (
-            <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-slate-950 text-white px-3 py-1.5 rounded-xl border border-amber-400 text-xs font-bold">
-              <span className="text-amber-400">Pricing Section:</span>
+            <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-slate-950 text-white px-3 py-1.5 rounded-xl border border-amber-400 text-xs font-bold shadow-xl">
+              <span className="text-amber-400">Packages Control:</span>
               <button
                 onClick={() => {
                   setEditingItemType('pricing');
                   setEditingItemData({
                     id: `plan-${Date.now()}`,
-                    name: 'New Custom Tier',
-                    price: 'KSh 45,000',
-                    period: 'per term',
-                    description: 'Description of the tier',
-                    features: ['Attendance roll call', 'CBC gradebook', 'Parent portal'],
+                    name: 'CUSTOM TIER',
+                    capacity: 'Up to 1,000 Students',
+                    price: 'KSh 150,000',
+                    period: 'per year',
+                    perStudent: '≈ KSh 150 per student',
+                    description: 'Custom tailored plan for specialized institutions.',
+                    color: '#2563eb',
+                    features: ['All Powerful Portals', 'CBC Continuous Assessment', 'Parent Portal & SMS', 'Email Support'],
                     popular: false,
                     buttonLabel: 'Select Plan'
                   });
                 }}
                 className="px-2.5 py-1 bg-amber-400 text-slate-950 rounded text-[11px] font-black cursor-pointer"
               >
-                + Add Plan Tier
+                + Add Package Tier
               </button>
               <button
                 onClick={() => toggleSectionVisibility('pricing')}
@@ -1073,84 +1082,492 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </div>
           )}
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
             
-            <div className="text-center max-w-2xl mx-auto space-y-3">
-              <span className="text-xs font-black tracking-widest text-blue-700 uppercase bg-blue-100/70 px-3 py-1 rounded-full border border-blue-200">
-                Institutional Plans
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 font-serif tracking-tight">
-                Transparent, Scalable Pricing
+            {/* Header with distinctive 'Our Packages' Banner */}
+            <div className="text-center max-w-3xl mx-auto space-y-3">
+              <div className="inline-block">
+                <div className="bg-[#0284c7] text-white font-serif font-black px-7 py-2 rounded-xl shadow-md text-lg sm:text-xl tracking-wider uppercase flex items-center justify-center gap-2">
+                  <Award className="w-5 h-5 text-amber-300" />
+                  <span>Our Packages</span>
+                </div>
+              </div>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-950 font-serif tracking-tight">
+                One Platform. Every School. <span className="text-[#0284c7]">Endless Possibilities.</span>
               </h2>
-              <p className="text-sm text-slate-600">
-                Tailored subscription tiers designed for single campuses and multi-branch educational groups.
+              <p className="text-sm sm:text-base text-slate-600 leading-relaxed font-medium">
+                EduSmart LMS is a complete school management system designed to simplify learning, communication and administration — all in one place.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {pricing.map((tier) => (
-                <div 
-                  key={tier.id}
-                  className={`rounded-2xl p-6 sm:p-8 space-y-6 transition-all text-left relative ${
-                    tier.popular
-                      ? 'border-2 border-blue-600 shadow-xl bg-white'
-                      : 'border border-slate-200 bg-white hover:shadow-lg'
-                  }`}
-                >
-                  {isSuperAdminEditMode && (
-                    <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
-                      <button
-                        onClick={() => {
-                          setEditingItemType('pricing');
-                          setEditingItemData(tier);
-                        }}
-                        className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded"
-                        title="Edit plan"
-                      >
-                        <Edit3 className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={() => removePricingTier(tier.id)}
-                        className="p-1 bg-slate-100 hover:bg-red-100 text-red-600 rounded"
-                        title="Delete plan"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
+            {/* ========================================================
+                EASY PLAN SELECTION & CATEGORY NAVIGATOR
+                ======================================================== */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-blue-950 rounded-3xl p-5 sm:p-7 border border-slate-800 shadow-2xl space-y-5 text-white">
+              
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="space-y-1 text-left">
+                  <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Instant Category Plan Selector</span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black font-serif tracking-tight text-white">
+                    Choose Your Ideal School Category
+                  </h3>
+                  <p className="text-xs text-slate-300 max-w-xl">
+                    Every school tier is calibrated to pupil capacity and operational scale. Select your student bracket below for instant match.
+                  </p>
+                </div>
 
-                  {tier.badge && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-0.5 rounded-full shadow-sm">
-                      {tier.badge}
-                    </span>
+                {/* Quick Population Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/90 p-2 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-1">
+                    Student Size:
+                  </span>
+                  {[
+                    { label: '≤300', count: 250, id: 'plan-starter' },
+                    { label: '301–600', count: 500, id: 'plan-standard' },
+                    { label: '601–1,200', count: 1000, id: 'plan-professional' },
+                    { label: '1,201–2,000', count: 1800, id: 'plan-premium' },
+                    { label: '2,001–3,000', count: 2800, id: 'plan-enterprise' },
+                    { label: '3,001–5,000+', count: 4200, id: 'plan-enterprise-plus' }
+                  ].map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryFilter(preset.id);
+                        setStudentEstimatorCount(preset.count);
+                      }}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        selectedCategoryFilter === preset.id
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/40 ring-1 ring-blue-400'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                  {selectedCategoryFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategoryFilter('all')}
+                      className="px-2 py-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 bg-amber-400/10 hover:bg-amber-400/20 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Show All 6
+                    </button>
                   )}
-                  <div>
-                    <h3 className="text-xl font-black text-slate-900 font-serif">{tier.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1">{tier.description}</p>
+                </div>
+              </div>
+
+              {/* 6 Category Summary Buttons for Easy 1-Tap Selection */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {pricing.map((tier, idx) => {
+                  const isSelected = selectedCategoryFilter === tier.id;
+                  const tierColor = tier.color || (
+                    idx === 0 ? '#059669' :
+                    idx === 1 ? '#2563eb' :
+                    idx === 2 ? '#7c3aed' :
+                    idx === 3 ? '#ea580c' :
+                    idx === 4 ? '#1e3a8a' :
+                    '#0f766e'
+                  );
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategoryFilter(tier.id);
+                        setRegForm(prev => ({
+                          ...prev,
+                          selectedPlanId: tier.id,
+                          schoolName: prev.schoolName || `Campus for ${tier.name} Package`,
+                          estimatedStudents: tier.id === 'plan-starter' ? '250' :
+                                             tier.id === 'plan-standard' ? '500' :
+                                             tier.id === 'plan-professional' ? '1000' :
+                                             tier.id === 'plan-premium' ? '1800' :
+                                             tier.id === 'plan-enterprise' ? '2800' : '4000'
+                        }));
+                      }}
+                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between relative group/btn ${
+                        isSelected
+                          ? 'border-white bg-slate-800/90 ring-2 ring-sky-400 shadow-xl'
+                          : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: tierColor }} />
+                          <span className="text-[10px] font-mono font-bold text-slate-400">
+                            Cat. 0{idx + 1}
+                          </span>
+                        </div>
+                        <div className="text-xs sm:text-sm font-black text-white uppercase tracking-tight font-serif truncate">
+                          {tier.name}
+                        </div>
+                        <div className="text-[10px] text-slate-300 font-medium truncate mt-0.5">
+                          {tier.capacity}
+                        </div>
+                      </div>
+                      
+                      <div className="mt-2 pt-2 border-t border-slate-800/80">
+                        <div className="text-xs sm:text-sm font-black text-amber-300 font-mono">
+                          {tier.price}
+                        </div>
+                        <div className="text-[9px] text-slate-400 font-medium">
+                          {tier.perStudent || tier.period}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Dynamic Recommendation & Action Bar */}
+              {selectedCategoryFilter !== 'all' && (() => {
+                const matched = pricing.find(p => p.id === selectedCategoryFilter);
+                if (!matched) return null;
+                return (
+                  <div className="p-3.5 bg-blue-900/40 border border-blue-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center font-bold text-sm shrink-0">
+                        <Check className="w-5 h-5 text-sky-400" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-sky-200">Selected Plan: <strong className="text-white text-sm font-serif">{matched.name}</strong> ({matched.capacity})</div>
+                        <div className="text-[11px] text-slate-300">{matched.description} • <span className="font-mono font-bold text-amber-300">{matched.price}</span> ({matched.perStudent})</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegForm(prev => ({
+                          ...prev,
+                          selectedPlanId: matched.id,
+                          schoolName: prev.schoolName || `Campus for ${matched.name} Package`,
+                          estimatedStudents: matched.id === 'plan-starter' ? '250' :
+                                             matched.id === 'plan-standard' ? '500' :
+                                             matched.id === 'plan-professional' ? '1000' :
+                                             matched.id === 'plan-premium' ? '1800' :
+                                             matched.id === 'plan-enterprise' ? '2800' : '4000'
+                        }));
+                        setShowRegisterModal(true);
+                      }}
+                      className="w-full sm:w-auto px-5 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      Proceed with {matched.name}
+                    </button>
                   </div>
-                  <div className="text-3xl font-black text-slate-900 font-serif">
-                    {tier.price}<span className="text-xs font-normal text-slate-500"> / {tier.period}</span>
-                  </div>
-                  <ul className="space-y-2.5 text-xs text-slate-600">
-                    {tier.features.map((feat, fidx) => (
-                      <li key={fidx} className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    onClick={() => setShowRegisterModal(true)}
-                    className={`w-full py-2.5 rounded-xl font-bold text-xs transition-colors cursor-pointer ${
-                      tier.popular
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
-                        : 'border border-slate-300 text-slate-800 hover:bg-slate-50'
+                );
+              })()}
+            </div>
+
+            {/* 6 Category Plans Grid (Matching the Flyer 100%) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4 items-stretch">
+              {pricing.map((tier, idx) => {
+                const isSelected = selectedCategoryFilter === tier.id;
+                // Determine styling based on index/color from brochure
+                const tierColor = tier.color || (
+                  idx === 0 ? '#059669' :
+                  idx === 1 ? '#2563eb' :
+                  idx === 2 ? '#7c3aed' :
+                  idx === 3 ? '#ea580c' :
+                  idx === 4 ? '#1e3a8a' :
+                  '#0f766e'
+                );
+
+                const getTierIcon = (index: number) => {
+                  switch (index) {
+                    case 0:
+                      return <School className="w-9 h-9" style={{ color: tierColor }} />;
+                    case 1:
+                      return <Building2 className="w-9 h-9" style={{ color: tierColor }} />;
+                    case 2:
+                      return <GraduationCap className="w-9 h-9" style={{ color: tierColor }} />;
+                    case 3:
+                      return <Award className="w-9 h-9" style={{ color: tierColor }} />;
+                    case 4:
+                      return <ShieldCheck className="w-9 h-9" style={{ color: tierColor }} />;
+                    default:
+                      return <Layers className="w-9 h-9" style={{ color: tierColor }} />;
+                  }
+                };
+
+                return (
+                  <div 
+                    key={tier.id}
+                    className={`rounded-2xl border-2 transition-all flex flex-col justify-between overflow-hidden bg-white shadow-md hover:shadow-xl relative ${
+                      isSelected
+                        ? 'border-sky-500 ring-4 ring-sky-400/40 shadow-2xl scale-[1.02]'
+                        : tier.popular
+                        ? 'border-purple-600 ring-2 ring-purple-400/40'
+                        : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    {tier.buttonLabel || `Select ${tier.name}`}
+                    {/* Super Admin In-Context Controls */}
+                    {isSuperAdminEditMode && (
+                      <div className="absolute top-1 right-1 flex items-center gap-1 z-20">
+                        <button
+                          onClick={() => {
+                            setEditingItemType('pricing');
+                            setEditingItemData(tier);
+                          }}
+                          className="p-1 bg-black/60 hover:bg-black text-white rounded text-xs"
+                          title="Edit plan"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => removePricingTier(tier.id)}
+                          className="p-1 bg-black/60 hover:bg-red-600 text-white rounded text-xs"
+                          title="Delete plan"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Popular Badge */}
+                    {tier.badge && (
+                      <span className="absolute top-8 left-1/2 -translate-x-1/2 z-10 bg-amber-400 text-slate-950 text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md whitespace-nowrap">
+                        {tier.badge}
+                      </span>
+                    )}
+
+                    {/* Top Package Name Header */}
+                    <div 
+                      className="text-white py-2.5 px-3 text-center font-serif font-black tracking-wider uppercase text-xs sm:text-sm shadow-inner"
+                      style={{ backgroundColor: tierColor }}
+                    >
+                      {tier.name}
+                    </div>
+
+                    {/* Body Content */}
+                    <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between text-center space-y-3.5">
+                      
+                      {/* School Illustration Icon */}
+                      <div className="flex justify-center items-center py-1">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center shadow-inner">
+                          {getTierIcon(idx)}
+                        </div>
+                      </div>
+
+                      {/* Student Capacity (Bold Label) */}
+                      <div className="text-xs sm:text-sm font-extrabold text-slate-800 tracking-tight">
+                        {tier.capacity || 'All Students'}
+                      </div>
+
+                      {/* Price Block (Solid Matching Banner) */}
+                      <div 
+                        className="py-2.5 px-2 rounded-xl text-white shadow-sm"
+                        style={{ backgroundColor: tierColor }}
+                      >
+                        <div className="text-base sm:text-lg font-black tracking-tight font-serif leading-none">
+                          {tier.price}
+                        </div>
+                        <div className="text-[10px] font-medium opacity-90 mt-0.5 uppercase tracking-wider">
+                          {tier.period}
+                        </div>
+                      </div>
+
+                      {/* Per-Student Pill */}
+                      {tier.perStudent && (
+                        <div className="inline-block mx-auto py-1 px-2 rounded-full text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200">
+                          {tier.perStudent}
+                        </div>
+                      )}
+
+                      {/* Target Description */}
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed min-h-[36px] flex items-center justify-center">
+                        {tier.description}
+                      </p>
+
+                      {/* Features Preview (Optional Popover/List) */}
+                      {tier.features && tier.features.length > 0 && (
+                        <div className="pt-2 border-t border-slate-100 text-left space-y-1.5">
+                          <span className="text-[9px] font-mono font-bold text-slate-400 uppercase block text-center">
+                            Includes
+                          </span>
+                          {tier.features.slice(0, 3).map((feat, fidx) => (
+                            <div key={fidx} className="flex items-start gap-1.5 text-[10px] text-slate-600">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0 mt-0.5" />
+                              <span className="truncate">{feat}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action Button */}
+                      <button
+                        onClick={() => {
+                          setRegForm(prev => ({
+                            ...prev,
+                            selectedPlanId: tier.id,
+                            schoolName: prev.schoolName || `Campus for ${tier.name} Package`,
+                            estimatedStudents: tier.id === 'plan-starter' ? '250' :
+                                               tier.id === 'plan-standard' ? '500' :
+                                               tier.id === 'plan-professional' ? '1000' :
+                                               tier.id === 'plan-premium' ? '1800' :
+                                               tier.id === 'plan-enterprise' ? '2800' : '4000'
+                          }));
+                          setShowRegisterModal(true);
+                        }}
+                        className="w-full py-2 px-2.5 rounded-xl text-white font-bold text-xs transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer mt-2"
+                        style={{ backgroundColor: tierColor }}
+                      >
+                        {tier.buttonLabel || `Select ${tier.name}`}
+                      </button>
+
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ========================================================
+                ONBOARDING CHARGES & PARTNERSHIP GUARANTEE CARDS
+                Strictly Synced with Marketing Brochure Flyer
+                ======================================================== */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 pt-4">
+              
+              {/* Card 1 & 2: Onboarding Charges (2 Columns Width on LG) */}
+              <div className="lg:col-span-2 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-xl border border-blue-900/50 flex flex-col md:flex-row items-center justify-between gap-6">
+                
+                <div className="space-y-4 text-left flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center shrink-0">
+                      <Rocket className="w-6 h-6 text-sky-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg sm:text-xl font-black font-serif tracking-tight text-white">
+                        Onboarding Charges
+                      </h3>
+                      <p className="text-xs text-sky-200">
+                        Get started the right way — with full setup and dedicated institutional support.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 4 Checkmarks list */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-200">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span>System configuration & customization</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span>Data migration (students, staff, classes, etc.)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span>Staff training & user orientation</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
+                      <span>Go-live support & 30 days post-launch assistance</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Setup Fee Badge */}
+                <div className="bg-blue-900/60 border border-blue-400/40 rounded-2xl p-5 text-center shrink-0 w-full md:w-56 shadow-inner">
+                  <div className="text-2xl sm:text-3xl font-black text-white font-serif tracking-tight">
+                    KSh 50,000
+                  </div>
+                  <div className="text-xs text-sky-300 font-bold uppercase tracking-wider mt-1">
+                    One-time setup fee
+                  </div>
+                  <button
+                    onClick={() => setShowRegisterModal(true)}
+                    className="mt-3 w-full py-2 px-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                  >
+                    Request Deployment
                   </button>
                 </div>
-              ))}
+
+              </div>
+
+              {/* Card 3: Partnership Commitment (1 Column Width on LG) */}
+              <div className="bg-sky-50 rounded-3xl p-6 sm:p-7 border border-sky-100 shadow-lg flex flex-col justify-between text-left space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Handshake className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-xs font-mono font-bold text-sky-800 uppercase tracking-wider">
+                    Our Commitment
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">
+                    We don't just give you a system. We partner with you for success.
+                  </p>
+                  <p className="text-base sm:text-lg font-serif font-black text-sky-950 italic">
+                    Your School. Our Priority.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-sky-200/60 flex items-center justify-between text-xs text-slate-600">
+                  <span className="font-bold text-slate-900">Direct Hotline:</span>
+                  <a 
+                    href="tel:0729620384"
+                    className="font-mono font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1.5"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>0729620384</span>
+                  </a>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Direct Contact & Assurance Bar */}
+            <div className="bg-slate-900 text-white rounded-2xl px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs shadow-lg border border-slate-800">
+              
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                  <Phone className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-left">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Contact Us Today</span>
+                  <a href="tel:0729620384" className="font-mono font-black text-sm text-amber-400 hover:underline">
+                    0729620384
+                  </a>
+                </div>
+              </div>
+
+              {/* Trust Badges from Flyer */}
+              <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[11px] font-bold text-slate-300">
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Secure</span>
+                </span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Cloud Ready</span>
+                </span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <Laptop className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Multi-Device Access</span>
+                </span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Reliable Support</span>
+                </span>
+                <span>·</span>
+                <span className="flex items-center gap-1">
+                  <BarChart3 className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Scalable Growth</span>
+                </span>
+              </div>
+
+              <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest text-center md:text-right">
+                SMART SCHOOLS CREATE A BRIGHTER FUTURE
+              </div>
+
             </div>
 
           </div>
@@ -2087,6 +2504,49 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">Student Capacity</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Up to 300 Students"
+                      value={editingItemData.capacity || ''}
+                      onChange={(e) => setEditingItemData({ ...editingItemData, capacity: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">Per Student Cost</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ≈ KSh 250 per student"
+                      value={editingItemData.perStudent || ''}
+                      onChange={(e) => setEditingItemData({ ...editingItemData, perStudent: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">Accent Theme Color</label>
+                    <input
+                      type="color"
+                      value={editingItemData.color || '#2563eb'}
+                      onChange={(e) => setEditingItemData({ ...editingItemData, color: e.target.value })}
+                      className="w-full h-9 bg-slate-950 border border-slate-700 rounded-xl p-1 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-300 mb-1">Button Label</label>
+                    <input
+                      type="text"
+                      placeholder="Select Plan"
+                      value={editingItemData.buttonLabel || ''}
+                      onChange={(e) => setEditingItemData({ ...editingItemData, buttonLabel: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white"
+                    />
+                  </div>
+                </div>
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">Description</label>
                   <input
@@ -2157,7 +2617,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           ======================================================== */}
       {showRegisterModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 space-y-4 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900 font-serif">Register a New School</h3>
@@ -2172,6 +2632,72 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </div>
 
             <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-left text-xs">
+              
+              {/* Package Category Selector */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-slate-700">
+                    Selected Package Category (6 Synced Tiers)
+                  </label>
+                  <span className="text-[10px] text-blue-600 font-bold">
+                    Official Pricing Flyer
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {pricing.map((tier, idx) => {
+                    const isSelected = regForm.selectedPlanId === tier.id;
+                    const tierColor = tier.color || (
+                      idx === 0 ? '#059669' :
+                      idx === 1 ? '#2563eb' :
+                      idx === 2 ? '#7c3aed' :
+                      idx === 3 ? '#ea580c' :
+                      idx === 4 ? '#1e3a8a' :
+                      '#0f766e'
+                    );
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => {
+                          setRegForm({
+                            ...regForm,
+                            selectedPlanId: tier.id,
+                            estimatedStudents: tier.id === 'plan-starter' ? '250' :
+                                               tier.id === 'plan-standard' ? '500' :
+                                               tier.id === 'plan-professional' ? '1000' :
+                                               tier.id === 'plan-premium' ? '1800' :
+                                               tier.id === 'plan-enterprise' ? '2800' : '4000'
+                          });
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                          isSelected
+                            ? 'border-blue-600 bg-blue-50/80 ring-2 ring-blue-500/30 shadow-sm'
+                            : 'border-slate-200 hover:border-slate-300 bg-slate-50/50 hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tierColor }} />
+                            <span className="font-serif font-black text-xs text-slate-900 uppercase">
+                              {tier.name}
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <Check className="w-3.5 h-3.5 text-blue-600 font-bold" />
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                          {tier.capacity}
+                        </div>
+                        <div className="text-xs font-black text-blue-700 font-mono mt-0.5">
+                          {tier.price}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">School Official Name</label>
                 <input
@@ -2180,7 +2706,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   placeholder="e.g. St. Jude Academy"
                   value={regForm.schoolName}
                   onChange={(e) => setRegForm({ ...regForm, schoolName: e.target.value })}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 font-medium"
                 />
               </div>
 

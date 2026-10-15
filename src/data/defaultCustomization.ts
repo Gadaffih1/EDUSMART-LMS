@@ -186,53 +186,126 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
     ],
     pricing: [
       {
-        id: 'plan-basic',
-        name: 'Basic School Plan',
-        price: 'KSh 25,000',
-        period: 'per term',
-        description: 'Ideal for small preparatory schools up to 400 learners.',
+        id: 'plan-starter',
+        name: 'STARTER',
+        capacity: 'Up to 300 Students',
+        price: 'KSh 75,000',
+        period: 'per year',
+        perStudent: '≈ KSh 250 per student',
+        description: 'Ideal for small schools and new institutions.',
+        color: '#059669',
+        accentClass: 'emerald',
         features: [
-          'Up to 400 Learners & 25 Teachers',
+          'Up to 300 Enrolled Students',
+          'Full CBC Academic Engine & Continuous Assessment',
           'Attendance Roll Call & Gate Registers',
-          'Standard CBC Termly Report Cards',
-          'Email & Community Support'
+          'Parent Portal & Termly Report Cards',
+          'Standard Cloud Setup & Email Support'
         ],
         popular: false,
-        buttonLabel: 'Select Basic Plan'
+        buttonLabel: 'Select Starter Plan'
       },
       {
-        id: 'plan-pro',
-        name: 'Pro Institutional Plan',
-        price: 'KSh 65,000',
-        period: 'per term',
-        badge: 'MOST POPULAR',
-        description: 'The complete enterprise suite for comprehensive academies.',
+        id: 'plan-standard',
+        name: 'STANDARD',
+        capacity: 'Up to 600 Students',
+        price: 'KSh 120,000',
+        period: 'per year',
+        perStudent: '≈ KSh 200 per student',
+        description: 'Great for growing schools and institutions.',
+        color: '#2563eb',
+        accentClass: 'blue',
         features: [
-          'Up to 2,500 Learners & Unlimited Staff',
-          'Kenyan CBC Assessment Engine & Rubrics',
-          'M-Pesa Paybill & Automated Reconciliation',
-          'Parent Portal & SMS Notification Pipeline',
-          'Sanatorium Clinic & Transport Fleet Modules',
-          'Priority 24/7 Dedicated Support'
+          'Up to 600 Enrolled Students',
+          'Full CBC Assessment & Auto Report Cards',
+          'M-Pesa Paybill Automated Reconciliation',
+          'Digital Library Integration & E-Resources',
+          'Timetable Scheduling & Teacher Workload'
         ],
+        popular: false,
+        buttonLabel: 'Select Standard Plan'
+      },
+      {
+        id: 'plan-professional',
+        name: 'PROFESSIONAL',
+        capacity: 'Up to 1,200 Students',
+        price: 'KSh 210,000',
+        period: 'per year',
+        perStudent: '≈ KSh 175 per student',
+        description: 'Perfect for medium and large schools.',
+        color: '#7c3aed',
+        accentClass: 'purple',
+        badge: 'MOST POPULAR',
         popular: true,
-        buttonLabel: 'Get Started with Pro'
+        features: [
+          'Up to 1,200 Enrolled Students',
+          'Virtual Classrooms & Virtual Laboratory',
+          'Live Transport & Fleet Tracking Integration',
+          'Sanatorium Clinic & Student Health Records',
+          'Multi-Stream CBC Grade Management (Grades 1–9)'
+        ],
+        buttonLabel: 'Select Professional Plan'
+      },
+      {
+        id: 'plan-premium',
+        name: 'PREMIUM',
+        capacity: 'Up to 2,000 Students',
+        price: 'KSh 320,000',
+        period: 'per year',
+        perStudent: '≈ KSh 160 per student',
+        description: 'Designed for large schools and multi-stream institutions.',
+        color: '#ea580c',
+        accentClass: 'orange',
+        features: [
+          'Up to 2,000 Enrolled Students',
+          'Co-Curricular Command Centre & Sports Portals',
+          'Event Ticketing & Public Event Management',
+          'Executive Leadership Strategic Dashboards',
+          'Priority 24/7 Dedicated Support & Quick SLA'
+        ],
+        popular: false,
+        buttonLabel: 'Select Premium Plan'
       },
       {
         id: 'plan-enterprise',
-        name: 'Multi-Campus Enterprise',
-        price: 'Custom Quote',
-        period: 'annual contract',
-        description: 'For school groups, multi-campus franchises and county trusts.',
+        name: 'ENTERPRISE',
+        capacity: 'Up to 3,000 Students',
+        price: 'KSh 450,000',
+        period: 'per year',
+        perStudent: '≈ KSh 150 per student',
+        description: 'For large schools, groups and institutions.',
+        color: '#1e3a8a',
+        accentClass: 'indigo',
         features: [
-          'Unlimited Campuses & Student Population',
-          'Central Super Admin Console & Campus Switcher',
-          'Custom Institutional Branding & Domain Name',
-          'Custom Workspaces & API Integrations',
-          'Dedicated Account Director & On-Site Training'
+          'Up to 3,000 Enrolled Students',
+          'Deep Analytics Windows & Finance Trends',
+          'Lunch Service & Nutrition Records Tracking',
+          'Custom Tenant Workspaces & Departmental RBAC',
+          'Dedicated Account Director & On-Site Orientation'
         ],
         popular: false,
-        buttonLabel: 'Contact Sales'
+        buttonLabel: 'Select Enterprise Plan'
+      },
+      {
+        id: 'plan-enterprise-plus',
+        name: 'ENTERPRISE PLUS',
+        capacity: '3,001 – 5,000 Students',
+        price: 'KSh 600,000',
+        period: 'per year',
+        perStudent: 'From KSh 120 per student',
+        description: 'For very large schools, groups and multi-campus institutions.',
+        color: '#0f766e',
+        accentClass: 'teal',
+        badge: 'MULTI-CAMPUS',
+        popular: false,
+        features: [
+          '3,001 to 5,000+ Enrolled Students',
+          'Multi-Campus Orchestration & Central Hub',
+          'Super Admin Campus Switcher Integration',
+          'Centralized Digital Resource Centre',
+          'Tailored API Integrations & Executive SLA'
+        ],
+        buttonLabel: 'Select Enterprise Plus'
       }
     ],
     faqs: [
@@ -265,14 +338,14 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       sectionBadge: 'GET IN TOUCH',
       sectionTitle: 'Contact Administration & Support',
       sectionSubtitle: 'Schedule an institutional walkthrough or request a tailored pilot deployment for your school campus.',
-      phone: '+254 (0) 700 889 900 / +254 (0) 20 523 4400',
+      phone: '0729620384',
       email: 'support@edusmart.ac.ke',
       address: 'EduSmart Towers, 5th Floor, Kilimani Business District, Nairobi, Kenya',
       supportHours: 'Monday – Friday: 7:00 AM – 6:00 PM EAT · Saturday: 8:00 AM – 1:00 PM EAT'
     },
     footer: {
       brandName: 'EduSmart LMS',
-      tagline: 'Multi-Tenant School Operating System · Empowering Modern Education',
+      tagline: 'Smart Learning. Better Management. By Gadsa Systems',
       copyrightText: '© 2026 EduSmart Systems Ltd. All rights reserved. Registered under Kenya Data Protection Act.',
       developerCredit: 'Designed & Engineered for African Academic Institutions'
     }

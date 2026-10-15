@@ -979,59 +979,140 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
           {/* Sub-Tab 5: PRICING PLANS */}
           {landingSubTab === 'pricing' && (
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-white">Subscription Tiers & Institutional Pricing</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Our Packages (Synced with Marketing Brochure)</h3>
+                  <p className="text-xs text-slate-400">Edit package pricing, student capacities, per-student costs and target descriptions</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const newTier: LandingPricingTier = {
+                      id: `plan-${Date.now()}`,
+                      name: 'CUSTOM TIER',
+                      capacity: 'Up to 1,000 Students',
+                      price: 'KSh 150,000',
+                      period: 'per year',
+                      perStudent: '≈ KSh 150 per student',
+                      description: 'Custom tailored plan for specialized institutions.',
+                      color: '#2563eb',
+                      features: ['All Powerful Portals', 'CBC Continuous Assessment', 'Parent Portal & SMS'],
+                      popular: false,
+                      buttonLabel: 'Select Plan'
+                    };
+                    addPricingTier(newTier);
+                    triggerToast('New package tier added!');
+                  }}
+                  className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Package</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
                 {customization.landingPage.pricing.map((tier) => (
-                  <div key={tier.id} className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between">
+                  <div key={tier.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5 relative flex flex-col justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <input
                         type="text"
                         value={tier.name}
                         onChange={(e) => updatePricingTier(tier.id, { name: e.target.value })}
-                        className="bg-transparent font-black text-white text-base border-b border-slate-700 pb-0.5 focus:outline-none"
+                        className="bg-transparent font-black text-white text-xs border-b border-slate-700 pb-0.5 focus:outline-none uppercase w-full"
                       />
-                      {tier.badge && (
-                        <span className="text-[9px] font-mono font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded">
-                          {tier.badge}
-                        </span>
-                      )}
+                      <button
+                        onClick={() => {
+                          removePricingTier(tier.id);
+                          triggerToast(`Deleted ${tier.name} tier`);
+                        }}
+                        className="text-slate-500 hover:text-red-400 p-0.5"
+                        title="Delete Package"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
-                    <div className="flex items-baseline gap-1">
+                    {/* Color & Badge */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={tier.color || '#2563eb'}
+                        onChange={(e) => updatePricingTier(tier.id, { color: e.target.value })}
+                        className="w-6 h-6 rounded cursor-pointer border border-slate-700 bg-transparent"
+                        title="Package Theme Color"
+                      />
                       <input
                         type="text"
-                        value={tier.price}
-                        onChange={(e) => updatePricingTier(tier.id, { price: e.target.value })}
-                        className="bg-slate-900 px-2 py-1 rounded text-lg font-black text-white font-mono w-32 border border-slate-700"
+                        placeholder="Badge (optional)"
+                        value={tier.badge || ''}
+                        onChange={(e) => updatePricingTier(tier.id, { badge: e.target.value })}
+                        className="bg-slate-900 px-2 py-0.5 rounded text-[10px] text-amber-300 font-mono w-full border border-slate-800"
                       />
-                      <span className="text-xs text-slate-400">{tier.period}</span>
                     </div>
 
-                    <textarea
-                      rows={2}
-                      value={tier.description}
-                      onChange={(e) => updatePricingTier(tier.id, { description: e.target.value })}
-                      className="w-full bg-slate-900 p-2 rounded text-xs text-slate-300 border border-slate-700"
-                    />
-
-                    <div className="space-y-1 pt-2">
-                      <span className="text-[10px] text-slate-400 uppercase font-mono">Features included:</span>
-                      {tier.features.map((feat, fidx) => (
-                        <div key={fidx} className="flex items-center gap-1.5 text-xs text-slate-300">
-                          <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <input
-                            type="text"
-                            value={feat}
-                            onChange={(e) => {
-                              const updated = [...tier.features];
-                              updated[fidx] = e.target.value;
-                              updatePricingTier(tier.id, { features: updated });
-                            }}
-                            className="bg-transparent border-b border-transparent hover:border-slate-700 focus:border-amber-400 w-full text-xs"
-                          />
-                        </div>
-                      ))}
+                    {/* Capacity */}
+                    <div>
+                      <label className="text-[9px] text-slate-400 uppercase font-mono block">Student Capacity</label>
+                      <input
+                        type="text"
+                        value={tier.capacity || ''}
+                        placeholder="e.g. Up to 300 Students"
+                        onChange={(e) => updatePricingTier(tier.id, { capacity: e.target.value })}
+                        className="w-full bg-slate-900 px-2 py-1 rounded text-xs text-slate-200 border border-slate-800 font-bold"
+                      />
                     </div>
+
+                    {/* Price & Period */}
+                    <div>
+                      <label className="text-[9px] text-slate-400 uppercase font-mono block">Price & Period</label>
+                      <div className="space-y-1">
+                        <input
+                          type="text"
+                          value={tier.price}
+                          onChange={(e) => updatePricingTier(tier.id, { price: e.target.value })}
+                          className="bg-slate-900 px-2 py-1 rounded text-xs font-black text-white font-mono w-full border border-slate-800"
+                        />
+                        <input
+                          type="text"
+                          value={tier.period}
+                          onChange={(e) => updatePricingTier(tier.id, { period: e.target.value })}
+                          className="bg-slate-900 px-2 py-0.5 rounded text-[10px] text-slate-400 w-full border border-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Per Student */}
+                    <div>
+                      <label className="text-[9px] text-slate-400 uppercase font-mono block">Per Student Cost</label>
+                      <input
+                        type="text"
+                        value={tier.perStudent || ''}
+                        placeholder="e.g. ≈ KSh 250 per student"
+                        onChange={(e) => updatePricingTier(tier.id, { perStudent: e.target.value })}
+                        className="w-full bg-slate-900 px-2 py-1 rounded text-[10px] text-slate-300 border border-slate-800 font-medium"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="text-[9px] text-slate-400 uppercase font-mono block">Target Audience</label>
+                      <textarea
+                        rows={2}
+                        value={tier.description}
+                        onChange={(e) => updatePricingTier(tier.id, { description: e.target.value })}
+                        className="w-full bg-slate-900 p-1.5 rounded text-[10px] text-slate-300 border border-slate-800 leading-tight"
+                      />
+                    </div>
+
+                    {/* Popular toggle */}
+                    <label className="flex items-center gap-1.5 text-[10px] text-slate-300 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={tier.popular || false}
+                        onChange={(e) => updatePricingTier(tier.id, { popular: e.target.checked })}
+                        className="rounded accent-amber-400"
+                      />
+                      <span>Featured Popular</span>
+                    </label>
                   </div>
                 ))}
               </div>

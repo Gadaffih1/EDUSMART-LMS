@@ -18,7 +18,7 @@ import {
 } from '../types/customization';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 
-const STORAGE_KEY = 'edusmart_platform_customization_v3';
+const STORAGE_KEY = 'edusmart_platform_customization_v4';
 
 interface PlatformCustomizationContextType {
   customization: PlatformCustomizationState;

@@ -85,11 +85,15 @@ export interface LandingPricingTier {
   name: string;
   price: string;
   period: string;
+  capacity?: string;
+  perStudent?: string;
   badge?: string;
   description: string;
   features: string[];
   popular?: boolean;
   buttonLabel?: string;
+  color?: string;
+  accentClass?: string;
 }
 
 export interface LandingContactConfig {

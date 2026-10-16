@@ -558,6 +558,58 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       accentColor: '#1e293b',
       customNotice: 'Campus operational status normal. Multi-tenancy isolation active.',
       allowedRoles: ['admin']
+    },
+    {
+      id: 'finance_officer',
+      name: 'Finance & Bursary Management Portal',
+      shortName: 'Finance & Bursary',
+      description: 'Tuition and activity fee billing, automated M-Pesa reconciliation, General Ledger accounts, trial balance, and departmental budgets.',
+      category: 'Finance & Operations',
+      icon: 'Wallet',
+      enabled: true,
+      badgeText: 'Official',
+      accentColor: '#059669',
+      customNotice: 'Term 1 fee collection and digital M-Pesa receipts active. Real-time ledger synchronization enabled.',
+      allowedRoles: ['finance_officer', 'admin', 'head_teacher']
+    },
+    {
+      id: 'procurement_officer',
+      name: 'Procurement & Purchasing Portal',
+      shortName: 'Procurement Hub',
+      description: 'Departmental purchase requisitions, multi-stage approval workflow, registered supplier database, quotations, and Local Purchase Orders (LPO).',
+      category: 'Finance & Operations',
+      icon: 'ShoppingCart',
+      enabled: true,
+      badgeText: 'Official',
+      accentColor: '#2563eb',
+      customNotice: 'Departmental purchase requisitions and 3-way matching authorization gateway online.',
+      allowedRoles: ['procurement_officer', 'admin', 'head_teacher']
+    },
+    {
+      id: 'storekeeper',
+      name: 'Central Stores & Inventory Hub',
+      shortName: 'Central Stores',
+      description: 'Campus warehouse catalog, stock replenishment tracking, Goods Received Notes (GRN), Store Issue Vouchers (SIV), and stocktake audits.',
+      category: 'Finance & Operations',
+      icon: 'Package',
+      enabled: true,
+      badgeText: 'Official',
+      accentColor: '#d97706',
+      customNotice: 'Central warehouse inventory catalog and digital Store Issue Vouchers (SIV) active.',
+      allowedRoles: ['storekeeper', 'admin', 'head_teacher']
+    },
+    {
+      id: 'hr_manager',
+      name: 'HR & Kenyan CBC Payroll Engine',
+      shortName: 'HR & Payroll',
+      description: 'Teacher and staff master dossiers, statutory deductions (PAYE, NSSF Tier I & II, NHIF/SHIF, Housing Levy 1.5%), monthly payroll runs, and digital payslips.',
+      category: 'Finance & Operations',
+      icon: 'Users',
+      enabled: true,
+      badgeText: 'Official',
+      accentColor: '#9333ea',
+      customNotice: 'Kenyan CBC statutory payroll engine active: PAYE, NSSF, SHIF, and Housing Levy calculations automated.',
+      allowedRoles: ['hr_manager', 'admin', 'head_teacher']
     }
   ],
   globalSettings: {
@@ -580,6 +632,15 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
     allowParentBroadcast: true,
     morningRollCallDeadline: '08:30 AM',
     isRegisterLocked: false
+  },
+  operationsPolicy: {
+    enableMpesaAutoReconciliation: true,
+    procurementApprovalThreshold: 50000,
+    strictBudgetEnforcement: true,
+    requireThreeWayMatchingForPayment: true,
+    lockDisbursedPayrollRuns: true,
+    autoReorderAlertsEnabled: true,
+    allowDepartmentalRequisitions: true
   },
   schoolOverrides: {}
 };

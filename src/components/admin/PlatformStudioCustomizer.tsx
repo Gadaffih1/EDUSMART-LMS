@@ -35,7 +35,10 @@ import {
   Award,
   ChevronRight,
   ExternalLink,
-  UserCheck
+  UserCheck,
+  Wallet,
+  ShoppingCart,
+  Package
 } from 'lucide-react';
 import { usePlatformCustomization } from '../../context/PlatformCustomizationContext';
 import { useTenant } from '../../context/TenantContext';
@@ -59,7 +62,8 @@ const HERO_IMAGE_PRESETS = [
 const AVAILABLE_ICONS = [
   'School', 'GraduationCap', 'BookOpen', 'Users', 'Calendar', 
   'BarChart3', 'Laptop', 'ShieldCheck', 'Shield', 'Award', 
-  'Building2', 'Layers', 'Sliders', 'Sparkles', 'Globe'
+  'Building2', 'Layers', 'Sliders', 'Sparkles', 'Globe',
+  'Wallet', 'ShoppingCart', 'Package'
 ];
 
 export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void }> = ({ onPreviewLanding }) => {
@@ -98,6 +102,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     removeCustomWorkspace,
     updateGlobalSettings,
     updateClassTeacherPolicy,
+    updateOperationsPolicy,
     updateSchoolOverride,
     resetToDefaults,
     exportConfiguration,
@@ -1650,6 +1655,182 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                       }`}
                     >
                       {policy.isRegisterLocked ? 'Locked' : 'Open'}
+                    </button>
+                  </div>
+
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* =========================================================================
+              OPERATIONS & FINANCIAL GOVERNANCE POLICY (SUPER ADMIN FULL CONTROL)
+              ========================================================================= */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-teal-950/40 rounded-2xl p-5 sm:p-6 border border-teal-500/30 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30 flex items-center justify-center font-bold">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white font-serif flex items-center gap-2">
+                    <span>Integrated Operations & Financial Governance Directives</span>
+                    <span className="text-[9px] bg-teal-500/20 text-teal-300 font-mono px-1.5 py-0.5 rounded border border-teal-400/30 uppercase">
+                      Super Admin Managed
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Define platform-level statutory compliance, M-Pesa automatic reconciliation, and 3-way matching rules for all schools.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium">Operations Suite:</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold border bg-teal-500/10 text-teal-400 border-teal-500/30">
+                  4 Modules Active
+                </span>
+              </div>
+            </div>
+
+            {/* Operations Policy Toggles Grid */}
+            {(() => {
+              const opsPolicy = customization.operationsPolicy || {
+                enableMpesaAutoReconciliation: true,
+                procurementApprovalThreshold: 50000,
+                strictBudgetEnforcement: true,
+                requireThreeWayMatchingForPayment: true,
+                lockDisbursedPayrollRuns: true,
+                autoReorderAlertsEnabled: true,
+                allowDepartmentalRequisitions: true
+              };
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                  
+                  {/* Directive 1: Automated M-Pesa Reconciliation */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">M-Pesa Auto-Reconciliation</div>
+                      <div className="text-[11px] text-slate-400">Match Paybill IPN callbacks with student admission numbers</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateOperationsPolicy({ enableMpesaAutoReconciliation: !opsPolicy.enableMpesaAutoReconciliation });
+                        triggerToast(`M-Pesa Auto-Reconciliation ${!opsPolicy.enableMpesaAutoReconciliation ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        opsPolicy.enableMpesaAutoReconciliation
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {opsPolicy.enableMpesaAutoReconciliation ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {/* Directive 2: Head Teacher Clearance Threshold */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5">
+                    <div className="font-bold text-white">Head Teacher Procurement Limit</div>
+                    <div className="text-[11px] text-slate-400">Requisitions exceeding this KES amount require Head Teacher sign-off</div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="number"
+                        value={opsPolicy.procurementApprovalThreshold}
+                        onChange={(e) => updateOperationsPolicy({ procurementApprovalThreshold: Number(e.target.value) || 0 })}
+                        className="px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs w-28 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                        placeholder="50000"
+                      />
+                      <span className="text-[10px] text-slate-400 font-mono">KES threshold</span>
+                    </div>
+                  </div>
+
+                  {/* Directive 3: Strict Budget Ceiling */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Strict Budget Ceiling</div>
+                      <div className="text-[11px] text-slate-400">Block requisitions if departmental vote head is depleted</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateOperationsPolicy({ strictBudgetEnforcement: !opsPolicy.strictBudgetEnforcement });
+                        triggerToast(`Strict budget enforcement ${!opsPolicy.strictBudgetEnforcement ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        opsPolicy.strictBudgetEnforcement
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {opsPolicy.strictBudgetEnforcement ? 'Enforced' : 'Relaxed'}
+                    </button>
+                  </div>
+
+                  {/* Directive 4: 3-Way Matching for Disbursements */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">3-Way Matching Gate</div>
+                      <div className="text-[11px] text-slate-400">Enforce Requisition &harr; LPO &harr; GRN check before payment</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateOperationsPolicy({ requireThreeWayMatchingForPayment: !opsPolicy.requireThreeWayMatchingForPayment });
+                        triggerToast(`3-Way Matching ${!opsPolicy.requireThreeWayMatchingForPayment ? 'mandated' : 'optional'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        opsPolicy.requireThreeWayMatchingForPayment
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {opsPolicy.requireThreeWayMatchingForPayment ? 'Mandated' : 'Optional'}
+                    </button>
+                  </div>
+
+                  {/* Directive 5: Lock Disbursed Payroll Runs */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Payroll Audit Freeze</div>
+                      <div className="text-[11px] text-slate-400">Lock historical payroll runs to prevent unauthorized alterations</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateOperationsPolicy({ lockDisbursedPayrollRuns: !opsPolicy.lockDisbursedPayrollRuns });
+                        triggerToast(`Payroll audit lock ${!opsPolicy.lockDisbursedPayrollRuns ? 'active' : 'unlocked'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        opsPolicy.lockDisbursedPayrollRuns
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {opsPolicy.lockDisbursedPayrollRuns ? 'Locked' : 'Open'}
+                    </button>
+                  </div>
+
+                  {/* Directive 6: Auto-Reorder Replenishment Alerts */}
+                  <div className="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-white">Stores Minimum Alerts</div>
+                      <div className="text-[11px] text-slate-400">Send alerts to storekeepers when bin levels reach reorder threshold</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateOperationsPolicy({ autoReorderAlertsEnabled: !opsPolicy.autoReorderAlertsEnabled });
+                        triggerToast(`Stores reorder alerts ${!opsPolicy.autoReorderAlertsEnabled ? 'enabled' : 'disabled'}`);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shrink-0 ${
+                        opsPolicy.autoReorderAlertsEnabled
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {opsPolicy.autoReorderAlertsEnabled ? 'Active' : 'Muted'}
                     </button>
                   </div>
 

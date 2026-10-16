@@ -35,6 +35,7 @@ import { SuperAdminDashboard } from './SuperAdminDashboard';
 import { CampusSwitcherWindow } from '../layout/CampusSwitcherWindow';
 import { PlatformStudioCustomizer } from './PlatformStudioCustomizer';
 import { ClassTeacherWorkspace } from '../teacher/ClassTeacherWorkspace';
+import { SuperAdminOperationsControl } from './SuperAdminOperationsControl';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool: (schoolId: string) => void;
@@ -47,7 +48,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
-  const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'class_teachers' | 'customizer' | 'settings_hub'>('overview');
+  const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'operations' | 'class_teachers' | 'customizer' | 'settings_hub'>('overview');
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');
   const [classTeacherSearchQuery, setClassTeacherSearchQuery] = useState<string>('');
   const [selectedCampusFilter, setSelectedCampusFilter] = useState<string>('all');
@@ -250,6 +251,20 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                 }`}
               >
                 Platform Overview
+              </button>
+              <button
+                onClick={() => setActiveConsoleTab('operations')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeConsoleTab === 'operations'
+                    ? 'bg-amber-400 text-slate-950 shadow-sm font-black'
+                    : 'text-amber-400 hover:text-amber-300'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5 text-amber-500" />
+                <span>Finance & Operations</span>
+                <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">
+                  Full Control
+                </span>
               </button>
               <button
                 onClick={() => setActiveConsoleTab('class_teachers')}
@@ -485,6 +500,23 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
+                  {/* Action 0.5: Finance & Operations Hub */}
+                  <button
+                    onClick={() => setActiveConsoleTab('operations')}
+                    className="w-full p-3 bg-gradient-to-r from-emerald-500/15 to-teal-500/15 hover:from-emerald-500/25 hover:to-teal-500/25 border border-emerald-500/50 hover:border-emerald-400 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group shadow-xs"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform font-bold">
+                      <Building2 className="w-5 h-5 text-slate-950" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-emerald-300 group-hover:text-emerald-200 transition-colors flex items-center gap-1.5">
+                        <span>Finance & Operations Governance</span>
+                        <span className="text-[9px] bg-emerald-400 text-slate-950 px-1 rounded font-black">SUPER ADMIN</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">Manage billing, procurement, stores, CBC payroll & SQL starter bundle</div>
+                    </div>
+                  </button>
+
                   {/* Action 1: Add New School */}
                   <button
                     onClick={() => setActiveConsoleTab('settings_hub')}
@@ -559,6 +591,14 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 
           </div>
 
+        </main>
+      ) : activeConsoleTab === 'operations' ? (
+        /* Super Admin Operations & Finance Hub View */
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <SuperAdminOperationsControl
+            currentUser={superAdminUser}
+            onEnterSchoolPortal={(schoolId) => onEnterSchool(schoolId)}
+          />
         </main>
       ) : activeConsoleTab === 'customizer' ? (
         /* Visual Studio & Customizer View */

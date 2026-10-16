@@ -15,7 +15,8 @@ import {
   LandingSectionsVisibility,
   WorkspaceModuleConfig,
   GlobalPlatformSettings,
-  ClassTeacherModulePolicy
+  ClassTeacherModulePolicy,
+  OperationsGovernancePolicy
 } from '../types/customization';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 
@@ -56,6 +57,7 @@ interface PlatformCustomizationContextType {
   removeCustomWorkspace: (id: string) => void;
   updateGlobalSettings: (settings: Partial<GlobalPlatformSettings>) => void;
   updateClassTeacherPolicy: (policy: Partial<ClassTeacherModulePolicy>) => void;
+  updateOperationsPolicy: (policy: Partial<OperationsGovernancePolicy>) => void;
   updateSchoolOverride: (schoolId: string, override: { disabledWorkspaceIds?: string[]; customNotice?: string }) => void;
   resetToDefaults: () => void;
   exportConfiguration: () => string;
@@ -102,12 +104,31 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
               ...(parsed.landingPage?.footer || {})
             }
           },
-          workspaces: parsed.workspaces && parsed.workspaces.length > 0 
-            ? parsed.workspaces 
-            : DEFAULT_PLATFORM_CUSTOMIZATION.workspaces,
+          workspaces: (() => {
+            if (!parsed.workspaces || parsed.workspaces.length === 0) {
+              return DEFAULT_PLATFORM_CUSTOMIZATION.workspaces;
+            }
+            const existingIds = new Set(parsed.workspaces.map((w: any) => w.id));
+            const merged = [...parsed.workspaces];
+            for (const defWs of DEFAULT_PLATFORM_CUSTOMIZATION.workspaces) {
+              if (!existingIds.has(defWs.id)) {
+                merged.push(defWs);
+                existingIds.add(defWs.id);
+              }
+            }
+            return merged;
+          })(),
           globalSettings: {
             ...DEFAULT_PLATFORM_CUSTOMIZATION.globalSettings,
             ...(parsed.globalSettings || {})
+          },
+          classTeacherPolicy: {
+            ...DEFAULT_PLATFORM_CUSTOMIZATION.classTeacherPolicy,
+            ...(parsed.classTeacherPolicy || {})
+          },
+          operationsPolicy: {
+            ...DEFAULT_PLATFORM_CUSTOMIZATION.operationsPolicy,
+            ...(parsed.operationsPolicy || {})
           }
         };
       }
@@ -480,6 +501,16 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
     }));
   };
 
+  const updateOperationsPolicy = (policy: Partial<OperationsGovernancePolicy>) => {
+    setCustomization(prev => ({
+      ...prev,
+      operationsPolicy: {
+        ...(prev.operationsPolicy || DEFAULT_PLATFORM_CUSTOMIZATION.operationsPolicy!),
+        ...policy
+      }
+    }));
+  };
+
   const updateSchoolOverride = (schoolId: string, override: { disabledWorkspaceIds?: string[]; customNotice?: string }) => {
     setCustomization(prev => ({
       ...prev,
@@ -566,6 +597,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
         removeCustomWorkspace,
         updateGlobalSettings,
         updateClassTeacherPolicy,
+        updateOperationsPolicy,
         updateSchoolOverride,
         resetToDefaults,
         exportConfiguration,

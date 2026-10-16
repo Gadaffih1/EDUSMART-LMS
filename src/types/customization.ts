@@ -147,7 +147,7 @@ export interface WorkspaceModuleConfig {
   name: string;
   shortName: string;
   description: string;
-  category: 'Learner' | 'Academics' | 'Leadership' | 'Specialized Operations' | 'Administration' | 'Custom';
+  category: 'Learner' | 'Academics' | 'Leadership' | 'Specialized Operations' | 'Administration' | 'Custom' | 'Finance & Operations';
   icon: string;
   enabled: boolean;
   badgeText: string;
@@ -188,11 +188,22 @@ export interface ClassTeacherModulePolicy {
   isRegisterLocked: boolean;
 }
 
+export interface OperationsGovernancePolicy {
+  enableMpesaAutoReconciliation: boolean;
+  procurementApprovalThreshold: number; // KES threshold requiring Head Teacher clearance
+  strictBudgetEnforcement: boolean;
+  requireThreeWayMatchingForPayment: boolean;
+  lockDisbursedPayrollRuns: boolean;
+  autoReorderAlertsEnabled: boolean;
+  allowDepartmentalRequisitions: boolean;
+}
+
 export interface PlatformCustomizationState {
   landingPage: LandingPageConfig;
   workspaces: WorkspaceModuleConfig[];
   globalSettings: GlobalPlatformSettings;
   classTeacherPolicy?: ClassTeacherModulePolicy;
+  operationsPolicy?: OperationsGovernancePolicy;
   schoolOverrides: Record<string, {
     disabledWorkspaceIds?: string[];
     customNotice?: string;

@@ -172,9 +172,13 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
     const remark = studentRemarksMap[studentId];
     if (!remark) return;
 
-    Storage.updateReportCardRemarks(studentId, '2026-T1', {
-      classTeacherRemarks: remark
-    });
+    const reportCards = Storage.getReportCards(undefined, selectedGrade, selectedStream);
+    const existingRc = reportCards.find(rc => rc.studentId === studentId);
+    if (existingRc) {
+      Storage.updateReportCardRemarks(existingRc.id, {
+        classTeacherRemarks: remark
+      });
+    }
 
     setRemarksSavedToast(`Class teacher remarks saved for ${streamStudents.find(s => s.id === studentId)?.name || 'Learner'}!`);
     setTimeout(() => setRemarksSavedToast(null), 3000);
@@ -182,10 +186,12 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
 
   // Batch save all remarks
   const handleBatchSaveAllRemarks = () => {
+    const reportCards = Storage.getReportCards(undefined, selectedGrade, selectedStream);
     streamStudents.forEach(stu => {
       const remark = studentRemarksMap[stu.id];
-      if (remark) {
-        Storage.updateReportCardRemarks(stu.id, '2026-T1', {
+      const existingRc = reportCards.find(rc => rc.studentId === stu.id);
+      if (remark && existingRc) {
+        Storage.updateReportCardRemarks(existingRc.id, {
           classTeacherRemarks: remark
         });
       }
@@ -456,7 +462,6 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
                 <ResultUploadManager
                   currentUser={currentUser}
                   defaultGrade={selectedGrade}
-                  defaultStream={selectedStream}
                 />
               </div>
             </div>
@@ -883,7 +888,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
               ======================================================== */}
           {activeTab === 'work_entry' && (
             <div className="space-y-6">
-              <TeacherWorkEntryForm currentUser={currentUser} defaultGrade={selectedGrade} />
+              <TeacherWorkEntryForm currentUser={currentUser} />
             </div>
           )}
 

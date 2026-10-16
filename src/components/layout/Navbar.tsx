@@ -30,12 +30,15 @@ import {
   Maximize2,
   Minimize2,
   ArrowLeft,
-  X
+  X,
+  Accessibility
 } from 'lucide-react';
 import { OfflineSyncIndicator } from './OfflineSyncIndicator';
 import { SettingsModal } from '../settings/SettingsModal';
 import { useTenant } from '../../context/TenantContext';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
+import { useAccessibility } from '../../context/AccessibilityContext';
+import { AccessibilityModal } from '../common/AccessibilityModal';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
 
 interface NavbarProps {
@@ -64,12 +67,42 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showGeminiModal, setShowGeminiModal] = useState(false);
 
   const { isNotificationOpen, toggleNotifications, unreadCount } = useNotificationLayout();
+  const { 
+    highContrast, 
+    fontSize, 
+    screenReaderMode, 
+    toggleHighContrast, 
+    isCustomized 
+  } = useAccessibility();
+
+  const [showAccessibilityModal, setShowAccessibilityModal] = useState(false);
 
   useEffect(() => {
     const handleOpenSettings = () => setShowSettingsModal(true);
+    const handleOpenA11y = () => setShowAccessibilityModal(true);
     window.addEventListener('open-storage-settings', handleOpenSettings);
-    return () => window.removeEventListener('open-storage-settings', handleOpenSettings);
-  }, []);
+    window.addEventListener('open-accessibility-menu', handleOpenA11y);
+
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      // Alt + A: Open Accessibility Settings
+      if (e.altKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        setShowAccessibilityModal(prev => !prev);
+      }
+      // Alt + C: Toggle High Contrast Mode
+      if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault();
+        toggleHighContrast();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalShortcuts);
+
+    return () => {
+      window.removeEventListener('open-storage-settings', handleOpenSettings);
+      window.removeEventListener('open-accessibility-menu', handleOpenA11y);
+      window.removeEventListener('keydown', handleGlobalShortcuts);
+    };
+  }, [toggleHighContrast]);
 
   // Keyboard shortcut & body scroll lock for Account Switcher Modal
   useEffect(() => {
@@ -110,7 +143,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200" role="banner">
+      {/* Skip to Main Content Link for Screen Readers and Keyboard Users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-amber-400 focus:text-slate-950 focus:font-extrabold focus:rounded-xl focus:shadow-2xl focus:ring-4 focus:ring-slate-950 focus:border-2 focus:border-white"
+      >
+        Skip to main content
+      </a>
+
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
         
         {/* Zone 1: Current School Branding (Multi-Tenancy) & Campus Selector */}
@@ -119,6 +160,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={onNavigateHome}
             className="flex items-center gap-2.5 text-left text-slate-900 hover:opacity-90 transition-opacity focus:outline-none cursor-pointer"
             title={`${currentTenant.name} — ${currentTenant.motto}`}
+            aria-label={
+              screenReaderMode 
+                ? `${currentTenant.name} School Portal, institutional motto: ${currentTenant.motto}. Campus code: ${currentTenant.code}. Click to return to homepage.`
+                : `${currentTenant.name} — ${currentTenant.motto}`
+            }
           >
             {/* School Crest Logo with Active Multi-Tenancy School Branding */}
             {currentTenant.logoUrl ? (
@@ -162,7 +208,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Zone 2: Navigation Context */}
         <div className="hidden lg:flex items-center gap-2 text-xs">
           {currentUser ? (
-            <div className="flex items-center gap-2 text-slate-600">
+            <div 
+              className="flex items-center gap-2 text-slate-600"
+              aria-label={
+                screenReaderMode
+                  ? `Active User Profile: ${currentUser.name}, Role: ${getRoleLabel(currentUser.role)}${currentUser.grade ? `, Grade ${currentUser.grade} ${currentUser.stream || ''}` : ''}`
+                  : undefined
+              }
+            >
               <span className="font-medium text-slate-900">{currentUser.name}</span>
               <span aria-hidden="true" className="text-slate-300">·</span>
               <span className="text-emerald-700 font-semibold">{getRoleLabel(currentUser.role)}</span>
@@ -181,7 +234,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                   window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'home' }));
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                aria-label={
+                  screenReaderMode
+                    ? "EduSmart Homepage: Overview of school portal, curriculum pathways, and institutional news"
+                    : "Home"
+                }
               >
                 <Home className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Home</span>
@@ -193,7 +251,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                   window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'announcements' }));
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                aria-label={
+                  screenReaderMode
+                    ? "School Announcements: Ministry circulars, term dates, and administrative alerts"
+                    : "Announcements"
+                }
               >
                 <Megaphone className="w-3.5 h-3.5 text-amber-600" />
                 <span>Announcements</span>
@@ -205,7 +268,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                   window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'calendar' }));
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                aria-label={
+                  screenReaderMode
+                    ? "School Calendar: Academic timetable, exam schedules, and holiday dates"
+                    : "School Calendar"
+                }
               >
                 <Calendar className="w-3.5 h-3.5 text-blue-600" />
                 <span>School Calendar</span>
@@ -217,7 +285,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   if (el) el.scrollIntoView({ behavior: 'smooth' });
                   window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'contact' }));
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                aria-label={
+                  screenReaderMode
+                    ? "Contact School: Direct campus telephone, email directory, and location map"
+                    : "Contact School"
+                }
               >
                 <Phone className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Contact School</span>
@@ -267,6 +340,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label="Settings and Storage Management"
           >
             <Settings className="w-4 h-4" />
+          </button>
+
+          {/* Accessibility Assistive Menu Trigger (High Contrast, Font Size, Screen Reader Labels) */}
+          <button
+            onClick={() => setShowAccessibilityModal(true)}
+            className={`p-2 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer relative flex items-center justify-center ${
+              isCustomized
+                ? 'bg-indigo-100 text-indigo-900 ring-2 ring-indigo-500 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+            title="Accessibility Menu (Alt+A): High Contrast, Font Size Scaling & Screen Reader Directory"
+            aria-label={
+              screenReaderMode
+                ? `Accessibility Options: High contrast is ${highContrast ? 'Active' : 'Standard'}, font size is ${fontSize} percent. Click or press Alt+A to open Assistive Menu.`
+                : "Accessibility Menu (Alt+A)"
+            }
+          >
+            <Accessibility className="w-4 h-4 text-indigo-700" />
+            {isCustomized && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-indigo-600 rounded-full ring-2 ring-white" />
+            )}
           </button>
 
           {/* Centralized Notification Bell with Real-Time Unread Badge & Active Indicator */}
@@ -710,6 +804,13 @@ export const Navbar: React.FC<NavbarProps> = ({
         isOpen={showGeminiModal}
         onClose={() => setShowGeminiModal(false)}
         currentUser={currentUser}
+      />
+
+      {/* Accessibility Assistive Settings Modal */}
+      <AccessibilityModal
+        isOpen={showAccessibilityModal}
+        onClose={() => setShowAccessibilityModal(false)}
+        onSwitchUser={onSwitchUser}
       />
 
     </header>

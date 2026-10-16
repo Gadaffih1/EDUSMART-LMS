@@ -14,7 +14,13 @@ export type UserRole =
   | 'nurse'          // School Nursing Officer: Strictly restricted to school sanatorium portal
   | 'transport_team' // Transport Team: Drivers, Assistants, Fleet & Route Operations
   | 'cocurricular_team' // Co-Curricular Team: Sports Coaches, Club Patrons, Talent & Activities Management
+  | 'finance_officer' // Finance & Bursar: Billing, fees, ledgers, budgets & bank reconciliation
+  | 'procurement_officer' // Procurement Lead: Requisitions, vendor management, RFQs & LPOs
+  | 'storekeeper'    // Central Stores: Inventory catalog, GRNs, stock issues & stocktakes
+  | 'hr_manager'     // HR & Payroll: Employee dossiers, contracts, statutory PAYE/NSSF/NHIF & monthly payroll runs
   | 'admin';         // System Administrator: Full system administration
+
+export * from './financeOperations';
 
 export interface RoleAccessRights {
   canAccessSanatorium: boolean;
@@ -24,6 +30,9 @@ export interface RoleAccessRights {
   canManageUsersAndRoles: boolean;
   canAccessAdminSettings: boolean;
   canAccessFinancials: boolean;
+  canAccessProcurement?: boolean;
+  canAccessStores?: boolean;
+  canAccessHRPayroll?: boolean;
   canAccessTimetable: boolean;
   canAccessGatePasses: boolean;
   canAccessLibrary: boolean;
@@ -134,8 +143,10 @@ export interface User {
   phone?: string;
   avatarUrl?: string;
   admissionNumber?: string;
+  upiNumber?: string;
   parentName?: string;
   parentPhone?: string;
+  parentEmail?: string;
   tscNumber?: string; // Teachers Service Commission ID
   designation?: string;
   customPermissions?: Partial<RoleAccessRights>;

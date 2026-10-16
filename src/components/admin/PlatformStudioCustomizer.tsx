@@ -34,7 +34,8 @@ import {
   Shield, 
   Award,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  UserCheck
 } from 'lucide-react';
 import { usePlatformCustomization } from '../../context/PlatformCustomizationContext';
 import { useTenant } from '../../context/TenantContext';

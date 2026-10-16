@@ -10,6 +10,7 @@ import { NotificationLayoutProvider, useNotificationLayout } from './context/Not
 import { TenantProvider, useTenant } from './context/TenantContext';
 import { MobileLayoutProvider, useMobileLayout } from './context/MobileLayoutContext';
 import { PlatformCustomizationProvider, usePlatformCustomization } from './context/PlatformCustomizationContext';
+import { AccessibilityProvider } from './context/AccessibilityContext';
 import { Navbar } from './components/layout/Navbar';
 import { NotificationDrawer } from './components/layout/NotificationDrawer';
 import { PublicLandingPage } from './components/landing/PublicLandingPage';
@@ -188,7 +189,7 @@ function AppContent({
             </div>
           )}
 
-          <main className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 sm:pb-8' : ''}`}>
+          <main id="main-content" className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 sm:pb-8' : ''}`}>
             {!currentUser ? (
               <LandingPage 
                 onLoginSuccess={onLoginSuccess} 
@@ -324,17 +325,19 @@ export default function App() {
     <ErrorBoundary>
       <TenantProvider>
         <PlatformCustomizationProvider>
-          <MobileLayoutProvider>
-            <NotificationLayoutProvider currentUser={currentUser}>
-              <AppContent
-                currentUser={currentUser}
-                onLoginSuccess={handleLoginSuccess}
-                onLogout={handleLogout}
-                onSwitchUser={handleSwitchUser}
-                onNavigateHome={handleNavigateHome}
-              />
-            </NotificationLayoutProvider>
-          </MobileLayoutProvider>
+          <AccessibilityProvider>
+            <MobileLayoutProvider>
+              <NotificationLayoutProvider currentUser={currentUser}>
+                <AppContent
+                  currentUser={currentUser}
+                  onLoginSuccess={handleLoginSuccess}
+                  onLogout={handleLogout}
+                  onSwitchUser={handleSwitchUser}
+                  onNavigateHome={handleNavigateHome}
+                />
+              </NotificationLayoutProvider>
+            </MobileLayoutProvider>
+          </AccessibilityProvider>
         </PlatformCustomizationProvider>
       </TenantProvider>
     </ErrorBoundary>

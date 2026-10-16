@@ -62,7 +62,7 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
 
   // Super Admin Live Inspection Modal State
   const [inspectingTenantId, setInspectingTenantId] = useState<string | null>(null);
-  const [inspectingPortalTab, setInspectingPortalTab] = useState<'finance' | 'procurement' | 'stores' | 'hr_payroll' | 'architecture'>('architecture');
+  const [inspectingPortalTab, setInspectingPortalTab] = useState<'finance' | 'procurement' | 'stores' | 'hr_payroll'>('finance');
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -231,7 +231,7 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
             <button
               onClick={() => {
                 setInspectingTenantId(currentTenant.id);
-                setInspectingPortalTab('architecture');
+                setInspectingPortalTab('finance');
               }}
               className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 transition-all flex items-center gap-2 cursor-pointer"
             >
@@ -464,7 +464,7 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
                             <button
                               onClick={() => {
                                 setInspectingTenantId(tenant.id);
-                                setInspectingPortalTab('architecture');
+                                setInspectingPortalTab('finance');
                               }}
                               className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-lg border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                               title="Inspect this campus's operations hub directly as Super Admin"

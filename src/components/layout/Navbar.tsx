@@ -351,7 +351,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('open-operations-hub'))}
               className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-              title="Open Integrated Operations Hub (Finance, Procurement, Stores, HR & Architecture Docs)"
+              title="Open Integrated Operations Hub (Finance, Procurement, Stores & HR/Payroll)"
               aria-label="Integrated Operations Hub"
             >
               <Briefcase className="w-4 h-4 text-emerald-600" />

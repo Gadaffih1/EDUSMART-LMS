@@ -295,10 +295,10 @@ function AppContent({
                     <span>&larr; Return to {currentUser.role === 'admin' ? 'System Administrator Console' : 'Workspace'}</span>
                   </button>
                   <span className="text-xs font-medium text-slate-500">
-                    Integrated Operations & Architecture Viewer &bull; {currentTenant.name}
+                    Integrated Operations &bull; {currentTenant.name}
                   </span>
                 </div>
-                <IntegratedOperationsHub currentUser={currentUser} initialPortal="architecture" />
+                <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
               </div>
             ) : (
               /* School Administrator (e.g. Mr. Patrick Kamau): Manages their school campus */

@@ -570,7 +570,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           }`}
         >
           <Building2 className="w-3.5 h-3.5 text-teal-600" />
-          <span>Integrated Operations & Architecture</span>
+          <span>Finance, Procurement, Stores & HR Hub</span>
           <span className="text-[10px] bg-teal-200 text-teal-950 px-1.5 py-0.2 rounded font-black">Connected</span>
         </button>
       </div>

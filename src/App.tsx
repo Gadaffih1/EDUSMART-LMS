@@ -32,6 +32,7 @@ import { SanatoriumWorkspace } from './components/sanatorium/SanatoriumWorkspace
 import { TransportWorkspace } from './components/transport/TransportWorkspace';
 import { CoCurricularWorkspace } from './components/cocurricular/CoCurricularWorkspace';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { IntegratedOperationsHub } from './components/operations/IntegratedOperationsHub';
 import { SuperAdminPortalView } from './components/admin/SuperAdminPortalView';
 import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloatingMenu';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -62,6 +63,18 @@ function AppContent({
   // 4. 'school_lms': Screen 3 Tenant School Workspace (e.g. Riara School, Return to Super Admin visible ONLY to platform owners)
   const [portalView, setPortalView] = useState<'public_landing' | 'unified_login' | 'super_admin' | 'school_lms'>('public_landing');
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
+  const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    const handleOpenOps = () => setViewingOperationsHub(true);
+    const handleCloseOps = () => setViewingOperationsHub(false);
+    window.addEventListener('open-operations-hub', handleOpenOps);
+    window.addEventListener('close-operations-hub', handleCloseOps);
+    return () => {
+      window.removeEventListener('open-operations-hub', handleOpenOps);
+      window.removeEventListener('close-operations-hub', handleCloseOps);
+    };
+  }, []);
 
   // 1. Public Landing Page (Screen 1 in diagram): Always accessible, no Super Admin button
   if (!currentUser && portalView === 'public_landing') {
@@ -259,6 +272,34 @@ function AppContent({
             ) : currentUser.role === 'cocurricular_team' ? (
               /* Co-Curricular Team: Sports, clubs, coaches, patrons, talent development */
               <CoCurricularWorkspace currentUser={currentUser} onLogout={onLogout} />
+            ) : currentUser.role === 'finance_officer' ? (
+              /* Finance & Bursary Officer: Billing, fees, ledgers, budgets & bank reconciliation */
+              <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
+            ) : currentUser.role === 'procurement_officer' ? (
+              /* Procurement Lead: Requisitions, vendor management, RFQs & LPOs */
+              <IntegratedOperationsHub currentUser={currentUser} initialPortal="procurement" />
+            ) : currentUser.role === 'storekeeper' ? (
+              /* Central Stores: Inventory catalog, GRNs, stock issues & stocktakes */
+              <IntegratedOperationsHub currentUser={currentUser} initialPortal="stores" />
+            ) : currentUser.role === 'hr_manager' ? (
+              /* HR & Payroll: Employee dossiers, contracts, statutory PAYE/NSSF/NHIF & monthly payroll runs */
+              <IntegratedOperationsHub currentUser={currentUser} initialPortal="hr_payroll" />
+            ) : viewingOperationsHub ? (
+              /* Full-page Operations & Architecture Hub view accessible to school administrators */
+              <div className="space-y-4">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between">
+                  <button
+                    onClick={() => setViewingOperationsHub(false)}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                  >
+                    <span>&larr; Return to {currentUser.role === 'admin' ? 'System Administrator Console' : 'Workspace'}</span>
+                  </button>
+                  <span className="text-xs font-medium text-slate-500">
+                    Integrated Operations & Architecture Viewer &bull; {currentTenant.name}
+                  </span>
+                </div>
+                <IntegratedOperationsHub currentUser={currentUser} initialPortal="architecture" />
+              </div>
             ) : (
               /* School Administrator (e.g. Mr. Patrick Kamau): Manages their school campus */
               <AdminDashboard currentUser={currentUser} />

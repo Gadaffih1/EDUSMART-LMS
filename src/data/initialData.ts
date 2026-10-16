@@ -409,6 +409,50 @@ export const INITIAL_USERS: User[] = [
     stream: 'Eagle',
     admissionNumber: 'ADM/2025/0202',
     avatarUrl: 'https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?w=150&auto=format&fit=crop&q=80',
+  },
+  // Finance & Bursary Lead
+  {
+    id: 'usr-fin-david',
+    name: 'Mr. David Mwangi',
+    email: 'finance@edusmart.ac.ke',
+    password: 'finance2026',
+    role: 'finance_officer',
+    tscNumber: 'FIN/09281/BUR',
+    designation: 'Senior Finance Officer & School Bursar',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+  },
+  // Procurement & Purchasing Lead
+  {
+    id: 'usr-procure-linda',
+    name: 'Ms. Linda Kiprop',
+    email: 'procurement@edusmart.ac.ke',
+    password: 'procure2026',
+    role: 'procurement_officer',
+    tscNumber: 'KISM/PR-44120',
+    designation: 'Head of Procurement & Supply Chain',
+    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+  },
+  // Central Stores & Inventory Master
+  {
+    id: 'usr-stores-joseph',
+    name: 'Mr. Joseph Otieno',
+    email: 'stores@edusmart.ac.ke',
+    password: 'stores2026',
+    role: 'storekeeper',
+    tscNumber: 'STR/LOG-38102',
+    designation: 'Central Stores & Inventory Master',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+  },
+  // Human Resources & Payroll Director
+  {
+    id: 'usr-hr-caroline',
+    name: 'Mrs. Caroline Nduta',
+    email: 'hr@edusmart.ac.ke',
+    password: 'hr2026',
+    role: 'hr_manager',
+    tscNumber: 'IHRM/HR-51204',
+    designation: 'Director of Human Resources & Payroll',
+    avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
   }
 ];
 

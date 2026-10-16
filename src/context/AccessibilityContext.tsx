@@ -4,7 +4,7 @@ export interface LMSWorkspaceA11yInfo {
   id: string;
   name: string;
   shortName: string;
-  category: 'Learner' | 'Academics' | 'Leadership' | 'Specialized Operations' | 'Administration';
+  category: 'Learner' | 'Academics' | 'Leadership' | 'Specialized Operations' | 'Administration' | 'Finance & Operations';
   role: string;
   screenReaderLabel: string;
   ariaDescription: string;
@@ -161,6 +161,46 @@ export const LMS_WORKSPACES_A11Y: LMSWorkspaceA11yInfo[] = [
     screenReaderLabel: 'System Administrator Console: User access control, bulk CSV onboarding, role permission policies, security audits, and institutional branding.',
     ariaDescription: 'Full system control panel for tenant configuration, database backups, and custom workspace policies.',
     shortcutKey: 'Alt + S'
+  },
+  {
+    id: 'finance_officer',
+    name: 'Finance & Bursary Portal',
+    shortName: 'Finance Portal',
+    category: 'Finance & Operations',
+    role: 'finance_officer',
+    screenReaderLabel: 'Finance & Bursary Portal: Student fee invoicing, M-Pesa automated reconciliation, fee collection ledger, departmental budgets, and cash flow reports.',
+    ariaDescription: 'Campus financial management and bursary operations with multi-tenant accounting and receipt issuance.',
+    shortcutKey: 'Alt + F'
+  },
+  {
+    id: 'procurement_officer',
+    name: 'Procurement & Purchasing Portal',
+    shortName: 'Procurement Lead',
+    category: 'Finance & Operations',
+    role: 'procurement_officer',
+    screenReaderLabel: 'Procurement Portal: Purchase requisitions, departmental approvals, registered supplier directory, quotation analysis, and LPO issuance.',
+    ariaDescription: 'Supply chain management and 3-way matching purchase authorization gateway.',
+    shortcutKey: 'Alt + P'
+  },
+  {
+    id: 'storekeeper',
+    name: 'Central Stores & Inventory Hub',
+    shortName: 'Central Stores',
+    category: 'Finance & Operations',
+    role: 'storekeeper',
+    screenReaderLabel: 'Central Stores & Inventory Hub: Stock cataloging, Goods Received Notes (GRN), Store Issue Vouchers (SIV), and stocktake audit reconciliations.',
+    ariaDescription: 'Campus warehouse inventory management, bin cards, and stock distribution tracking.',
+    shortcutKey: 'Alt + I'
+  },
+  {
+    id: 'hr_manager',
+    name: 'HR & Kenyan CBC Payroll Engine',
+    shortName: 'HR & Payroll',
+    category: 'Finance & Operations',
+    role: 'hr_manager',
+    screenReaderLabel: 'HR & Payroll Engine: Staff dossiers, statutory deductions (PAYE, NSSF, NHIF/SHIF, Housing Levy), monthly payroll runs, and digital payslips.',
+    ariaDescription: 'Human resources management and payroll execution compliant with Kenyan tax and labour laws.',
+    shortcutKey: 'Alt + E'
   }
 ];
 

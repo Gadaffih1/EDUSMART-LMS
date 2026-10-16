@@ -137,6 +137,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       case 'school_admin_staff': return 'School Admin Staff / Registrar';
       case 'transport_team': return 'School Transport Team';
       case 'cocurricular_team': return 'Co-Curricular & Sports Academy';
+      case 'finance_officer': return 'Finance & Bursary Officer';
+      case 'procurement_officer': return 'Procurement & Purchasing Lead';
+      case 'storekeeper': return 'Central Stores & Inventory Keeper';
+      case 'hr_manager': return 'Human Resources & Payroll Manager';
       case 'admin': return 'System Administrator';
       default: return role;
     }
@@ -341,6 +345,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Settings className="w-4 h-4" />
           </button>
+
+          {/* Integrated Operations & Architecture Quick Launcher */}
+          {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-operations-hub'))}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+              title="Open Integrated Operations Hub (Finance, Procurement, Stores, HR & Architecture Docs)"
+              aria-label="Integrated Operations Hub"
+            >
+              <Briefcase className="w-4 h-4 text-emerald-600" />
+              <span className="hidden xl:inline">Operations</span>
+            </button>
+          )}
 
           {/* Accessibility Assistive Menu Trigger (High Contrast, Font Size, Screen Reader Labels) */}
           <button
@@ -747,6 +764,65 @@ export const Navbar: React.FC<NavbarProps> = ({
                             'bg-emerald-50 text-emerald-800 border border-emerald-200'
                           }`}>
                             {isNurse ? '🏥 Sanatorium' : isTransport ? '🚌 Transport' : '🎯 Sports'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* 6. Integrated Finance, Procurement, Stores & HR/Payroll Operations */}
+              <div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>6. Integrated Finance, Procurement, Stores & HR/Payroll</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Campus Operations & Accounting</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  {allUsers
+                    .filter(u => ['finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(u.role))
+                    .map(user => {
+                      const isFin = user.role === 'finance_officer';
+                      const isProc = user.role === 'procurement_officer';
+                      const isStore = user.role === 'storekeeper';
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => {
+                            onSwitchUser(user);
+                            setShowSwitchModal(false);
+                          }}
+                          className={`text-left p-2.5 rounded-lg border transition-all flex items-center justify-between ${
+                            currentUser?.id === user.id
+                              ? 'border-emerald-600 bg-emerald-50/50 ring-1 ring-emerald-600'
+                              : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-bold text-slate-900">{user.name}</div>
+                            <div className={`text-[11px] font-bold ${
+                              isFin ? 'text-emerald-700' :
+                              isProc ? 'text-blue-700' :
+                              isStore ? 'text-amber-700' :
+                              'text-purple-700'
+                            }`}>
+                              {getRoleLabel(user.role)}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              Main Access: {
+                                isFin ? 'Fee billing, M-Pesa receipts, General Ledger' :
+                                isProc ? 'Requisitions, supplier quotations, LPO issuance' :
+                                isStore ? 'Central stores, GRNs, stock issues & stocktake' :
+                                'Staff records, PAYE/NSSF payroll & payslips'
+                              }
+                            </div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold shrink-0 ${
+                            isFin ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                            isProc ? 'bg-blue-50 text-blue-800 border border-blue-200' :
+                            isStore ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                            'bg-purple-50 text-purple-800 border border-purple-200'
+                          }`}>
+                            {isFin ? '💰 Finance' : isProc ? '🛒 Procurement' : isStore ? '📦 Stores' : '👥 HR'}
                           </span>
                         </button>
                       );

@@ -52,8 +52,10 @@ import {
   ShieldAlert,
   CheckCircle2,
   Shield,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Building2
 } from 'lucide-react';
+import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 
 import { useTenant } from '../../context/TenantContext';
 
@@ -90,6 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     | 'cocurricular' 
     | 'oversight' 
     | 'reports'
+    | 'operations'
   >(defaultTab);
 
   // User state synced with Storage
@@ -113,12 +116,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports'].includes(tab)) {
+        if (['users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
           setActiveTab(tab as any);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
         } else if (tab === 'analytics' || tab === 'gradebook') {
           setActiveTab('oversight');
+        } else if (tab === 'finance' || tab === 'procurement' || tab === 'stores' || tab === 'hr') {
+          setActiveTab('operations');
         }
       }
     };
@@ -556,6 +561,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
           <span>Reports & Dossiers (Print / PDF)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('operations')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
+            activeTab === 'operations' ? 'bg-slate-900 text-white shadow-xs' : 'bg-teal-50 text-teal-900 hover:bg-teal-100 border border-teal-300'
+          }`}
+        >
+          <Building2 className="w-3.5 h-3.5 text-teal-600" />
+          <span>Integrated Operations & Architecture</span>
+          <span className="text-[10px] bg-teal-200 text-teal-950 px-1.5 py-0.2 rounded font-black">Connected</span>
         </button>
       </div>
 
@@ -1718,6 +1734,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           ======================================================== */}
       {activeTab === 'staff_appraisal' && (
         <StaffAppraisalModule currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB: INTEGRATED OPERATIONS (FINANCE, PROCUREMENT, STORES, HR/PAYROLL & ARCHITECTURE)
+          ======================================================== */}
+      {activeTab === 'operations' && (
+        <IntegratedOperationsHub currentUser={currentUser} />
       )}
 
       {/* ========================================================

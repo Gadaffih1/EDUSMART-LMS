@@ -18,6 +18,7 @@ import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 import { 
   School, 
   Users, 
@@ -49,7 +50,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
-  type HeadTab = 'analytics' | 'executive' | 'announcements' | 'staff_governance' | 'staff_appraisal' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events';
+  type HeadTab = 'analytics' | 'executive' | 'announcements' | 'staff_governance' | 'staff_appraisal' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events' | 'operations';
   const [activeTab, setActiveTab] = useState<HeadTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -66,12 +67,14 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['analytics', 'executive', 'announcements', 'staff_governance', 'staff_appraisal', 'timetable', 'work_entry_audit', 'lunch_register', 'transport', 'cocurricular', 'bom_report', 'reporting_hub', 'events'].includes(tab)) {
+        if (['analytics', 'executive', 'announcements', 'staff_governance', 'staff_appraisal', 'timetable', 'work_entry_audit', 'lunch_register', 'transport', 'cocurricular', 'bom_report', 'reporting_hub', 'events', 'operations'].includes(tab)) {
           setActiveTab(tab as HeadTab);
         } else if (tab === 'bom' || tab === 'report' || tab === 'reports') {
           setActiveTab('bom_report');
         } else if (tab === 'work_ledger' || tab === 'work_entries') {
           setActiveTab('work_entry_audit');
+        } else if (tab === 'finance' || tab === 'procurement' || tab === 'stores' || tab === 'hr') {
+          setActiveTab('operations');
         }
       }
     };
@@ -148,6 +151,12 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         { id: 'transport', label: 'School Transport Fleet', icon: Bus },
         { id: 'cocurricular', label: 'Co-Curricular Directorate', icon: Trophy },
         { id: 'events', label: 'School Events & Tickets', icon: CalendarDays, badge: 'Post', badgeColor: 'bg-indigo-500' }
+      ]
+    },
+    {
+      title: 'FINANCE & OPERATIONS PIPELINE',
+      items: [
+        { id: 'operations', label: 'Finance, Procurement & HR Hub', icon: Building2, badge: 'Integrated', badgeColor: 'bg-emerald-600' }
       ]
     }
   ];
@@ -564,6 +573,13 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           ======================================================== */}
       {activeTab === 'events' && (
         <SchoolEventsManager currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB 7: INTEGRATED FINANCE, PROCUREMENT & HR OPERATIONS
+          ======================================================== */}
+      {activeTab === 'operations' && (
+        <IntegratedOperationsHub currentUser={currentUser} />
       )}
         </main>
       </div>

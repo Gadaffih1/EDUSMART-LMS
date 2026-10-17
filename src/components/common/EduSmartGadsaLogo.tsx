@@ -15,13 +15,13 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
 }) => {
   // Dimensions based on size preset
   const sizeMap = {
-    xs: { width: 32, height: 32, scale: 0.16 },
-    sm: { width: 44, height: 44, scale: 0.22 },
-    md: { width: 64, height: 64, scale: 0.32 },
-    lg: { width: 96, height: 96, scale: 0.48 },
-    xl: { width: 140, height: 140, scale: 0.7 },
-    '2xl': { width: 220, height: 220, scale: 1.1 },
-    doc: { width: 160, height: 160, scale: 0.8 }
+    xs: { width: 28, height: 28, scale: 0.14 },
+    sm: { width: 38, height: 38, scale: 0.19 },
+    md: { width: 54, height: 54, scale: 0.27 },
+    lg: { width: 82, height: 82, scale: 0.41 },
+    xl: { width: 119, height: 119, scale: 0.6 },
+    '2xl': { width: 187, height: 187, scale: 0.94 },
+    doc: { width: 136, height: 136, scale: 0.68 }
   };
 
   const blue = monochrome ? 'currentColor' : '#0B3075';
@@ -32,11 +32,11 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
   // If variant is 'horizontal', show emblem on left and clean branded typography on right
   if (variant === 'horizontal') {
     return (
-      <div className={`inline-flex items-center gap-3 ${className}`}>
+      <div className={`inline-flex items-center gap-2 ${className}`}>
         <svg
           viewBox="0 0 200 200"
           className="shrink-0"
-          style={{ width: size === 'xs' ? 28 : size === 'sm' ? 36 : size === 'lg' ? 60 : 44, height: 'auto' }}
+          style={{ width: size === 'xs' ? 24 : size === 'sm' ? 31 : size === 'lg' ? 51 : 37, height: 'auto' }}
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
@@ -122,20 +122,20 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
         </svg>
 
         <div className="flex flex-col leading-none">
-          <div className="flex items-center text-lg font-black tracking-tight">
+          <div className="flex items-center text-base font-black tracking-tight">
             <span style={{ color: blue }}>Edu-</span>
             <span style={{ color: gold }}>Smart</span>
           </div>
           <div className="flex items-center gap-1.5 mt-1">
             <div className="h-[1.5px] w-3 bg-amber-500 rounded" />
-            <span className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: blue }}>
+            <span className="text-[9px] font-black uppercase tracking-[0.25em]" style={{ color: blue }}>
               PORTAL
             </span>
             <div className="h-[1.5px] w-3 bg-amber-500 rounded" />
           </div>
           <div className="mt-1">
             <span 
-              className="text-[9px] font-bold italic text-white px-2 py-0.5 rounded-full inline-block shadow-2xs"
+              className="text-[8px] font-bold italic text-white px-2 py-0.5 rounded-full inline-block shadow-2xs"
               style={{ backgroundColor: pillBlue, border: `1px solid ${gold}` }}
             >
               By Gadsa Systems
@@ -332,7 +332,7 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
       </svg>
 
       {/* Main Brand Typography: Edu-Smart */}
-      <div className="flex items-center justify-center font-black tracking-tighter text-center mt-1" style={{ fontSize: size === 'xs' ? '12px' : size === 'sm' ? '15px' : size === 'md' ? '22px' : size === 'lg' ? '30px' : size === 'xl' ? '40px' : '48px', lineHeight: 1 }}>
+      <div className="flex items-center justify-center font-black tracking-tighter text-center mt-1"       style={{ fontSize: size === 'xs' ? '11px' : size === 'sm' ? '13px' : size === 'md' ? '20px' : size === 'lg' ? '27px' : size === 'xl' ? '36px' : '43px', lineHeight: 1 }}>
         <span style={{ color: blue }} className="font-extrabold tracking-tight">Edu-</span>
         <span style={{ color: gold }} className="font-extrabold tracking-tight">Smart</span>
       </div>
@@ -344,7 +344,7 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
           className="font-black uppercase tracking-[0.32em] text-center"
           style={{ 
             color: blue, 
-            fontSize: size === 'xs' ? '8px' : size === 'sm' ? '9px' : size === 'md' ? '12px' : size === 'lg' ? '16px' : '20px' 
+            fontSize: size === 'xs' ? '7px' : size === 'sm' ? '8px' : size === 'md' ? '11px' : size === 'lg' ? '14px' : '18px' 
           }}
         >
           PORTAL
@@ -365,7 +365,7 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
           <span 
             className="text-white font-extrabold italic whitespace-nowrap"
             style={{ 
-              fontSize: size === 'xs' ? '7px' : size === 'sm' ? '8px' : size === 'md' ? '10px' : size === 'lg' ? '13px' : '15px' 
+              fontSize: size === 'xs' ? '6px' : size === 'sm' ? '7px' : size === 'md' ? '9px' : size === 'lg' ? '12px' : '14px' 
             }}
           >
             By Gadsa Systems

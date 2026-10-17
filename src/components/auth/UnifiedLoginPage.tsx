@@ -22,24 +22,31 @@ import { Storage } from '../../utils/storage';
 import { INITIAL_USERS } from '../../data/initialData';
 import { useTenant } from '../../context/TenantContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { signInToEduSmart } from '../../utils/supabaseAuth';
+import { SyncEngine } from '../../utils/syncEngine';
 
 interface UnifiedLoginPageProps {
   onLoginSuccess: (user: User) => void;
   onBackToLanding: () => void;
   onOpenRegisterSchool?: () => void;
+  adminOnly?: boolean;
 }
 
 export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
   onLoginSuccess,
   onBackToLanding,
-  onOpenRegisterSchool
+  onOpenRegisterSchool,
+  adminOnly = false
 }) => {
   const { allTenants, currentTenant, switchTenant } = useTenant();
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>(currentTenant.id);
-  const [identifier, setIdentifier] = useState<string>('admin@riaraschools.ac.ke');
-  const [password, setPassword] = useState<string>('admin2026');
+  const canUseDemoProfiles = import.meta.env.DEV && !isSupabaseConfigured;
+  const [identifier, setIdentifier] = useState<string>(canUseDemoProfiles ? 'admin@riaraschools.ac.ke' : '');
+  const [password, setPassword] = useState<string>(canUseDemoProfiles ? 'admin2026' : '');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [infoMessage, setInfoMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const activeSchool = allTenants.find(t => t.id === selectedSchoolId) || currentTenant;
@@ -49,10 +56,66 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
     switchTenant(schoolId);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handlePasswordRecovery = async () => {
+    setErrorMessage('');
+    setInfoMessage('');
+    const email = identifier.trim().toLowerCase();
+    if (!email) {
+      setErrorMessage('Enter your account email address first.');
+      return;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setErrorMessage('Password recovery requires configured Supabase Auth.');
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/setup-password`,
+    });
+    if (error) {
+      setErrorMessage(`Unable to request a password reset: ${error.message}`);
+      return;
+    }
+    setInfoMessage('If this email belongs to an account, Supabase will send password reset instructions.');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setIsSubmitting(true);
+
+    if (adminOnly && !isSupabaseConfigured) {
+      setErrorMessage('Admin Console sign-in requires configured Supabase Auth.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        const user = await signInToEduSmart(identifier.trim().toLowerCase(), password);
+        if (adminOnly && user.role !== 'admin') {
+          const { error: signOutError } = await supabase!.auth.signOut();
+          SyncEngine.activateIdentity(null);
+          if (signOutError) {
+            throw new Error(`This account is not authorized for Admin Console, and sign-out failed: ${signOutError.message}`);
+          }
+          throw new Error('This account does not have the administrator role required for Admin Console.');
+        }
+        switchTenant(user.schoolId || selectedSchoolId);
+        onLoginSuccess(user);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Sign-in failed. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    if (!canUseDemoProfiles) {
+      setErrorMessage('Supabase Auth is not configured. Contact your system administrator.');
+      setIsSubmitting(false);
+      return;
+    }
 
     setTimeout(() => {
       const users = Storage.getUsers();
@@ -90,6 +153,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
   };
 
   const handleQuickDemoLogin = (role: string, emailPreset: string, passPreset: string, name: string) => {
+    if (!canUseDemoProfiles) return;
     setIdentifier(emailPreset);
     setPassword(passPreset);
     const users = Storage.getUsers();
@@ -126,7 +190,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
 
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Unified School Gateway · {activeSchool.name}</span>
+          <span>{adminOnly ? 'Secure Admin Console Access' : `Unified School Gateway · ${activeSchool.name}`}</span>
         </div>
       </header>
 
@@ -145,10 +209,12 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
             </div>
 
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 font-serif tracking-tight">
-              Login to Your School Portal
+              {adminOnly ? 'Admin Console Sign In' : 'Login to Your School Portal'}
             </h1>
             <p className="text-xs sm:text-sm text-slate-500">
-              Enter your school, email or username to continue.
+              {adminOnly
+                ? 'Sign in with your administrator email and password to continue.'
+                : 'Enter your school, email or username to continue.'}
             </p>
           </div>
 
@@ -156,7 +222,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             
             {/* School Selector Dropdown */}
-            <div className="space-y-1.5 text-left">
+            {!adminOnly && <div className="space-y-1.5 text-left">
               <label className="block text-xs font-bold text-slate-700">
                 School Campus
               </label>
@@ -182,12 +248,12 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
               <p className="text-[10px] text-slate-500 pl-1">
                 Selected: <span className="font-bold text-slate-700">{activeSchool.name}</span> · {activeSchool.motto}
               </p>
-            </div>
+            </div>}
 
             {/* Username or Email Input */}
             <div className="space-y-1.5 text-left">
               <label className="block text-xs font-bold text-slate-700">
-                Username or Email
+                {isSupabaseConfigured ? 'Email address' : 'Username or Email'}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -198,7 +264,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="e.g. admin@riaraschools.ac.ke or ADM/2023/0416"
+                  placeholder={isSupabaseConfigured ? 'name@school.org' : 'e.g. admin@riaraschools.ac.ke or ADM/2023/0416'}
                   className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50/90 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
                 />
               </div>
@@ -212,7 +278,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
                 </label>
                 <button
                   type="button"
-                  onClick={() => alert(`Password recovery dispatched to registered administrator for ${activeSchool.name}.`)}
+                  onClick={() => void handlePasswordRecovery()}
                   className="text-[11px] font-bold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer"
                 >
                   Forgot password?
@@ -246,6 +312,11 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
                 <span>{errorMessage}</span>
               </div>
             )}
+            {infoMessage && (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800" role="status">
+                {infoMessage}
+              </p>
+            )}
 
             {/* Login Action Button */}
             <button
@@ -258,33 +329,37 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
             </button>
           </form>
 
-          {/* OR Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-slate-200 w-full" />
-            <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest absolute">
-              OR
-            </span>
-          </div>
+          {!adminOnly && (
+            <>
+              {/* OR Divider */}
+              <div className="relative flex items-center justify-center">
+                <div className="border-t border-slate-200 w-full" />
+                <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest absolute">
+                  OR
+                </span>
+              </div>
 
-          {/* Register Your School */}
-          <div className="text-center pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                if (onOpenRegisterSchool) {
-                  onOpenRegisterSchool();
-                } else {
-                  alert("Opening School Onboarding & Registration form...");
-                }
-              }}
-              className="text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer"
-            >
-              Register your school
-            </button>
-          </div>
+              {/* Register Your School */}
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onOpenRegisterSchool) {
+                      onOpenRegisterSchool();
+                    } else {
+                      alert("Opening School Onboarding & Registration form...");
+                    }
+                  }}
+                  className="text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  Register your school
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Quick Demo Access Bar */}
-          <div className="pt-2 border-t border-slate-100">
+          {canUseDemoProfiles && !adminOnly && <div className="pt-2 border-t border-slate-100">
             <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider text-center mb-2">
               ⚡ Instant 1-Click Demo Profiles
             </p>
@@ -318,7 +393,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
                 👨‍👧 Parent (Learner Guardian)
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* Secure · Reliable · Multi-Tenant Tagline (Panel 2) */}
           <div className="text-center pt-2">

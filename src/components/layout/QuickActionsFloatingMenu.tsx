@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 export interface QuickActionItem {
   id: string;
@@ -1077,30 +1078,33 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
   }, [currentUser]);
 
   // System Utility Actions available to all logged-in users
-  const utilityActions: QuickActionItem[] = useMemo(() => [
-    {
-      id: 'storage-settings',
-      title: 'Storage & Offline CBC Cache Management',
-      subtitle: 'Inspect local storage usage by subject and clear module cache',
-      icon: HardDrive,
-      iconBg: 'bg-emerald-100',
-      iconColor: 'text-emerald-700',
-      category: 'utility',
-      badge: 'Offline PWA',
-      badgeColor: 'bg-emerald-700 text-white',
-      actionType: 'storage_modal'
-    },
-    {
-      id: 'switch-user-persona',
-      title: 'Quick Switch User / Role Persona',
-      subtitle: 'Seamlessly test teacher, student, head teacher, dean or admin perspectives',
-      icon: UserIcon,
-      iconBg: 'bg-indigo-100',
-      iconColor: 'text-indigo-700',
-      category: 'utility',
-      actionType: 'switch_user'
-    }
-  ], []);
+  const utilityActions = useMemo<QuickActionItem[]>(() => {
+    const actions: QuickActionItem[] = [
+      {
+        id: 'storage-settings',
+        title: 'Storage & Offline CBC Cache Management',
+        subtitle: 'Inspect local storage usage by subject and clear module cache',
+        icon: HardDrive,
+        iconBg: 'bg-emerald-100',
+        iconColor: 'text-emerald-700',
+        category: 'utility',
+        badge: 'Offline PWA',
+        badgeColor: 'bg-emerald-700 text-white',
+        actionType: 'storage_modal'
+      },
+      {
+        id: 'switch-user-persona',
+        title: 'Quick Switch User / Role Persona',
+        subtitle: 'Seamlessly test teacher, student, head teacher, dean or admin perspectives',
+        icon: UserIcon,
+        iconBg: 'bg-indigo-100',
+        iconColor: 'text-indigo-700',
+        category: 'utility',
+        actionType: 'switch_user'
+      }
+    ];
+    return actions.filter(action => !isSupabaseConfigured || action.actionType !== 'switch_user');
+  }, []);
 
   // Combined and filtered action items based on search input
   const allFilteredActions = useMemo(() => {

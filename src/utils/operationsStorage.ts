@@ -33,6 +33,8 @@ import {
   INITIAL_AUDIT_LOGS
 } from '../data/financeOperationsData';
 import { Storage } from './storage';
+import { SyncEngine } from './syncEngine';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const STORAGE_KEYS = {
   FEE_STRUCTURES: 'edusmart_ops_fee_structures_v1',
@@ -56,20 +58,27 @@ const STORAGE_KEYS = {
 function getStorage<T>(key: string, defaultValue: T): T {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return defaultValue;
-    return JSON.parse(raw) as T;
+    if (!raw) return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
+    const parsed = JSON.parse(raw);
+    return isSupabaseConfigured && Array.isArray(defaultValue) && !Array.isArray(parsed)
+      ? [] as T
+      : parsed as T;
   } catch {
-    return defaultValue;
+    return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
   }
 }
 
 function setStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    SyncEngine.markDirty(key);
   } catch {
     // Ignore storage quota errors
   }
 }
+
+// Register every operations collection with the Supabase sync layer.
+SyncEngine.register(Object.values(STORAGE_KEYS));
 
 // Generate sample student invoices based on actual registered students
 function generateInitialInvoices(): FeeInvoice[] {
@@ -117,7 +126,66 @@ function generateInitialInvoices(): FeeInvoice[] {
   return invoices;
 }
 
+const INITIAL_FEE_PAYMENTS: FeePaymentReceipt[] = [
+  {
+    id: 'rec-001',
+    receiptNumber: 'REC-2026-8921',
+    tenantId: 'tenant-riara',
+    invoiceId: 'inv-usr-stu-01',
+    studentId: 'usr-stu-01',
+    studentName: 'Liam Kiprono',
+    admissionNumber: 'ADM-2026-101',
+    amount: 40000,
+    paymentMethod: 'M-PESA',
+    referenceNumber: 'QHK892198L',
+    payerName: 'Grace Muthoni Kiprono',
+    payerPhone: '+254 722 910 200',
+    paymentDate: '2026-02-10 11:42',
+    receivedBy: 'Safaricom M-PESA Auto-Reconcile',
+    term: 'Term 1, 2026',
+    academicYear: '2026',
+    notes: 'Paybill 522123 Account ADM-2026-101'
+  },
+  {
+    id: 'rec-002',
+    receiptNumber: 'REC-2026-8922',
+    tenantId: 'tenant-riara',
+    invoiceId: 'inv-usr-stu-02',
+    studentId: 'usr-stu-02',
+    studentName: 'Zawadi Muthoni',
+    admissionNumber: 'ADM-2026-102',
+    amount: 65500,
+    paymentMethod: 'Bank Transfer',
+    referenceNumber: 'KCB-FT-992019',
+    payerName: 'Dr. John Muthoni',
+    payerPhone: '+254 733 445 566',
+    paymentDate: '2026-02-12 14:15',
+    receivedBy: 'Mr. David Mwangi (Bursar)',
+    term: 'Term 1, 2026',
+    academicYear: '2026',
+    notes: 'Full fees clearance for Term 1'
+  }
+];
+
 export const OperationsStorage = {
+  getInitialSeedCollections(): Record<string, unknown> {
+    return {
+      [STORAGE_KEYS.FEE_STRUCTURES]: INITIAL_FEE_STRUCTURES,
+      [STORAGE_KEYS.FEE_PAYMENTS]: INITIAL_FEE_PAYMENTS,
+      [STORAGE_KEYS.GL_ACCOUNTS]: INITIAL_GL_ACCOUNTS,
+      [STORAGE_KEYS.BUDGETS]: INITIAL_BUDGETS,
+      [STORAGE_KEYS.SUPPLIERS]: INITIAL_SUPPLIERS,
+      [STORAGE_KEYS.REQUISITIONS]: INITIAL_REQUISITIONS,
+      [STORAGE_KEYS.LPOS]: INITIAL_LPOS,
+      [STORAGE_KEYS.INVENTORY]: INITIAL_INVENTORY,
+      [STORAGE_KEYS.GRNS]: INITIAL_GRNS,
+      [STORAGE_KEYS.SIVS]: INITIAL_SIVS,
+      [STORAGE_KEYS.EMPLOYEES]: INITIAL_EMPLOYEES,
+      [STORAGE_KEYS.PAYROLL_RUNS]: INITIAL_PAYROLL_RUNS,
+      [STORAGE_KEYS.AUDIT_LOGS]: INITIAL_AUDIT_LOGS,
+    };
+  },
+
   // =========================================================================
   // 1. FINANCE & BILLING
   // =========================================================================
@@ -128,6 +196,7 @@ export const OperationsStorage = {
   getFeeInvoices(tenantId: string = 'tenant-riara'): FeeInvoice[] {
     const invoices = getStorage<FeeInvoice[]>(STORAGE_KEYS.FEE_INVOICES, []);
     if (invoices.length === 0) {
+      if (isSupabaseConfigured) return [];
       const generated = generateInitialInvoices();
       setStorage(STORAGE_KEYS.FEE_INVOICES, generated);
       return generated.filter(i => !tenantId || i.tenantId === tenantId);
@@ -137,6 +206,7 @@ export const OperationsStorage = {
 
   getStudentFeeAccounts(tenantId: string = 'tenant-riara'): StudentFeeAccount[] {
     const invoices = this.getFeeInvoices(tenantId);
+    if (isSupabaseConfigured && invoices.length === 0) return [];
     const users = Storage.getUsers().filter(u => u.role === 'student');
     
     return users.map(u => {
@@ -169,47 +239,10 @@ export const OperationsStorage = {
   },
 
   getFeePayments(tenantId: string = 'tenant-riara'): FeePaymentReceipt[] {
-    const defaultPayments: FeePaymentReceipt[] = [
-      {
-        id: 'rec-001',
-        receiptNumber: 'REC-2026-8921',
-        tenantId: 'tenant-riara',
-        invoiceId: 'inv-usr-stu-01',
-        studentId: 'usr-stu-01',
-        studentName: 'Liam Kiprono',
-        admissionNumber: 'ADM-2026-101',
-        amount: 40000,
-        paymentMethod: 'M-PESA',
-        referenceNumber: 'QHK892198L',
-        payerName: 'Grace Muthoni Kiprono',
-        payerPhone: '+254 722 910 200',
-        paymentDate: '2026-02-10 11:42',
-        receivedBy: 'Safaricom M-PESA Auto-Reconcile',
-        term: 'Term 1, 2026',
-        academicYear: '2026',
-        notes: 'Paybill 522123 Account ADM-2026-101'
-      },
-      {
-        id: 'rec-002',
-        receiptNumber: 'REC-2026-8922',
-        tenantId: 'tenant-riara',
-        invoiceId: 'inv-usr-stu-02',
-        studentId: 'usr-stu-02',
-        studentName: 'Zawadi Muthoni',
-        admissionNumber: 'ADM-2026-102',
-        amount: 65500,
-        paymentMethod: 'Bank Transfer',
-        referenceNumber: 'KCB-FT-992019',
-        payerName: 'Dr. John Muthoni',
-        payerPhone: '+254 733 445 566',
-        paymentDate: '2026-02-12 14:15',
-        receivedBy: 'Mr. David Mwangi (Bursar)',
-        term: 'Term 1, 2026',
-        academicYear: '2026',
-        notes: 'Full fees clearance for Term 1'
-      }
-    ];
-    return getStorage<FeePaymentReceipt[]>(STORAGE_KEYS.FEE_PAYMENTS, defaultPayments).filter(p => !tenantId || p.tenantId === tenantId);
+    return getStorage<FeePaymentReceipt[]>(
+      STORAGE_KEYS.FEE_PAYMENTS,
+      isSupabaseConfigured ? [] : INITIAL_FEE_PAYMENTS
+    ).filter(p => !tenantId || p.tenantId === tenantId);
   },
 
   addFeePayment(paymentData: Omit<FeePaymentReceipt, 'id' | 'receiptNumber'> & { receiptNumber?: string }): FeePaymentReceipt {

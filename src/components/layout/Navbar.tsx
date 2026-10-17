@@ -40,6 +40,7 @@ import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { AccessibilityModal } from '../common/AccessibilityModal';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -65,6 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isSwitchModalFullscreen, setIsSwitchModalFullscreen] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showGeminiModal, setShowGeminiModal] = useState(false);
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
 
   const { isNotificationOpen, toggleNotifications, unreadCount } = useNotificationLayout();
   const { 
@@ -156,7 +158,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         Skip to main content
       </a>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex items-center justify-between gap-3">
         
         {/* Zone 1: Current School Branding (Multi-Tenancy) & Campus Selector */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -304,7 +306,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Zone 3: Actions & Quick Switcher */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="hidden xl:flex items-center gap-1 sm:gap-2">
           {/* Gemini AI Multi-Turn Chatbot Trigger */}
           <button
             onClick={() => setShowGeminiModal(true)}
@@ -407,15 +409,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Quick Demo Switcher */}
-          <button
-            onClick={() => setShowSwitchModal(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-            title="Switch demo account"
-          >
-            <UserCheck className="w-3.5 h-3.5 text-slate-600" />
-            <span className="hidden sm:inline">Switch Role</span>
-            <ChevronDown className="w-3 h-3 text-slate-500" />
-          </button>
+          {!isSupabaseConfigured && (
+            <button
+              onClick={() => setShowSwitchModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              title="Switch demo account"
+            >
+              <UserCheck className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">Switch Role</span>
+              <ChevronDown className="w-3 h-3 text-slate-500" />
+            </button>
+          )}
 
           {/* Return to Super Admin Button (Matching Panel 3): Visible ONLY to platform-owner accounts while inside a tenant */}
           {isPlatformAdminSession && onReturnToSuperAdmin && (
@@ -457,11 +461,162 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
         </div>
+
+        <div className="relative xl:hidden">
+          <button
+            type="button"
+            onClick={() => setIsMobileActionsOpen(prev => !prev)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 shadow-xs"
+            aria-label="Open account and app actions"
+            aria-expanded={isMobileActionsOpen}
+            aria-haspopup="menu"
+          >
+            <Layers className="h-4 w-4 text-indigo-700" />
+            <span>Menu</span>
+            <ChevronDown className={`h-3 w-3 transition-transform ${isMobileActionsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isMobileActionsOpen && (
+            <div
+              className="absolute right-0 top-full z-50 mt-2 max-h-[min(70vh,32rem)] w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+              role="menu"
+              aria-label="Account and app actions"
+            >
+              {!currentUser && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'home' })); setIsMobileActionsOpen(false); }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <Home className="h-4 w-4 text-emerald-600" /> Home
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { document.getElementById('announcements-section')?.scrollIntoView({ behavior: 'smooth' }); window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'announcements' })); setIsMobileActionsOpen(false); }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <Megaphone className="h-4 w-4 text-amber-600" /> Announcements
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { document.getElementById('calendar-section')?.scrollIntoView({ behavior: 'smooth' }); window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'calendar' })); setIsMobileActionsOpen(false); }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <Calendar className="h-4 w-4 text-blue-600" /> School calendar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { document.getElementById('contact-section')?.scrollIntoView({ behavior: 'smooth' }); window.dispatchEvent(new CustomEvent('landing-nav', { detail: 'contact' })); setIsMobileActionsOpen(false); }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    role="menuitem"
+                  >
+                    <Phone className="h-4 w-4 text-indigo-600" /> Contact school
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => { setShowGeminiModal(true); setIsMobileActionsOpen(false); }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                role="menuitem"
+              >
+                <Sparkles className="h-4 w-4 text-indigo-600" /> Gemini AI
+              </button>
+              <button
+                type="button"
+                onClick={() => { toggleMobileOverlapProtection(); setIsMobileActionsOpen(false); }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                role="menuitem"
+              >
+                <Smartphone className="h-4 w-4 text-emerald-700" />
+                Screen overlap protection: {isMobileOverlapProtectionEnabled ? 'On' : 'Off'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowSettingsModal(true); setIsMobileActionsOpen(false); }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                role="menuitem"
+              >
+                <Settings className="h-4 w-4" /> Settings and storage
+              </button>
+              {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
+                <button
+                  type="button"
+                  onClick={() => { window.dispatchEvent(new CustomEvent('open-operations-hub')); setIsMobileActionsOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  role="menuitem"
+                >
+                  <Briefcase className="h-4 w-4 text-emerald-700" /> Operations hub
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setShowAccessibilityModal(true); setIsMobileActionsOpen(false); }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                role="menuitem"
+              >
+                <Accessibility className="h-4 w-4 text-indigo-700" /> Accessibility
+              </button>
+              {currentUser && (
+                <button
+                  type="button"
+                  onClick={() => { toggleNotifications(); setIsMobileActionsOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  role="menuitem"
+                >
+                  <Bell className="h-4 w-4" /> Notifications ({unreadCount})
+                </button>
+              )}
+              {!isSupabaseConfigured && (
+                <button
+                  type="button"
+                  onClick={() => { setShowSwitchModal(true); setIsMobileActionsOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  role="menuitem"
+                >
+                  <UserCheck className="h-4 w-4" /> Switch account
+                </button>
+              )}
+              {isPlatformAdminSession && onReturnToSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => { onReturnToSuperAdmin(); setIsMobileActionsOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-blue-700 hover:bg-blue-50"
+                  role="menuitem"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Return to Super Admin
+                </button>
+              )}
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => { onLogout(); setIsMobileActionsOpen(false); }}
+                  className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-slate-100 px-3 py-2.5 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                  role="menuitem"
+                >
+                  <LogOut className="h-4 w-4" /> Sign out
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { document.getElementById('portal-login-section')?.scrollIntoView({ behavior: 'smooth' }); setIsMobileActionsOpen(false); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                  role="menuitem"
+                >
+                  <LogIn className="h-4 w-4" /> Sign in
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Account Switcher Modal */}
       {/* Account Switcher Dedicated Window via Portal */}
-      {showSwitchModal && createPortal(
+      {showSwitchModal && !isSupabaseConfigured && createPortal(
         <div 
           className={`fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center transition-all duration-200 ${
             isSwitchModalFullscreen ? 'p-0 overflow-hidden' : 'p-2 sm:p-4 md:p-6 overflow-hidden'
@@ -834,16 +989,18 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* DEDICATED WINDOW FOOTER */}
             <div className="p-3 sm:px-5 border-t border-slate-200 bg-slate-100 flex items-center justify-between text-xs text-slate-600 shrink-0 gap-2">
-              <button
-                onClick={() => {
-                  Storage.resetAllData();
-                  window.location.reload();
-                }}
-                className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition-colors font-medium text-xs cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reset Demo Data</span>
-              </button>
+              {!isSupabaseConfigured && (
+                <button
+                  onClick={() => {
+                    Storage.resetAllData();
+                    window.location.reload();
+                  }}
+                  className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition-colors font-medium text-xs cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Reset Demo Data</span>
+                </button>
+              )}
 
               <div className="flex items-center gap-2">
                 <button

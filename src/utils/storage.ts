@@ -180,6 +180,8 @@ import {
   INITIAL_LESSON_IMAGES,
   INITIAL_E_LINKS
 } from '../data/initialData';
+import { SyncEngine } from './syncEngine';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const KEYS = {
   USERS: 'edusmart_users_v1',
@@ -268,6 +270,15 @@ const KEYS = {
   ONBOARDING_BATCHES: 'edusmart_onboarding_batches_v1',
 };
 
+// Every core LMS collection participates in Supabase synchronisation.
+SyncEngine.register(Object.values(KEYS));
+
+/** localStorage write that also queues a Supabase push. Drop-in for setItem. */
+function persistItem(key: string, serialized: string): void {
+  localStorage.setItem(key, serialized);
+  SyncEngine.markDirty(key);
+}
+
 function getFromStorage<T>(key: string, defaultValue: T): T {
   try {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
@@ -275,17 +286,19 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
     }
     const item = localStorage.getItem(key);
     if (!item || item === 'undefined' || item === 'null') {
-      try {
-        localStorage.setItem(key, JSON.stringify(defaultValue));
-      } catch (e) {}
-      return defaultValue;
+      if (!isSupabaseConfigured) {
+        // Factory seed: written locally only — uploaded on first sync if the
+        // cloud copy of this collection is empty (never overwrites cloud data).
+        SyncEngine.persistSeed(key, JSON.stringify(defaultValue));
+      }
+      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
     }
     const parsed = JSON.parse(item);
     if (parsed === null && defaultValue !== null) {
-      return defaultValue;
+      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
     }
     if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
-      return defaultValue;
+      return isSupabaseConfigured ? [] as T : defaultValue;
     }
     return parsed as T;
   } catch (err) {
@@ -297,7 +310,7 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
 function setToStorage<T>(key: string, value: T): void {
   try {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-    localStorage.setItem(key, JSON.stringify(value));
+    persistItem(key, JSON.stringify(value));
   } catch (err) {
     console.error(`Error writing ${key} to localStorage`, err);
   }
@@ -707,61 +720,149 @@ export const INITIAL_ONBOARDING_BATCHES: OnboardingBatchRecord[] = [
 ];
 
 export const Storage = {
+  getInitialSeedCollections(): Record<string, unknown> {
+    return {
+      [KEYS.ROLE_PERMISSIONS]: DEFAULT_ROLE_PERMISSIONS,
+      [KEYS.TOPICS]: INITIAL_TOPICS,
+      [KEYS.NOTES]: INITIAL_LESSON_NOTES,
+      [KEYS.VIDEOS]: INITIAL_VIDEOS,
+      [KEYS.AUDIOS]: INITIAL_AUDIOS,
+      [KEYS.QUIZZES]: INITIAL_QUIZZES,
+      [KEYS.QUIZ_ATTEMPTS]: INITIAL_QUIZ_ATTEMPTS,
+      [KEYS.ASSIGNMENTS]: INITIAL_ASSIGNMENTS,
+      [KEYS.ANNOUNCEMENTS]: INITIAL_ANNOUNCEMENTS,
+      [KEYS.VIRTUAL_CLASSES]: INITIAL_VIRTUAL_CLASSES,
+      [KEYS.WORK_ENTRY_LOGS]: INITIAL_WORK_ENTRY_LOGS,
+      [KEYS.GATE_PASSES]: INITIAL_GATE_EXIT_PASSES,
+      [KEYS.ATTENDANCE]: INITIAL_ATTENDANCE,
+      [KEYS.TIMETABLE]: INITIAL_TIMETABLE,
+      [KEYS.BELL_SCHEDULE]: INITIAL_BELL_SCHEDULE,
+      [KEYS.FIXED_LESSON_CONDITIONS]: INITIAL_FIXED_LESSON_CONDITIONS,
+      [KEYS.SHARED_RESOURCES]: INITIAL_SHARED_FACILITIES,
+      [KEYS.LUNCH_RECORDS]: INITIAL_LUNCH_RECORDS,
+      [KEYS.REPORT_CARDS]: INITIAL_REPORT_CARDS,
+      [KEYS.CHAT_MESSAGES]: INITIAL_CHAT_MESSAGES,
+      [KEYS.LIBRARY_BOOKS]: INITIAL_LIBRARY_BOOKS,
+      [KEYS.BORROW_RECORDS]: INITIAL_BORROW_RECORDS,
+      [KEYS.LIBRARY_ACQUISITIONS]: INITIAL_LIBRARY_ACQUISITIONS,
+      [KEYS.NOTIFICATIONS]: INITIAL_NOTIFICATIONS,
+      [KEYS.BADGES]: INITIAL_BADGES,
+      [KEYS.PORTFOLIO]: INITIAL_PORTFOLIO_ITEMS,
+      [KEYS.PERIODIC_REPORTS]: INITIAL_PERIODIC_REPORTS,
+      [KEYS.EXTERNAL_TOOLS]: INITIAL_EXTERNAL_TOOLS,
+      [KEYS.SEARCH_AUDIT]: INITIAL_SEARCH_AUDIT_LOGS,
+      [KEYS.CALENDAR_EVENTS]: INITIAL_CALENDAR_EVENTS,
+      [KEYS.PARENT_COMMUNICATIONS]: INITIAL_PARENT_COMMUNICATIONS,
+      [KEYS.EXAM_TIMETABLE]: INITIAL_EXAM_TIMETABLE,
+      [KEYS.SANATORIUM_RECORDS]: INITIAL_SANATORIUM_RECORDS,
+      [KEYS.TRANSPORT_BUSES]: INITIAL_SCHOOL_BUSES,
+      [KEYS.TRANSPORT_ROUTES]: INITIAL_TRANSPORT_ROUTES,
+      [KEYS.TRANSPORT_STUDENTS]: INITIAL_STUDENT_TRANSPORT_PROFILES,
+      [KEYS.TRANSPORT_TRIP_RECORDS]: INITIAL_TRANSPORT_TRIP_RECORDS,
+      [KEYS.TRANSPORT_INCIDENTS]: INITIAL_TRANSPORT_INCIDENTS,
+      [KEYS.TRANSPORT_ALERTS]: INITIAL_TRANSPORT_ALERTS,
+      [KEYS.CO_CURRICULAR_ACTIVITIES]: INITIAL_CO_CURRICULAR_ACTIVITIES,
+      [KEYS.CO_CURRICULAR_PROFILES]: INITIAL_LEARNER_CO_CURRICULAR_PROFILES,
+      [KEYS.CO_CURRICULAR_ATTENDANCE]: INITIAL_CO_CURRICULAR_ATTENDANCE,
+      [KEYS.CO_CURRICULAR_COMPETITIONS]: INITIAL_CO_CURRICULAR_COMPETITIONS,
+      [KEYS.CO_CURRICULAR_EQUIPMENT]: INITIAL_CO_CURRICULAR_EQUIPMENT,
+      [KEYS.CO_CURRICULAR_TRIPS]: INITIAL_CO_CURRICULAR_TRIPS,
+      [KEYS.CO_CURRICULAR_ANNOUNCEMENTS]: INITIAL_CO_CURRICULAR_ANNOUNCEMENTS,
+      [KEYS.CO_CURRICULAR_BUDGET]: INITIAL_CO_CURRICULAR_BUDGET,
+      [KEYS.LIBRARY_RESERVATIONS]: INITIAL_LIBRARY_RESERVATIONS,
+      [KEYS.LIBRARY_FINES]: INITIAL_LIBRARY_FINES,
+      [KEYS.LIBRARY_ACQUISITIONS]: INITIAL_LIBRARY_ACQUISITIONS,
+      [KEYS.LIBRARY_SHELVES]: INITIAL_LIBRARY_SHELVES,
+      [KEYS.LIBRARY_DIGITAL_ITEMS]: INITIAL_DIGITAL_LIBRARY_ITEMS,
+      [KEYS.LIBRARY_READING_PROGRAMME]: INITIAL_READING_PROGRAMME_MEMBERS,
+      [KEYS.LIBRARY_ATTENDANCE]: INITIAL_LIBRARY_ATTENDANCE,
+      [KEYS.LIBRARY_TIMETABLE]: INITIAL_LIBRARY_TIMETABLE,
+      [KEYS.LIBRARY_EVENTS]: INITIAL_LIBRARY_EVENTS,
+      [KEYS.LIBRARY_POLICIES]: INITIAL_LIBRARY_POLICIES,
+      [KEYS.LIBRARY_AUDIT_LOGS]: INITIAL_LIBRARY_AUDIT_LOGS,
+      [KEYS.LIBRARY_ROOMS]: INITIAL_LIBRARY_ROOMS,
+      [KEYS.LIBRARY_ROOM_BOOKINGS]: INITIAL_LIBRARY_ROOM_BOOKINGS,
+      [KEYS.STAFF_DUTY_ROSTER]: INITIAL_STAFF_DUTY_ROSTER,
+      [KEYS.DROPOFF_VERIFICATIONS]: INITIAL_DROPOFF_VERIFICATIONS,
+      [KEYS.LESSON_IMAGES]: INITIAL_LESSON_IMAGES,
+      [KEYS.E_LINKS]: INITIAL_E_LINKS,
+      [KEYS.EVENT_TICKETS]: INITIAL_EVENT_TICKETS,
+      [KEYS.ASSESSMENT_RECORDS]: INITIAL_ASSESSMENT_RECORDS,
+      [KEYS.TEACHER_UPLOAD_ASSIGNMENTS]: INITIAL_TEACHER_UPLOAD_ASSIGNMENTS,
+      [KEYS.CODING_CHALLENGES]: INITIAL_CODING_CHALLENGES,
+      [KEYS.DOCUMENT_REQUESTS]: INITIAL_DOCUMENT_REQUESTS,
+      [KEYS.DOCUMENT_SUBMISSIONS]: INITIAL_DOCUMENT_SUBMISSIONS,
+      [KEYS.POST_CATEGORIES]: INITIAL_POST_CATEGORIES,
+      [KEYS.PORTAL_SECTIONS]: INITIAL_PORTAL_SECTIONS,
+      [KEYS.CBA_TASK_MAPPINGS]: INITIAL_CBA_TASK_MAPPINGS,
+      [KEYS.STAFF_APPRAISALS]: INITIAL_STAFF_APPRAISALS,
+      [KEYS.CURRICULUM_WRITTEN_REPORTS]: INITIAL_CURRICULUM_WRITTEN_REPORTS,
+      [KEYS.COORDINATOR_SCHEMES_OF_WORK]: INITIAL_COORDINATOR_SCHEMES_OF_WORK,
+      [KEYS.COORDINATOR_SYLLABUS_TRACKING]: INITIAL_COORDINATOR_SYLLABUS_TRACKING,
+      [KEYS.COORDINATOR_CBA_MODERATIONS]: INITIAL_COORDINATOR_CBA_MODERATIONS,
+      [KEYS.ONBOARDING_BATCHES]: INITIAL_ONBOARDING_BATCHES,
+    };
+  },
+
   // Reset all data to factory demo defaults
   resetAllData(): void {
-    localStorage.setItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    localStorage.setItem(KEYS.GRADE_PASSWORDS, JSON.stringify(INITIAL_GRADE_PASSWORDS));
-    localStorage.setItem(KEYS.TOPICS, JSON.stringify(INITIAL_TOPICS));
-    localStorage.setItem(KEYS.NOTES, JSON.stringify(INITIAL_LESSON_NOTES));
-    localStorage.setItem(KEYS.VIDEOS, JSON.stringify(INITIAL_VIDEOS));
-    localStorage.setItem(KEYS.AUDIOS, JSON.stringify(INITIAL_AUDIOS));
-    localStorage.setItem(KEYS.QUIZZES, JSON.stringify(INITIAL_QUIZZES));
-    localStorage.setItem(KEYS.QUIZ_ATTEMPTS, JSON.stringify(INITIAL_QUIZ_ATTEMPTS));
-    localStorage.setItem(KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
-    localStorage.setItem(KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
-    localStorage.setItem(KEYS.VIRTUAL_CLASSES, JSON.stringify(INITIAL_VIRTUAL_CLASSES));
-    localStorage.setItem(KEYS.WORK_ENTRY_LOGS, JSON.stringify(INITIAL_WORK_ENTRY_LOGS));
-    localStorage.setItem(KEYS.GATE_PASSES, JSON.stringify(INITIAL_GATE_EXIT_PASSES));
-    localStorage.setItem(KEYS.ATTENDANCE, JSON.stringify(INITIAL_ATTENDANCE));
-    localStorage.setItem(KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
-    localStorage.setItem(KEYS.BELL_SCHEDULE, JSON.stringify(INITIAL_BELL_SCHEDULE));
-    localStorage.setItem(KEYS.LUNCH_RECORDS, JSON.stringify(INITIAL_LUNCH_RECORDS));
-    localStorage.setItem(KEYS.REPORT_CARDS, JSON.stringify(INITIAL_REPORT_CARDS));
-    localStorage.setItem(KEYS.CHAT_MESSAGES, JSON.stringify(INITIAL_CHAT_MESSAGES));
-    localStorage.setItem(KEYS.LIBRARY_BOOKS, JSON.stringify(INITIAL_LIBRARY_BOOKS));
-    localStorage.setItem(KEYS.BORROW_RECORDS, JSON.stringify(INITIAL_BORROW_RECORDS));
-    localStorage.setItem(KEYS.SANATORIUM_RECORDS, JSON.stringify(INITIAL_SANATORIUM_RECORDS));
-    localStorage.setItem(KEYS.TRANSPORT_BUSES, JSON.stringify(INITIAL_SCHOOL_BUSES));
-    localStorage.setItem(KEYS.TRANSPORT_ROUTES, JSON.stringify(INITIAL_TRANSPORT_ROUTES));
-    localStorage.setItem(KEYS.TRANSPORT_STUDENTS, JSON.stringify(INITIAL_STUDENT_TRANSPORT_PROFILES));
-    localStorage.setItem(KEYS.TRANSPORT_TRIP_RECORDS, JSON.stringify(INITIAL_TRANSPORT_TRIP_RECORDS));
-    localStorage.setItem(KEYS.TRANSPORT_INCIDENTS, JSON.stringify(INITIAL_TRANSPORT_INCIDENTS));
-    localStorage.setItem(KEYS.TRANSPORT_ALERTS, JSON.stringify(INITIAL_TRANSPORT_ALERTS));
-    localStorage.setItem(KEYS.CO_CURRICULAR_ACTIVITIES, JSON.stringify(INITIAL_CO_CURRICULAR_ACTIVITIES));
-    localStorage.setItem(KEYS.CO_CURRICULAR_PROFILES, JSON.stringify(INITIAL_LEARNER_CO_CURRICULAR_PROFILES));
-    localStorage.setItem(KEYS.CO_CURRICULAR_ATTENDANCE, JSON.stringify(INITIAL_CO_CURRICULAR_ATTENDANCE));
-    localStorage.setItem(KEYS.CO_CURRICULAR_COMPETITIONS, JSON.stringify(INITIAL_CO_CURRICULAR_COMPETITIONS));
-    localStorage.setItem(KEYS.CO_CURRICULAR_EQUIPMENT, JSON.stringify(INITIAL_CO_CURRICULAR_EQUIPMENT));
-    localStorage.setItem(KEYS.CO_CURRICULAR_TRIPS, JSON.stringify(INITIAL_CO_CURRICULAR_TRIPS));
-    localStorage.setItem(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, JSON.stringify(INITIAL_CO_CURRICULAR_ANNOUNCEMENTS));
-    localStorage.setItem(KEYS.CO_CURRICULAR_BUDGET, JSON.stringify(INITIAL_CO_CURRICULAR_BUDGET));
-    localStorage.setItem(KEYS.LIBRARY_RESERVATIONS, JSON.stringify(INITIAL_LIBRARY_RESERVATIONS));
-    localStorage.setItem(KEYS.LIBRARY_FINES, JSON.stringify(INITIAL_LIBRARY_FINES));
-    localStorage.setItem(KEYS.LIBRARY_ACQUISITIONS, JSON.stringify(INITIAL_LIBRARY_ACQUISITIONS));
-    localStorage.setItem(KEYS.LIBRARY_SHELVES, JSON.stringify(INITIAL_LIBRARY_SHELVES));
-    localStorage.setItem(KEYS.LIBRARY_DIGITAL_ITEMS, JSON.stringify(INITIAL_DIGITAL_LIBRARY_ITEMS));
-    localStorage.setItem(KEYS.LIBRARY_READING_PROGRAMME, JSON.stringify(INITIAL_READING_PROGRAMME_MEMBERS));
-    localStorage.setItem(KEYS.LIBRARY_ATTENDANCE, JSON.stringify(INITIAL_LIBRARY_ATTENDANCE));
-    localStorage.setItem(KEYS.LIBRARY_TIMETABLE, JSON.stringify(INITIAL_LIBRARY_TIMETABLE));
-    localStorage.setItem(KEYS.LIBRARY_EVENTS, JSON.stringify(INITIAL_LIBRARY_EVENTS));
-    localStorage.setItem(KEYS.LIBRARY_POLICIES, JSON.stringify(INITIAL_LIBRARY_POLICIES));
-    localStorage.setItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
-    localStorage.setItem(KEYS.LESSON_IMAGES, JSON.stringify(INITIAL_LESSON_IMAGES));
-    localStorage.setItem(KEYS.E_LINKS, JSON.stringify(INITIAL_E_LINKS));
-    localStorage.setItem(KEYS.DOCUMENT_REQUESTS, JSON.stringify(INITIAL_DOCUMENT_REQUESTS));
-    localStorage.setItem(KEYS.DOCUMENT_SUBMISSIONS, JSON.stringify(INITIAL_DOCUMENT_SUBMISSIONS));
-    localStorage.setItem(KEYS.POST_CATEGORIES, JSON.stringify(INITIAL_POST_CATEGORIES));
-    localStorage.setItem(KEYS.PORTAL_SECTIONS, JSON.stringify(INITIAL_PORTAL_SECTIONS));
+    if (isSupabaseConfigured) {
+      console.error('[storage] Demo data reset is disabled when Supabase is configured.');
+      return;
+    }
+    persistItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
+    persistItem(KEYS.GRADE_PASSWORDS, JSON.stringify(INITIAL_GRADE_PASSWORDS));
+    persistItem(KEYS.TOPICS, JSON.stringify(INITIAL_TOPICS));
+    persistItem(KEYS.NOTES, JSON.stringify(INITIAL_LESSON_NOTES));
+    persistItem(KEYS.VIDEOS, JSON.stringify(INITIAL_VIDEOS));
+    persistItem(KEYS.AUDIOS, JSON.stringify(INITIAL_AUDIOS));
+    persistItem(KEYS.QUIZZES, JSON.stringify(INITIAL_QUIZZES));
+    persistItem(KEYS.QUIZ_ATTEMPTS, JSON.stringify(INITIAL_QUIZ_ATTEMPTS));
+    persistItem(KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
+    persistItem(KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
+    persistItem(KEYS.VIRTUAL_CLASSES, JSON.stringify(INITIAL_VIRTUAL_CLASSES));
+    persistItem(KEYS.WORK_ENTRY_LOGS, JSON.stringify(INITIAL_WORK_ENTRY_LOGS));
+    persistItem(KEYS.GATE_PASSES, JSON.stringify(INITIAL_GATE_EXIT_PASSES));
+    persistItem(KEYS.ATTENDANCE, JSON.stringify(INITIAL_ATTENDANCE));
+    persistItem(KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
+    persistItem(KEYS.BELL_SCHEDULE, JSON.stringify(INITIAL_BELL_SCHEDULE));
+    persistItem(KEYS.LUNCH_RECORDS, JSON.stringify(INITIAL_LUNCH_RECORDS));
+    persistItem(KEYS.REPORT_CARDS, JSON.stringify(INITIAL_REPORT_CARDS));
+    persistItem(KEYS.CHAT_MESSAGES, JSON.stringify(INITIAL_CHAT_MESSAGES));
+    persistItem(KEYS.LIBRARY_BOOKS, JSON.stringify(INITIAL_LIBRARY_BOOKS));
+    persistItem(KEYS.BORROW_RECORDS, JSON.stringify(INITIAL_BORROW_RECORDS));
+    persistItem(KEYS.SANATORIUM_RECORDS, JSON.stringify(INITIAL_SANATORIUM_RECORDS));
+    persistItem(KEYS.TRANSPORT_BUSES, JSON.stringify(INITIAL_SCHOOL_BUSES));
+    persistItem(KEYS.TRANSPORT_ROUTES, JSON.stringify(INITIAL_TRANSPORT_ROUTES));
+    persistItem(KEYS.TRANSPORT_STUDENTS, JSON.stringify(INITIAL_STUDENT_TRANSPORT_PROFILES));
+    persistItem(KEYS.TRANSPORT_TRIP_RECORDS, JSON.stringify(INITIAL_TRANSPORT_TRIP_RECORDS));
+    persistItem(KEYS.TRANSPORT_INCIDENTS, JSON.stringify(INITIAL_TRANSPORT_INCIDENTS));
+    persistItem(KEYS.TRANSPORT_ALERTS, JSON.stringify(INITIAL_TRANSPORT_ALERTS));
+    persistItem(KEYS.CO_CURRICULAR_ACTIVITIES, JSON.stringify(INITIAL_CO_CURRICULAR_ACTIVITIES));
+    persistItem(KEYS.CO_CURRICULAR_PROFILES, JSON.stringify(INITIAL_LEARNER_CO_CURRICULAR_PROFILES));
+    persistItem(KEYS.CO_CURRICULAR_ATTENDANCE, JSON.stringify(INITIAL_CO_CURRICULAR_ATTENDANCE));
+    persistItem(KEYS.CO_CURRICULAR_COMPETITIONS, JSON.stringify(INITIAL_CO_CURRICULAR_COMPETITIONS));
+    persistItem(KEYS.CO_CURRICULAR_EQUIPMENT, JSON.stringify(INITIAL_CO_CURRICULAR_EQUIPMENT));
+    persistItem(KEYS.CO_CURRICULAR_TRIPS, JSON.stringify(INITIAL_CO_CURRICULAR_TRIPS));
+    persistItem(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, JSON.stringify(INITIAL_CO_CURRICULAR_ANNOUNCEMENTS));
+    persistItem(KEYS.CO_CURRICULAR_BUDGET, JSON.stringify(INITIAL_CO_CURRICULAR_BUDGET));
+    persistItem(KEYS.LIBRARY_RESERVATIONS, JSON.stringify(INITIAL_LIBRARY_RESERVATIONS));
+    persistItem(KEYS.LIBRARY_FINES, JSON.stringify(INITIAL_LIBRARY_FINES));
+    persistItem(KEYS.LIBRARY_ACQUISITIONS, JSON.stringify(INITIAL_LIBRARY_ACQUISITIONS));
+    persistItem(KEYS.LIBRARY_SHELVES, JSON.stringify(INITIAL_LIBRARY_SHELVES));
+    persistItem(KEYS.LIBRARY_DIGITAL_ITEMS, JSON.stringify(INITIAL_DIGITAL_LIBRARY_ITEMS));
+    persistItem(KEYS.LIBRARY_READING_PROGRAMME, JSON.stringify(INITIAL_READING_PROGRAMME_MEMBERS));
+    persistItem(KEYS.LIBRARY_ATTENDANCE, JSON.stringify(INITIAL_LIBRARY_ATTENDANCE));
+    persistItem(KEYS.LIBRARY_TIMETABLE, JSON.stringify(INITIAL_LIBRARY_TIMETABLE));
+    persistItem(KEYS.LIBRARY_EVENTS, JSON.stringify(INITIAL_LIBRARY_EVENTS));
+    persistItem(KEYS.LIBRARY_POLICIES, JSON.stringify(INITIAL_LIBRARY_POLICIES));
+    persistItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
+    persistItem(KEYS.LESSON_IMAGES, JSON.stringify(INITIAL_LESSON_IMAGES));
+    persistItem(KEYS.E_LINKS, JSON.stringify(INITIAL_E_LINKS));
+    persistItem(KEYS.DOCUMENT_REQUESTS, JSON.stringify(INITIAL_DOCUMENT_REQUESTS));
+    persistItem(KEYS.DOCUMENT_SUBMISSIONS, JSON.stringify(INITIAL_DOCUMENT_SUBMISSIONS));
+    persistItem(KEYS.POST_CATEGORIES, JSON.stringify(INITIAL_POST_CATEGORIES));
+    persistItem(KEYS.PORTAL_SECTIONS, JSON.stringify(INITIAL_PORTAL_SECTIONS));
   },
 
   // Role Permissions & Access Control
@@ -855,6 +956,13 @@ export const Storage = {
   // Users
   getUsers(): User[] {
     const stored = getFromStorage<User[]>(KEYS.USERS, INITIAL_USERS);
+    if (isSupabaseConfigured) {
+      const safeUsers = stored.map(({ password: _password, ...user }) => user);
+      if (stored.some(user => Object.prototype.hasOwnProperty.call(user, 'password'))) {
+        setToStorage(KEYS.USERS, safeUsers);
+      }
+      return safeUsers;
+    }
     // Guarantee that all demo accounts from INITIAL_USERS are actively present in stored users
     let hasMissing = false;
     const existingIds = new Set(stored.map(u => u.id));
@@ -4053,5 +4161,3 @@ export const INITIAL_TEACHER_ABSENCE_REPORTS: TeacherAbsenceReport[] = [
     createdAt: new Date().toISOString()
   }
 ];
-
-

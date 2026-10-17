@@ -152,6 +152,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
   // Visual Editor State
   const [isSuperAdminEditMode, setIsSuperAdminEditMode] = useState<boolean>(false);
+  const [isControlPanelOpen, setIsControlPanelOpen] = useState(false);
   const [activeEditorSection, setActiveEditorSection] = useState<string | null>(null);
   const [expandedFaqId, setExpandedFaqId] = useState<string | null>(faqs[0]?.id || null);
   const [activeTab, setActiveTab] = useState<string>('home');
@@ -206,39 +207,54 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white relative">
       
       {/* ========================================================
-          SUPER ADMIN LIVE IN-CONTEXT CUSTOMIZER TOOLBAR
+          LANDING PAGE ADMIN TOOLS
           Full control for Super Admin to edit, add, remove, customize every part
           ======================================================== */}
-      <div className="sticky top-0 z-50 bg-slate-950 text-slate-100 border-b border-amber-400/40 px-4 py-2.5 shadow-2xl backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          
-          <div className="flex items-center gap-3">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isSuperAdminEditMode ? 'bg-amber-400' : 'bg-slate-500'} opacity-75`}></span>
-              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isSuperAdminEditMode ? 'bg-amber-400' : 'bg-slate-400'}`}></span>
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="font-mono font-black text-amber-400 uppercase tracking-wider text-[11px] flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Super Admin Visual Control:</span>
-              </span>
-              <span className="hidden sm:inline text-slate-300">
-                {isSuperAdminEditMode 
-                  ? 'Live In-Context Edit Mode is ACTIVE. Click any section toolbar to edit, add, or remove.'
-                  : 'Full landing page customization enabled. Toggle live editing to customize any element.'}
-              </span>
-            </div>
-          </div>
+      <div className="fixed top-20 right-4 z-50">
+        <button
+          type="button"
+          onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
+          aria-expanded={isControlPanelOpen}
+          aria-controls="landing-control-panel"
+          aria-label={isControlPanelOpen ? 'Close platform tools' : 'Open platform tools'}
+          className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-2 text-xs font-bold text-slate-600 shadow-lg shadow-slate-900/10 backdrop-blur transition hover:border-blue-200 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          <Sliders className="h-3.5 w-3.5" />
+          <span>Platform tools</span>
+          {isControlPanelOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        </button>
 
-          <div className="flex items-center gap-2">
+        {isControlPanelOpen && (
+          <div id="landing-control-panel" className="absolute right-0 top-full mt-3 w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-slate-950 p-4 text-slate-100 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-bold text-white">
+                  <span className={`h-2 w-2 rounded-full ${isSuperAdminEditMode ? 'bg-amber-400' : 'bg-slate-500'}`} />
+                  Landing page tools
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {isSuperAdminEditMode ? 'Live editing is active.' : 'Manage the landing page or open the admin console.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsControlPanelOpen(false)}
+                aria-label="Close platform tools"
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
             
             {/* Toggle Live Edit Mode */}
             <button
               onClick={() => setIsSuperAdminEditMode(!isSuperAdminEditMode)}
-              className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+              className={`w-full justify-center px-3 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
                 isSuperAdminEditMode
                   ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-300'
-                  : 'bg-slate-800 text-amber-300 hover:bg-slate-700 border border-amber-400/50'
+                  : 'bg-slate-800 text-amber-300 hover:bg-slate-700 border border-slate-700'
               }`}
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -249,7 +265,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <select
               value={activeEditorSection || ''}
               onChange={(e) => setActiveEditorSection(e.target.value || null)}
-              className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+              className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
             >
               <option value="">Quick Customize Section...</option>
               <option value="header">Header & Navbar</option>
@@ -266,20 +282,21 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </select>
 
             {/* Platform Admin Console Link */}
-            <button
-              onClick={onNavigateToPlatformAdmin}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-              title="Open full Super Admin Management Console"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">Admin Console</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onNavigateToPlatformAdmin}
+                className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-xl border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title="Open full Super Admin Management Console"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>Admin Console</span>
+              </button>
 
             {/* Reset to Defaults */}
             <div className="relative">
               <button
                 onClick={() => setShowResetConfirm(true)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                className="p-2.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
                 title="Reset Landing Page Defaults"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -316,11 +333,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 </div>
               )}
             </div>
-
-          </div>
-
+              </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
 
       {/* Persistent Toast Feedback Banner */}
       {toastMessage && (
@@ -369,7 +386,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           1. HEADER NAVBAR (FULLY CUSTOMIZABLE)
           ======================================================== */}
       {visibility.header && (
-        <header className="sticky top-11 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs relative group">
+        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-sm relative group">
           
           {/* In-Context Section Edit Bar when Edit Mode is active */}
           {isSuperAdminEditMode && (
@@ -395,31 +412,31 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </div>
           )}
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[76px] flex items-center justify-between">
             
             {/* Logo & Title */}
             <div className="flex items-center gap-3">
-              <div className="bg-blue-50 p-2 rounded-2xl border border-blue-100 flex items-center justify-center">
+              <div className="bg-gradient-to-br from-blue-700 to-cyan-600 p-2.5 rounded-2xl border border-white shadow-lg shadow-blue-900/15 flex items-center justify-center">
                 <EduSmartGadsaLogo variant="emblem" size="md" />
               </div>
               <div>
-                <span className="font-serif font-black text-xl tracking-tight text-slate-950 block leading-tight">
+                <span className="font-sans font-extrabold text-lg tracking-tight text-slate-950 block leading-tight">
                   {header.brandName || 'EduSmart LMS'}
                 </span>
-                <span className="text-[10px] font-mono font-bold tracking-wider text-blue-700 uppercase block">
+                <span className="text-[10px] font-bold tracking-[0.12em] text-slate-500 uppercase block mt-0.5">
                   {header.brandSubtitle || 'Multi-Tenant School Platform'}
                 </span>
               </div>
             </div>
 
             {/* Desktop Nav Links (Dynamic from config) */}
-            <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-slate-600">
+            <nav aria-label="Main navigation" className="hidden xl:flex items-center gap-6 text-[13px] font-semibold text-slate-600">
               {header.navLinks.filter(link => link.enabled).map((link) => (
                 <button
                   key={link.id}
                   onClick={() => scrollToSection(link.sectionId, link.id)}
-                  className={`hover:text-blue-700 transition-colors cursor-pointer ${
-                    activeTab === link.id ? 'text-blue-700 font-bold' : ''
+                  className={`relative py-2 transition-colors cursor-pointer after:absolute after:inset-x-0 after:-bottom-1 after:h-0.5 after:origin-left after:rounded-full after:bg-blue-600 after:transition-transform ${
+                    activeTab === link.id ? 'text-blue-700 after:scale-x-100' : 'hover:text-blue-700 after:scale-x-0 hover:after:scale-x-100'
                   }`}
                 >
                   {link.label}
@@ -428,11 +445,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </nav>
 
             {/* Header Action Button: [ School Login ] */}
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="hidden xl:flex items-center gap-3">
               {header.showRegisterButton && (
                 <button
                   onClick={() => setShowRegisterModal(true)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                  className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 hover:border-slate-300 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
                   {header.registerButtonLabel}
                 </button>
@@ -441,7 +458,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               {header.showLoginButton && (
                 <button
                   onClick={onNavigateToLogin}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-2 cursor-pointer"
+                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-900/15 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
                   <span>{header.loginButtonLabel}</span>
                   <ArrowRight className="w-4 h-4" />
@@ -450,16 +467,18 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </div>
 
             {/* Mobile Menu Toggle */}
-            <div className="flex sm:hidden items-center gap-2">
+            <div className="flex xl:hidden items-center gap-2">
               <button
                 onClick={onNavigateToLogin}
-                className="px-3 py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm"
+                className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
-                Login
+                {header.loginButtonLabel}
               </button>
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100"
+                aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={mobileMenuOpen}
+                className="p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
@@ -469,7 +488,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
           {/* Mobile Navigation Drawer */}
           {mobileMenuOpen && (
-            <div className="sm:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-4 space-y-3 shadow-lg">
+            <div className="xl:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-5 space-y-3 shadow-lg">
               {header.navLinks.filter(l => l.enabled).map((link) => (
                 <button
                   key={link.id}
@@ -486,15 +505,17 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 >
                   {header.loginButtonLabel}
                 </button>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setShowRegisterModal(true);
-                  }}
-                  className="w-full py-2.5 bg-slate-100 text-slate-800 font-bold text-sm rounded-xl text-center"
-                >
-                  {header.registerButtonLabel}
-                </button>
+                {header.showRegisterButton && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      setShowRegisterModal(true);
+                    }}
+                    className="w-full py-2.5 bg-slate-100 text-slate-800 font-bold text-sm rounded-xl text-center"
+                  >
+                    {header.registerButtonLabel}
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -505,7 +526,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           2. HERO SECTION (FULLY CUSTOMIZABLE)
           ======================================================== */}
       {visibility.hero && (
-        <section className="relative overflow-hidden bg-gradient-to-b from-blue-50/50 via-white to-slate-50 pt-12 pb-20 sm:pt-16 sm:pb-28 border-b border-slate-100 relative group">
+        <section className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50/70 pt-14 pb-16 sm:pt-20 sm:pb-24 lg:pt-24 lg:pb-28 border-b border-slate-100 group">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute -top-40 right-[-8%] h-[30rem] w-[30rem] rounded-full bg-blue-200/35 blur-3xl" />
+            <div className="absolute -bottom-48 left-[20%] h-80 w-80 rounded-full bg-cyan-100/50 blur-3xl" />
+          </div>
           
           {/* In-Context Hero Toolbar */}
           {isSuperAdminEditMode && (
@@ -529,37 +554,37 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </div>
           )}
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
               
               {/* Left Hero Content */}
-              <div className="lg:col-span-7 space-y-6 text-left">
+              <div className="lg:col-span-7 space-y-7 text-left">
                 
                 {/* Category Pill Tag */}
                 {hero.pillTag && (
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-100/80 border border-blue-200 text-blue-800 text-xs font-black tracking-widest uppercase">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/80 border border-blue-100 text-blue-800 text-[11px] font-extrabold tracking-[0.14em] uppercase shadow-sm">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" aria-hidden="true" />
                     <span>{hero.pillTag}</span>
                   </div>
                 )}
 
                 {/* Main Headline */}
-                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-950 font-serif tracking-tight leading-[1.12]">
-                  {hero.headlineStart}<br />
-                  {hero.headlineMid}<br />
-                  <span className="text-blue-700">{hero.headlineHighlight}</span>
+                <h1 className="text-[2.7rem] sm:text-6xl xl:text-7xl font-extrabold text-slate-950 tracking-[-0.055em] leading-[1.02]">
+                  <span className="block">{hero.headlineStart}</span>
+                  <span className="block">{hero.headlineMid}</span>
+                  <span className="block bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-600 bg-clip-text text-transparent">{hero.headlineHighlight}</span>
                 </h1>
 
                 {/* Subtitle */}
-                <p className="text-base sm:text-lg text-slate-600 max-w-xl font-medium leading-relaxed">
+                <p className="text-base sm:text-lg text-slate-600 max-w-xl leading-8">
                   {hero.subtitle}
                 </p>
 
                 {/* CTA Action Buttons */}
-                <div className="flex flex-wrap items-center gap-4 pt-2">
+                <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button
                     onClick={onNavigateToLogin}
-                    className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-sm rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2.5 cursor-pointer transform hover:-translate-y-0.5"
+                    className="px-6 py-3.5 bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center gap-2.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <Users className="w-4 h-4" />
                     <span>{hero.primaryCta}</span>
@@ -568,7 +593,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
                   <button
                     onClick={() => setShowRegisterModal(true)}
-                    className="px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 font-bold text-sm rounded-xl border border-slate-300 hover:border-slate-400 shadow-2xs hover:shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                    className="px-6 py-3.5 bg-white/90 hover:bg-white text-slate-800 font-bold text-sm rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <Building2 className="w-4 h-4 text-blue-600" />
                     <span>{hero.secondaryCta}</span>
@@ -576,10 +601,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 </div>
 
                 {/* Trust Indicators / Badges (Add / Remove supported) */}
-                <div className="pt-6 border-t border-slate-200/80 flex flex-wrap items-center gap-4 text-xs text-slate-600 font-semibold">
+                <div className="pt-5 border-t border-slate-200/80 flex flex-wrap items-center gap-x-5 gap-y-3 text-xs text-slate-600 font-semibold">
                   {hero.trustBadges?.map((badge, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5 bg-slate-100/70 px-2.5 py-1 rounded-lg border border-slate-200 relative group/badge">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div key={idx} className="flex items-center gap-2 relative group/badge">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
                       <span>{badge}</span>
                       {isSuperAdminEditMode && (
                         <button
@@ -611,17 +636,17 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
               {/* Right Hero Visual: School Campus Banner / Student Photograph */}
               <div className="lg:col-span-5 relative">
-                <div className="relative mx-auto max-w-md lg:max-w-none">
+                <div className="relative mx-auto max-w-lg lg:max-w-none">
                   
                   {/* Decorative glow backing */}
-                  <div className="absolute -inset-2 bg-gradient-to-r from-blue-400 to-teal-400 rounded-3xl blur-xl opacity-20 transform -rotate-1" />
+                  <div className="absolute -inset-3 bg-gradient-to-br from-blue-500/35 via-cyan-400/25 to-emerald-300/30 rounded-[2rem] blur-2xl opacity-80 transform -rotate-2" />
 
                   {/* Main Image Frame */}
-                  <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-900 group/heroimg">
+                  <div className="relative rounded-[1.75rem] overflow-hidden shadow-2xl shadow-slate-900/20 border-[6px] border-white bg-slate-900 group/heroimg">
                     <img
                       src={hero.heroImageUrl || "/src/assets/images/edusmart_campus_banner_1790859700873.jpg"}
                       alt="EduSmart Learners & School Campus"
-                      className="w-full h-80 sm:h-96 object-cover object-center transform hover:scale-105 transition-transform duration-500"
+                      className="w-full h-[22rem] sm:h-[29rem] lg:h-[32rem] object-cover object-center transform hover:scale-[1.03] transition-transform duration-700"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/src/assets/images/edusmart_campus_banner_1790859700873.jpg';
                       }}
@@ -639,13 +664,14 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     
                     {/* Floating Overlay Card */}
                     {hero.showFloatingCard && (
-                      <div className="absolute bottom-4 left-4 right-4 bg-slate-950/85 backdrop-blur-md rounded-2xl p-3.5 text-white border border-white/10 shadow-lg flex items-center justify-between">
+                      <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl p-4 text-slate-900 border border-white/80 shadow-xl flex items-center justify-between gap-3">
                         <div>
-                          <div className="text-xs font-black text-amber-400 font-serif">{hero.floatingCardTitle}</div>
-                          <div className="text-[10px] text-slate-300">{hero.floatingCardSubtitle}</div>
+                          <div className="text-sm font-extrabold text-slate-900">{hero.floatingCardTitle}</div>
+                          <div className="text-xs text-slate-600 mt-0.5">{hero.floatingCardSubtitle}</div>
                         </div>
-                        <span className="text-[10px] font-mono font-bold bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full">
-                          ● Active
+                        <span className="inline-flex items-center gap-1.5 shrink-0 text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                          Active
                         </span>
                       </div>
                     )}
@@ -663,7 +689,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           3. SOCIAL PROOF / IMPACT & STATS SECTION
           ======================================================== */}
       {visibility.stats && stats.length > 0 && (
-        <section id="stats-section" className="py-10 bg-slate-900 text-white border-b border-slate-800 relative group">
+        <section id="stats-section" className="py-10 sm:py-12 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white border-b border-slate-800 relative group">
           
           {isSuperAdminEditMode && (
             <div className="absolute top-2 right-4 z-20 flex items-center gap-2 bg-slate-950 text-white px-3 py-1 rounded-xl border border-amber-400 text-xs font-bold">
@@ -689,7 +715,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
               {stats.map((st) => (
-                <div key={st.id} className="text-left space-y-1 p-3 bg-slate-950/40 rounded-xl border border-slate-800 relative group/stat">
+                <div key={st.id} className="text-left space-y-1.5 p-4 sm:p-5 bg-white/[0.04] rounded-2xl border border-white/10 relative group/stat">
                   {isSuperAdminEditMode && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 opacity-80 group-hover/stat:opacity-100">
                       <button
@@ -712,10 +738,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     </div>
                   )}
 
-                  <div className="text-blue-400 mb-1">{renderIcon(st.icon, "w-5 h-5")}</div>
-                  <div className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-white">{st.value}</div>
-                  <div className="text-xs font-bold text-slate-200">{st.label}</div>
-                  <div className="text-[10px] text-slate-400">{st.subtext}</div>
+                  <div className="text-cyan-300 mb-2">{renderIcon(st.icon, "w-5 h-5")}</div>
+                  <div className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">{st.value}</div>
+                  <div className="text-sm font-bold text-slate-100">{st.label}</div>
+                  <div className="text-xs leading-relaxed text-slate-400">{st.subtext}</div>
                 </div>
               ))}
             </div>
@@ -727,7 +753,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           4. CORE FEATURE CARDS SECTION
           ======================================================== */}
       {visibility.features && (
-        <section id="features-section" className="py-16 sm:py-24 bg-white border-b border-slate-100 relative group">
+        <section id="features-section" className="py-16 sm:py-24 bg-slate-50/70 border-b border-slate-100 relative group">
           
           {isSuperAdminEditMode && (
             <div className="absolute top-4 right-4 z-20 flex items-center gap-2 bg-slate-950 text-white px-3 py-1.5 rounded-xl border border-amber-400 text-xs font-bold">
@@ -761,23 +787,23 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
             
             <div className="text-center max-w-3xl mx-auto space-y-3">
-              <span className="text-xs font-black tracking-widest text-blue-700 uppercase bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+              <span className="text-[11px] font-extrabold tracking-[0.14em] text-blue-700 uppercase bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
                 Institutional Capabilities
               </span>
-              <h2 className="text-3xl sm:text-4xl font-black text-slate-900 font-serif tracking-tight">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
                 Core Pillars Designed for Institutional Excellence
               </h2>
-              <p className="text-sm sm:text-base text-slate-600">
+              <p className="text-sm sm:text-base text-slate-600 leading-7">
                 Everything required to operate modern CBC learning environments, track mastery, communicate with parents, and manage campus operations.
               </p>
             </div>
 
             {/* Dynamic Feature Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {activeFeatures.map((feat) => (
                 <div 
                   key={feat.id} 
-                  className="bg-slate-50 hover:bg-white rounded-2xl p-6 border border-slate-200 hover:border-blue-400 hover:shadow-xl transition-all space-y-4 group text-left relative"
+                  className="bg-white rounded-2xl p-6 sm:p-7 border border-slate-200/80 hover:border-blue-200 hover:shadow-xl hover:shadow-slate-900/5 hover:-translate-y-1 transition-all duration-200 space-y-5 group text-left relative"
                 >
                   {isSuperAdminEditMode && (
                     <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
@@ -802,20 +828,20 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   )}
 
                   <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center group-hover:scale-105 transition-transform">
                       {renderIcon(feat.icon, "w-6 h-6")}
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-white px-2 py-0.5 rounded border border-slate-200">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200">
                       {feat.tag}
                     </span>
                   </div>
-                  <h3 className="text-lg font-black text-slate-900 font-serif">
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">
                     {feat.title}
                   </h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
+                  <p className="text-sm text-slate-600 leading-6">
                     {feat.description}
                   </p>
-                  <div className="pt-2 text-xs font-bold text-blue-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                  <div className="pt-1 text-xs font-bold text-blue-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                     <span>Explore Suite</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </div>

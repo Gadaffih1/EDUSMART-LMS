@@ -5,6 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { networkInterfaces } from 'os';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -581,7 +582,17 @@ Core rules:
   }
 
   const server = app.listen(PORT, HOST, () => {
-    console.log(`EduSmart Full-Stack server running at http://${HOST}:${PORT}`);
+    console.log('EduSmart Full-Stack server is ready:');
+    console.log(`  Local:   http://localhost:${PORT}`);
+    if (HOST === '0.0.0.0' || HOST === '::') {
+      const addresses = Object.values(networkInterfaces())
+        .flatMap((interfaces) => interfaces ?? [])
+        .filter((address) => !address.internal && address.family === 'IPv4')
+        .map((address) => address.address);
+      for (const address of addresses) {
+        console.log(`  Network: http://${address}:${PORT}`);
+      }
+    }
   });
 
   // Graceful shutdown handling for container orchestrators (Cloud Run, Docker, Kubernetes)

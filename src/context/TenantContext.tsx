@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Tenant, TenantContextType } from '../types/tenant';
 import { INITIAL_TENANTS } from '../data/tenantsData';
+import { SyncEngine } from '../utils/syncEngine';
 
 const TENANT_STORAGE_KEY = 'edusmart_active_tenant_id';
 const ALL_TENANTS_STORAGE_KEY = 'edusmart_all_tenants_registry';
@@ -48,7 +49,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (target) {
       setCurrentTenantId(tenantId);
       try {
-        localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
+        SyncEngine.persistItem(TENANT_STORAGE_KEY, tenantId);
         window.dispatchEvent(new CustomEvent('tenant-changed', { detail: target }));
       } catch (err) {
         console.error('Failed to persist tenant selection:', err);
@@ -61,7 +62,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setAllTenants(prev => {
       const updated = prev.map(t => (t.id === targetId ? { ...t, ...updates } : t));
       try {
-        localStorage.setItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
         window.dispatchEvent(new CustomEvent('tenant-branding-updated', { detail: { tenantId: targetId, updates } }));
       } catch (err) {
         console.error('Failed to save updated tenant branding:', err);
@@ -78,7 +79,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         ? prev.map(t => (t.id === newTenant.id ? { ...t, ...newTenant } : t))
         : [...prev, newTenant];
       try {
-        localStorage.setItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
         window.dispatchEvent(new CustomEvent('tenant-registered', { detail: newTenant }));
       } catch (err) {
         console.error('Failed to save registered tenant:', err);
@@ -91,7 +92,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setAllTenants(prev => {
       const updated = prev.map(t => (t.id === tenantId ? { ...t, ...updates } : t));
       try {
-        localStorage.setItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
         window.dispatchEvent(new CustomEvent('tenant-updated', { detail: { tenantId, updates } }));
       } catch (err) {
         console.error('Failed to update tenant:', err);
@@ -108,11 +109,11 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       const updated = prev.filter(t => t.id !== tenantId);
       try {
-        localStorage.setItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
         if (currentTenantId === tenantId) {
           const nextId = updated[0]?.id || 'tenant-staustins';
           setCurrentTenantId(nextId);
-          localStorage.setItem(TENANT_STORAGE_KEY, nextId);
+          SyncEngine.persistItem(TENANT_STORAGE_KEY, nextId);
         }
         window.dispatchEvent(new CustomEvent('tenant-deleted', { detail: { tenantId } }));
       } catch (err) {
@@ -124,7 +125,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     try {
-      localStorage.setItem(TENANT_STORAGE_KEY, currentTenant.id);
+      SyncEngine.persistItem(TENANT_STORAGE_KEY, currentTenant.id);
     } catch {
       // Ignore
     }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SyncEngine } from '../../utils/syncEngine';
 import { 
   User, 
   Topic, 
@@ -1874,7 +1875,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                     submittedAt: new Date().toISOString().split('T')[0],
                     status: 'submitted'
                   });
-                  localStorage.setItem('edusmart_assignment_submissions', JSON.stringify(existingSubs));
+                  SyncEngine.persistItem('edusmart_assignment_submissions', JSON.stringify(existingSubs));
                   setActiveAssignedLab(null);
                   alert('Assigned Practical Completed & Submitted to Teacher Successfully!');
                 }}

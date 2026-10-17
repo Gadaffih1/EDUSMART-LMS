@@ -37,6 +37,39 @@ import { SuperAdminPortalView } from './components/admin/SuperAdminPortalView';
 import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloatingMenu';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { Maximize2, CheckCheck, Megaphone, Sparkles } from 'lucide-react';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
+import { SyncEngine } from './utils/syncEngine';
+
+type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
+const SCHOOL_ROUTE_STORAGE_PREFIX = 'edusmart:school-route:';
+
+function getPortalRoute(pathname: string): { view: PortalView; routeId?: string } {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+
+  if (normalizedPath === '/login') {
+    return { view: 'unified_login' };
+  }
+  if (normalizedPath === '/admin') {
+    return { view: 'super_admin' };
+  }
+
+  const schoolRoute = normalizedPath.match(/^\/school(?:\/([^/]+))?$/);
+  if (schoolRoute) {
+    return { view: 'school_lms', routeId: schoolRoute[1] };
+  }
+
+  return { view: 'public_landing' };
+}
+
+function resolveSchoolRoute(routeId: string | undefined): string | undefined {
+  return routeId ? sessionStorage.getItem(`${SCHOOL_ROUTE_STORAGE_PREFIX}${routeId}`) || undefined : undefined;
+}
+
+function createSchoolRouteId(schoolId: string): string {
+  const routeId = crypto.randomUUID().replace(/-/g, '');
+  sessionStorage.setItem(`${SCHOOL_ROUTE_STORAGE_PREFIX}${routeId}`, schoolId);
+  return routeId;
+}
 
 function AppContent({
   currentUser,
@@ -51,7 +84,7 @@ function AppContent({
   onSwitchUser: (user: User) => void;
   onNavigateHome: () => void;
 }) {
-  const { currentTenant } = useTenant();
+  const { currentTenant, allTenants, switchTenant } = useTenant();
   const { isNotificationOpen, closeNotifications } = useNotificationLayout();
   const { isMobileOverlapProtectionEnabled } = useMobileLayout();
   const { customization, isWorkspaceEnabled } = usePlatformCustomization();
@@ -61,9 +94,54 @@ function AppContent({
   // 2. 'unified_login': Screen 2 Unified Login Page (Select school, credentials)
   // 3. 'super_admin': Screen 4 Super Admin Console (Platform management, Campus Switcher)
   // 4. 'school_lms': Screen 3 Tenant School Workspace (e.g. Riara School, Return to Super Admin visible ONLY to platform owners)
-  const [portalView, setPortalView] = useState<'public_landing' | 'unified_login' | 'super_admin' | 'school_lms'>('public_landing');
+  const [portalView, setPortalView] = useState<PortalView>(() => getPortalRoute(window.location.pathname).view);
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
+
+  const navigateToPortal = (view: PortalView, schoolId = currentTenant.id, replace = false) => {
+    const path = view === 'public_landing'
+      ? '/'
+      : view === 'unified_login'
+        ? '/login'
+        : view === 'super_admin'
+          ? '/admin'
+          : `/school/${createSchoolRouteId(schoolId)}`;
+
+    if (window.location.pathname !== path) {
+      const updateHistory = replace ? window.history.replaceState : window.history.pushState;
+      updateHistory.call(window.history, { view }, '', path);
+    }
+    setPortalView(view);
+  };
+
+  React.useEffect(() => {
+    const handlePopState = () => {
+      setPortalView(getPortalRoute(window.location.pathname).view);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  React.useEffect(() => {
+    const { view, routeId } = getPortalRoute(window.location.pathname);
+    if (view === 'school_lms') {
+      const schoolId = resolveSchoolRoute(routeId);
+      const school = schoolId
+        ? allTenants.find((tenant) => tenant.id === schoolId)
+        : undefined;
+      if (school && school.id !== currentTenant.id) {
+        switchTenant(school.id);
+      } else if (!school) {
+        navigateToPortal(currentUser ? 'school_lms' : 'unified_login', currentTenant.id, true);
+      }
+    }
+  }, [allTenants, currentTenant.id, currentUser, switchTenant]);
+
+  React.useEffect(() => {
+    if (currentUser && portalView !== 'super_admin' && portalView !== 'school_lms') {
+      navigateToPortal('school_lms', currentTenant.id, true);
+    }
+  }, [currentUser, currentTenant.id, portalView]);
 
   React.useEffect(() => {
     const handleOpenOps = () => setViewingOperationsHub(true);
@@ -80,34 +158,80 @@ function AppContent({
   if (!currentUser && portalView === 'public_landing') {
     return (
       <PublicLandingPage
-        onNavigateToLogin={() => setPortalView('unified_login')}
-        onNavigateToPlatformAdmin={() => setPortalView('super_admin')}
+        onNavigateToLogin={() => navigateToPortal('unified_login')}
+        onNavigateToPlatformAdmin={() => navigateToPortal('super_admin')}
+      />
+    );
+  }
+
+  // Admin Console always requires a signed-in Supabase administrator.
+  if (!currentUser && portalView === 'super_admin') {
+    return (
+      <UnifiedLoginPage
+        adminOnly
+        onLoginSuccess={(user) => {
+          setIsPlatformAdminSession(true);
+          onLoginSuccess(user);
+          navigateToPortal('super_admin', currentTenant.id, true);
+        }}
+        onBackToLanding={() => navigateToPortal('public_landing')}
+      />
+    );
+  }
+
+  if (currentUser && portalView === 'super_admin' && currentUser.role !== 'admin') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
+        <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-xl">
+          <h1 className="text-xl font-bold text-slate-900">Administrator sign-in required</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            This account cannot access the Admin Console. Sign out and use an administrator email and password.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => void onLogout()}
+              className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800"
+            >
+              Sign out and continue
+            </button>
+            <button
+              onClick={() => navigateToPortal('public_landing')}
+              className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Back to website
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (currentUser && portalView === 'super_admin' && currentUser.role === 'admin') {
+    return (
+      <SuperAdminPortalView
+        onEnterSchool={(schoolId) => {
+          setIsPlatformAdminSession(true);
+          navigateToPortal('school_lms', schoolId);
+        }}
+        onBackToLanding={async () => {
+          await onLogout();
+          setIsPlatformAdminSession(false);
+          navigateToPortal('public_landing');
+        }}
       />
     );
   }
 
   // 2. Unified Login Page (Screen 2 in diagram): Select school, enter username/password
-  if (!currentUser && portalView === 'unified_login') {
+  if (!currentUser && (portalView === 'unified_login' || portalView === 'school_lms')) {
     return (
       <UnifiedLoginPage
         onLoginSuccess={(user) => {
           setIsPlatformAdminSession(false);
           onLoginSuccess(user);
+          navigateToPortal('school_lms', user.schoolId || currentTenant.id, true);
         }}
-        onBackToLanding={() => setPortalView('public_landing')}
-      />
-    );
-  }
-
-  // 3. Super Admin Console (Screen 4 in diagram): Private platform management, Campus Switcher exclusive
-  if (!currentUser && portalView === 'super_admin') {
-    return (
-      <SuperAdminPortalView
-        onEnterSchool={(schoolId) => {
-          setIsPlatformAdminSession(true);
-          setPortalView('school_lms');
-        }}
-        onBackToLanding={() => setPortalView('public_landing')}
+        onBackToLanding={() => navigateToPortal('public_landing')}
       />
     );
   }
@@ -124,20 +248,20 @@ function AppContent({
         onLogout={() => {
           setIsPlatformAdminSession(false);
           onLogout();
-          setPortalView('public_landing');
+          navigateToPortal('public_landing');
         }}
         onSwitchUser={onSwitchUser}
         isPlatformAdminSession={isPlatformAdminSession || (currentUser?.role === 'admin' && isPlatformAdminSession)}
         onReturnToSuperAdmin={() => {
           setIsPlatformAdminSession(true);
           onLogout();
-          setPortalView('super_admin');
+          navigateToPortal('super_admin');
         }}
         onNavigateHome={() => {
           if (currentUser) {
             onNavigateHome();
           } else {
-            setPortalView('public_landing');
+            navigateToPortal('public_landing');
           }
         }}
       />
@@ -206,7 +330,7 @@ function AppContent({
             {!currentUser ? (
               <LandingPage 
                 onLoginSuccess={onLoginSuccess} 
-                onReturnToSuperAdmin={isPlatformAdminSession ? () => setPortalView('super_admin') : undefined}
+                onReturnToSuperAdmin={isPlatformAdminSession ? () => navigateToPortal('super_admin') : undefined}
               />
             ) : !isWorkspaceEnabled(currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
               /* Informative notice if Super Admin deactivated this workspace for this tenant */
@@ -220,7 +344,7 @@ function AppContent({
                 </p>
                 {isPlatformAdminSession && (
                   <button
-                    onClick={() => setPortalView('super_admin')}
+                    onClick={() => navigateToPortal('super_admin')}
                     className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
                   >
                     Open Platform Customizer to Re-Enable
@@ -325,7 +449,7 @@ function AppContent({
       {isPlatformAdminSession && (
         <div className="fixed bottom-6 left-6 z-40">
           <button
-            onClick={() => setPortalView('super_admin')}
+            onClick={() => navigateToPortal('super_admin')}
             className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-2xl shadow-xl flex items-center gap-2 border-2 border-amber-300 transition-all transform hover:scale-105 cursor-pointer group"
             title="Return to Super Admin Hub & Customizer Studio"
           >
@@ -338,22 +462,41 @@ function AppContent({
   );
 }
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    return Storage.getCurrentUser();
-  });
+export default function App({ initialUser = null }: { initialUser?: User | null }) {
+  const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
+
+  React.useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        SyncEngine.activateIdentity(null);
+        Storage.setCurrentUser(null);
+        setCurrentUser(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleLoginSuccess = (user: User) => {
     Storage.setCurrentUser(user);
     setCurrentUser(user);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[auth] Sign-out failed', error);
+        return;
+      }
+      SyncEngine.activateIdentity(null);
+    }
     Storage.setCurrentUser(null);
     setCurrentUser(null);
   };
 
   const handleSwitchUser = (user: User) => {
+    if (isSupabaseConfigured) return;
     Storage.setCurrentUser(user);
     setCurrentUser(user);
   };

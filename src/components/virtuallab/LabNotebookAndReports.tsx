@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SyncEngine } from '../../utils/syncEngine';
 import { 
   FileText, 
   Award, 
@@ -75,7 +76,7 @@ export const LabNotebookAndReports: React.FC<LabNotebookAndReportsProps> = ({
         ];
         setReports(initialReports);
         setSelectedReport(initialReports[0]);
-        localStorage.setItem('edusmart_virtual_lab_reports', JSON.stringify(initialReports));
+        SyncEngine.persistItem('edusmart_virtual_lab_reports', JSON.stringify(initialReports));
       }
     } catch (e) {
       console.error(e);

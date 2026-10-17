@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SyncEngine } from '../../utils/syncEngine';
 import { 
   X, 
   FlaskConical, 
@@ -143,7 +144,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
         issuedAt: nowStr,
         status: 'active'
       });
-      localStorage.setItem('edusmart_vlab_ticket_passes', JSON.stringify(existing));
+      SyncEngine.persistItem('edusmart_vlab_ticket_passes', JSON.stringify(existing));
     }, 1500);
   };
 

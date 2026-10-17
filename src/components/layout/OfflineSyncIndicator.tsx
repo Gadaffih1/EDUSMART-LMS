@@ -4,6 +4,8 @@ import {
   OfflineCacheStatus, 
   OfflineSyncHealth 
 } from '../../utils/offlineCacheManager';
+import { SyncEngine, type SyncStatus } from '../../utils/syncEngine';
+import { Cloud, CloudUpload, CloudOff } from 'lucide-react';
 import { 
   HardDrive, 
   Wifi, 
@@ -28,7 +30,30 @@ export const OfflineSyncIndicator: React.FC<OfflineSyncIndicatorProps> = ({
   const [status, setStatus] = useState<OfflineCacheStatus>(() => OfflineCacheManager.getStatus());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [cloudStatus, setCloudStatus] = useState<SyncStatus>(() => SyncEngine.getStatus());
+  const [pendingWrites, setPendingWrites] = useState<number>(() => SyncEngine.pendingCount());
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Supabase school-data sync state
+  useEffect(() => {
+    const readCloud = () => {
+      setCloudStatus(SyncEngine.getStatus());
+      setPendingWrites(SyncEngine.pendingCount());
+    };
+    const handleStatus = () => readCloud();
+    const handleChange = () => readCloud();
+    window.addEventListener('edusmart:sync-status', handleStatus);
+    window.addEventListener('edusmart:data-changed', handleChange);
+    const unsubscribe = SyncEngine.onStatusChange(() => readCloud());
+    readCloud();
+    const timer = setInterval(readCloud, 5000);
+    return () => {
+      window.removeEventListener('edusmart:sync-status', handleStatus);
+      window.removeEventListener('edusmart:data-changed', handleChange);
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, []);
 
   // Update status on events
   useEffect(() => {
@@ -131,6 +156,30 @@ export const OfflineSyncIndicator: React.FC<OfflineSyncIndicatorProps> = ({
       ring: 'ring-rose-200',
       label: 'Not Cached'
     };
+  };
+
+  const handleCloudSyncNow = async () => {
+    await SyncEngine.syncNow();
+    setCloudStatus(SyncEngine.getStatus());
+    setPendingWrites(SyncEngine.pendingCount());
+  };
+
+  const cloudLabel: Record<SyncStatus, string> = {
+    disabled: 'Local Only',
+    idle: 'Synced',
+    hydrating: 'Loading…',
+    syncing: 'Syncing…',
+    offline: 'Offline – Queued',
+    error: 'Retrying…',
+  };
+
+  const cloudBadgeClasses: Record<SyncStatus, string> = {
+    disabled: 'bg-slate-100 text-slate-600 border-slate-200',
+    idle: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    hydrating: 'bg-blue-50 text-blue-700 border-blue-200',
+    syncing: 'bg-blue-50 text-blue-700 border-blue-200',
+    offline: 'bg-amber-50 text-amber-700 border-amber-200',
+    error: 'bg-rose-50 text-rose-700 border-rose-200',
   };
 
   const dotConfig = getStatusDotClasses();
@@ -241,6 +290,48 @@ export const OfflineSyncIndicator: React.FC<OfflineSyncIndicatorProps> = ({
           <p className="text-[11px] text-slate-600 leading-relaxed mb-3">
             Lesson notes, diagrams, and audio transcripts are saved in browser storage so learners and teachers can access critical CBC notes with zero internet.
           </p>
+
+          {/* School Data — Supabase Cloud Sync */}
+          <div className="mb-3 p-3 rounded-xl border border-indigo-100 bg-indigo-50/60 space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                {cloudStatus === 'offline' || cloudStatus === 'disabled' ? (
+                  <CloudOff className="w-3.5 h-3.5 text-indigo-500" />
+                ) : cloudStatus === 'syncing' || cloudStatus === 'hydrating' ? (
+                  <CloudUpload className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                ) : (
+                  <Cloud className="w-3.5 h-3.5 text-indigo-600" />
+                )}
+                School Data (Supabase)
+              </span>
+              <span className={`px-1.5 py-0.5 rounded-full border text-[10px] font-bold ${cloudBadgeClasses[cloudStatus]}`}>
+                {cloudLabel[cloudStatus]}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600">
+              {cloudStatus === 'disabled'
+                ? 'Supabase credentials missing — data stays on this device only.'
+                : SyncEngine.getLastError()
+                  ? SyncEngine.getLastError()
+                  : pendingWrites > 0
+                    ? `${pendingWrites} change${pendingWrites === 1 ? '' : 's'} waiting to upload.`
+                    : 'All records are backed up to the school cloud database.'}
+            </p>
+            {cloudStatus !== 'disabled' && (
+              <button
+                onClick={handleCloudSyncNow}
+                disabled={cloudStatus === 'syncing' || cloudStatus === 'hydrating'}
+                className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                  cloudStatus === 'syncing' || cloudStatus === 'hydrating'
+                    ? 'bg-indigo-100 text-indigo-400 cursor-not-allowed'
+                    : 'bg-indigo-700 hover:bg-indigo-800 text-white'
+                }`}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${cloudStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                <span>Sync School Data Now</span>
+              </button>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="space-y-2 pt-1 border-t border-slate-100">

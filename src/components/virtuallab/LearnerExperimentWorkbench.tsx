@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SyncEngine } from '../../utils/syncEngine';
 import { 
   VirtualExperiment, 
   CBC_VIRTUAL_EXPERIMENTS, 
@@ -91,7 +92,7 @@ export const LearnerExperimentWorkbench: React.FC<LearnerExperimentWorkbenchProp
     try {
       const existing = JSON.parse(localStorage.getItem('edusmart_virtual_lab_reports') || '[]');
       existing.unshift(reportData);
-      localStorage.setItem('edusmart_virtual_lab_reports', JSON.stringify(existing));
+      SyncEngine.persistItem('edusmart_virtual_lab_reports', JSON.stringify(existing));
     } catch (e) {
       console.error(e);
     }

@@ -19,6 +19,7 @@ import {
   OperationsGovernancePolicy
 } from '../types/customization';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
+import { SyncEngine } from '../utils/syncEngine';
 
 const STORAGE_KEY = 'edusmart_platform_customization_v5';
 
@@ -141,7 +142,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
   // Save to localStorage on changes
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(customization));
+      SyncEngine.persistItem(STORAGE_KEY, JSON.stringify(customization));
     } catch (e) {
       console.error('Failed to save platform customization to localStorage', e);
     }

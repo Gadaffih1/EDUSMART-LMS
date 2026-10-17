@@ -55,8 +55,10 @@ import {
   RefreshCw,
   Zap,
   Laptop,
-  Copy
+  Copy,
+  Palette
 } from 'lucide-react';
+import { TenantBrandingCustomizerModal } from './TenantBrandingCustomizerModal';
 
 interface LandingPageProps {
   onLoginSuccess: (user: User) => void;
@@ -113,6 +115,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [portalProcessingProgress, setPortalProcessingProgress] = useState<number>(0);
   const [copiedPortalKey, setCopiedPortalKey] = useState<string | null>(null);
   const [isAppDirectoryOpen, setIsAppDirectoryOpen] = useState(false);
+  const [isBrandingCustomizerOpen, setIsBrandingCustomizerOpen] = useState(false);
 
   // Auto-detect portal access app from URL query parameters (e.g. ?portal=student or ?app=teacher)
   useEffect(() => {
@@ -702,25 +705,88 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center">
           
-          {/* OFFICIAL SCHOOL LOGO + SCHOOL NAME: Edu-Smart PORTAL By Gadsa Systems */}
-          <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[140px] w-full mx-auto flex flex-col items-center hover:scale-[1.02] transition-transform">
-            <EduSmartGadsaLogo variant="full" size="sm" />
+          {/* ========================================================
+              OFFICIAL CUSTOMIZABLE TENANT EMBLEM / LOGO CARD
+              Displays customized logo, theme, and details for the tenant school
+              ======================================================== */}
+          <div className="relative group/logo">
+            <div 
+              onClick={() => setIsBrandingCustomizerOpen(true)}
+              className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[145px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-all cursor-pointer relative"
+              title="Click to customize school logo, theme & letterhead"
+            >
+              {currentTenant.customLogoBase64 ? (
+                <img 
+                  src={currentTenant.customLogoBase64} 
+                  alt={currentTenant.name} 
+                  className="w-16 h-16 object-contain"
+                />
+              ) : currentTenant.logoUrl ? (
+                <img 
+                  src={currentTenant.logoUrl} 
+                  alt={currentTenant.name} 
+                  className="w-16 h-16 object-contain"
+                />
+              ) : (
+                <EduSmartGadsaLogo variant="full" size="sm" />
+              )}
+              <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase tracking-tight truncate max-w-full">
+                {currentTenant.portalCardBadge || 'By Gadsa Systems'}
+              </div>
+
+              {/* Hover Edit Overlay */}
+              <div className="absolute inset-0 bg-slate-900/80 rounded-2xl opacity-0 group-hover/logo:opacity-100 flex flex-col items-center justify-center text-white transition-opacity text-[10px] font-bold p-1">
+                <Palette className="w-4 h-4 text-amber-400 mb-0.5" />
+                <span>Customize</span>
+              </div>
+            </div>
           </div>
 
+          {/* CUSTOMIZABLE CURRICULUM SUBHEADING */}
           <div className="text-center">
-            <p className="text-emerald-400 font-extrabold text-xs sm:text-sm tracking-widest uppercase">
-              Competency-Based Curriculum (CBC) · Grades 1 to 9
+            <p className="text-emerald-400 font-extrabold text-xs sm:text-sm tracking-widest uppercase font-mono">
+              {currentTenant.curriculumBadgeText || 'Competency-Based Curriculum (CBC) · Grades 1 to 9'}
             </p>
           </div>
 
-          {/* Subtitle & Responsive Hero Heading */}
-          <div className="max-w-3xl mt-2 mb-6 sm:mb-8 text-center">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-100 tracking-tight uppercase leading-tight">
-              Welcome to the School Portal
+          {/* CUSTOMIZABLE WELCOME HEADLINE & SUBTITLE QUOTE */}
+          <div className="max-w-3xl mt-2 mb-4 sm:mb-6 text-center">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-100 tracking-tight uppercase leading-tight font-sans">
+              {currentTenant.heroTitle || `Welcome to the ${currentTenant.shortName || currentTenant.name} Portal`}
             </h1>
-            <p className="text-slate-300 text-xs sm:text-sm md:text-base mt-2 max-w-2xl mx-auto font-medium italic">
-              "A secure digital platform connecting learners, teachers, parents and school leadership."
+            <p className="text-slate-300 text-xs sm:text-sm md:text-base mt-2 max-w-2xl mx-auto font-medium italic leading-relaxed">
+              {currentTenant.heroSubtitle || '"A secure digital platform connecting learners, teachers, parents and school leadership."'}
             </p>
+          </div>
+
+          {/* TENANT INSTITUTIONAL BADGES & QUICK CUSTOMIZE BAR */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-6 sm:mb-8 text-xs">
+            <span className="px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 font-semibold flex items-center gap-1.5 shadow-2xs">
+              <School className="w-3.5 h-3.5 text-blue-400" />
+              <strong className="text-white">{currentTenant.name}</strong>
+              <span className="text-[10px] text-slate-400 font-mono">({currentTenant.code})</span>
+            </span>
+
+            <span className="px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-amber-300 font-mono text-[11px] flex items-center gap-1 shadow-2xs">
+              <span>★</span>
+              <span>{currentTenant.motto}</span>
+              <span>★</span>
+            </span>
+
+            {currentTenant.taglineNotes && (
+              <span className="hidden md:inline-flex px-3 py-1 rounded-full bg-slate-800/90 border border-slate-700 text-slate-300 text-[11px] items-center gap-1 shadow-2xs">
+                <span>{currentTenant.taglineNotes}</span>
+              </span>
+            )}
+
+            <button
+              onClick={() => setIsBrandingCustomizerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-full font-black text-xs transition-all shadow-md cursor-pointer hover:scale-105"
+              title="Customize School Logo, Theme, Tagline & Printable Documents"
+            >
+              <Palette className="w-3.5 h-3.5 text-slate-950" />
+              <span>Customize Logo & Documents</span>
+            </button>
           </div>
 
           {/* ========================================================
@@ -3933,6 +3999,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* TENANT SCHOOL BRANDING, HERO DETAILS & PRINT DOCUMENTS CUSTOMIZER MODAL */}
+      <TenantBrandingCustomizerModal
+        isOpen={isBrandingCustomizerOpen}
+        onClose={() => setIsBrandingCustomizerOpen(false)}
+      />
 
     </div>
   );

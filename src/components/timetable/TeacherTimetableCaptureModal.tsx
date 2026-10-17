@@ -22,6 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
 
 interface TeacherTimetableCaptureModalProps {
   isOpen: boolean;
@@ -59,6 +60,7 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
     }
     return 'Monday';
   });
+  const { currentTenant } = useTenant();
   const [isCopied, setIsCopied] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -252,20 +254,31 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
         <div ref={captureRef} className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1 bg-white print:p-2">
           
           {/* OFFICIAL INSTITUTIONAL HEADER */}
-          <div className="border-b-2 border-slate-900 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div 
+            className="border-b-2 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            style={{ borderColor: currentTenant.primaryColorHex || '#1e3a8a' }}
+          >
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-slate-900 text-white rounded-xl shadow-xs">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+              <div className="shrink-0">
+                {currentTenant.customLogoBase64 ? (
+                  <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
+                ) : currentTenant.logoUrl ? (
+                  <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
+                ) : (
+                  <div className="p-2 bg-slate-900 text-white rounded-xl shadow-xs">
+                    <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                  </div>
+                )}
               </div>
               <div>
-                <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase">
-                  EduSmart GADSA Senior Academy
+                <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase font-serif">
+                  {currentTenant.name}
                 </h2>
-                <p className="text-xs font-bold text-indigo-700">
+                <p className="text-xs font-bold" style={{ color: currentTenant.primaryColorHex || '#1e3a8a' }}>
                   Official CBC Faculty Timetable & Stream Delivery Schedule
                 </p>
                 <p className="text-[11px] text-slate-500 font-mono">
-                  Ministry of Education & TSC Certified · Academic Year 2026 / Term 1
+                  "{currentTenant.motto}" · {currentTenant.registrationNumber} · {currentTenant.term || 'Term 1, 2026'}
                 </p>
               </div>
             </div>

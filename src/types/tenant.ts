@@ -38,6 +38,20 @@ export interface Tenant {
   categories?: string[];    // Custom school categories (e.g. STEM, Athletics, Boarding, Music)
   registeredAt?: string;
   superAdminNotes?: string;
+  // Customizable Hero and Portal Branding
+  taglineNotes?: string;     // Institutional tagline notes (e.g. "Dedicated to Academic Excellence, Holistic CBC Discovery & Moral Integrity")
+  heroTitle?: string;        // Custom hero headline (e.g. "WELCOME TO THE RIARA SCHOOL PORTAL")
+  heroSubtitle?: string;     // Custom hero subtitle / quote note
+  curriculumBadgeText?: string; // e.g. "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9"
+  portalCardBadge?: string;  // e.g. "Official Campus Portal" or "By Gadsa Systems"
+  // Customizable Printable Document Letterhead & Theme
+  printHeaderTheme?: 'classic' | 'modern' | 'formal' | 'executive';
+  printFooterNotes?: string; // Tagline notes & accreditation for bottom of printed documents
+  printWatermarkText?: string;
+  stampUrl?: string;         // Official school digital seal / stamp
+  signatureUrl?: string;     // Principal / Head of School digital signature
+  primaryColorHex?: string;  // Hex for official brand color (e.g. #1e3a8a)
+  accentColorHex?: string;   // Hex for secondary / gold / highlight (e.g. #f59e0b)
 }
 
 export interface TenantContextType {

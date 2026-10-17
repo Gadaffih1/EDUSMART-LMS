@@ -1776,18 +1776,9 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 {footer.copyrightText} · {footer.developerCredit}
               </div>
 
-              {/* Discrete Private Platform Login access as per the Navigation diagram */}
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={onNavigateToPlatformAdmin}
-                  className="text-slate-500 hover:text-amber-400 flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Private Platform Login (Platform Administrators Only)"
-                >
-                  <Lock className="w-3 h-3 text-slate-500" />
-                  <span>Platform Admin</span>
-                </button>
-                <span>·</span>
-                <span className="text-slate-500">Secure · Reliable · Multi-Tenant</span>
+              <div className="flex items-center gap-2 text-slate-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Secure · Reliable · Multi-Tenant</span>
               </div>
             </div>
           </div>

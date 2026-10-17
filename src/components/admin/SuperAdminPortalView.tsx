@@ -20,7 +20,6 @@ import {
   Search,
   Filter,
   DollarSign,
-  UserCheck,
   Edit3,
   X,
   Save,
@@ -48,7 +47,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
-  const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'operations' | 'class_teachers' | 'customizer' | 'settings_hub'>('overview');
+  const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'operations' | 'customizer' | 'settings_hub'>('overview');
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');
   const [classTeacherSearchQuery, setClassTeacherSearchQuery] = useState<string>('');
   const [selectedCampusFilter, setSelectedCampusFilter] = useState<string>('all');
@@ -264,20 +263,6 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                 <span>Finance & Operations</span>
                 <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">
                   Full Control
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveConsoleTab('class_teachers')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                  activeConsoleTab === 'class_teachers'
-                    ? 'bg-emerald-500 text-slate-950 shadow-sm font-black'
-                    : 'text-emerald-400 hover:text-emerald-300'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Class Teacher Hub</span>
-                <span className="text-[10px] bg-emerald-950/70 text-emerald-300 px-1.5 py-0.2 rounded font-mono">
-                  {classTeachers.length}
                 </span>
               </button>
               <button

@@ -45,6 +45,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
 
 // CBC Subjects for Primary (Grades 1-6) and Junior School (Grades 7-9)
 const PRIMARY_CBC_SUBJECTS: SubjectName[] = [
@@ -86,6 +87,7 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
   viewMode: initialViewMode,
   defaultGrade = 4
 }) => {
+  const { currentTenant } = useTenant();
   // Determine effective view mode
   const effectiveMode = initialViewMode || (
     currentUser.role === 'dean_of_studies' ? 'dean' :
@@ -1262,14 +1264,29 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 text-slate-900 bg-white print:p-0">
               
               {/* Institutional Header */}
-              <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
+              <div 
+                className="flex items-center justify-between border-b-2 pb-4"
+                style={{ borderColor: currentTenant.primaryColorHex || '#1e3a8a' }}
+              >
                 <div className="flex items-center gap-3">
-                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
-                    <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                  <div className="shrink-0">
+                    {currentTenant.customLogoBase64 ? (
+                      <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
+                    ) : currentTenant.logoUrl ? (
+                      <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
+                    ) : (
+                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                        <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                      </div>
+                    )}
                   </div>
                   <div>
-                    <h2 className="text-base font-black tracking-tight uppercase">EDUSMART GADSA PREMIER ACADEMY</h2>
-                    <p className="text-[11px] text-slate-600 font-mono">Ministry of Education CBC Assessment Accreditation · Nairobi, Kenya</p>
+                    <h2 className="text-base font-black tracking-tight uppercase font-serif">
+                      {currentTenant.name}
+                    </h2>
+                    <p className="text-[11px] text-slate-600 font-mono">
+                      "{currentTenant.motto}" {currentTenant.taglineNotes ? `· ${currentTenant.taglineNotes}` : ''} · {currentTenant.registrationNumber}
+                    </p>
                   </div>
                 </div>
 

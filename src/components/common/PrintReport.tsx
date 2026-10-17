@@ -14,6 +14,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
+import { TenantPrintHeader, TenantPrintFooter } from './TenantPrintHeader';
 
 export interface PrintReportMetadata {
   studentName?: string;
@@ -125,59 +126,17 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           orientation === 'landscape' ? 'max-w-6xl' : 'max-w-4xl'
         }`}
       >
-        {/* OFFICIAL INSTITUTIONAL LETTERHEAD */}
-        <header className="border-b-2 border-slate-800 pb-4 mb-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              {/* School Crest Emblem */}
-              <div className="w-16 h-16 rounded-2xl bg-slate-900 text-white flex flex-col items-center justify-center p-2 shadow-xs shrink-0 border border-slate-700">
-                <GraduationCap className="w-8 h-8 text-amber-400" />
-                <span className="text-[7px] font-mono tracking-widest uppercase mt-0.5 text-slate-300">EST. {currentTenant.establishedYear}</span>
-              </div>
-
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-950 uppercase tracking-tight font-serif">
-                  {currentTenant.name}
-                </h1>
-                <p className="text-xs font-medium italic text-slate-700 mt-0.5">
-                  "{currentTenant.motto}"
-                </p>
-                <div className="text-[10px] text-slate-600 mt-1 space-x-2">
-                  <span>{currentTenant.address}, {currentTenant.city}</span>
-                  <span>·</span>
-                  <span>Tel: {currentTenant.phone}</span>
-                  <span>·</span>
-                  <span>Email: {currentTenant.email}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Ministry & System Certification Stamp */}
-            <div className="text-right shrink-0 hidden sm:block">
-              <div className="text-[10px] font-bold text-slate-900 uppercase tracking-wider">
-                Ministry Code: {currentTenant.registrationNumber}
-              </div>
-              <div className="text-[10px] font-mono text-slate-600 mt-0.5">
-                Ref: {finalRef}
-              </div>
-              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                Date: {finalDate}
-              </div>
-            </div>
-          </div>
-
-          {/* REPORT TITLE BANNER */}
-          <div className="mt-4 pt-3 border-t border-slate-200 text-center">
-            <h2 className="text-base sm:text-lg font-black uppercase tracking-wider text-slate-900">
-              {title}
-            </h2>
-            {subtitle && (
-              <p className="text-xs text-slate-600 mt-0.5">
-                {subtitle}
-              </p>
-            )}
-          </div>
-        </header>
+        {/* OFFICIAL INSTITUTIONAL LETTERHEAD WITH TENANT CUSTOMIZED LOGO, THEME & TAGLINE */}
+        <TenantPrintHeader
+          title={title}
+          subtitle={subtitle}
+          documentRef={finalRef}
+          documentDate={finalDate}
+          term={metadata?.term}
+          academicYear={metadata?.academicYear?.toString()}
+          showWatermark={true}
+          className="mb-6"
+        />
 
         {/* METADATA SUMMARY GRID */}
         {metadata && (
@@ -286,44 +245,13 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           </div>
         )}
 
-        {/* OFFICIAL SIGNATURES & VERIFICATION ZONE */}
-        {showSignatures && (
-          <div className="mt-8 pt-4 border-t-2 border-slate-300 grid grid-cols-3 gap-4 text-xs">
-            {/* Class Teacher */}
-            <div className="text-center">
-              <div className="h-10 border-b border-dashed border-slate-400 mb-1 flex items-end justify-center">
-                <span className="font-serif italic text-slate-600 text-sm">Signature Recorded</span>
-              </div>
-              <span className="font-bold text-slate-900 block text-[11px]">Class Teacher</span>
-              <span className="text-[10px] text-slate-500">{metadata?.classTeacher || 'Authorized Form Tutor'}</span>
-            </div>
-
-            {/* Verification Stamp & QR Code */}
-            <div className="text-center flex flex-col items-center justify-center">
-              <div className="border border-slate-400 rounded-lg p-1.5 w-16 h-16 flex flex-col items-center justify-center bg-white shadow-2xs mb-1">
-                <QrCode className="w-8 h-8 text-slate-800" />
-                <span className="text-[6px] font-mono text-slate-500 uppercase mt-0.5">Verified</span>
-              </div>
-              <span className="text-[9px] font-mono text-slate-600 uppercase">EduSmart Official Record</span>
-            </div>
-
-            {/* Principal Stamp */}
-            <div className="text-center">
-              <div className="h-10 border-b border-dashed border-slate-400 mb-1 flex items-end justify-center">
-                <span className="font-serif italic text-slate-600 text-sm">Official Seal Applied</span>
-              </div>
-              <span className="font-bold text-slate-900 block text-[11px]">Head of School / Principal</span>
-              <span className="text-[10px] text-slate-500">{currentTenant.principalName}</span>
-            </div>
-          </div>
-        )}
-
-        {/* BOTTOM FOOTER */}
-        <footer className="mt-8 pt-2 border-t border-slate-200 text-center text-[9px] text-slate-500 font-mono flex items-center justify-between">
-          <span>EduSmart CBC Portal · {currentTenant.name}</span>
-          <span>Security Token: {finalRef}</span>
-          <span>Page 1 of 1</span>
-        </footer>
+        {/* OFFICIAL INSTITUTIONAL ENDORSEMENTS & CERTIFIED FOOTER WITH TENANT TAGLINE */}
+        <TenantPrintFooter
+          showSignature={showSignatures}
+          principalTitleOverride={currentTenant.principalTitle}
+          signatureNameOverride={metadata?.principalName || currentTenant.principalName}
+          customNote={currentTenant.printFooterNotes}
+        />
 
       </div>
     </div>

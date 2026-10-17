@@ -13,7 +13,15 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const stored = localStorage.getItem(ALL_TENANTS_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: Tenant) => {
+            const initialMatch = INITIAL_TENANTS.find(it => it.id === item.id);
+            if (initialMatch) {
+              return { ...initialMatch, ...item };
+            }
+            return item;
+          });
+        }
       }
     } catch {
       // Fallback

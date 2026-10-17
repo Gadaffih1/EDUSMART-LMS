@@ -32,7 +32,17 @@ export const INITIAL_TENANTS: Tenant[] = [
     attendanceToday: 96,
     status: 'active',
     plan: 'Pro',
-    expiryDate: '12 Apr 2026'
+    expiryDate: '12 Apr 2026',
+    taglineNotes: 'Academic Discipline · Holistic CBC Development · Moral Integrity',
+    heroTitle: 'WELCOME TO RIARA SCHOOL PORTAL',
+    heroSubtitle: '"Learn · Grow · Succeed" — A secure digital platform connecting learners, teachers, parents and school leadership.',
+    curriculumBadgeText: 'COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9',
+    portalCardBadge: 'Official Campus Portal',
+    printHeaderTheme: 'formal',
+    printFooterNotes: 'Official Riara School Document. Authorized by Ministry of Education NEMIS & School Board of Management. Learn · Grow · Succeed.',
+    printWatermarkText: 'RIARA SCHOOL · OFFICIAL ACADEMIC DOCUMENT',
+    primaryColorHex: '#1e3a8a',
+    accentColorHex: '#fbbf24'
   },
   {
     id: 'tenant-greenwood',
@@ -65,7 +75,17 @@ export const INITIAL_TENANTS: Tenant[] = [
     attendanceToday: 94,
     status: 'active',
     plan: 'Pro',
-    expiryDate: '20 Jun 2026'
+    expiryDate: '20 Jun 2026',
+    taglineNotes: 'Inspiring Excellence · Fostering Innovation · Sustainable Leadership',
+    heroTitle: 'WELCOME TO GREENWOOD ACADEMY PORTAL',
+    heroSubtitle: '"Inspiring Excellence, Fostering Innovation" — A modern STEM & CBC portal connecting students, staff and guardians.',
+    curriculumBadgeText: 'CBC INTEGRATED STEM TRACK · GRADES 1 TO 9',
+    portalCardBadge: 'Greenwood Digital Campus',
+    printHeaderTheme: 'modern',
+    printFooterNotes: 'Greenwood Academy Official Record. Certified under Ministry of Education Guidelines. Fostering Innovation.',
+    printWatermarkText: 'GREENWOOD ACADEMY · OFFICIAL RECORD',
+    primaryColorHex: '#064e3b',
+    accentColorHex: '#10b981'
   },
   {
     id: 'tenant-hillcrest',
@@ -98,7 +118,17 @@ export const INITIAL_TENANTS: Tenant[] = [
     attendanceToday: 95,
     status: 'active',
     plan: 'Standard',
-    expiryDate: '05 Aug 2026'
+    expiryDate: '05 Aug 2026',
+    taglineNotes: 'Knowledge is Power · Integrity is Strength · Global Academic Leadership',
+    heroTitle: 'WELCOME TO HILLCREST HIGH PORTAL',
+    heroSubtitle: '"Knowledge is Power, Integrity is Strength" — Institutional portal for secondary pathways and university readiness.',
+    curriculumBadgeText: 'CBC JUNIOR & SENIOR SECONDARY PATHWAYS · GRADES 7 TO 10',
+    portalCardBadge: 'Hillcrest Executive Portal',
+    printHeaderTheme: 'executive',
+    printFooterNotes: 'Hillcrest High Official Academic Transcript. Registered MOE/SEC/NBI/1965/0024. Integrity is Strength.',
+    printWatermarkText: 'HILLCREST HIGH · OFFICIAL TRANSCRIPT',
+    primaryColorHex: '#312e81',
+    accentColorHex: '#818cf8'
   },
   {
     id: 'tenant-sunrise',
@@ -131,7 +161,17 @@ export const INITIAL_TENANTS: Tenant[] = [
     attendanceToday: 92,
     status: 'pending',
     plan: 'Basic',
-    expiryDate: 'Pending Review'
+    expiryDate: 'Pending Review',
+    taglineNotes: 'Nurturing Potential · Foundational Literacy · Joyful CBC Discovery',
+    heroTitle: 'WELCOME TO SUNRISE PRIMARY PORTAL',
+    heroSubtitle: '"Shining Bright in Foundational CBC Learning" — Early Childhood & Primary Education Digital Gateway.',
+    curriculumBadgeText: 'CBC EARLY YEARS & PRIMARY FOUNDATION · PP1 TO GRADE 6',
+    portalCardBadge: 'Sunrise Portal',
+    printHeaderTheme: 'classic',
+    printFooterNotes: 'Sunrise Primary School Official Documentation. Early Childhood & Primary Education Ministry Approved.',
+    printWatermarkText: 'SUNRISE PRIMARY · OFFICIAL TRANSCRIPT',
+    primaryColorHex: '#ea580c',
+    accentColorHex: '#f59e0b'
   },
   {
     id: 'tenant-westlands',
@@ -164,7 +204,17 @@ export const INITIAL_TENANTS: Tenant[] = [
     attendanceToday: 97,
     status: 'active',
     plan: 'Pro',
-    expiryDate: '14 Sep 2026'
+    expiryDate: '14 Sep 2026',
+    taglineNotes: 'Excellence in Academic and Creative Pursuit · CBC Talent Academy',
+    heroTitle: 'WELCOME TO WESTLANDS SCHOOL PORTAL',
+    heroSubtitle: '"Excellence in Academic and Creative Pursuit" — Dedicated Arts, Sports, Sciences & CBC Streams.',
+    curriculumBadgeText: 'KENYAN CBC CURRICULUM & TALENT PATHWAY · GRADES 1 TO 9',
+    portalCardBadge: 'Westlands Campus',
+    printHeaderTheme: 'modern',
+    printFooterNotes: 'Westlands School Official Transcript. Certified under Ministry of Education Kenya. Creative Pursuit.',
+    printWatermarkText: 'WESTLANDS SCHOOL · OFFICIAL RECORD',
+    primaryColorHex: '#0f766e',
+    accentColorHex: '#2dd4bf'
   },
   {
     id: 'tenant-staustins',
@@ -197,6 +247,16 @@ export const INITIAL_TENANTS: Tenant[] = [
     attendanceToday: 95,
     status: 'active',
     plan: 'Pro',
-    expiryDate: '31 Dec 2026'
+    expiryDate: '31 Dec 2026',
+    taglineNotes: 'Excellence in Character · Scholarship and Service · Holistic Leadership',
+    heroTitle: 'WELCOME TO ST. AUSTIN’S ACADEMY PORTAL',
+    heroSubtitle: '"Excellence in Character, Scholarship and Service" — Connecting learners, teachers, parents and school leadership.',
+    curriculumBadgeText: 'COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9',
+    portalCardBadge: 'St. Austin’s Portal',
+    printHeaderTheme: 'formal',
+    printFooterNotes: 'St. Austin’s Academy Official Academic Record. Authorized by Ministry of Education & KICD. Excellence in Character.',
+    printWatermarkText: 'ST. AUSTIN’S ACADEMY · OFFICIAL TRANSCRIPT',
+    primaryColorHex: '#064e3b',
+    accentColorHex: '#fbbf24'
   }
 ];

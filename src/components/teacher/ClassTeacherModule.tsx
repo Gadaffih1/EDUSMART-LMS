@@ -10,6 +10,8 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantPrintHeader, TenantPrintFooter } from '../common/TenantPrintHeader';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { 
@@ -41,6 +43,7 @@ interface ClassTeacherModuleProps {
 }
 
 export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentUser }) => {
+  const { currentTenant } = useTenant();
   // Strict School Protocol: Only designated Class Teachers can mark daily attendance
   const canMarkAttendance = currentUser.role === 'class_teacher' || (currentUser.role === 'teacher' && !!currentUser.stream);
 
@@ -909,20 +912,12 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
           {/* Report Card Preview Frame */}
           {selectedReportToPrint ? (
             <div className="border border-slate-300 rounded-2xl p-6 sm:p-8 bg-white shadow-md space-y-6 print:m-0 print:border-none print:shadow-none">
-              <div className="text-center pb-4 border-b-2 border-slate-900 space-y-1">
-                <div className="flex justify-center mb-2">
-                  <EduSmartGadsaLogo variant="full" size="sm" />
-                </div>
-                <div className="text-xs font-extrabold text-emerald-800 uppercase tracking-widest">
-                  Edu-Smart PORTAL · By Gadsa Systems
-                </div>
-                <h2 className="text-2xl font-black text-slate-900 uppercase">
-                  Comprehensive Learner Performance Report
-                </h2>
-                <div className="text-xs text-slate-600 font-semibold">
-                  {selectedReportToPrint.term} · Academic Year {selectedReportToPrint.academicYear} · Grade {selectedReportToPrint.grade} ({selectedReportToPrint.stream} Stream)
-                </div>
-              </div>
+              <TenantPrintHeader
+                title="Comprehensive Learner Performance Report"
+                subtitle={`${selectedReportToPrint.term} · Academic Year ${selectedReportToPrint.academicYear} · Grade ${selectedReportToPrint.grade} (${selectedReportToPrint.stream} Stream)`}
+                documentRef={`REPORT/${currentTenant.code}/${selectedReportToPrint.admissionNumber}`}
+                showWatermark={true}
+              />
 
               {/* Pupil details */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono">
@@ -993,6 +988,12 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
                   </div>
                 </div>
               </div>
+
+              {/* OFFICIAL ENDORSEMENT FOOTER WITH TENANT MOTTO & TAGLINE */}
+              <TenantPrintFooter
+                showSignature={false}
+                customNote={currentTenant.printFooterNotes}
+              />
             </div>
           ) : (
             <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl">

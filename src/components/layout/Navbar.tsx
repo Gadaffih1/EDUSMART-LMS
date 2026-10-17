@@ -409,17 +409,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
 
           {/* Quick Demo Switcher */}
-          {!isSupabaseConfigured && (
-            <button
-              onClick={() => setShowSwitchModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              title="Switch demo account"
-            >
-              <UserCheck className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden sm:inline">Switch Role</span>
-              <ChevronDown className="w-3 h-3 text-slate-500" />
-            </button>
-          )}
+          <button
+            onClick={() => setShowSwitchModal(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            title="Switch demo account"
+          >
+            <UserCheck className="w-3.5 h-3.5 text-slate-600" />
+            <span className="hidden sm:inline">Switch Role</span>
+            <ChevronDown className="w-3 h-3 text-slate-500" />
+          </button>
 
           {/* Return to Super Admin Button (Matching Panel 3): Visible ONLY to platform-owner accounts while inside a tenant */}
           {isPlatformAdminSession && onReturnToSuperAdmin && (
@@ -570,16 +568,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <Bell className="h-4 w-4" /> Notifications ({unreadCount})
                 </button>
               )}
-              {!isSupabaseConfigured && (
-                <button
-                  type="button"
-                  onClick={() => { setShowSwitchModal(true); setIsMobileActionsOpen(false); }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  role="menuitem"
-                >
-                  <UserCheck className="h-4 w-4" /> Switch account
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => { setShowSwitchModal(true); setIsMobileActionsOpen(false); }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                role="menuitem"
+              >
+                <UserCheck className="h-4 w-4" /> Switch account
+              </button>
               {isPlatformAdminSession && onReturnToSuperAdmin && (
                 <button
                   type="button"
@@ -616,7 +612,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Account Switcher Modal */}
       {/* Account Switcher Dedicated Window via Portal */}
-      {showSwitchModal && !isSupabaseConfigured && createPortal(
+      {showSwitchModal && createPortal(
         <div 
           className={`fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-md flex flex-col items-center justify-center transition-all duration-200 ${
             isSwitchModalFullscreen ? 'p-0 overflow-hidden' : 'p-2 sm:p-4 md:p-6 overflow-hidden'

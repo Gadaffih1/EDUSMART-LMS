@@ -496,7 +496,9 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
   };
 
   const handleSwitchUser = (user: User) => {
-    if (isSupabaseConfigured) return;
+    if (isSupabaseConfigured) {
+      SyncEngine.activateIdentity(user.id, user.schoolId);
+    }
     Storage.setCurrentUser(user);
     setCurrentUser(user);
   };

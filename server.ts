@@ -508,9 +508,9 @@ Core rules:
   const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
   const distPath = path.resolve(rootDir, 'dist');
   const indexHtmlPath = path.resolve(distPath, 'index.html');
-  const hasDist = fs.existsSync(indexHtmlPath);
+  const isProd = process.env.NODE_ENV === 'production';
 
-  if (process.env.NODE_ENV === 'production' || hasDist) {
+  if (isProd) {
     app.use(express.static(distPath));
 
     // Helper to find active compiled bundle assets

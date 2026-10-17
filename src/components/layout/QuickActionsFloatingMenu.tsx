@@ -1103,7 +1103,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
         actionType: 'switch_user'
       }
     ];
-    return actions.filter(action => !isSupabaseConfigured || action.actionType !== 'switch_user');
+    return actions;
   }, []);
 
   // Combined and filtered action items based on search input

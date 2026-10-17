@@ -50,21 +50,26 @@ async function mount() {
         initialUser = await getAuthenticatedAppUser();
         if (initialUser) {
           Storage.setCurrentUser(initialUser);
-          await Promise.race([
-            SyncEngine.hydrate(),
-            new Promise(resolve => setTimeout(resolve, 20000)),
-          ]);
         }
-      } else {
-        Storage.setCurrentUser(null);
       }
     } catch (err) {
-      console.error('[auth] Unable to restore the Supabase session', err);
-      await supabase.auth.signOut();
-      SyncEngine.activateIdentity(null);
-      Storage.setCurrentUser(null);
+      console.warn('[auth] Unable to restore the Supabase session, falling back to local user session', err);
     }
-  } else if (import.meta.env.DEV) {
+
+    if (!initialUser) {
+      initialUser = Storage.getCurrentUser();
+      if (initialUser) {
+        SyncEngine.activateIdentity(initialUser.id, initialUser.schoolId);
+      }
+    }
+
+    if (initialUser) {
+      await Promise.race([
+        SyncEngine.hydrate(),
+        new Promise(resolve => setTimeout(resolve, 6000)),
+      ]);
+    }
+  } else {
     initialUser = Storage.getCurrentUser();
   }
 

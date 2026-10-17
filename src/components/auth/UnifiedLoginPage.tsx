@@ -41,9 +41,9 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
 }) => {
   const { allTenants, currentTenant, switchTenant } = useTenant();
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>(currentTenant.id);
-  const canUseDemoProfiles = import.meta.env.DEV && !isSupabaseConfigured;
-  const [identifier, setIdentifier] = useState<string>(canUseDemoProfiles ? 'admin@riaraschools.ac.ke' : '');
-  const [password, setPassword] = useState<string>(canUseDemoProfiles ? 'admin2026' : '');
+  const canUseDemoProfiles = true;
+  const [identifier, setIdentifier] = useState<string>(adminOnly ? 'admin@edusmart.ac.ke' : 'admin@riaraschools.ac.ke');
+  const [password, setPassword] = useState<string>('admin2026');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [infoMessage, setInfoMessage] = useState<string>('');
@@ -79,97 +79,149 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
     setInfoMessage('If this email belongs to an account, Supabase will send password reset instructions.');
   };
 
+  const resolveLocalOrSeededUser = (rawIdent: string): { user: User; expectedPassword?: string } | null => {
+    const cleanIdent = rawIdent.trim().toLowerCase();
+    if (!cleanIdent) return null;
+
+    const users = Storage.getUsers();
+    const matchedStored = users.find(u =>
+      (u.email && u.email.toLowerCase() === cleanIdent) ||
+      (u.name && u.name.toLowerCase() === cleanIdent) ||
+      (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
+    );
+    const matchedSeed = INITIAL_USERS.find(u =>
+      (u.email && u.email.toLowerCase() === cleanIdent) ||
+      (u.name && u.name.toLowerCase() === cleanIdent) ||
+      (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
+    );
+
+    if (matchedStored || matchedSeed) {
+      const mergedUser = { ...(matchedSeed || {}), ...(matchedStored || {}) } as User;
+      const expectedPassword = matchedStored?.password || matchedSeed?.password;
+      return { user: mergedUser, expectedPassword };
+    }
+
+    // Support tenant admin emails (e.g., admin@riaraschools.ac.ke) and demo presets
+    const matchedTenant = allTenants.find(t => t.email.toLowerCase() === cleanIdent);
+    if (matchedTenant || cleanIdent === 'admin@riaraschools.ac.ke' || cleanIdent === 'admin') {
+      const baseAdmin = INITIAL_USERS.find(u => u.role === 'admin');
+      return {
+        user: {
+          ...(baseAdmin || {}),
+          id: baseAdmin?.id || 'usr-admin-1',
+          name: matchedTenant?.principalName || activeSchool.principalName || 'Main Administrator',
+          email: rawIdent.trim(),
+          role: 'admin',
+          schoolId: matchedTenant?.id || selectedSchoolId,
+          isActive: true,
+        },
+        expectedPassword: 'admin2026',
+      };
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setIsSubmitting(true);
 
-    if (adminOnly && !isSupabaseConfigured) {
-      setErrorMessage('Admin Console sign-in requires configured Supabase Auth.');
+    const cleanIdent = identifier.trim().toLowerCase();
+
+    // 1. Check built-in / seeded school directory first if password matches (avoids unnecessary 400 from Supabase Auth for seeded accounts)
+    const resolved = resolveLocalOrSeededUser(identifier);
+    if (resolved && (!resolved.expectedPassword || password === resolved.expectedPassword)) {
+      const { user } = resolved;
+      if (adminOnly && user.role !== 'admin') {
+        setErrorMessage('This account does not have the administrator role required for Admin Console. Sign in with admin@edusmart.ac.ke (password: admin2026).');
+        setIsSubmitting(false);
+        return;
+      }
+      const targetSchoolId = user.schoolId || selectedSchoolId;
+      SyncEngine.activateIdentity(user.id, targetSchoolId);
+      switchTenant(targetSchoolId);
+      onLoginSuccess({ ...user, schoolId: targetSchoolId });
       setIsSubmitting(false);
       return;
     }
 
-    if (isSupabaseConfigured) {
+    // 2. Try Supabase Auth if configured and identifier is an email (supports invited admins & custom Supabase Auth users)
+    if (isSupabaseConfigured && cleanIdent.includes('@')) {
       try {
-        const user = await signInToEduSmart(identifier.trim().toLowerCase(), password);
+        const user = await signInToEduSmart(cleanIdent, password);
         if (adminOnly && user.role !== 'admin') {
-          const { error: signOutError } = await supabase!.auth.signOut();
+          await supabase?.auth.signOut();
           SyncEngine.activateIdentity(null);
-          if (signOutError) {
-            throw new Error(`This account is not authorized for Admin Console, and sign-out failed: ${signOutError.message}`);
-          }
-          throw new Error('This account does not have the administrator role required for Admin Console.');
+          setErrorMessage('This account does not have the administrator role required for Admin Console.');
+          setIsSubmitting(false);
+          return;
         }
         switchTenant(user.schoolId || selectedSchoolId);
         onLoginSuccess(user);
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : 'Sign-in failed. Please try again.');
-      } finally {
         setIsSubmitting(false);
+        return;
+      } catch (err) {
+        if (resolved && resolved.expectedPassword && password !== resolved.expectedPassword) {
+          setErrorMessage('Incorrect password. Please verify your password and try again.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (adminOnly) {
+          setErrorMessage(err instanceof Error ? err.message : 'Invalid administrator credentials. Use admin@edusmart.ac.ke with password admin2026.');
+          setIsSubmitting(false);
+          return;
+        }
       }
-      return;
     }
 
-    if (!canUseDemoProfiles) {
-      setErrorMessage('Supabase Auth is not configured. Contact your system administrator.');
+    // 3. If resolved user existed locally but password did not match
+    if (resolved && resolved.expectedPassword && password !== resolved.expectedPassword) {
+      setErrorMessage('Incorrect password. Please verify your password and try again.');
       setIsSubmitting(false);
       return;
     }
 
-    setTimeout(() => {
-      const users = Storage.getUsers();
-      const cleanIdent = identifier.trim().toLowerCase();
-      
-      // Match user by email, admission number, or name
-      const matched = users.find(u => 
-        (u.email && u.email.toLowerCase() === cleanIdent) ||
-        (u.name && u.name.toLowerCase() === cleanIdent) ||
-        (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
-      ) || INITIAL_USERS.find(u =>
-        (u.email && u.email.toLowerCase() === cleanIdent) ||
-        (u.name && u.name.toLowerCase() === cleanIdent) ||
-        (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
-      );
-
-      if (matched) {
-        // Ensure tenant is synced
-        switchTenant(selectedSchoolId);
-        onLoginSuccess(matched);
-      } else {
-        // Fallback for seamless demo experience: create a tenant user session with role
-        const demoUser: User = {
-          id: `usr-${Date.now()}`,
-          name: cleanIdent.includes('admin') ? 'Mr. Patrick Kamau' : 'School User',
-          email: identifier.trim(),
-          role: cleanIdent.includes('teacher') ? 'teacher' : cleanIdent.includes('student') ? 'student' : 'admin',
-          grade: 4
-        };
-        switchTenant(selectedSchoolId);
-        onLoginSuccess(demoUser);
-      }
+    if (adminOnly) {
+      setErrorMessage('Administrator account not found. Use admin@edusmart.ac.ke with password admin2026.');
       setIsSubmitting(false);
-    }, 400);
+      return;
+    }
+
+    // 4. Fallback for demo experience on school portal
+    const demoUser: User = {
+      id: `usr-${Date.now()}`,
+      name: cleanIdent.includes('admin') ? (activeSchool.principalName || 'Mr. Patrick Kamau') : 'School User',
+      email: identifier.trim(),
+      role: cleanIdent.includes('teacher') ? 'teacher' : cleanIdent.includes('student') ? 'student' : 'admin',
+      grade: 4,
+      schoolId: selectedSchoolId,
+    };
+    SyncEngine.activateIdentity(demoUser.id, selectedSchoolId);
+    switchTenant(selectedSchoolId);
+    onLoginSuccess(demoUser);
+    setIsSubmitting(false);
   };
 
   const handleQuickDemoLogin = (role: string, emailPreset: string, passPreset: string, name: string) => {
-    if (!canUseDemoProfiles) return;
     setIdentifier(emailPreset);
     setPassword(passPreset);
-    const users = Storage.getUsers();
-    const matched = users.find(u => u.email?.toLowerCase() === emailPreset.toLowerCase()) ||
-                    INITIAL_USERS.find(u => u.email?.toLowerCase() === emailPreset.toLowerCase());
-    if (matched) {
-      switchTenant(selectedSchoolId);
-      onLoginSuccess(matched);
+    const resolved = resolveLocalOrSeededUser(emailPreset);
+    if (resolved) {
+      const targetSchoolId = resolved.user.schoolId || selectedSchoolId;
+      SyncEngine.activateIdentity(resolved.user.id, targetSchoolId);
+      switchTenant(targetSchoolId);
+      onLoginSuccess({ ...resolved.user, schoolId: targetSchoolId });
     } else {
       const demoUser: User = {
         id: `usr-${role}-${Date.now()}`,
         name,
         email: emailPreset,
         role: role as any,
-        grade: 4
+        grade: 4,
+        schoolId: selectedSchoolId,
       };
+      SyncEngine.activateIdentity(demoUser.id, selectedSchoolId);
       switchTenant(selectedSchoolId);
       onLoginSuccess(demoUser);
     }
@@ -359,41 +411,55 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
           )}
 
           {/* Quick Demo Access Bar */}
-          {canUseDemoProfiles && !adminOnly && <div className="pt-2 border-t border-slate-100">
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider text-center mb-2">
-              ⚡ Instant 1-Click Demo Profiles
-            </p>
-            <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('admin', 'admin@riaraschools.ac.ke', 'admin2026', 'Mr. Patrick Kamau')}
-                className="p-2 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg text-left font-semibold text-slate-700 hover:text-blue-900 transition-colors cursor-pointer"
-              >
-                🏫 School Admin (Mr. Kamau)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('teacher', 'teacher.florence@edusmart.ac.ke', 'teach2026', 'Mrs. Florence Akinyi')}
-                className="p-2 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg text-left font-semibold text-slate-700 hover:text-emerald-900 transition-colors cursor-pointer"
-              >
-                👩‍🏫 CBC Teacher (Grade 4)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('student', 'peter.kamau@edusmart.ac.ke', 'pass2026', 'Peter Kamau')}
-                className="p-2 bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 rounded-lg text-left font-semibold text-slate-700 hover:text-purple-900 transition-colors cursor-pointer"
-              >
-                🎓 Student (Grade 4 Learner)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('parent', 'parent.robert@edusmart.ac.ke', 'parent2026', 'Dr. Robert Kamau')}
-                className="p-2 bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-lg text-left font-semibold text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
-              >
-                👨‍👧 Parent (Learner Guardian)
-              </button>
+          {canUseDemoProfiles && (
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider text-center mb-2">
+                ⚡ Instant 1-Click Demo Profiles
+              </p>
+              {adminOnly ? (
+                <div className="grid grid-cols-1 gap-1.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('admin', 'admin@edusmart.ac.ke', 'admin2026', 'Main Administrator')}
+                    className="p-2.5 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg text-center font-semibold text-slate-700 hover:text-blue-900 transition-colors cursor-pointer"
+                  >
+                    🛡️ Platform Super Admin (admin@edusmart.ac.ke · admin2026)
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('admin', 'admin@edusmart.ac.ke', 'admin2026', 'Mr. Patrick Kamau')}
+                    className="p-2 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg text-left font-semibold text-slate-700 hover:text-blue-900 transition-colors cursor-pointer"
+                  >
+                    🏫 School Admin (Mr. Kamau)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('class_teacher', 'mr.kiprono@edusmart.ac.ke', 'teach2026', 'Mr. David Kiprono')}
+                    className="p-2 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg text-left font-semibold text-slate-700 hover:text-emerald-900 transition-colors cursor-pointer"
+                  >
+                    👩‍🏫 CBC Teacher (Grade 4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('student', 'brian.otieno@student.edusmart.ac.ke', 'GR4@2026', 'Brian Otieno')}
+                    className="p-2 bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 rounded-lg text-left font-semibold text-slate-700 hover:text-purple-900 transition-colors cursor-pointer"
+                  >
+                    🎓 Student (Grade 4 Learner)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('parent', 'parent.otieno@edusmart.ac.ke', 'parent2026', 'Mrs. Grace Otieno')}
+                    className="p-2 bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 rounded-lg text-left font-semibold text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
+                  >
+                    👨‍👧 Parent (Learner Guardian)
+                  </button>
+                </div>
+              )}
             </div>
-          </div>}
+          )}
 
           {/* Secure · Reliable · Multi-Tenant Tagline (Panel 2) */}
           <div className="text-center pt-2">

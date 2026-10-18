@@ -38,7 +38,15 @@ import {
   UserCheck,
   Wallet,
   ShoppingCart,
-  Package
+  Package,
+  Video,
+  Film,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Image as ImageIcon,
+  Info
 } from 'lucide-react';
 import { usePlatformCustomization } from '../../context/PlatformCustomizationContext';
 import { useTenant } from '../../context/TenantContext';
@@ -49,15 +57,9 @@ import {
   LandingSectionsVisibility,
   WorkspaceModuleConfig 
 } from '../../types/customization';
+import { HERO_VIDEO_PRESETS, HERO_IMAGE_PRESETS } from '../../data/heroMediaPresets';
+import { HeroBannerMedia } from '../common/HeroBannerMedia';
 
-// Preset educational images for hero section
-const HERO_IMAGE_PRESETS = [
-  { label: 'Campus Aerial & Grounds', url: '/src/assets/images/edusmart_campus_banner_1790859700873.jpg' },
-  { label: 'Science & Ecosystem Lab', url: '/src/assets/images/diagram_science_ecosystem_1790859717590.jpg' },
-  { label: 'Mathematics & Geometry', url: '/src/assets/images/diagram_math_geometry_1790859731617.jpg' },
-  { label: 'African Classroom Uniforms (Unsplash)', url: 'https://images.unsplash.com/photo-1577896851231-70ef18881754?auto=format&fit=crop&w=1200&q=80' },
-  { label: 'Modern Digital Classroom (Unsplash)', url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=1200&q=80' }
-];
 
 const AVAILABLE_ICONS = [
   'School', 'GraduationCap', 'BookOpen', 'Users', 'Calendar', 
@@ -158,6 +160,80 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
   const triggerToast = (msg: string) => {
     setSaveToast(msg);
     setTimeout(() => setSaveToast(null), 2500);
+  };
+
+  const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
+  const [isVideoUploading, setIsVideoUploading] = useState<boolean>(false);
+
+  const handleHeroVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setVideoUploadError(null);
+    setIsVideoUploading(true);
+
+    const objectUrl = URL.createObjectURL(file);
+    const tempVideo = document.createElement('video');
+    tempVideo.preload = 'metadata';
+    tempVideo.src = objectUrl;
+
+    tempVideo.onloadedmetadata = () => {
+      URL.revokeObjectURL(objectUrl);
+      const videoDuration = tempVideo.duration;
+
+      if (videoDuration > 30) {
+        setVideoUploadError(
+          `Video is ${Math.round(videoDuration)} seconds long. Maximum permitted hero showcase length is 30 seconds.`
+        );
+        setIsVideoUploading(false);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (loadEvt) => {
+        const base64 = loadEvt.target?.result as string;
+        updateLandingHero({
+          mediaType: 'video',
+          heroVideoUrl: base64,
+          videoMaxDuration: Math.min(30, Math.ceil(videoDuration)),
+          videoBadgeLabel: '30s Custom Showcase'
+        });
+        setIsVideoUploading(false);
+        triggerToast(`30s Video uploaded successfully (${Math.round(videoDuration)}s)`);
+      };
+      reader.onerror = () => {
+        setVideoUploadError('Failed to read video file.');
+        setIsVideoUploading(false);
+      };
+      reader.readAsDataURL(file);
+    };
+
+    tempVideo.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setVideoUploadError('Could not process video format. Please select an MP4 or WebM video file.');
+      setIsVideoUploading(false);
+    };
+  };
+
+  const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast('Please upload an image smaller than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const base64 = loadEvt.target?.result as string;
+      updateLandingHero({
+        mediaType: 'image',
+        heroImageUrl: base64
+      });
+      triggerToast('Hero banner image updated successfully!');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveFeature = () => {
@@ -659,35 +735,253 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                     </div>
                   </div>
 
-                  {/* Hero Image Selection */}
-                  <div className="pt-2 border-t border-slate-800 space-y-2">
-                    <label className="block text-xs font-bold text-slate-300">Hero Banner Image URL</label>
-                    <input
-                      type="text"
-                      value={customization.landingPage.hero.heroImageUrl}
-                      onChange={(e) => updateLandingHero({ heroImageUrl: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 font-mono"
-                      placeholder="Paste image URL or choose preset below"
-                    />
-
-                    {/* Presets */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className="text-[10px] text-slate-500 self-center mr-1">Presets:</span>
-                      {HERO_IMAGE_PRESETS.map((preset) => (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => updateLandingHero({ heroImageUrl: preset.url })}
-                          className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
-                            customization.landingPage.hero.heroImageUrl === preset.url
-                              ? 'bg-amber-400 text-slate-950 border-amber-300'
-                              : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
+                  {/* HERO BANNER MEDIA CUSTOMIZATION: IMAGE OR SHORT VIDEO (30s) */}
+                  <div className="pt-3 border-t border-slate-800 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Film className="w-4 h-4 text-amber-400" />
+                        <span>Hero Banner Media Type</span>
+                      </label>
+                      <span className="text-[10px] text-cyan-400 font-mono font-bold bg-cyan-950/60 border border-cyan-800/80 px-2 py-0.5 rounded-full">
+                        Image or Short Video (30s)
+                      </span>
                     </div>
+
+                    {/* Segmented Media Type Toggle */}
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-900 border border-slate-800 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => updateLandingHero({ mediaType: 'image' })}
+                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          (customization.landingPage.hero.mediaType || 'image') === 'image'
+                            ? 'bg-amber-400 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                        <span>High-Res Photo / Image</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => updateLandingHero({ mediaType: 'video' })}
+                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          customization.landingPage.hero.mediaType === 'video'
+                            ? 'bg-amber-400 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Video className="w-4 h-4" />
+                        <span>Short Video Showcase (30s)</span>
+                      </button>
+                    </div>
+
+                    {/* 1. SHORT VIDEO (30s) CONFIGURATION */}
+                    {customization.landingPage.hero.mediaType === 'video' && (
+                      <div className="p-3.5 bg-slate-900/90 border border-cyan-900/60 rounded-xl space-y-3.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Short Video Source (Max 30 Seconds)</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">MP4 or WebM</span>
+                        </div>
+
+                        {/* Direct Video URL Input */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">Direct Video URL</label>
+                          <input
+                            type="text"
+                            value={customization.landingPage.hero.heroVideoUrl || ''}
+                            onChange={(e) => updateLandingHero({ heroVideoUrl: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-cyan-200 font-mono focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                            placeholder="https://.../video.mp4"
+                          />
+                        </div>
+
+                        {/* Upload Local Short Video File (30s max check) */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            Upload Video File (Max 30s)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <label className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold border border-slate-600 flex items-center gap-1.5 cursor-pointer">
+                              <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>{isVideoUploading ? 'Validating (30s max)...' : 'Choose Video File'}</span>
+                              <input
+                                type="file"
+                                accept="video/mp4,video/webm"
+                                onChange={handleHeroVideoUpload}
+                                className="hidden"
+                                disabled={isVideoUploading}
+                              />
+                            </label>
+                            <span className="text-[11px] text-slate-400">Validated with client-side 30s limit</span>
+                          </div>
+                          {videoUploadError && (
+                            <div className="mt-1.5 p-2 bg-red-950/80 border border-red-700 rounded-lg text-red-300 text-xs flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                              <span>{videoUploadError}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Presets for 30s Educational Videos */}
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Or Choose Curated 30-Second Showcase Video:</span>
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {HERO_VIDEO_PRESETS.map((preset) => {
+                              const isSelected = customization.landingPage.hero.heroVideoUrl === preset.url;
+                              return (
+                                <button
+                                  key={preset.id}
+                                  type="button"
+                                  onClick={() => updateLandingHero({
+                                    mediaType: 'video',
+                                    heroVideoUrl: preset.url,
+                                    heroVideoPoster: preset.poster,
+                                    videoBadgeLabel: `${preset.durationLabel} Campus Tour`,
+                                    videoMaxDuration: preset.durationSeconds
+                                  })}
+                                  className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-cyan-950 border-cyan-400 text-white ring-1 ring-cyan-400'
+                                      : 'bg-slate-950/70 border-slate-800 text-slate-300 hover:border-slate-600'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between text-xs font-bold">
+                                    <span className="truncate">{preset.label}</span>
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-cyan-900/60 text-cyan-300 shrink-0 ml-1">
+                                      {preset.durationLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{preset.description}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Video Controls & Playback Preferences */}
+                        <div className="pt-2 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                          <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={customization.landingPage.hero.videoAutoplay !== false}
+                              onChange={(e) => updateLandingHero({ videoAutoplay: e.target.checked })}
+                              className="accent-amber-400 rounded"
+                            />
+                            <span>Autoplay</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer" title="Browsers require muted for autoplay">
+                            <input
+                              type="checkbox"
+                              checked={customization.landingPage.hero.videoMuted !== false}
+                              onChange={(e) => updateLandingHero({ videoMuted: e.target.checked })}
+                              className="accent-amber-400 rounded"
+                            />
+                            <span>Muted (Mute/Unmute btn)</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={customization.landingPage.hero.videoLoop !== false}
+                              onChange={(e) => updateLandingHero({ videoLoop: e.target.checked })}
+                              className="accent-amber-400 rounded"
+                            />
+                            <span>30s Loop</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={customization.landingPage.hero.videoShowControls !== false}
+                              onChange={(e) => updateLandingHero({ videoShowControls: e.target.checked })}
+                              className="accent-amber-400 rounded"
+                            />
+                            <span>Show Controls</span>
+                          </label>
+                        </div>
+
+                        {/* Video Badge Label & Poster Fallback */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                              Video Badge Label
+                            </label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.videoBadgeLabel || '30s Campus Spotlight'}
+                              onChange={(e) => updateLandingHero({ videoBadgeLabel: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                              placeholder="e.g. 30s Campus Spotlight"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                              Poster Fallback Image URL
+                            </label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.heroVideoPoster || ''}
+                              onChange={(e) => updateLandingHero({ heroVideoPoster: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-300 font-mono"
+                              placeholder="Fallback / preview photo"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. IMAGE CONFIGURATION */}
+                    {customization.landingPage.hero.mediaType !== 'video' && (
+                      <div className="p-3.5 bg-slate-900/90 border border-slate-800 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold text-slate-300">Hero Banner Image Source</label>
+                          <label className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-bold border border-slate-600 flex items-center gap-1 cursor-pointer">
+                            <Upload className="w-3 h-3 text-amber-400" />
+                            <span>Upload Image</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleHeroImageUpload}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                        <input
+                          type="text"
+                          value={customization.landingPage.hero.heroImageUrl}
+                          onChange={(e) => updateLandingHero({ heroImageUrl: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 font-mono"
+                          placeholder="Paste image URL or choose preset below"
+                        />
+
+                        {/* Presets */}
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          <span className="text-[10px] text-slate-500 self-center mr-1">Presets:</span>
+                          {HERO_IMAGE_PRESETS.map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => updateLandingHero({ heroImageUrl: preset.url, mediaType: 'image' })}
+                              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                                customization.landingPage.hero.heroImageUrl === preset.url && customization.landingPage.hero.mediaType !== 'video'
+                                  ? 'bg-amber-400 text-slate-950 border-amber-300'
+                                  : 'bg-slate-950 text-slate-300 border-slate-700 hover:border-slate-500'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Floating Metric Card Overlay */}
@@ -727,50 +1021,59 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
               {/* Live Preview Right 5 Cols */}
               <div className="lg:col-span-5 space-y-3">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                  <span>Live Hero Preview</span>
-                  <span className="text-[10px] text-emerald-400 font-mono">● Active synced</span>
+                  <span className="flex items-center gap-1.5">
+                    {customization.landingPage.hero.mediaType === 'video' ? (
+                      <Video className="w-3.5 h-3.5 text-cyan-400" />
+                    ) : (
+                      <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                    )}
+                    <span>Live Hero {customization.landingPage.hero.mediaType === 'video' ? 'Video (30s)' : 'Image'} Preview</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono">● Real-Time Synced</span>
                 </div>
 
-                <div className="bg-white rounded-2xl p-6 text-slate-900 shadow-xl border border-slate-200 space-y-4">
+                <div className="bg-white rounded-2xl p-5 text-slate-900 shadow-xl border border-slate-200 space-y-3">
                   <div className="inline-block px-3 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black tracking-widest uppercase">
                     {customization.landingPage.hero.pillTag}
                   </div>
 
-                  <h3 className="text-2xl font-black font-serif leading-tight text-slate-950">
+                  <h3 className="text-xl font-black font-serif leading-tight text-slate-950">
                     {customization.landingPage.hero.headlineStart}<br />
                     {customization.landingPage.hero.headlineMid}<br />
                     <span className="text-blue-700">{customization.landingPage.hero.headlineHighlight}</span>
                   </h3>
 
-                  <p className="text-xs text-slate-600 line-clamp-3">
+                  <p className="text-xs text-slate-600 line-clamp-2">
                     {customization.landingPage.hero.subtitle}
                   </p>
 
-                  <div className="flex gap-2 pt-2">
-                    <span className="px-3 py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm">
+                  <div className="flex gap-2 pt-1">
+                    <span className="px-3 py-1 bg-blue-600 text-white font-bold text-xs rounded-lg shadow-sm">
                       {customization.landingPage.hero.primaryCta}
                     </span>
-                    <span className="px-3 py-1.5 bg-slate-100 text-slate-800 font-bold text-xs rounded-lg border border-slate-200">
+                    <span className="px-3 py-1 bg-slate-100 text-slate-800 font-bold text-xs rounded-lg border border-slate-200">
                       {customization.landingPage.hero.secondaryCta}
                     </span>
                   </div>
 
-                  {/* Thumbnail of Image */}
-                  <div className="relative rounded-xl overflow-hidden border border-slate-200 h-36 bg-slate-100">
-                    <img 
-                      src={customization.landingPage.hero.heroImageUrl} 
-                      alt="Hero preview" 
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/src/assets/images/edusmart_campus_banner_1790859700873.jpg';
-                      }}
+                  {/* Interactive Live HeroBannerMedia inside preview! */}
+                  <div className="pt-2">
+                    <HeroBannerMedia
+                      mediaType={customization.landingPage.hero.mediaType || 'image'}
+                      imageUrl={customization.landingPage.hero.heroImageUrl}
+                      videoUrl={customization.landingPage.hero.heroVideoUrl}
+                      posterUrl={customization.landingPage.hero.heroVideoPoster || customization.landingPage.hero.heroImageUrl}
+                      videoBadgeLabel={customization.landingPage.hero.videoBadgeLabel}
+                      videoAutoplay={customization.landingPage.hero.videoAutoplay}
+                      videoMuted={customization.landingPage.hero.videoMuted}
+                      videoLoop={customization.landingPage.hero.videoLoop}
+                      videoShowControls={customization.landingPage.hero.videoShowControls}
+                      maxDurationSeconds={customization.landingPage.hero.videoMaxDuration || 30}
+                      floatingCardTitle={customization.landingPage.hero.floatingCardTitle}
+                      floatingCardSubtitle={customization.landingPage.hero.floatingCardSubtitle}
+                      showFloatingCard={customization.landingPage.hero.showFloatingCard}
+                      className="!h-64 !border-2 !border-slate-200"
                     />
-                    {customization.landingPage.hero.showFloatingCard && (
-                      <div className="absolute bottom-2 left-2 right-2 bg-white/95 backdrop-blur-md p-2 rounded-lg shadow-md border border-slate-200">
-                        <div className="text-xs font-black text-slate-900">{customization.landingPage.hero.floatingCardTitle}</div>
-                        <div className="text-[10px] text-slate-500">{customization.landingPage.hero.floatingCardSubtitle}</div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

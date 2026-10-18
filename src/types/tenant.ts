@@ -42,6 +42,11 @@ export interface Tenant {
   taglineNotes?: string;     // Institutional tagline notes (e.g. "Dedicated to Academic Excellence, Holistic CBC Discovery & Moral Integrity")
   heroTitle?: string;        // Custom hero headline (e.g. "WELCOME TO THE RIARA SCHOOL PORTAL")
   heroSubtitle?: string;     // Custom hero subtitle / quote note
+  heroMediaType?: 'image' | 'video'; // 'image' | 'video' (short 30s)
+  heroImageUrl?: string;
+  heroVideoUrl?: string;     // Short MP4/WebM video URL or uploaded base64 (max 30s)
+  heroVideoPoster?: string;
+  heroVideoBadge?: string;
   curriculumBadgeText?: string; // e.g. "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9"
   portalCardBadge?: string;  // e.g. "Official Campus Portal" or "By Gadsa Systems"
   // Customizable Printable Document Letterhead & Theme

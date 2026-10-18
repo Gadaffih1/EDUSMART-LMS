@@ -30,7 +30,8 @@ export const LabNotebookAndReports: React.FC<LabNotebookAndReportsProps> = ({
 
   useEffect(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('edusmart_virtual_lab_reports') || '[]');
+      const reportsKey = `edusmart_tenant_${currentUser?.schoolId || 'tenant-riara'}_virtual_lab_reports`;
+      const stored = JSON.parse(localStorage.getItem(reportsKey) || '[]');
       if (stored.length > 0) {
         setReports(stored);
         setSelectedReport(stored[0]);

@@ -954,7 +954,7 @@ export const Storage = {
   },
 
   // Users
-  getUsers(): User[] {
+  getUsers(tenantId?: string): User[] {
     const stored = getFromStorage<User[]>(KEYS.USERS, INITIAL_USERS);
     if (isSupabaseConfigured) {
       const safeUsers = stored.map(({ password: _password, ...user }) => user);

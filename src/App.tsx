@@ -36,6 +36,7 @@ import { IntegratedOperationsHub } from './components/operations/IntegratedOpera
 import { SuperAdminPortalView } from './components/admin/SuperAdminPortalView';
 import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloatingMenu';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { WorkspaceRoleGuard } from './components/common/WorkspaceRoleGuard';
 import { Maximize2, CheckCheck, Megaphone, Sparkles } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { SyncEngine } from './utils/syncEngine';
@@ -352,81 +353,238 @@ function AppContent({
                 )}
               </div>
             ) : currentUser.role === 'student' ? (
-              /* Learner: Own academic and school information */
-              <StudentWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['student']}
+                workspaceName="Learner Academic Portal"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <StudentWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'parent' ? (
-              /* Parent: Their children's information */
-              <ParentWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['parent']}
+                workspaceName="Parent & Guardian Portal"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <ParentWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'class_teacher' ? (
-              /* Class Teacher: Dedicated Class Teacher Command Centre & Form Lead Desk */
-              <ClassTeacherWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['class_teacher']}
+                workspaceName="Class Teacher Command Desk"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <ClassTeacherWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'teacher' ? (
-              /* Teacher: Assigned classes and subjects */
-              <TeacherWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['teacher']}
+                workspaceName="Subject Teacher Portal"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <TeacherWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'hod' ? (
-              /* HOD: Department */
-              <HODWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['hod']}
+                workspaceName="Head of Department (HOD) Portal"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <HODWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'senior_teacher' ? (
-              /* Senior Teacher: Academic/learner supervision */
-              <SeniorTeacherWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['senior_teacher']}
+                workspaceName="Senior Teacher Supervision Desk"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <SeniorTeacherWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'deputy_head' ? (
-              /* Deputy Head: Operations/discipline/staff */
-              <DeputyHeadWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['deputy_head']}
+                workspaceName="Deputy Head Operations Hub"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <DeputyHeadWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'dean_of_studies' ? (
-              /* Dean of Studies: Academic/assessment */
-              <DeanOfStudiesWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['dean_of_studies']}
+                workspaceName="Dean of Studies Academic Hub"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <DeanOfStudiesWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'curriculum_coordinator' ? (
-              /* Curriculum Coordinator: Executive leadership - CBC curriculum, CBA & syllabi */
-              <CurriculumCoordinatorWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['curriculum_coordinator']}
+                workspaceName="Curriculum Coordinator Executive Suite"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <CurriculumCoordinatorWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'librarian' ? (
-              /* Librarian: Library */
-              <LibrarianWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['librarian']}
+                workspaceName="School Library Information System"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <LibrarianWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'head_teacher' ? (
-              /* Head Teacher: School-wide management */
-              <HeadTeacherWorkspace currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['head_teacher']}
+                workspaceName="Head Teacher & Principal Executive Office"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <HeadTeacherWorkspace currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'nurse' || currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.role === 'school_admin_staff' && currentUser.designation?.toLowerCase().includes('nurse')) ? (
-              /* School Sanatorium Nurse In-Charge: Strictly only access to school sanatorium portal */
-              <SanatoriumWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['nurse', 'school_admin_staff']}
+                workspaceName="School Sanatorium & Clinic Bay"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <SanatoriumWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'school_admin_staff' ? (
-              /* School Admin Staff: Secretarial, registers, gate exits, work analysis, calendar */
-              <SchoolAdminStaffWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['school_admin_staff']}
+                workspaceName="Academic Registrar & School Secretariat"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <SchoolAdminStaffWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'transport_team' ? (
-              /* Transport Team: Fleet, routes, drivers, chaperones, student tracking */
-              <TransportWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['transport_team']}
+                workspaceName="Campus Fleet & Student Transport Desk"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <TransportWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'cocurricular_team' ? (
-              /* Co-Curricular Team: Sports, clubs, coaches, patrons, talent development */
-              <CoCurricularWorkspace currentUser={currentUser} onLogout={onLogout} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['cocurricular_team']}
+                workspaceName="Co-Curricular & Sports Academy Command"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <CoCurricularWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
             ) : currentUser.role === 'finance_officer' ? (
-              /* Finance & Bursary Officer: Billing, fees, ledgers, budgets & bank reconciliation */
-              <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
-            ) : currentUser.role === 'procurement_officer' ? (
-              /* Procurement Lead: Requisitions, vendor management, RFQs & LPOs */
-              <IntegratedOperationsHub currentUser={currentUser} initialPortal="procurement" />
-            ) : currentUser.role === 'storekeeper' ? (
-              /* Central Stores: Inventory catalog, GRNs, stock issues & stocktakes */
-              <IntegratedOperationsHub currentUser={currentUser} initialPortal="stores" />
-            ) : currentUser.role === 'hr_manager' ? (
-              /* HR & Payroll: Employee dossiers, contracts, statutory PAYE/NSSF/NHIF & monthly payroll runs */
-              <IntegratedOperationsHub currentUser={currentUser} initialPortal="hr_payroll" />
-            ) : viewingOperationsHub ? (
-              /* Full-page Operations & Architecture Hub view accessible to school administrators */
-              <div className="space-y-4">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between">
-                  <button
-                    onClick={() => setViewingOperationsHub(false)}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
-                  >
-                    <span>&larr; Return to {currentUser.role === 'admin' ? 'System Administrator Console' : 'Workspace'}</span>
-                  </button>
-                  <span className="text-xs font-medium text-slate-500">
-                    Integrated Operations &bull; {currentTenant.name}
-                  </span>
-                </div>
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['finance_officer', 'admin', 'head_teacher', 'deputy_head']}
+                workspaceName="Finance & Bursary Workspace"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
                 <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
-              </div>
+              </WorkspaceRoleGuard>
+            ) : currentUser.role === 'procurement_officer' ? (
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['procurement_officer', 'admin', 'head_teacher', 'deputy_head']}
+                workspaceName="Procurement & Purchasing Workspace"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <IntegratedOperationsHub currentUser={currentUser} initialPortal="procurement" />
+              </WorkspaceRoleGuard>
+            ) : currentUser.role === 'storekeeper' ? (
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['storekeeper', 'admin', 'head_teacher', 'deputy_head']}
+                workspaceName="Central Stores & Inventory Hub"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <IntegratedOperationsHub currentUser={currentUser} initialPortal="stores" />
+              </WorkspaceRoleGuard>
+            ) : currentUser.role === 'hr_manager' ? (
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['hr_manager', 'admin', 'head_teacher']}
+                workspaceName="HR & Kenyan CBC Payroll Engine"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <IntegratedOperationsHub currentUser={currentUser} initialPortal="hr_payroll" />
+              </WorkspaceRoleGuard>
+            ) : viewingOperationsHub ? (
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['admin', 'head_teacher', 'deputy_head']}
+                workspaceName="Integrated Operations Management Hub"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <div className="space-y-4">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between">
+                    <button
+                      onClick={() => setViewingOperationsHub(false)}
+                      className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                    >
+                      <span>&larr; Return to System Administrator Console</span>
+                    </button>
+                    <span className="text-xs font-medium text-slate-500">
+                      Integrated Operations &bull; {currentTenant.name}
+                    </span>
+                  </div>
+                  <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
+                </div>
+              </WorkspaceRoleGuard>
+            ) : currentUser.role === 'admin' ? (
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={['admin']}
+                workspaceName="School Administrator Management Console"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <AdminDashboard currentUser={currentUser} />
+              </WorkspaceRoleGuard>
             ) : (
-              /* School Administrator (e.g. Mr. Patrick Kamau): Manages their school campus */
-              <AdminDashboard currentUser={currentUser} />
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={[]}
+                workspaceName="Protected Campus Workspace"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <div />
+              </WorkspaceRoleGuard>
             )}
           </main>
         </div>

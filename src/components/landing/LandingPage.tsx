@@ -43,6 +43,8 @@ import {
   CalendarDays,
   Menu,
   Utensils,
+  Film,
+  Video,
   Bus,
   HeartPulse,
   Trophy,
@@ -58,6 +60,7 @@ import {
   Copy,
   Palette
 } from 'lucide-react';
+import { HeroBannerMedia } from '../common/HeroBannerMedia';
 import { TenantBrandingCustomizerModal } from './TenantBrandingCustomizerModal';
 
 interface LandingPageProps {
@@ -800,6 +803,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span>Customize Logo & Documents</span>
             </button>
           </div>
+
+          {/* CAMPUS HERO BANNER VISUAL (HIGH-RES IMAGE OR 30-SEC SHORT VIDEO) */}
+          {(currentTenant.heroVideoUrl || currentTenant.heroImageUrl) && (
+            <div className="w-full max-w-4xl mx-auto mb-8 px-4">
+              <HeroBannerMedia
+                mediaType={currentTenant.heroMediaType || (currentTenant.heroVideoUrl ? 'video' : 'image')}
+                imageUrl={currentTenant.heroImageUrl || '/src/assets/images/edusmart_campus_banner_1790859700873.jpg'}
+                videoUrl={currentTenant.heroVideoUrl}
+                posterUrl={currentTenant.heroVideoPoster || currentTenant.heroImageUrl}
+                videoBadgeLabel={currentTenant.heroVideoBadge || '30s Campus Spotlight'}
+                videoAutoplay={true}
+                videoMuted={true}
+                videoLoop={true}
+                videoShowControls={true}
+                maxDurationSeconds={30}
+                showFloatingCard={true}
+                floatingCardTitle={`${currentTenant.shortName || currentTenant.name} Digital Campus`}
+                floatingCardSubtitle={currentTenant.motto}
+                isSuperAdminEditMode={false}
+                onEditClick={() => setIsBrandingCustomizerOpen(true)}
+                altText={`${currentTenant.name} Campus`}
+              />
+            </div>
+          )}
 
           {/* ========================================================
               MAIN PORTAL ACCESS (RESPONSIVE 4-COLUMN / 2-COLUMN / 1-COLUMN GRID)

@@ -17,6 +17,8 @@ export interface LandingHeaderConfig {
   registerButtonLabel: string;
 }
 
+export type HeroMediaType = 'image' | 'video';
+
 export interface LandingHeroConfig {
   pillTag: string;
   headlineStart: string;
@@ -25,7 +27,18 @@ export interface LandingHeroConfig {
   subtitle: string;
   primaryCta: string;
   secondaryCta: string;
+  // Hero Media configuration (Image or short video max 30s)
+  mediaType?: HeroMediaType; // 'image' | 'video'
   heroImageUrl: string;
+  heroVideoUrl?: string; // MP4/WebM video URL or uploaded blob/data
+  heroVideoPoster?: string; // Poster thumbnail image while loading or fallback
+  videoAutoplay?: boolean; // Autoplay (default: true)
+  videoMuted?: boolean; // Default true so browser allows autoplay
+  videoLoop?: boolean; // Loop video (default: true)
+  videoShowControls?: boolean; // Show play/pause/sound control buttons on banner
+  videoMaxDuration?: number; // In seconds (default: 30)
+  videoBadgeLabel?: string; // e.g. "30s Campus Spotlight" or "CBC Video Tour"
+  bannerAspect?: 'cinematic' | 'standard' | 'tall'; // Aspect ratio mode
   floatingCardTitle: string;
   floatingCardSubtitle: string;
   showFloatingCard: boolean;

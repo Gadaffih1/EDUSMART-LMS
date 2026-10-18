@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   }, [showSwitchModal]);
 
-  const allUsers = Storage.getUsers();
+  const allUsers = Storage.getUsers(currentTenant.id);
 
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
@@ -665,10 +665,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-xs sm:text-sm font-bold text-white tracking-wide truncate block">
-                      Instant Demo Account Switcher
+                      Account Switcher · {currentTenant.name}
                     </h3>
-                    <p className="text-[10px] text-slate-400 truncate hidden sm:block">
-                      Test permissions and workspaces across all school departments
+                    <p className="text-[10px] text-emerald-400 font-semibold truncate hidden sm:block">
+                      🔒 Isolated Campus Roster ({currentTenant.code}) · Zero data crossover
                     </p>
                   </div>
                 </div>

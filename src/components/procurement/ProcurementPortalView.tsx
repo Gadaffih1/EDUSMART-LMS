@@ -1078,10 +1078,27 @@ export const ProcurementPortalView: React.FC<ProcurementPortalViewProps> = ({
             </div>
 
             <div className="printable-report border border-slate-300 p-5 rounded-2xl bg-white space-y-3 text-xs font-mono">
-              <div className="text-center pb-2 border-b border-dashed border-slate-300 space-y-0.5">
-                <div className="font-black text-sm font-serif uppercase tracking-tight text-slate-950">{currentTenant.name}</div>
-                <div className="text-[10px] text-slate-500">{currentTenant.address}, {currentTenant.city}</div>
-                <div className="font-extrabold text-xs pt-1 text-amber-800">LOCAL PURCHASE ORDER (LPO)</div>
+              <div 
+                className="text-center pb-3 border-b-2 space-y-1"
+                style={{ borderColor: currentTenant.primaryColorHex || '#0f766e' }}
+              >
+                {/* School Logo */}
+                <div className="flex justify-center mb-1">
+                  {currentTenant.customLogoBase64 ? (
+                    <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain" />
+                  ) : currentTenant.logoUrl ? (
+                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain" />
+                  ) : null}
+                </div>
+                <div className="font-black text-base font-serif uppercase tracking-tight text-slate-950">{currentTenant.name}</div>
+                <div className="text-[10px] font-serif italic text-slate-700">"{currentTenant.motto}" {currentTenant.taglineNotes ? `· ${currentTenant.taglineNotes}` : ''}</div>
+                <div className="text-[10px] text-slate-500">{currentTenant.address}, {currentTenant.city} · NEMIS Reg: {currentTenant.registrationNumber}</div>
+                <div 
+                  className="font-extrabold text-xs pt-1 tracking-wider uppercase"
+                  style={{ color: currentTenant.primaryColorHex || '#0f766e' }}
+                >
+                  OFFICIAL LOCAL PURCHASE ORDER (LPO)
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-1 text-[11px] py-1">

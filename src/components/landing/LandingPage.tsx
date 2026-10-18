@@ -8,6 +8,7 @@ import { EventTicketModal } from '../events/EventTicketModal';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { VirtualLabSubscriptionModal } from '../virtuallab/VirtualLabSubscriptionModal';
 import { PortalAccessAppModal, PORTAL_APPS_CONFIG } from './PortalAccessAppModal';
+import { resolveSchoolUserAndTenant } from '../../utils/schoolAuthResolver';
 import { 
   GraduationCap, 
   Lock, 
@@ -72,7 +73,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onLoginSuccess,
   onReturnToSuperAdmin
 }) => {
-  const { currentTenant } = useTenant();
+  const { currentTenant, allTenants, switchTenant } = useTenant();
 
   // Modal states
   const [activeModal, setActiveModal] = useState<
@@ -228,29 +229,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     setErrorMsg('');
 
     const cleanEmail = email.trim().toLowerCase();
-    let user = Storage.findUserByEmail(cleanEmail);
-    const seedUser = INITIAL_USERS.find(u => u.email.toLowerCase() === cleanEmail);
-    if (!user && seedUser) {
-      user = seedUser;
-      Storage.addUser(user);
-    }
-    if (!user && (cleanEmail === 'admin@riaraschools.ac.ke' || cleanEmail === currentTenant.email.toLowerCase())) {
-      const baseAdmin = INITIAL_USERS.find(u => u.role === 'admin');
-      user = {
-        ...(baseAdmin || {}),
-        id: baseAdmin?.id || 'usr-admin-1',
-        name: currentTenant.principalName || 'Main Administrator',
-        email: email.trim(),
-        password: 'admin2026',
-        role: 'admin',
-      };
-    }
-    if (!user) {
-      setErrorMsg('Account not found with this email. Please check your credentials or contact the School Administration.');
+    const resolved = resolveSchoolUserAndTenant(cleanEmail, allTenants, currentTenant);
+
+    if (!resolved) {
+      setErrorMsg('Account not found with this email. Please check your credentials or contact your School Administration.');
       return;
     }
 
-    const expectedPassword = user.password || seedUser?.password;
+    const { user, expectedPassword, tenant } = resolved;
+
     if (expectedPassword && expectedPassword !== password) {
       setErrorMsg('Incorrect password. Please verify and try again.');
       return;
@@ -313,9 +300,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       }
     }
 
-    // Success
-    Storage.setCurrentUser(user);
-    onLoginSuccess(user);
+    // Success - bind user to tenant and switch tenant
+    switchTenant(tenant.id);
+    const isolatedUser = { ...user, schoolId: tenant.id };
+    Storage.setCurrentUser(isolatedUser);
+    onLoginSuccess(isolatedUser);
   };
 
   // Handle direct Grade Passcode access (e.g. GR4@2026)
@@ -331,17 +320,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
     // Find first student in this grade or create a session student
     const allUsers = Storage.getUsers();
-    let student = allUsers.find(u => u.role === 'student' && u.grade === selectedGrade);
+    let student = allUsers.find(u => u.role === 'student' && u.grade === selectedGrade && (!u.schoolId || u.schoolId === currentTenant.id));
     
     if (!student) {
       student = {
-        id: `stu-gr${selectedGrade}-demo`,
+        id: `stu-${currentTenant.id}-gr${selectedGrade}-demo`,
         name: `Grade ${selectedGrade} Learner`,
-        email: `learner.gr${selectedGrade}@student.edusmart.ac.ke`,
+        email: `learner.gr${selectedGrade}@${currentTenant.domain || 'student.edusmart.ac.ke'}`,
         role: 'student',
         grade: selectedGrade,
         stream: selectedGrade <= 6 ? 'Dove' : 'Mara',
-        admissionNumber: `ADM/2026/0${selectedGrade}01`
+        admissionNumber: `ADM/${currentTenant.code}/0${selectedGrade}01`,
+        schoolId: currentTenant.id
       };
       Storage.addUser(student);
     }
@@ -352,16 +342,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   // Quick 1-click test login
   const handleQuickDemoLogin = (emailToUse: string) => {
-    let user = Storage.findUserByEmail(emailToUse);
-    if (!user) {
-      user = INITIAL_USERS.find(u => u.email.toLowerCase() === emailToUse.trim().toLowerCase());
-      if (user) {
-        Storage.addUser(user);
-      }
-    }
-    if (user) {
-      Storage.setCurrentUser(user);
-      onLoginSuccess(user);
+    const resolved = resolveSchoolUserAndTenant(emailToUse, allTenants, currentTenant);
+    if (resolved) {
+      switchTenant(resolved.tenant.id);
+      const isolatedUser = { ...resolved.user, schoolId: resolved.tenant.id };
+      Storage.setCurrentUser(isolatedUser);
+      onLoginSuccess(isolatedUser);
     }
   };
 

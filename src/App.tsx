@@ -130,6 +130,17 @@ function AppContent({
       const school = schoolId
         ? allTenants.find((tenant) => tenant.id === schoolId)
         : undefined;
+
+      const isPlatformSuperAdmin = currentUser?.role === 'admin' && (currentUser.email === 'admin@edusmart.ac.ke' || currentUser.email === 'superadmin@edusmart.ac.ke');
+
+      // STRICT MULTI-TENANT ISOLATION: A logged-in user can never cross over to another school
+      if (currentUser && !isPlatformSuperAdmin && currentUser.schoolId) {
+        if (currentTenant.id !== currentUser.schoolId) {
+          switchTenant(currentUser.schoolId);
+        }
+        return;
+      }
+
       if (school && school.id !== currentTenant.id) {
         switchTenant(school.id);
       } else if (!school) {
@@ -180,26 +191,28 @@ function AppContent({
     );
   }
 
-  if (currentUser && portalView === 'super_admin' && currentUser.role !== 'admin') {
+  const isPlatformSuperAdmin = currentUser?.role === 'admin' && (currentUser.email === 'admin@edusmart.ac.ke' || currentUser.email === 'superadmin@edusmart.ac.ke');
+
+  if (currentUser && portalView === 'super_admin' && !isPlatformSuperAdmin) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
         <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-xl">
-          <h1 className="text-xl font-bold text-slate-900">Administrator sign-in required</h1>
+          <h1 className="text-xl font-bold text-slate-900">Platform Super Administrator sign-in required</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            This account cannot access the Admin Console. Sign out and use an administrator email and password.
+            Tenant school accounts are strictly confined to their own institution ({currentTenant.name}). Cross-campus access is prohibited under multi-tenant data protection.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
-              onClick={() => void onLogout()}
+              onClick={() => navigateToPortal('school_lms', currentUser.schoolId || currentTenant.id)}
               className="rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800"
             >
-              Sign out and continue
+              Return to My School Portal
             </button>
             <button
-              onClick={() => navigateToPortal('public_landing')}
+              onClick={() => void onLogout()}
               className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Back to website
+              Sign out
             </button>
           </div>
         </section>
@@ -207,7 +220,7 @@ function AppContent({
     );
   }
 
-  if (currentUser && portalView === 'super_admin' && currentUser.role === 'admin') {
+  if (currentUser && portalView === 'super_admin' && isPlatformSuperAdmin) {
     return (
       <SuperAdminPortalView
         onEnterSchool={(schoolId) => {

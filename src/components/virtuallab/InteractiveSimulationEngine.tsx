@@ -20,8 +20,14 @@ import {
   FileText,
   Save,
   Check,
-  Maximize2
+  Maximize2,
+  Atom
 } from 'lucide-react';
+import { ClassicCircuitsPhET } from './classic/ClassicCircuitsPhET';
+import { ClassicPhScalePhET } from './classic/ClassicPhScalePhET';
+import { ClassicForcesMotionPhET } from './classic/ClassicForcesMotionPhET';
+import { ClassicBendingLightPhET } from './classic/ClassicBendingLightPhET';
+import { ClassicEnergySkateParkPhET } from './classic/ClassicEnergySkateParkPhET';
 
 interface InteractiveSimulationEngineProps {
   experiment: VirtualExperiment;
@@ -70,6 +76,7 @@ export const InteractiveSimulationEngine: React.FC<InteractiveSimulationEnginePr
 
   // Observation state
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [simEngineView, setSimEngineView] = useState<'apparatus' | 'classic_phet'>('apparatus');
 
   // Chemistry Substance Database mapped to PDF JSS reagents
   const jssChemicals: Record<string, { name: string; formula: string; ph: number; category: string; itemRef: string }> = {
@@ -190,7 +197,31 @@ export const InteractiveSimulationEngine: React.FC<InteractiveSimulationEnginePr
         </div>
 
         {/* Workbench Quick Actions */}
-        <div className="flex items-center gap-2 self-start sm:self-center">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+          <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => setSimEngineView('apparatus')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                simEngineView === 'apparatus'
+                  ? 'bg-emerald-600 text-white shadow-xs font-black'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Apparatus Bench
+            </button>
+            <button
+              onClick={() => setSimEngineView('classic_phet')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                simEngineView === 'classic_phet'
+                  ? 'bg-orange-600 text-white shadow-xs font-black'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <Atom className="w-3.5 h-3.5 text-orange-300 animate-spin" />
+              <span>PhET Classic</span>
+            </button>
+          </div>
+
           <button
             onClick={handleRecordData}
             className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
@@ -210,8 +241,24 @@ export const InteractiveSimulationEngine: React.FC<InteractiveSimulationEnginePr
         </div>
       </div>
 
-      {/* Main Interactive Stage */}
-      <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50/50">
+      {/* Main Interactive Stage or PhET Classic Stage */}
+      {simEngineView === 'classic_phet' ? (
+        <div className="p-4 bg-slate-950">
+          {experiment.simulationType === 'circuits' && (
+            <ClassicCircuitsPhET onRecordObservation={onRecordObservation} />
+          )}
+          {experiment.simulationType === 'acids_bases' && (
+            <ClassicPhScalePhET onRecordObservation={onRecordObservation} />
+          )}
+          {experiment.simulationType === 'density_eureka' && (
+            <ClassicForcesMotionPhET onRecordObservation={onRecordObservation} />
+          )}
+          {!['circuits', 'acids_bases', 'density_eureka'].includes(experiment.simulationType) && (
+            <ClassicForcesMotionPhET onRecordObservation={onRecordObservation} />
+          )}
+        </div>
+      ) : (
+        <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50/50">
         
         {/* ============================================================== */}
         {/* CASE 1: ACIDS, BASES & INDICATOR EXPERIMENT */}
@@ -785,7 +832,8 @@ export const InteractiveSimulationEngine: React.FC<InteractiveSimulationEnginePr
           </>
         )}
 
-      </div>
+        </div>
+      )}
     </div>
   );
 };

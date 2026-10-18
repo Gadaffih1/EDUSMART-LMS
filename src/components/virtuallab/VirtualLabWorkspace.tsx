@@ -33,6 +33,7 @@ import { TeacherDemonstrationHub } from './TeacherDemonstrationHub';
 import { LearnerExperimentWorkbench } from './LearnerExperimentWorkbench';
 import { LabNotebookAndReports } from './LabNotebookAndReports';
 import { ComputerLabScratchStudio } from './ComputerLabScratchStudio';
+import { PhetSimulationsHub } from './PhetSimulationsHub';
 import { TeacherLabAssignmentModal } from './TeacherLabAssignmentModal';
 import { ScienceViewerModal } from './ScienceViewerModal';
 import { PrintReportModal } from '../common/PrintReportModal';
@@ -40,6 +41,7 @@ import { Printer } from 'lucide-react';
 
 export type VirtualLabTab = 
   | 'home'
+  | 'phet_simulations'
   | 'library'
   | 'demonstrations'
   | 'scratch_coding'
@@ -72,6 +74,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
   const [selectedExperiment, setSelectedExperiment] = useState<VirtualExperiment>(CBC_VIRTUAL_EXPERIMENTS[0]);
   const [searchExperimentQuery, setSearchExperimentQuery] = useState('');
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
+  const [selectedPhetSimId, setSelectedPhetSimId] = useState<string>('phet-circuits-dc');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isScienceViewerOpen, setIsScienceViewerOpen] = useState(false);
   const [isPrintReportOpen, setIsPrintReportOpen] = useState(false);
@@ -184,6 +187,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
       <div className="bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 flex items-center gap-1 overflow-x-auto no-scrollbar shadow-2xs">
         {[
           { id: 'home', label: 'Lab Home', icon: Sparkles },
+          { id: 'phet_simulations', label: 'PhET Classic Simulations', icon: Atom },
           { id: 'library', label: 'Experiment Library', icon: BookOpen },
           { id: 'demonstrations', label: 'Teacher Demonstrations', icon: Presentation },
           { id: 'scratch_coding', label: 'Computer Lab (Scratch)', icon: Laptop },
@@ -229,6 +233,13 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
                 Seamlessly integrated inside EduSmart LMS. Experience hands-on laboratory investigations aligned directly with the Kenya Junior Secondary School curriculum requirements.
               </p>
               <div className="flex flex-wrap gap-3 pt-2">
+                <button
+                  onClick={() => setActiveTab('phet_simulations')}
+                  className="px-5 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Atom className="w-4 h-4 text-orange-100 animate-spin" />
+                  <span>PhET Classic Simulations</span>
+                </button>
                 <button
                   onClick={() => setActiveTab('learner_experiments')}
                   className="px-5 py-3 bg-white text-emerald-950 font-black text-xs rounded-xl shadow-md hover:bg-emerald-50 transition-all flex items-center gap-2 cursor-pointer"
@@ -281,6 +292,101 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* PhET Interactive Simulations Showcase */}
+          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-orange-950 p-6 rounded-3xl text-white shadow-md border border-orange-900/40 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-orange-500/20 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <Atom className="w-3 h-3 text-orange-300 animate-spin" />
+                    PhET Classic STEM Models
+                  </span>
+                  <span className="text-[10px] font-bold bg-white/10 text-slate-300 px-2 py-0.5 rounded-full">
+                    Interactive Offline Engines
+                  </span>
+                </div>
+                <h3 className="text-lg font-black tracking-tight mt-1 text-white">
+                  Featured PhET Simulations (Live Classic Workbench)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Direct manipulation of circuits, chemical dilution, optical lasers, and Newtonian forces.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setActiveTab('phet_simulations')}
+                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+              >
+                <span>Browse All 12 PhET Sims</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              {[
+                {
+                  id: 'phet-circuits-dc',
+                  title: 'Circuit Kit: DC & Ohm\'s Law',
+                  subject: 'Physics',
+                  desc: 'Batteries, bulbs, resistors, switch & multimeter test leads.',
+                  badge: 'Voltmeter + Ammeter',
+                  color: 'border-amber-500/30 bg-slate-800/80'
+                },
+                {
+                  id: 'phet-ph-scale',
+                  title: 'pH Scale & Dilution',
+                  subject: 'Chemistry',
+                  desc: '14 reagents, acids, bases, indicator test strips & H⁺ ion meter.',
+                  badge: 'Digital pH Probe',
+                  color: 'border-purple-500/30 bg-slate-800/80'
+                },
+                {
+                  id: 'phet-forces-motion',
+                  title: 'Forces, Motion & Friction',
+                  subject: 'Physics',
+                  desc: 'Tug-of-war cart, net force vectors, surface friction & speed gauge.',
+                  badge: 'Newton\'s Laws',
+                  color: 'border-orange-500/30 bg-slate-800/80'
+                },
+                {
+                  id: 'phet-bending-light',
+                  title: 'Bending Light & Snell\'s Law',
+                  subject: 'Physics',
+                  desc: 'Laser ray refraction, protractor tool & Total Internal Reflection.',
+                  badge: 'Laser + Protractor',
+                  color: 'border-cyan-500/30 bg-slate-800/80'
+                }
+              ].map(item => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    setSelectedPhetSimId(item.id);
+                    setActiveTab('phet_simulations');
+                  }}
+                  className={`p-4 rounded-2xl border ${item.color} hover:border-orange-400 transition-all cursor-pointer flex flex-col justify-between group shadow-xs`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-bold">
+                      <span className="text-orange-400">{item.subject}</span>
+                      <span className="bg-slate-700/80 text-slate-300 px-1.5 py-0.5 rounded font-mono">{item.badge}</span>
+                    </div>
+                    <div className="font-black text-sm text-white group-hover:text-orange-300 transition-colors mt-2">
+                      {item.title}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1 leading-relaxed line-clamp-2">
+                      {item.desc}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-slate-700/50 flex items-center justify-between text-xs font-bold text-orange-400 group-hover:text-orange-300">
+                    <span>Launch Classic Engine</span>
+                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -339,6 +445,16 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
       )}
 
       {/* ============================================================== */}
+      {/* SECTION 1B: PHET CLASSIC INTERACTIVE SIMULATIONS */}
+      {/* ============================================================== */}
+      {activeTab === 'phet_simulations' && (
+        <PhetSimulationsHub
+          currentUser={currentUser}
+          initialSimulationId={selectedPhetSimId}
+        />
+      )}
+
+      {/* ============================================================== */}
       {/* SECTION 2: EXPERIMENT LIBRARY */}
       {/* ============================================================== */}
       {activeTab === 'library' && (
@@ -387,17 +503,31 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                <div className="pt-4 mt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                   <button
                     onClick={() => handleLaunchExperiment(exp, 'conduct')}
                     className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <FlaskConical className="w-4 h-4" />
-                    <span>Conduct Experiment (Learner Mode)</span>
+                    <span>Conduct (CBC 10-Stage)</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (exp.simulationType === 'circuits') setSelectedPhetSimId('phet-circuits-dc');
+                      else if (exp.simulationType === 'acids_bases') setSelectedPhetSimId('phet-ph-scale');
+                      else if (exp.simulationType === 'density_eureka') setSelectedPhetSimId('phet-forces-motion');
+                      else setSelectedPhetSimId('phet-circuits-dc');
+                      setActiveTab('phet_simulations');
+                    }}
+                    className="px-3 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Launch Classic PhET Interactive Simulation"
+                  >
+                    <Atom className="w-3.5 h-3.5 text-orange-200 animate-spin" />
+                    <span>PhET Classic</span>
                   </button>
                   <button
                     onClick={() => handleLaunchExperiment(exp, 'demonstrate')}
-                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
                   >
                     Demonstrate
                   </button>

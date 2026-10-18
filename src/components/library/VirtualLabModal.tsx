@@ -3,7 +3,7 @@ import { X, Sparkles, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { User } from '../../types';
 
-export const VIRTUAL_LAB_URL = 'https://chatgpt.com/s/t_6ac78bfad95c8191841d261117b27e60';
+export const VIRTUAL_LAB_URL = 'https://chatgpt.com/s/t_6ad4b3dc26ac8191b12f4c4780daeaf0';
 
 interface VirtualLabModalProps {
   isOpen: boolean;

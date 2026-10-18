@@ -19,6 +19,8 @@ import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
 import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
+import { SchoolKpiAnalyticsCharts } from '../analytics/SchoolKpiAnalyticsCharts';
+import { useTenant } from '../../context/TenantContext';
 import { 
   School, 
   Users, 
@@ -50,6 +52,7 @@ interface HeadTeacherWorkspaceProps {
 }
 
 export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ currentUser }) => {
+  const { currentTenant } = useTenant();
   type HeadTab = 'analytics' | 'executive' | 'announcements' | 'staff_governance' | 'staff_appraisal' | 'timetable' | 'work_entry_audit' | 'lunch_register' | 'transport' | 'cocurricular' | 'bom_report' | 'reporting_hub' | 'events' | 'operations';
   const [activeTab, setActiveTab] = useState<HeadTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -281,6 +284,15 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
               </div>
             </div>
           </div>
+
+          {/* Executive KPI Charts Suite (Recharts Engine) */}
+          <SchoolKpiAnalyticsCharts
+            currentUser={currentUser}
+            variant="full"
+            defaultSection="all"
+            title={`${currentTenant.name} Executive Leadership Analytics: Attendance Trends & CBC Metrics`}
+            subtitle="Authoritative surveillance of learner attendance velocity and subject mastery distributions for the Head Teacher & Board of Management."
+          />
         </section>
       )}
 

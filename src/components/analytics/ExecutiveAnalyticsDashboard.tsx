@@ -37,6 +37,7 @@ import { User, GradeLevel } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ExportPdfButton } from '../common/ExportPdfButton';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
 
 interface ExecutiveAnalyticsDashboardProps {
   currentUser: User;
@@ -57,13 +58,14 @@ export const ExecutiveAnalyticsDashboard: React.FC<ExecutiveAnalyticsDashboardPr
   title = "School-Wide Health, Attendance & Academic Analytics",
   subtitle = "Executive surveillance console for Head Teacher & Dean of Studies: Real-time attendance trends, longitudinal subject performance, library foot-traffic, and student pastoral wellbeing."
 }) => {
+  const { currentTenant } = useTenant();
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
-  const [selectedTerm, setSelectedTerm] = useState<'Term 1' | 'Term 2' | 'Term 3'>('Term 3');
+  const [selectedTerm, setSelectedTerm] = useState<'Term 1' | 'Term 2' | 'Term 3'>('Term 1');
   const [timeframe, setTimeframe] = useState<'10_days' | 'term'>('10_days');
 
   // Pull real underlying data from Storage
   const allUsers = useMemo(() => Storage.getUsers(), []);
-  const allStudents = useMemo(() => allUsers.filter(u => u.role === 'student'), [allUsers]);
+  const allStudents = useMemo(() => allUsers.filter(u => u.role === 'student' && (!u.schoolId || u.schoolId === currentTenant.id)), [allUsers, currentTenant.id]);
   const attendanceRecords = useMemo(() => Storage.getAttendanceRecords(), []);
   const reportCards = useMemo(() => Storage.getReportCards(), []);
   const libraryBorrows = useMemo(() => Storage.getBorrowRecords(), []);

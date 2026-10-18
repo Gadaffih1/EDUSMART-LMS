@@ -24,6 +24,7 @@ import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
 import { BulkUserImportModule } from './BulkUserImportModule';
+import { SchoolKpiAnalyticsCharts } from '../analytics/SchoolKpiAnalyticsCharts';
 import { 
   Users, 
   Award,
@@ -74,6 +75,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const defaultTab = 'overview';
   const [activeTab, setActiveTab] = useState<
     | 'overview'
+    | 'analytics'
     | 'users' 
     | 'create_user' 
     | 'bulk_import'
@@ -116,11 +118,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
+        if (['overview', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
           setActiveTab(tab as any);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
-        } else if (tab === 'analytics' || tab === 'gradebook') {
+        } else if (tab === 'gradebook') {
           setActiveTab('oversight');
         } else if (tab === 'finance' || tab === 'procurement' || tab === 'stores' || tab === 'hr') {
           setActiveTab('operations');
@@ -377,6 +379,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         >
           <School className="w-3.5 h-3.5" />
           <span>Dashboard Overview</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
+          <span>Attendance & Academic KPIs</span>
+          <span className="text-[10px] bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded font-bold">Recharts</span>
         </button>
 
         <button
@@ -697,6 +710,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
           </div>
 
+          {/* Institutional KPI Analytics Section (Recharts Engine) */}
+          <SchoolKpiAnalyticsCharts
+            currentUser={currentUser}
+            variant="full"
+            defaultSection="all"
+            title={`${currentTenant.name} Key Performance Indicators: Attendance Trends & Academic Metrics`}
+            subtitle="Real-time Recharts visualization of daily roll call presence, longitudinal CBC competency, and subject means."
+          />
+
           {/* 2-Column Section: Recent Activities (Left) & Upcoming Events (Right) - Matching Panel 3 */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
@@ -812,6 +834,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           </div>
 
         </div>
+      )}
+
+      {/* ========================================================
+          TAB: ATTENDANCE & ACADEMIC KPI ANALYTICS (RECHARTS ENGINE)
+          ======================================================== */}
+      {activeTab === 'analytics' && (
+        <section className="space-y-6">
+          <SchoolKpiAnalyticsCharts
+            currentUser={currentUser}
+            variant="full"
+            defaultSection="all"
+            title={`${currentTenant.name} Comprehensive KPI Surveillance Console`}
+            subtitle="Real-time Recharts analytics tracking daily roll call presence rates, subject performance aggregates, and MoE CBC competency rubrics."
+          />
+        </section>
       )}
 
       {/* ========================================================

@@ -142,6 +142,16 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
 
         {/* Global Action Tools */}
         <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+          {/* Simulated Apparatus & Demonstrations Button */}
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className="px-3.5 py-2 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+            title="Launch Simulated Apparatus Workbench and Teacher Demonstrations"
+          >
+            <Boxes className="w-4 h-4 text-purple-200" />
+            <span>Apparatus Bench & Demo</span>
+          </button>
+
           {/* 3D Science & Molecular Viewer Button */}
           <button
             onClick={() => setIsScienceViewerOpen(true)}
@@ -193,7 +203,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
           { id: 'scratch_coding', label: 'Computer Lab (Scratch)', icon: Laptop },
           { id: 'learner_experiments', label: 'Learner Experiments (10-Stage)', icon: FlaskConical },
           { id: 'my_experiments', label: 'My Notebook & Reports', icon: FileText },
-          { id: 'inventory', label: 'Apparatus Requirements (75 Items)', icon: Boxes },
+          { id: 'inventory', label: 'Simulated Apparatus & Inventory (75 Items)', icon: Boxes },
           { id: 'safety', label: 'Safety Guidelines', icon: ShieldCheck }
         ].map(tab => {
           const Icon = tab.icon;
@@ -252,7 +262,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
                   className="px-4 py-3 bg-white/15 hover:bg-white/20 border border-white/20 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <Boxes className="w-4 h-4 text-emerald-300" />
-                  <span>View 75 JSS Requirements</span>
+                  <span>Simulated Apparatus & Demonstrations (75 Items)</span>
                 </button>
               </div>
             </div>

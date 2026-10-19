@@ -16,7 +16,8 @@ export interface PhetSimulation {
     | 'states_of_matter' 
     | 'bending_light' 
     | 'density_buoyancy' 
-    | 'microscope';
+    | 'microscope'
+    | 'wave_on_string';
   thumbnailUrl: string;
   learningGoals: string[];
   inquiryPrompts: string[];
@@ -321,22 +322,31 @@ export const PHET_SIMULATIONS: PhetSimulation[] = [
     strand: 'Waves & Sound: Transverse Waves, Reflection & Resonance',
     difficulty: 'Intermediate',
     durationMinutes: 25,
-    description: 'Wiggle a string manually or use an oscillator. Adjust wave frequency, amplitude, damping, and string tension. Measure wavelength with rulers and observe fixed vs loose end reflections.',
+    description: 'Explore the fundamental behavior of transverse waves on a stretched string. Generate continuous periodic waves with an oscillator, create individual pulses, or manually wiggle the driver. Adjust frequency (f), amplitude (A), damping (friction), and string tension (T). Measure wavelength (λ) using the on-screen movable metric ruler and measure wave period (T) with the digital stopwatch to experimentally verify the wave equation v = f × λ.',
     phetUrl: 'https://phet.colorado.edu/sims/html/wave-on-a-string/latest/wave-on-a-string_en.html',
-    nativeEngineType: 'bending_light',
+    nativeEngineType: 'wave_on_string',
     thumbnailUrl: 'https://phet.colorado.edu/sims/html/wave-on-a-string/latest/wave-on-a-string-600.png',
     learningGoals: [
-      'Identify wave properties: crest, trough, wavelength (λ), amplitude (A), and frequency (f).',
-      'Verify the fundamental wave equation: v = f × λ.',
-      'Investigate the effect of damping and string tension on wave speed.'
+      'Identify key anatomy of transverse waves: crest, trough, wavelength (λ), amplitude (A), frequency (f), and period (T).',
+      'Experimentally verify the universal wave speed equation: v = f × λ.',
+      'Investigate how changing string tension (T) directly alters wave propagation speed (v = √(T/μ)) and affects wavelength at constant frequency.',
+      'Analyze the physical effect of mechanical damping on wave amplitude attenuation over distance: A(x) = A₀ × e^(-γx).',
+      'Distinguish boundary reflection characteristics: 180° inverted phase change at a Fixed Clamp vs in-phase constructive reflection at a frictionless Loose Ring.'
     ],
     inquiryPrompts: [
-      'When frequency f is increased, what happens to wavelength λ if tension is kept constant?',
-      'How does wave reflection from a fixed end differ from reflection at a loose end ring?',
-      'Calculate wave speed if frequency is 2.0 Hz and measured wavelength is 3.5 cm.'
+      'If string tension is switched from Low (1.0 N) to High (9.0 N) while keeping frequency at 1.50 Hz, does wavelength increase or decrease? Explain using v = √(T/μ) and λ = v/f.',
+      'Why does a single crest pulse invert into a trough upon reflecting from a fixed clamp post, while reflecting upright as a crest from a loose ring?',
+      'If a student measures a frequency of 2.0 Hz and a crest-to-crest wavelength of 4.0 cm using the ruler, what is the wave propagation speed?',
+      'How does adjusting the damping slider from "None" to "Lots" affect wave energy and amplitude as the wave travels down the string?'
     ],
-    keyFormulas: ['v = f × λ', 'T = 1 / f', 'v = √(Tension / linear_density)'],
+    keyFormulas: [
+      'Universal Wave Equation: v = f × λ',
+      'Wave Period: T = 1 / f',
+      'Wave Speed on Stretched String: v = √(Tension / μ)',
+      'Wavelength Calculation: λ = v / f',
+      'Damping Exponential Decay: A(x) = A₀ × e^(-γx)'
+    ],
     classicTools: ['ruler', 'stopwatch'],
-    cbcCurriculumRef: 'CBC Grade 8 Physics Strand 4.5 · Wave Motion, Frequency & Amplitude'
+    cbcCurriculumRef: 'CBC Grade 8-9 Physics Strand 4.5 · Transverse Wave Motion, Amplitude, Frequency & String Tension'
   }
 ];

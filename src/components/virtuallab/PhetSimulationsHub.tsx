@@ -8,6 +8,7 @@ import { ClassicPhScalePhET } from './classic/ClassicPhScalePhET';
 import { ClassicForcesMotionPhET } from './classic/ClassicForcesMotionPhET';
 import { ClassicBendingLightPhET } from './classic/ClassicBendingLightPhET';
 import { ClassicEnergySkateParkPhET } from './classic/ClassicEnergySkateParkPhET';
+import { ClassicWaveOnStringPhET } from './classic/ClassicWaveOnStringPhET';
 import { SyncEngine } from '../../utils/syncEngine';
 import { User } from '../../types';
 import { 

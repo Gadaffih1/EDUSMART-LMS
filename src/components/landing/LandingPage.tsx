@@ -790,6 +790,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
           </div>
 
+          {/* CUSTOMIZABLE CAMPUS HERO CALLS TO ACTION */}
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+            <button
+              onClick={() => {
+                const target = currentTenant.heroPrimaryCtaAction || 'student';
+                if (target === 'scroll_grid') {
+                  document.getElementById('portal-cards-grid')?.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  handleOpenPortalApp(target as any);
+                }
+              }}
+              className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <span>{currentTenant.heroPrimaryCtaText || 'Access Student Portal App'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => {
+                const target = currentTenant.heroSecondaryCtaAction || 'school_admin_staff';
+                if (target === 'scroll_grid') {
+                  document.getElementById('portal-cards-grid')?.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  handleOpenPortalApp(target as any);
+                }
+              }}
+              className="px-5 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs sm:text-sm rounded-xl border border-slate-700 shadow-md transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <span>{currentTenant.heroSecondaryCtaText || 'Staff & Parent Portals'}</span>
+            </button>
+          </div>
+
           {/* CAMPUS HERO BANNER VISUAL (HIGH-RES IMAGE OR 30-SEC SHORT VIDEO) */}
           {(currentTenant.heroVideoUrl || currentTenant.heroImageUrl) && (
             <div className="w-full max-w-4xl mx-auto mb-8 px-4">
@@ -804,9 +836,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 videoLoop={true}
                 videoShowControls={true}
                 maxDurationSeconds={30}
-                showFloatingCard={true}
-                floatingCardTitle={`${currentTenant.shortName || currentTenant.name} Digital Campus`}
-                floatingCardSubtitle={currentTenant.motto}
+                showFloatingCard={currentTenant.heroShowFloatingCard !== false}
+                floatingCardTitle={currentTenant.heroFloatingCardTitle || `${currentTenant.shortName || currentTenant.name} Digital Campus`}
+                floatingCardSubtitle={currentTenant.heroFloatingCardSubtitle || currentTenant.motto}
+                floatingCardBadgeText={currentTenant.heroFloatingCardBadgeText || 'ACTIVE'}
+                floatingCardBadgeColor={(currentTenant.heroFloatingCardBadgeColor as any) || 'emerald'}
                 isSuperAdminEditMode={false}
                 onEditClick={() => setIsBrandingCustomizerOpen(true)}
                 altText={`${currentTenant.name} Campus`}

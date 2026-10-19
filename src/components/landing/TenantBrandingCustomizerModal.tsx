@@ -85,7 +85,16 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     heroImageUrl: currentTenant.heroImageUrl || '/src/assets/images/edusmart_campus_banner_1790859700873.jpg',
     heroVideoUrl: currentTenant.heroVideoUrl || '',
     heroVideoPoster: currentTenant.heroVideoPoster || '',
-    heroVideoBadge: currentTenant.heroVideoBadge || '30s Campus Tour'
+    heroVideoBadge: currentTenant.heroVideoBadge || '30s Campus Tour',
+    heroPrimaryCtaText: currentTenant.heroPrimaryCtaText || 'Access Student Portal App',
+    heroPrimaryCtaAction: currentTenant.heroPrimaryCtaAction || 'student',
+    heroSecondaryCtaText: currentTenant.heroSecondaryCtaText || 'Staff & Parent Portals',
+    heroSecondaryCtaAction: currentTenant.heroSecondaryCtaAction || 'school_admin_staff',
+    heroFloatingCardTitle: currentTenant.heroFloatingCardTitle || `${currentTenant.shortName || currentTenant.name} Digital Campus`,
+    heroFloatingCardSubtitle: currentTenant.heroFloatingCardSubtitle || currentTenant.motto,
+    heroFloatingCardBadgeText: currentTenant.heroFloatingCardBadgeText || 'ACTIVE',
+    heroFloatingCardBadgeColor: currentTenant.heroFloatingCardBadgeColor || 'emerald',
+    heroShowFloatingCard: currentTenant.heroShowFloatingCard !== false
   });
 
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
@@ -496,6 +505,123 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                       placeholder="e.g. Academic Discipline · Holistic CBC Discovery"
                       className="w-full px-3 py-2 text-xs font-semibold text-slate-900 border border-slate-300 rounded-xl"
                     />
+                  </div>
+
+                  {/* Primary Hero CTA */}
+                  <div className="space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <label className="block font-bold text-xs text-emerald-800">
+                      Primary Hero Action Button
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.heroPrimaryCtaText || ''}
+                      onChange={(e) => setFormData({ ...formData, heroPrimaryCtaText: e.target.value })}
+                      placeholder="e.g. Access Student Portal App"
+                      className="w-full px-3 py-1.5 text-xs font-bold text-slate-900 border border-slate-300 rounded-lg bg-white"
+                    />
+                    <select
+                      value={formData.heroPrimaryCtaAction || 'student'}
+                      onChange={(e) => setFormData({ ...formData, heroPrimaryCtaAction: e.target.value })}
+                      className="w-full px-3 py-1 text-xs text-slate-700 border border-slate-300 rounded-lg bg-white"
+                    >
+                      <option value="student">👨‍🎓 Student Portal App</option>
+                      <option value="parent">👨‍👩‍👧 Parent Portal App</option>
+                      <option value="teacher">👩‍🏫 Teacher Workspace</option>
+                      <option value="scroll_grid">📱 Scroll to All Portals Grid</option>
+                    </select>
+                  </div>
+
+                  {/* Secondary Hero CTA */}
+                  <div className="space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <label className="block font-bold text-xs text-blue-800">
+                      Secondary Hero Action Button
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.heroSecondaryCtaText || ''}
+                      onChange={(e) => setFormData({ ...formData, heroSecondaryCtaText: e.target.value })}
+                      placeholder="e.g. Staff & Parent Portals"
+                      className="w-full px-3 py-1.5 text-xs font-bold text-slate-900 border border-slate-300 rounded-lg bg-white"
+                    />
+                    <select
+                      value={formData.heroSecondaryCtaAction || 'school_admin_staff'}
+                      onChange={(e) => setFormData({ ...formData, heroSecondaryCtaAction: e.target.value })}
+                      className="w-full px-3 py-1 text-xs text-slate-700 border border-slate-300 rounded-lg bg-white"
+                    >
+                      <option value="school_admin_staff">🏛️ School Secretariat & Admin</option>
+                      <option value="parent">👨‍👩‍👧 Parent Portal App</option>
+                      <option value="teacher">👩‍🏫 Teacher Workspace</option>
+                      <option value="scroll_grid">📱 Scroll to All Portals Grid</option>
+                    </select>
+                  </div>
+
+                  {/* SECTION B1.5: FLOATING HIGHLIGHT CARD OVERLAY */}
+                  <div className="sm:col-span-2 space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Floating Highlight Card Overlay (Banner KPI Card)</span>
+                      </span>
+                      <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.heroShowFloatingCard !== false}
+                          onChange={(e) => setFormData({ ...formData, heroShowFloatingCard: e.target.checked })}
+                          className="accent-blue-600 rounded"
+                        />
+                        <span>Show Card</span>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Card Headline Title</label>
+                        <input
+                          type="text"
+                          value={formData.heroFloatingCardTitle || ''}
+                          onChange={(e) => setFormData({ ...formData, heroFloatingCardTitle: e.target.value })}
+                          placeholder="e.g. 99.4% Term Attendance"
+                          className="w-full px-3 py-1.5 text-xs font-bold text-slate-900 border border-slate-300 rounded-lg bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Card Subtitle</label>
+                        <input
+                          type="text"
+                          value={formData.heroFloatingCardSubtitle || ''}
+                          onChange={(e) => setFormData({ ...formData, heroFloatingCardSubtitle: e.target.value })}
+                          placeholder="e.g. Real-time biometrics & roll call monitoring"
+                          className="w-full px-3 py-1.5 text-xs text-slate-900 border border-slate-300 rounded-lg bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Status Badge Text</label>
+                        <input
+                          type="text"
+                          value={formData.heroFloatingCardBadgeText || 'ACTIVE'}
+                          onChange={(e) => setFormData({ ...formData, heroFloatingCardBadgeText: e.target.value.toUpperCase() })}
+                          placeholder="e.g. ACTIVE"
+                          className="w-full px-3 py-1.5 text-xs font-mono font-bold text-slate-900 border border-slate-300 rounded-lg bg-white uppercase"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Badge Color Theme</label>
+                        <select
+                          value={formData.heroFloatingCardBadgeColor || 'emerald'}
+                          onChange={(e) => setFormData({ ...formData, heroFloatingCardBadgeColor: e.target.value as any })}
+                          className="w-full px-3 py-1.5 text-xs text-slate-800 border border-slate-300 rounded-lg bg-white"
+                        >
+                          <option value="emerald">🟢 Emerald Green (ACTIVE)</option>
+                          <option value="blue">🔵 Royal Blue (VERIFIED)</option>
+                          <option value="amber">🟡 Amber Gold (SPOTLIGHT)</option>
+                          <option value="purple">🟣 Indigo Purple (AI-POWERED)</option>
+                          <option value="slate">⚪ Classic Slate (OFFICIAL)</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
                 </div>
@@ -1023,7 +1149,11 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                       videoLoop={true}
                       videoShowControls={true}
                       maxDurationSeconds={30}
-                      showFloatingCard={false}
+                      showFloatingCard={formData.heroShowFloatingCard !== false}
+                      floatingCardTitle={formData.heroFloatingCardTitle || `${formData.shortName || formData.name} Digital Campus`}
+                      floatingCardSubtitle={formData.heroFloatingCardSubtitle || formData.motto}
+                      floatingCardBadgeText={formData.heroFloatingCardBadgeText || 'ACTIVE'}
+                      floatingCardBadgeColor={(formData.heroFloatingCardBadgeColor as any) || 'emerald'}
                       className="!h-64 !border-2 !border-slate-700"
                     />
                   </div>

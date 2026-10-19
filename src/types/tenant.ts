@@ -49,6 +49,16 @@ export interface Tenant {
   heroVideoBadge?: string;
   curriculumBadgeText?: string; // e.g. "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9"
   portalCardBadge?: string;  // e.g. "Official Campus Portal" or "By Gadsa Systems"
+  heroPrimaryCtaText?: string;   // e.g. "Access Learner Portal"
+  heroPrimaryCtaAction?: string; // "student_app" | "parent_app" | "teacher_app" | "scroll_grid"
+  heroSecondaryCtaText?: string; // e.g. "Staff & Secretariat Login"
+  heroSecondaryCtaAction?: string; // "staff_login" | "admissions" | "custom"
+  // Customizable Floating Highlight Card (Overlay on Campus Hero Media)
+  heroFloatingCardTitle?: string;
+  heroFloatingCardSubtitle?: string;
+  heroFloatingCardBadgeText?: string;
+  heroFloatingCardBadgeColor?: 'emerald' | 'blue' | 'amber' | 'purple' | 'slate';
+  heroShowFloatingCard?: boolean;
   // Customizable Printable Document Letterhead & Theme
   printHeaderTheme?: 'classic' | 'modern' | 'formal' | 'executive';
   printFooterNotes?: string; // Tagline notes & accreditation for bottom of printed documents

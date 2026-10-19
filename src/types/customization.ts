@@ -27,6 +27,10 @@ export interface LandingHeroConfig {
   subtitle: string;
   primaryCta: string;
   secondaryCta: string;
+  primaryCtaAction?: 'login' | 'portals' | 'register' | 'demo' | 'contact' | 'custom';
+  primaryCtaUrl?: string;
+  secondaryCtaAction?: 'register' | 'login' | 'portals' | 'demo' | 'contact' | 'custom';
+  secondaryCtaUrl?: string;
   // Hero Media configuration (Image or short video max 30s)
   mediaType?: HeroMediaType; // 'image' | 'video'
   heroImageUrl: string;
@@ -41,6 +45,8 @@ export interface LandingHeroConfig {
   bannerAspect?: 'cinematic' | 'standard' | 'tall'; // Aspect ratio mode
   floatingCardTitle: string;
   floatingCardSubtitle: string;
+  floatingCardBadgeText?: string;
+  floatingCardBadgeColor?: 'emerald' | 'blue' | 'amber' | 'purple' | 'slate';
   showFloatingCard: boolean;
   trustBadges: string[];
 }

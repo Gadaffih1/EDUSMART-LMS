@@ -49,7 +49,8 @@ import {
   VolumeX,
   Image as ImageIcon,
   Upload,
-  AlertTriangle
+  AlertTriangle,
+  Save
 } from 'lucide-react';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { useTenant } from '../../context/TenantContext';
@@ -278,6 +279,56 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     const element = document.getElementById(id);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handlePrimaryCtaClick = () => {
+    const action = hero.primaryCtaAction || 'login';
+    if (action === 'login') {
+      onNavigateToLogin();
+    } else if (action === 'portals') {
+      onNavigateToLogin();
+    } else if (action === 'register') {
+      setShowRegisterModal(true);
+    } else if (action === 'demo') {
+      setShowRegisterModal(true);
+    } else if (action === 'contact') {
+      const el = document.getElementById('contact-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      else onNavigateToLogin();
+    } else if (action === 'custom' && hero.primaryCtaUrl) {
+      if (hero.primaryCtaUrl.startsWith('#')) {
+        document.querySelector(hero.primaryCtaUrl)?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        window.location.href = hero.primaryCtaUrl;
+      }
+    } else {
+      onNavigateToLogin();
+    }
+  };
+
+  const handleSecondaryCtaClick = () => {
+    const action = hero.secondaryCtaAction || 'register';
+    if (action === 'register') {
+      setShowRegisterModal(true);
+    } else if (action === 'login') {
+      onNavigateToLogin();
+    } else if (action === 'portals') {
+      onNavigateToLogin();
+    } else if (action === 'contact') {
+      const el = document.getElementById('contact-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      else setShowRegisterModal(true);
+    } else if (action === 'demo') {
+      setShowRegisterModal(true);
+    } else if (action === 'custom' && hero.secondaryCtaUrl) {
+      if (hero.secondaryCtaUrl.startsWith('#')) {
+        document.querySelector(hero.secondaryCtaUrl)?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        window.location.href = hero.secondaryCtaUrl;
+      }
+    } else {
+      setShowRegisterModal(true);
     }
   };
 
@@ -663,7 +714,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 {/* CTA Action Buttons */}
                 <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button
-                    onClick={onNavigateToLogin}
+                    onClick={handlePrimaryCtaClick}
                     className="px-6 py-3.5 bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-900/20 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center gap-2.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <Users className="w-4 h-4" />
@@ -672,7 +723,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   </button>
 
                   <button
-                    onClick={() => setShowRegisterModal(true)}
+                    onClick={handleSecondaryCtaClick}
                     className="px-6 py-3.5 bg-white/90 hover:bg-white text-slate-800 font-bold text-sm rounded-xl border border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                   >
                     <Building2 className="w-4 h-4 text-blue-600" />
@@ -735,6 +786,8 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     maxDurationSeconds={hero.videoMaxDuration || 30}
                     floatingCardTitle={hero.floatingCardTitle}
                     floatingCardSubtitle={hero.floatingCardSubtitle}
+                    floatingCardBadgeText={hero.floatingCardBadgeText || 'ACTIVE'}
+                    floatingCardBadgeColor={hero.floatingCardBadgeColor || 'emerald'}
                     showFloatingCard={hero.showFloatingCard}
                     isSuperAdminEditMode={isSuperAdminEditMode}
                     onEditClick={() => setActiveEditorSection('hero')}
@@ -2291,32 +2344,88 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   )}
                 </div>
 
-                <div className="pt-2 border-t border-slate-800">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-slate-300">Floating Highlight Overlay Card</span>
-                    <input
-                      type="checkbox"
-                      checked={hero.showFloatingCard}
-                      onChange={(e) => updateLandingHero({ showFloatingCard: e.target.checked })}
-                      className="w-4 h-4 accent-amber-400"
-                    />
+                <div className="pt-2 border-t border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-slate-200">Floating Highlight Overlay Card</span>
+                      <p className="text-[10px] text-slate-400">Bottom highlight card with status pill badge</p>
+                    </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                      <span className="text-[11px] text-slate-300">Show Card</span>
+                      <input
+                        type="checkbox"
+                        checked={hero.showFloatingCard}
+                        onChange={(e) => updateLandingHero({ showFloatingCard: e.target.checked })}
+                        className="w-4 h-4 accent-amber-400"
+                      />
+                    </label>
                   </div>
+
                   {hero.showFloatingCard && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        value={hero.floatingCardTitle}
-                        onChange={(e) => updateLandingHero({ floatingCardTitle: e.target.value })}
-                        className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white"
-                        placeholder="Card Title"
-                      />
-                      <input
-                        type="text"
-                        value={hero.floatingCardSubtitle}
-                        onChange={(e) => updateLandingHero({ floatingCardSubtitle: e.target.value })}
-                        className="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white"
-                        placeholder="Card Subtitle"
-                      />
+                    <div className="space-y-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-400 mb-0.5">Card Title</label>
+                          <input
+                            type="text"
+                            value={hero.floatingCardTitle}
+                            onChange={(e) => updateLandingHero({ floatingCardTitle: e.target.value })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-bold"
+                            placeholder="e.g. 99.4% Term Attendance"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 mb-0.5">Card Subtitle</label>
+                          <input
+                            type="text"
+                            value={hero.floatingCardSubtitle}
+                            onChange={(e) => updateLandingHero({ floatingCardSubtitle: e.target.value })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                            placeholder="e.g. Real-time biometrics & roll call monitoring"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-400 mb-0.5">Badge Text</label>
+                          <input
+                            type="text"
+                            value={hero.floatingCardBadgeText || 'ACTIVE'}
+                            onChange={(e) => updateLandingHero({ floatingCardBadgeText: e.target.value.toUpperCase() })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-mono font-bold uppercase"
+                            placeholder="e.g. ACTIVE"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-400 mb-0.5">Badge Color</label>
+                          <select
+                            value={hero.floatingCardBadgeColor || 'emerald'}
+                            onChange={(e) => updateLandingHero({ floatingCardBadgeColor: e.target.value as any })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                          >
+                            <option value="emerald">🟢 Emerald Green (ACTIVE)</option>
+                            <option value="blue">🔵 Royal Blue (VERIFIED)</option>
+                            <option value="amber">🟡 Amber Gold (SPOTLIGHT)</option>
+                            <option value="purple">🟣 Indigo Purple (AI-POWERED)</option>
+                            <option value="slate">⚪ Classic Slate (OFFICIAL)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setToastMessage('Floating highlight card settings saved and retained!');
+                            setTimeout(() => setToastMessage(null), 3000);
+                          }}
+                          className="px-3 py-1 bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg shadow-sm cursor-pointer hover:bg-amber-300 flex items-center gap-1"
+                        >
+                          <Save className="w-3 h-3 text-slate-950" />
+                          <span>Save Floating Card</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

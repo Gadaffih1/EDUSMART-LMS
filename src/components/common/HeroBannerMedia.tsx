@@ -27,6 +27,8 @@ export interface HeroBannerMediaProps {
   maxDurationSeconds?: number;
   floatingCardTitle?: string;
   floatingCardSubtitle?: string;
+  floatingCardBadgeText?: string;
+  floatingCardBadgeColor?: 'emerald' | 'blue' | 'amber' | 'purple' | 'slate';
   showFloatingCard?: boolean;
   isSuperAdminEditMode?: boolean;
   onEditClick?: () => void;
@@ -47,6 +49,8 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
   maxDurationSeconds = 30,
   floatingCardTitle = '99.4% Term Attendance',
   floatingCardSubtitle = 'Real-time biometrics & roll call monitoring',
+  floatingCardBadgeText = 'ACTIVE',
+  floatingCardBadgeColor = 'emerald',
   showFloatingCard = true,
   isSuperAdminEditMode = false,
   onEditClick,
@@ -282,16 +286,36 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
         </button>
       )}
 
-      {/* Floating Highlight Overlay Card */}
+      {/* Floating Highlight Overlay Card (Customizable from Super Admin Console) */}
       {showFloatingCard && (
-        <div className="absolute bottom-4 left-4 right-4 z-10 bg-white/95 backdrop-blur-md rounded-2xl p-4 text-slate-900 border border-white/80 shadow-xl flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-extrabold text-slate-900">{floatingCardTitle}</div>
-            <div className="text-xs text-slate-600 mt-0.5">{floatingCardSubtitle}</div>
+        <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4 z-10 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 sm:p-4 text-slate-900 border border-white/80 shadow-xl flex items-center justify-between gap-3">
+          <div className="min-w-0 pr-2">
+            <div className="text-sm sm:text-base font-extrabold text-slate-950 tracking-tight leading-tight truncate">
+              {floatingCardTitle}
+            </div>
+            <div className="text-[11px] sm:text-xs text-slate-600 mt-0.5 line-clamp-1">
+              {floatingCardSubtitle}
+            </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 shrink-0 text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded-full shadow-2xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" aria-hidden="true" />
-            Active
+          <span className={`inline-flex items-center gap-1.5 shrink-0 text-[10px] sm:text-xs font-bold uppercase tracking-wider px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full shadow-2xs border ${
+            floatingCardBadgeColor === 'blue'
+              ? 'text-blue-800 bg-blue-50 border-blue-200'
+              : floatingCardBadgeColor === 'amber'
+              ? 'text-amber-800 bg-amber-50 border-amber-200'
+              : floatingCardBadgeColor === 'purple'
+              ? 'text-purple-800 bg-purple-50 border-purple-200'
+              : floatingCardBadgeColor === 'slate'
+              ? 'text-slate-800 bg-slate-100 border-slate-300'
+              : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full animate-ping ${
+              floatingCardBadgeColor === 'blue' ? 'bg-blue-500' :
+              floatingCardBadgeColor === 'amber' ? 'bg-amber-500' :
+              floatingCardBadgeColor === 'purple' ? 'bg-purple-500' :
+              floatingCardBadgeColor === 'slate' ? 'bg-slate-500' :
+              'bg-emerald-500'
+            }`} aria-hidden="true" />
+            <span>{floatingCardBadgeText || 'ACTIVE'}</span>
           </span>
         </div>
       )}

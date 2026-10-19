@@ -33,7 +33,6 @@ import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { SuperAdminDashboard } from './SuperAdminDashboard';
 import { CampusSwitcherWindow } from '../layout/CampusSwitcherWindow';
 import { PlatformStudioCustomizer } from './PlatformStudioCustomizer';
-import { ClassTeacherWorkspace } from '../teacher/ClassTeacherWorkspace';
 import { SuperAdminOperationsControl } from './SuperAdminOperationsControl';
 
 interface SuperAdminPortalViewProps {
@@ -49,18 +48,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<'overview' | 'operations' | 'customizer' | 'settings_hub'>('overview');
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');
-  const [classTeacherSearchQuery, setClassTeacherSearchQuery] = useState<string>('');
-  const [selectedCampusFilter, setSelectedCampusFilter] = useState<string>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Appoint / Reassign Modal State
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState<boolean>(false);
-  const [targetTeacherId, setTargetTeacherId] = useState<string>('');
-  const [assignGrade, setAssignGrade] = useState<GradeLevel>(4);
-  const [assignStream, setAssignStream] = useState<StreamName>('Dove');
-
-  // Preview Class Teacher Workspace Modal
-  const [previewingTeacher, setPreviewingTeacher] = useState<User | null>(null);
 
   const [allUsersState, setAllUsersState] = useState<User[]>(() => Storage.getUsers());
 
@@ -82,37 +70,6 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
     name: 'Super Administrator',
     email: 'admin@edusmart.ac.ke',
     role: 'admin'
-  };
-
-  const classTeachers = allUsersState.filter(u => u.role === 'class_teacher');
-  const availableTeachers = allUsersState.filter(u => ['teacher', 'class_teacher', 'hod', 'senior_teacher'].includes(u.role));
-
-  const handleAssignClassTeacher = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetTeacherId) return;
-
-    const teacher = allUsersState.find(u => u.id === targetTeacherId);
-    if (!teacher) return;
-
-    Storage.updateUser(targetTeacherId, {
-      role: 'class_teacher',
-      grade: assignGrade,
-      stream: assignStream,
-      assignedStreams: [{ grade: assignGrade, stream: assignStream }]
-    });
-
-    setIsAssignModalOpen(false);
-    triggerToast(`Successfully assigned ${teacher.name} as Class Teacher for Grade ${assignGrade} (${assignStream})!`);
-  };
-
-  const handleDemoteToSubjectTeacher = (teacherId: string) => {
-    const teacher = allUsersState.find(u => u.id === teacherId);
-    if (!teacher) return;
-
-    Storage.updateUser(teacherId, {
-      role: 'teacher'
-    });
-    triggerToast(`${teacher.name} reassigned to Subject Faculty.`);
   };
 
   const activeSchoolsCount = allTenants.filter(t => t.status !== 'pending').length;
@@ -239,7 +196,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
               </p>
             </div>
 
-            {/* Switch between Overview, Class Teacher Hub, Customizer Studio and Schools Hub */}
+            {/* Switch between Overview, Finance & Operations, Customizer Studio and Schools Hub */}
             <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
                 onClick={() => setActiveConsoleTab('overview')}

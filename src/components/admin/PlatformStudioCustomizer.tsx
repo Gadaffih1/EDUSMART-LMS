@@ -111,11 +111,15 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     importConfiguration
   } = usePlatformCustomization();
 
-  const { allTenants } = useTenant();
+  const { allTenants, updateTenant } = useTenant();
 
   const [activeTab, setActiveTab] = useState<'landing' | 'workspaces' | 'tenants' | 'broadcast' | 'json'>('landing');
   const [landingSubTab, setLandingSubTab] = useState<'visibility' | 'header' | 'hero' | 'stats' | 'features' | 'about' | 'testimonials' | 'pricing' | 'faqs' | 'contact' | 'footer'>('visibility');
   
+  // Hero retention state & presets
+  const [heroLastSavedAt, setHeroLastSavedAt] = useState<string>('Persistent & Active');
+  const [heroSaveSuccess, setHeroSaveSuccess] = useState<boolean>(false);
+
   // Modals state
   const [editingFeature, setEditingFeature] = useState<LandingFeatureItem | null>(null);
   const [isNewFeatureModalOpen, setIsNewFeatureModalOpen] = useState(false);
@@ -161,6 +165,60 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     setSaveToast(msg);
     setTimeout(() => setSaveToast(null), 2500);
   };
+
+  const handleSaveHeroSettings = () => {
+    try {
+      localStorage.setItem('edusmart_platform_customization', JSON.stringify(customization));
+      localStorage.setItem('edusmart_platform_customization_v2', JSON.stringify(customization));
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setHeroLastSavedAt(`Saved at ${timeStr}`);
+      setHeroSaveSuccess(true);
+      triggerToast('Hero Section Copy & Calls To Action successfully saved and retained in persistent storage!');
+      setTimeout(() => setHeroSaveSuccess(false), 3500);
+    } catch (e) {
+      console.error('Failed to persist hero customization:', e);
+      triggerToast('Hero settings active in session memory.');
+    }
+  };
+
+  const HERO_COPY_PRESETS = [
+    {
+      name: 'Kenyan CBC & National Excellence',
+      pillTag: 'ONE PLATFORM. EVERY KENYAN SCHOOL.',
+      headlineStart: 'Smarter School',
+      headlineMid: 'Management.',
+      headlineHighlight: 'Better CBC Learning.',
+      subtitle: 'A complete digital platform for school administration, teaching, assessment and communication. Built specifically for Kenyan CBC and modern global curricula.',
+      primaryCta: 'School Login',
+      primaryCtaAction: 'login' as const,
+      secondaryCta: 'Register a School',
+      secondaryCtaAction: 'register' as const
+    },
+    {
+      name: 'STEM & Digital Campus',
+      pillTag: 'FUTURE-READY STEM & CBC ECOSYSTEM',
+      headlineStart: 'Empowering Next-Gen',
+      headlineMid: 'Learners & Teachers.',
+      headlineHighlight: 'Interactive Discovery.',
+      subtitle: 'Comprehensive educational governance connecting roll call attendance, automated CBA assessment sheets, smart timetable coordination, and parent communications.',
+      primaryCta: 'Explore Digital Portals',
+      primaryCtaAction: 'portals' as const,
+      secondaryCta: 'Request Executive Demo',
+      secondaryCtaAction: 'demo' as const
+    },
+    {
+      name: 'Holistic Academy & Moral Integrity',
+      pillTag: 'LEARN · GROW · SUCCEED TOGETHER',
+      headlineStart: 'Nurturing Academic Rigor,',
+      headlineMid: 'Talent & Character.',
+      headlineHighlight: 'Shining Bright.',
+      subtitle: 'A high-trust digital sanctuary providing transparent grade tracking, biometric attendance, and seamless communication across school leadership and families.',
+      primaryCta: 'Institutional Login',
+      primaryCtaAction: 'login' as const,
+      secondaryCta: 'Admissions & Inquiries',
+      secondaryCtaAction: 'contact' as const
+    }
+  ];
 
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
   const [isVideoUploading, setIsVideoUploading] = useState<boolean>(false);
@@ -659,80 +717,272 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
               {/* Form Left 7 Cols */}
               <div className="lg:col-span-7 space-y-4">
                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
-                  <h3 className="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    <span>Hero Section Copy & Calls To Action</span>
-                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                    <div>
+                      <h3 className="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span>Hero Section Copy & Calls To Action</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        Customize top banner copy, headlines, and call-to-action behaviors. All changes are saved and retained in persistent storage.
+                      </p>
+                    </div>
 
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                        heroSaveSuccess 
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-500 animate-pulse' 
+                          : 'bg-slate-900 text-slate-400 border-slate-700'
+                      }`}>
+                        {heroSaveSuccess ? '✓ Saved & Retained' : heroLastSavedAt}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quick Copy Presets */}
+                  <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Curated Institutional Copy Presets:</span>
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {HERO_COPY_PRESETS.map((preset, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          onClick={() => {
+                            updateLandingHero({
+                              pillTag: preset.pillTag,
+                              headlineStart: preset.headlineStart,
+                              headlineMid: preset.headlineMid,
+                              headlineHighlight: preset.headlineHighlight,
+                              subtitle: preset.subtitle,
+                              primaryCta: preset.primaryCta,
+                              primaryCtaAction: preset.primaryCtaAction,
+                              secondaryCta: preset.secondaryCta,
+                              secondaryCtaAction: preset.secondaryCtaAction
+                            });
+                            triggerToast(`Applied "${preset.name}" copy preset!`);
+                          }}
+                          className="text-left p-2 rounded-lg bg-slate-950 hover:bg-amber-400/10 border border-slate-800 hover:border-amber-400/40 transition-all text-slate-300 hover:text-white cursor-pointer group"
+                        >
+                          <div className="text-[11px] font-extrabold text-amber-400 group-hover:text-amber-300 truncate">
+                            {preset.name}
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                            "{preset.primaryCta}" & "{preset.secondaryCta}"
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 1. Pill Tag */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Top Pill Tag Text</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-300">Top Pill Tag / Category Badge</label>
+                      <span className="text-[10px] text-slate-500 font-mono">Upper badge text</span>
+                    </div>
                     <input
                       type="text"
                       value={customization.landingPage.hero.pillTag}
                       onChange={(e) => updateLandingHero({ pillTag: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                      placeholder="e.g. ONE PLATFORM. EVERY KENYAN SCHOOL."
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">Headline Part 1</label>
-                      <input
-                        type="text"
-                        value={customization.landingPage.hero.headlineStart}
-                        onChange={(e) => updateLandingHero({ headlineStart: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">Headline Part 2</label>
-                      <input
-                        type="text"
-                        value={customization.landingPage.hero.headlineMid}
-                        onChange={(e) => updateLandingHero({ headlineMid: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-amber-400 mb-1">Highlight Part</label>
-                      <input
-                        type="text"
-                        value={customization.landingPage.hero.headlineHighlight}
-                        onChange={(e) => updateLandingHero({ headlineHighlight: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-lg text-xs text-amber-300 font-bold"
-                      />
+                  {/* 2. 3-Part Modular Headline */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-300 block">
+                      3-Part Dynamic Headline (Start, Middle, and Colored Accent)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <span className="block text-[10px] text-slate-400 mb-1">Headline Part 1</span>
+                        <input
+                          type="text"
+                          value={customization.landingPage.hero.headlineStart}
+                          onChange={(e) => updateLandingHero({ headlineStart: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                          placeholder="Smarter School"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-slate-400 mb-1">Headline Part 2</span>
+                        <input
+                          type="text"
+                          value={customization.landingPage.hero.headlineMid}
+                          onChange={(e) => updateLandingHero({ headlineMid: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                          placeholder="Management."
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] text-amber-400 font-bold mb-1">Highlight Word / Accent</span>
+                        <input
+                          type="text"
+                          value={customization.landingPage.hero.headlineHighlight}
+                          onChange={(e) => updateLandingHero({ headlineHighlight: e.target.value })}
+                          className="w-full px-3 py-2 bg-slate-900 border border-amber-500/50 rounded-lg text-xs text-amber-300 font-bold"
+                          placeholder="Better Learning."
+                        />
+                      </div>
                     </div>
                   </div>
 
+                  {/* 3. Subtitle / Mission Statement */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Subtitle / Mission Statement</label>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Hero Subtitle & Institutional Value Proposition
+                    </label>
                     <textarea
                       rows={3}
                       value={customization.landingPage.hero.subtitle}
                       onChange={(e) => updateLandingHero({ subtitle: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white resize-none"
+                      placeholder="Comprehensive CBC management..."
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">Primary CTA Button Label</label>
-                      <input
-                        type="text"
-                        value={customization.landingPage.hero.primaryCta}
-                        onChange={(e) => updateLandingHero({ primaryCta: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                      />
+                  {/* 4. Modular Calls To Action (Primary & Secondary) */}
+                  <div className="pt-2 border-t border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Calls To Action (CTA) Buttons & Actions</span>
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">2 Configurable Buttons</span>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">Secondary CTA Button Label</label>
-                      <input
-                        type="text"
-                        value={customization.landingPage.hero.secondaryCta}
-                        onChange={(e) => updateLandingHero({ secondaryCta: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                      />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* PRIMARY CTA CONFIG */}
+                      <div className="bg-slate-900/90 p-3.5 rounded-xl border border-blue-900/40 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-blue-400 uppercase tracking-wider">
+                            Primary CTA Button
+                          </span>
+                          <span className="text-[9px] bg-blue-950 text-blue-300 border border-blue-800 px-1.5 py-0.5 rounded font-mono">
+                            High-Priority Action
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Button Label</label>
+                          <input
+                            type="text"
+                            value={customization.landingPage.hero.primaryCta}
+                            onChange={(e) => updateLandingHero({ primaryCta: e.target.value })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-bold"
+                            placeholder="e.g. School Login"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Click Behavior / Action</label>
+                          <select
+                            value={customization.landingPage.hero.primaryCtaAction || 'login'}
+                            onChange={(e) => updateLandingHero({ primaryCtaAction: e.target.value as any })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                          >
+                            <option value="login">🔐 Navigate to Unified School Login</option>
+                            <option value="portals">📱 Scroll to Interactive Portals Grid</option>
+                            <option value="register">🏫 Open School Registration Modal</option>
+                            <option value="demo">📅 Request Platform Interactive Demo</option>
+                            <option value="custom">🔗 Custom Web Link or Anchor (#)</option>
+                          </select>
+                        </div>
+
+                        {(customization.landingPage.hero.primaryCtaAction === 'custom') && (
+                          <div>
+                            <label className="block text-[10px] text-slate-400 mb-1">Target URL or Section ID</label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.primaryCtaUrl || ''}
+                              onChange={(e) => updateLandingHero({ primaryCtaUrl: e.target.value })}
+                              placeholder="https://... or #features"
+                              className="w-full px-3 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-mono"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* SECONDARY CTA CONFIG */}
+                      <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-slate-300 uppercase tracking-wider">
+                            Secondary CTA Button
+                          </span>
+                          <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
+                            Secondary Action
+                          </span>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Button Label</label>
+                          <input
+                            type="text"
+                            value={customization.landingPage.hero.secondaryCta}
+                            onChange={(e) => updateLandingHero({ secondaryCta: e.target.value })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-bold"
+                            placeholder="e.g. Register a School"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-300 mb-1">Click Behavior / Action</label>
+                          <select
+                            value={customization.landingPage.hero.secondaryCtaAction || 'register'}
+                            onChange={(e) => updateLandingHero({ secondaryCtaAction: e.target.value as any })}
+                            className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                          >
+                            <option value="register">🏫 Open School Registration Modal</option>
+                            <option value="login">🔐 Navigate to Unified School Login</option>
+                            <option value="portals">📱 Scroll to Interactive Portals Grid</option>
+                            <option value="contact">📞 Scroll to Contact & Inquiries</option>
+                            <option value="demo">📅 Request Platform Interactive Demo</option>
+                            <option value="custom">🔗 Custom Web Link or Anchor (#)</option>
+                          </select>
+                        </div>
+
+                        {(customization.landingPage.hero.secondaryCtaAction === 'custom') && (
+                          <div>
+                            <label className="block text-[10px] text-slate-400 mb-1">Target URL or Section ID</label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.secondaryCtaUrl || ''}
+                              onChange={(e) => updateLandingHero({ secondaryCtaUrl: e.target.value })}
+                              placeholder="https://... or #pricing"
+                              className="w-full px-3 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-mono"
+                            />
+                          </div>
+                        )}
+                      </div>
+
                     </div>
+                  </div>
+
+                  {/* 5. DEDICATED PERSISTENT RETENTION & SAVE ACTION BAR */}
+                  <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                    <div className="text-left">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Settings Retention Engine</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Changes are saved into persistent browser storage and retained across reloads & sessions.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveHeroSettings}
+                      className="px-5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-105 active:scale-95 shrink-0"
+                    >
+                      <Save className="w-4 h-4 text-slate-950" />
+                      <span>Save & Retain Hero Settings</span>
+                    </button>
                   </div>
 
                   {/* HERO BANNER MEDIA CUSTOMIZATION: IMAGE OR SHORT VIDEO (30s) */}
@@ -984,33 +1234,172 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                     )}
                   </div>
 
-                  {/* Floating Metric Card Overlay */}
-                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                  {/* Floating Highlight Overlay Card (Banner KPI Card - Matching User Request) */}
+                  <div className="pt-3 border-t border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-300">Show Floating Highlight Card</label>
-                      <input
-                        type="checkbox"
-                        checked={customization.landingPage.hero.showFloatingCard}
-                        onChange={(e) => updateLandingHero({ showFloatingCard: e.target.checked })}
-                        className="w-4 h-4 accent-amber-400"
-                      />
+                      <div>
+                        <label className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          <span>Floating Highlight Card Overlay (Banner KPI Card)</span>
+                        </label>
+                        <p className="text-[10px] text-slate-400">
+                          Configure the bottom highlight card (KPI title, subtext & status pill badge) displayed over the hero banner.
+                        </p>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700">
+                        <span className="text-[11px] font-bold text-slate-300">Show Card</span>
+                        <input
+                          type="checkbox"
+                          checked={customization.landingPage.hero.showFloatingCard}
+                          onChange={(e) => updateLandingHero({ showFloatingCard: e.target.checked })}
+                          className="w-4 h-4 accent-amber-400"
+                        />
+                      </label>
                     </div>
+
                     {customization.landingPage.hero.showFloatingCard && (
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <input
-                          type="text"
-                          value={customization.landingPage.hero.floatingCardTitle}
-                          onChange={(e) => updateLandingHero({ floatingCardTitle: e.target.value })}
-                          className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                          placeholder="Card Title"
-                        />
-                        <input
-                          type="text"
-                          value={customization.landingPage.hero.floatingCardSubtitle}
-                          onChange={(e) => updateLandingHero({ floatingCardSubtitle: e.target.value })}
-                          className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-                          placeholder="Card Subtitle"
-                        />
+                      <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 space-y-3">
+                        
+                        {/* Quick Presets for Floating Card */}
+                        <div>
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 mb-1.5">
+                            <Clock className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Quick Metric Presets:</span>
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {[
+                              {
+                                title: '99.4% Term Attendance',
+                                subtitle: 'Real-time biometrics & roll call monitoring',
+                                badge: 'ACTIVE',
+                                color: 'emerald' as const
+                              },
+                              {
+                                title: '100% MoE CBC Compliance',
+                                subtitle: 'Automated continuous assessment rubrics',
+                                badge: 'VERIFIED',
+                                color: 'blue' as const
+                              },
+                              {
+                                title: 'Top Academic Transition',
+                                subtitle: '98.7% transition to national universities',
+                                badge: 'EXCELLENCE',
+                                color: 'amber' as const
+                              },
+                              {
+                                title: '24/7 Gate Surveillance',
+                                subtitle: 'Biometric gate passes & parent alerts',
+                                badge: 'SECURE',
+                                color: 'purple' as const
+                              }
+                            ].map((preset, prIdx) => (
+                              <button
+                                key={prIdx}
+                                type="button"
+                                onClick={() => {
+                                  updateLandingHero({
+                                    floatingCardTitle: preset.title,
+                                    floatingCardSubtitle: preset.subtitle,
+                                    floatingCardBadgeText: preset.badge,
+                                    floatingCardBadgeColor: preset.color
+                                  });
+                                  triggerToast(`Applied "${preset.title}" floating card preset!`);
+                                }}
+                                className="text-left p-2 rounded-lg bg-slate-950 hover:bg-amber-400/10 border border-slate-800 hover:border-amber-400/40 transition-all text-xs cursor-pointer group"
+                              >
+                                <div className="font-extrabold text-amber-300 group-hover:text-amber-200 truncate flex items-center justify-between">
+                                  <span>{preset.title}</span>
+                                  <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded font-mono text-slate-300">
+                                    {preset.badge}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                                  {preset.subtitle}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Title and Subtitle inputs */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                              Card Headline / KPI Title
+                            </label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.floatingCardTitle}
+                              onChange={(e) => updateLandingHero({ floatingCardTitle: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-black"
+                              placeholder="e.g. 99.4% Term Attendance"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                              Card Subtitle / Description
+                            </label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.floatingCardSubtitle}
+                              onChange={(e) => updateLandingHero({ floatingCardSubtitle: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                              placeholder="e.g. Real-time biometrics & roll call monitoring"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Badge Text and Badge Color */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                              Status Pill Badge Label
+                            </label>
+                            <input
+                              type="text"
+                              value={customization.landingPage.hero.floatingCardBadgeText || 'ACTIVE'}
+                              onChange={(e) => updateLandingHero({ floatingCardBadgeText: e.target.value.toUpperCase() })}
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-mono font-bold uppercase tracking-wider"
+                              placeholder="e.g. ACTIVE"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                              Badge Pill Color Theme
+                            </label>
+                            <select
+                              value={customization.landingPage.hero.floatingCardBadgeColor || 'emerald'}
+                              onChange={(e) => updateLandingHero({ floatingCardBadgeColor: e.target.value as any })}
+                              className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-semibold"
+                            >
+                              <option value="emerald">🟢 Emerald Green (e.g. ACTIVE / ONLINE)</option>
+                              <option value="blue">🔵 Royal Blue (e.g. VERIFIED / CERTIFIED)</option>
+                              <option value="amber">🟡 Amber Gold (e.g. SPOTLIGHT / PENDING)</option>
+                              <option value="purple">🟣 Indigo Purple (e.g. AI-POWERED)</option>
+                              <option value="slate">⚪ Classic Slate (e.g. OFFICIAL)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Save & Retain Floating Card button */}
+                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                          <div className="text-[10px] text-slate-400">
+                            Saved values update the live banner overlay and are retained across sessions.
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSaveHeroSettings}
+                            className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+                          >
+                            <Save className="w-3.5 h-3.5 text-slate-950" />
+                            <span>Save Floating Card</span>
+                          </button>
+                        </div>
+
                       </div>
                     )}
                   </div>
@@ -1068,9 +1457,10 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                       videoMuted={customization.landingPage.hero.videoMuted}
                       videoLoop={customization.landingPage.hero.videoLoop}
                       videoShowControls={customization.landingPage.hero.videoShowControls}
-                      maxDurationSeconds={customization.landingPage.hero.videoMaxDuration || 30}
                       floatingCardTitle={customization.landingPage.hero.floatingCardTitle}
                       floatingCardSubtitle={customization.landingPage.hero.floatingCardSubtitle}
+                      floatingCardBadgeText={customization.landingPage.hero.floatingCardBadgeText || 'ACTIVE'}
+                      floatingCardBadgeColor={customization.landingPage.hero.floatingCardBadgeColor || 'emerald'}
                       showFloatingCard={customization.landingPage.hero.showFloatingCard}
                       className="!h-64 !border-2 !border-slate-200"
                     />
@@ -2241,6 +2631,185 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                     placeholder="e.g. Annual Sports Day this Friday · Early departure for day scholars"
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
                   />
+                </div>
+
+                {/* Campus-Specific Hero Headline, Subtitle & Call To Action Customizer */}
+                <div className="pt-4 border-t border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>{currentSchool.name} · Hero Section Copy & CTAs</span>
+                      </h5>
+                      <p className="text-[10px] text-slate-400">
+                        Customize how this specific school's landing page headline, subtitle, and CTA buttons appear.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">Hero Title Headline</label>
+                      <input
+                        type="text"
+                        value={currentSchool.heroTitle || `WELCOME TO ${currentSchool.name.toUpperCase()} PORTAL`}
+                        onChange={(e) => {
+                          updateTenant(currentSchool.id, { heroTitle: e.target.value });
+                        }}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-300 mb-1">Curriculum Badge Text</label>
+                      <input
+                        type="text"
+                        value={currentSchool.curriculumBadgeText || 'COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9'}
+                        onChange={(e) => {
+                          updateTenant(currentSchool.id, { curriculumBadgeText: e.target.value });
+                        }}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Hero Subtitle Quote</label>
+                    <textarea
+                      rows={2}
+                      value={currentSchool.heroSubtitle || `"${currentSchool.motto}" — A secure digital platform connecting learners, teachers, parents and school leadership.`}
+                      onChange={(e) => {
+                        updateTenant(currentSchool.id, { heroSubtitle: e.target.value });
+                      }}
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                      <label className="block text-[11px] font-bold text-emerald-400">Primary Hero Action Button</label>
+                      <input
+                        type="text"
+                        value={currentSchool.heroPrimaryCtaText || 'Access Student Portal App'}
+                        onChange={(e) => updateTenant(currentSchool.id, { heroPrimaryCtaText: e.target.value })}
+                        className="w-full px-3 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-bold"
+                        placeholder="Button Text"
+                      />
+                      <select
+                        value={currentSchool.heroPrimaryCtaAction || 'student'}
+                        onChange={(e) => updateTenant(currentSchool.id, { heroPrimaryCtaAction: e.target.value })}
+                        className="w-full px-3 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                      >
+                        <option value="student">👨‍🎓 Student Portal App</option>
+                        <option value="parent">👨‍👩‍👧 Parent Portal App</option>
+                        <option value="teacher">👩‍🏫 Teacher Workspace</option>
+                        <option value="scroll_grid">📱 Scroll to All Portals Grid</option>
+                      </select>
+                    </div>
+
+                    <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                      <label className="block text-[11px] font-bold text-blue-400">Secondary Hero Action Button</label>
+                      <input
+                        type="text"
+                        value={currentSchool.heroSecondaryCtaText || 'Staff & Parent Portals'}
+                        onChange={(e) => updateTenant(currentSchool.id, { heroSecondaryCtaText: e.target.value })}
+                        className="w-full px-3 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-bold"
+                        placeholder="Button Text"
+                      />
+                      <select
+                        value={currentSchool.heroSecondaryCtaAction || 'school_admin_staff'}
+                        onChange={(e) => updateTenant(currentSchool.id, { heroSecondaryCtaAction: e.target.value })}
+                        className="w-full px-3 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                      >
+                        <option value="school_admin_staff">🏛️ School Secretariat & Admin</option>
+                        <option value="parent">👨‍👩‍👧 Parent Portal App</option>
+                        <option value="teacher">👩‍🏫 Teacher Workspace</option>
+                        <option value="scroll_grid">📱 Scroll to All Portals Grid</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Campus-Specific Floating Highlight Card Overlay */}
+                  <div className="pt-3 border-t border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Floating Highlight Card Overlay for {currentSchool.shortName || currentSchool.name}</span>
+                      </span>
+                      <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={currentSchool.heroShowFloatingCard !== false}
+                          onChange={(e) => updateTenant(currentSchool.id, { heroShowFloatingCard: e.target.checked })}
+                          className="accent-amber-400 rounded"
+                        />
+                        <span>Show Card</span>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Card Title Headline</label>
+                        <input
+                          type="text"
+                          value={currentSchool.heroFloatingCardTitle || `${currentSchool.shortName || currentSchool.name} Digital Campus`}
+                          onChange={(e) => updateTenant(currentSchool.id, { heroFloatingCardTitle: e.target.value })}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-bold"
+                          placeholder="e.g. 99.4% Term Attendance"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Card Subtitle</label>
+                        <input
+                          type="text"
+                          value={currentSchool.heroFloatingCardSubtitle || currentSchool.motto}
+                          onChange={(e) => updateTenant(currentSchool.id, { heroFloatingCardSubtitle: e.target.value })}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                          placeholder="e.g. Real-time biometrics & roll call monitoring"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Status Badge Text</label>
+                        <input
+                          type="text"
+                          value={currentSchool.heroFloatingCardBadgeText || 'ACTIVE'}
+                          onChange={(e) => updateTenant(currentSchool.id, { heroFloatingCardBadgeText: e.target.value.toUpperCase() })}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono font-bold uppercase"
+                          placeholder="e.g. ACTIVE"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Badge Color Theme</label>
+                        <select
+                          value={currentSchool.heroFloatingCardBadgeColor || 'emerald'}
+                          onChange={(e) => updateTenant(currentSchool.id, { heroFloatingCardBadgeColor: e.target.value as any })}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+                        >
+                          <option value="emerald">🟢 Emerald Green (ACTIVE)</option>
+                          <option value="blue">🔵 Royal Blue (VERIFIED)</option>
+                          <option value="amber">🟡 Amber Gold (SPOTLIGHT)</option>
+                          <option value="purple">🟣 Indigo Purple (AI-POWERED)</option>
+                          <option value="slate">⚪ Classic Slate (OFFICIAL)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerToast(`Saved and retained custom Hero Copy & CTAs for ${currentSchool.name}!`);
+                      }}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5 text-slate-950" />
+                      <span>Save & Retain {currentSchool.shortName || currentSchool.name} Hero Settings</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );

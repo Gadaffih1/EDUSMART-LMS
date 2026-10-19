@@ -90,7 +90,13 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
             },
             hero: {
               ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.hero,
-              ...(parsed.landingPage?.hero || {})
+              ...(parsed.landingPage?.hero || {}),
+              heroImageUrl: (!parsed.landingPage?.hero?.heroImageUrl || parsed.landingPage?.hero?.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg')
+                ? '/gad@edusmart.jpeg'
+                : parsed.landingPage.hero.heroImageUrl,
+              heroVideoPoster: (!parsed.landingPage?.hero?.heroVideoPoster || parsed.landingPage?.hero?.heroVideoPoster === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg')
+                ? '/gad@edusmart.jpeg'
+                : parsed.landingPage.hero.heroVideoPoster
             },
             about: {
               ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.about,

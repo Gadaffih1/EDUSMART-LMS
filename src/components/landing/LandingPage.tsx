@@ -694,7 +694,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* Background Image Scrim */}
         <div className="absolute inset-0 z-0 opacity-20">
           <img
-            src="/src/assets/images/edusmart_campus_banner_1790859700873.jpg"
+            src="/gad@edusmart.jpeg"
             alt="EduSmart Campus"
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -827,9 +827,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="w-full max-w-4xl mx-auto mb-8 px-4">
               <HeroBannerMedia
                 mediaType={currentTenant.heroMediaType || (currentTenant.heroVideoUrl ? 'video' : 'image')}
-                imageUrl={currentTenant.heroImageUrl || '/src/assets/images/edusmart_campus_banner_1790859700873.jpg'}
+                imageUrl={currentTenant.heroImageUrl || '/gad@edusmart.jpeg'}
                 videoUrl={currentTenant.heroVideoUrl}
-                posterUrl={currentTenant.heroVideoPoster || currentTenant.heroImageUrl}
+                posterUrl={currentTenant.heroVideoPoster || currentTenant.heroImageUrl || '/gad@edusmart.jpeg'}
                 videoBadgeLabel={currentTenant.heroVideoBadge || '30s Campus Spotlight'}
                 videoAutoplay={true}
                 videoMuted={true}

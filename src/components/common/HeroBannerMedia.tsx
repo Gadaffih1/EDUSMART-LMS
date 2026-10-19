@@ -153,7 +153,7 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
 
   const progressPercent = Math.min(100, Math.max(0, (currentTime / (duration || maxDurationSeconds)) * 100));
 
-  const fallbackImageSrc = posterUrl || imageUrl || '/src/assets/images/edusmart_campus_banner_1790859700873.jpg';
+  const fallbackImageSrc = posterUrl || imageUrl || '/gad@edusmart.jpeg';
 
   const isVideoMode = mediaType === 'video' && Boolean(videoUrl) && !videoError;
 
@@ -257,7 +257,7 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
             alt={altText}
             className="w-full h-full object-cover object-center transform group-hover/hero-media:scale-[1.03] transition-transform duration-700"
             onError={(e) => {
-              (e.target as HTMLImageElement).src = '/src/assets/images/edusmart_campus_banner_1790859700873.jpg';
+              (e.target as HTMLImageElement).src = '/gad@edusmart.jpeg';
             }}
           />
 

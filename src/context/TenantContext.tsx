@@ -18,7 +18,14 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           return parsed.map((item: Tenant) => {
             const initialMatch = INITIAL_TENANTS.find(it => it.id === item.id);
             if (initialMatch) {
-              return { ...initialMatch, ...item };
+              const merged = { ...initialMatch, ...item };
+              if (merged.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg') {
+                merged.heroImageUrl = '/gad@edusmart.jpeg';
+              }
+              if (merged.heroVideoPoster === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg') {
+                merged.heroVideoPoster = '/gad@edusmart.jpeg';
+              }
+              return merged;
             }
             return item;
           });

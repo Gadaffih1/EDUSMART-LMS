@@ -600,7 +600,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             {/* Campus Background Photo with Subtle Dark Gradient */}
             <div className="absolute inset-0">
               <img
-                src="/src/assets/images/edusmart_campus_banner_1790859700873.jpg"
+                src={currentTenant.heroImageUrl || "/gad@edusmart.jpeg"}
                 alt={`${currentTenant.name} Campus Grounds`}
                 className="w-full h-full object-cover object-center opacity-30"
               />

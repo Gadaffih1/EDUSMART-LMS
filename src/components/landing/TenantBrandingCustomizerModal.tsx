@@ -82,7 +82,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     primaryColorHex: currentTenant.primaryColorHex || '#1e3a8a',
     accentColorHex: currentTenant.accentColorHex || '#fbbf24',
     heroMediaType: currentTenant.heroMediaType || 'image',
-    heroImageUrl: currentTenant.heroImageUrl || '/src/assets/images/edusmart_campus_banner_1790859700873.jpg',
+    heroImageUrl: currentTenant.heroImageUrl || '/gad@edusmart.jpeg',
     heroVideoUrl: currentTenant.heroVideoUrl || '',
     heroVideoPoster: currentTenant.heroVideoPoster || '',
     heroVideoBadge: currentTenant.heroVideoBadge || '30s Campus Tour',
@@ -1140,9 +1140,9 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                   <div className="w-full max-w-2xl mt-6">
                     <HeroBannerMedia
                       mediaType={formData.heroMediaType || 'image'}
-                      imageUrl={formData.heroImageUrl || '/src/assets/images/edusmart_campus_banner_1790859700873.jpg'}
+                      imageUrl={formData.heroImageUrl || '/gad@edusmart.jpeg'}
                       videoUrl={formData.heroVideoUrl}
-                      posterUrl={formData.heroVideoPoster || formData.heroImageUrl}
+                      posterUrl={formData.heroVideoPoster || formData.heroImageUrl || '/gad@edusmart.jpeg'}
                       videoBadgeLabel={formData.heroVideoBadge || '30s Campus Tour'}
                       videoAutoplay={true}
                       videoMuted={true}

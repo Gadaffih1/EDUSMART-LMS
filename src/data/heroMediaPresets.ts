@@ -23,7 +23,7 @@ export const HERO_VIDEO_PRESETS: HeroVideoPreset[] = [
     durationLabel: '22 sec',
     durationSeconds: 22,
     url: 'https://assets.mixkit.co/videos/preview/mixkit-students-in-a-classroom-with-their-teacher-41147-large.mp4',
-    poster: '/src/assets/images/edusmart_campus_banner_1790859700873.jpg',
+    poster: '/gad@edusmart.jpeg',
     category: 'classroom',
     description: 'Teacher mentoring enthusiastic learners with interactive digital board'
   },
@@ -70,6 +70,12 @@ export const HERO_VIDEO_PRESETS: HeroVideoPreset[] = [
 ];
 
 export const HERO_IMAGE_PRESETS: HeroImagePreset[] = [
+  {
+    id: 'img-gadaffih-smartboard',
+    label: 'Mr. Gadaffih & Interactive Smart Board (Official)',
+    url: '/gad@edusmart.jpeg',
+    description: 'Teacher Mr. Gadaffih and learners with interactive EduSmart smart board and tablets'
+  },
   {
     id: 'img-campus-aerial',
     label: 'Campus Aerial & Grounds',

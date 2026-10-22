@@ -372,8 +372,11 @@ export const PhetSimulationsHub: React.FC<PhetSimulationsHubProps> = ({
               {selectedSim.nativeEngineType === 'energy_skate' && (
                 <ClassicEnergySkateParkPhET onRecordObservation={handleLogObservation} />
               )}
+              {selectedSim.nativeEngineType === 'wave_on_string' && (
+                <ClassicWaveOnStringPhET onRecordObservation={handleLogObservation} />
+              )}
               {/* Fallback for other simulation types: seamless embedded PhET */}
-              {!['circuits', 'ph_scale', 'forces_motion', 'bending_light', 'energy_skate'].includes(selectedSim.nativeEngineType) && (
+              {!['circuits', 'ph_scale', 'forces_motion', 'bending_light', 'energy_skate', 'wave_on_string'].includes(selectedSim.nativeEngineType) && (
                 <div className="relative w-full h-[580px] bg-slate-950">
                   <iframe
                     src={selectedSim.phetUrl}

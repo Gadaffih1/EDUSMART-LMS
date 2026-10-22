@@ -827,9 +827,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="w-full max-w-4xl mx-auto mb-8 px-4">
               <HeroBannerMedia
                 mediaType={currentTenant.heroMediaType || (currentTenant.heroVideoUrl ? 'video' : 'image')}
-                imageUrl={currentTenant.heroImageUrl || '/gad@edusmart.jpeg'}
+                imageUrl={currentTenant.heroImageUrl || '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'}
                 videoUrl={currentTenant.heroVideoUrl}
-                posterUrl={currentTenant.heroVideoPoster || currentTenant.heroImageUrl || '/gad@edusmart.jpeg'}
+                posterUrl={currentTenant.heroVideoPoster || currentTenant.heroImageUrl || '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'}
                 videoBadgeLabel={currentTenant.heroVideoBadge || '30s Campus Spotlight'}
                 videoAutoplay={true}
                 videoMuted={true}

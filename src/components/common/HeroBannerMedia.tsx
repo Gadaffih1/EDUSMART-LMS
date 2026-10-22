@@ -49,7 +49,7 @@ const DEFAULT_IMAGE_PRESETS = [
   {
     id: 'gadaffih-smartboard',
     label: 'Mr. Gadaffih & CBC Classroom (Official)',
-    url: '/gad@edusmart.jpeg',
+    url: '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg',
     description: 'Teacher Mr. Gadaffih guiding learners with smart board and tablets'
   },
   {
@@ -112,7 +112,7 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
   // In-context image customizer state
   const [isCustomizerOpen, setIsCustomizerOpen] = useState<boolean>(false);
   const [customUrlInput, setCustomUrlInput] = useState<string>('');
-  const [currentImage, setCurrentImage] = useState<string>(imageUrl || '/gad@edusmart.jpeg');
+  const [currentImage, setCurrentImage] = useState<string>(imageUrl || '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg');
   const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
 
   // Keep internal image synchronized with prop
@@ -208,7 +208,7 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
 
   const progressPercent = Math.min(100, Math.max(0, (currentTime / (duration || maxDurationSeconds)) * 100));
 
-  const fallbackImageSrc = posterUrl || currentImage || '/gad@edusmart.jpeg';
+  const fallbackImageSrc = posterUrl || currentImage || '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg';
   const isVideoMode = mediaType === 'video' && Boolean(videoUrl) && !videoError;
 
   // Image customization handlers - Restricted to Super Admin
@@ -409,7 +409,7 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
         </div>
       ) : (
         /* Image Mode: Clean, Unobstructed, Customizable */
-        <div className="relative w-full h-[21rem] sm:h-[28rem] lg:h-[30rem] bg-slate-950 overflow-hidden">
+        <div className="relative w-full aspect-[3/2] bg-slate-950 overflow-hidden">
           <img
             src={fallbackImageSrc}
             alt={altText}

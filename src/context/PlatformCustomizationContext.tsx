@@ -21,7 +21,7 @@ import {
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 import { SyncEngine } from '../utils/syncEngine';
 
-const STORAGE_KEY = 'edusmart_platform_customization_v5';
+const STORAGE_KEY = 'edusmart_platform_customization_v6';
 
 interface PlatformCustomizationContextType {
   customization: PlatformCustomizationState;
@@ -91,11 +91,12 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
             hero: {
               ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.hero,
               ...(parsed.landingPage?.hero || {}),
-              heroImageUrl: (!parsed.landingPage?.hero?.heroImageUrl || parsed.landingPage?.hero?.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg')
-                ? '/gad@edusmart.jpeg'
+              mediaType: parsed.landingPage?.hero?.mediaType === 'video' ? 'image' : (parsed.landingPage?.hero?.mediaType || 'image'),
+              heroImageUrl: (!parsed.landingPage?.hero?.heroImageUrl || parsed.landingPage?.hero?.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg' || parsed.landingPage?.hero?.heroImageUrl === '/gad@edusmart.jpeg')
+                ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
                 : parsed.landingPage.hero.heroImageUrl,
               heroVideoPoster: (!parsed.landingPage?.hero?.heroVideoPoster || parsed.landingPage?.hero?.heroVideoPoster === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg')
-                ? '/gad@edusmart.jpeg'
+                ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
                 : parsed.landingPage.hero.heroVideoPoster
             },
             about: {

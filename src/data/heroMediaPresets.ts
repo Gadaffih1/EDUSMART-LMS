@@ -73,7 +73,7 @@ export const HERO_IMAGE_PRESETS: HeroImagePreset[] = [
   {
     id: 'img-gadaffih-smartboard',
     label: 'Mr. Gadaffih & Interactive Smart Board (Official)',
-    url: '/gad@edusmart.jpeg',
+    url: '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg',
     description: 'Teacher Mr. Gadaffih and learners with interactive EduSmart smart board and tablets'
   },
   {

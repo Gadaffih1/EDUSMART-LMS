@@ -926,9 +926,9 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   {/* Main Hero Banner: High-Res Image or 30-sec Video Showcase */}
                   <HeroBannerMedia
                     mediaType={hero.mediaType || 'image'}
-                    imageUrl={hero.heroImageUrl || "/gad@edusmart.jpeg"}
+                    imageUrl={hero.heroImageUrl || "/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg"}
                     videoUrl={hero.heroVideoUrl}
-                    posterUrl={hero.heroVideoPoster || hero.heroImageUrl || "/gad@edusmart.jpeg"}
+                    posterUrl={hero.heroVideoPoster || hero.heroImageUrl || "/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg"}
                     videoBadgeLabel={hero.videoBadgeLabel}
                     videoAutoplay={hero.videoAutoplay}
                     videoMuted={hero.videoMuted}

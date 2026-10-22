@@ -559,10 +559,71 @@ function mergeKey(key: string, rows: any[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Server Database Persistence Bridge (Express /api/sync/*)
+// Guarantees data synchronization and retention even without external Supabase
+// ---------------------------------------------------------------------------
+async function pushToServerDatabase(key: string, data: any): Promise<boolean> {
+  try {
+    const res = await fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        collection: key,
+        records: data,
+        tenantId: activeTenantId,
+        userId: activeIdentity,
+      }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[sync] pushToServerDatabase error for', key, err);
+    return false;
+  }
+}
+
+async function hydrateFromServerDatabase(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/sync/all');
+    if (!res.ok) return false;
+    const body = await res.json();
+    if (body.collections && typeof body.collections === 'object') {
+      for (const [key, val] of Object.entries(body.collections)) {
+        if (registered.has(key)) {
+          const currentLocal = readLocal(key);
+          if (currentLocal === undefined && val !== undefined) {
+            writeLocal(key, val);
+          } else if (Array.isArray(val) && Array.isArray(currentLocal)) {
+            // Merge records: if server has extra records not in local, add them
+            const localIdSet = new Set(currentLocal.map((r: any) => r?.id));
+            let added = false;
+            const merged = [...currentLocal];
+            for (const r of (val as any[])) {
+              if (r?.id && !localIdSet.has(r.id)) {
+                merged.push(r);
+                localIdSet.add(r.id);
+                added = true;
+              }
+            }
+            if (added) {
+              writeLocal(key, merged);
+              dispatchDataChange(key);
+            }
+          }
+        }
+      }
+      return true;
+    }
+  } catch (err) {
+    console.warn('[sync] hydrateFromServerDatabase error', err);
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Push / pull orchestration
 // ---------------------------------------------------------------------------
 async function flushDirty(): Promise<void> {
-  if (!hydrated || !supabase || flushing || missingTable) return;
+  if (flushing) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     setStatus('offline');
     return;
@@ -577,7 +638,19 @@ async function flushDirty(): Promise<void> {
     for (const key of pending) {
       if (!dirty.has(key)) continue; // newer edit re-queued it
       try {
-        await flushKey(key);
+        // 1. Always push to server-side persistent database
+        const local = readLocal(key);
+        if (local !== undefined) {
+          await pushToServerDatabase(key, local);
+        }
+
+        // 2. Push to Supabase if configured and hydrated
+        if (supabase && hydrated && !missingTable) {
+          await flushKey(key);
+        } else {
+          dirty.delete(key);
+          saveJSON(DIRTY_KEY, [...dirty]);
+        }
       } catch (e) {
         failed = true;
         console.warn('[sync] push failed for', key, e);
@@ -722,8 +795,13 @@ export const SyncEngine = {
   /** Pull remote data, merge, then push local changes. Awaited before first render. */
   async hydrate(): Promise<void> {
     if (hydrated) return;
+
+    // 1. First hydrate from local persistent server database
+    await hydrateFromServerDatabase();
+
     if (!supabase) {
-      setStatus('disabled');
+      hydrated = true;
+      setStatus('idle');
       return;
     }
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();

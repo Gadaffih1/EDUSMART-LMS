@@ -37,7 +37,24 @@ export function resolveSchoolUserAndTenant(
     return { user: superAdmin, expectedPassword: 'admin2026', tenant: defaultTenant };
   }
 
-  // 2. Search registered Tenant Schools
+  // 2. Check explicitly stored user accounts in Storage first (User Registration & Data Retention)
+  const storedUsers = Storage.getUsers();
+  const matchedStored = storedUsers.find(u =>
+    (u.email && u.email.toLowerCase() === cleanIdent) ||
+    (u.name && u.name.toLowerCase() === cleanIdent) ||
+    (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
+  );
+  if (matchedStored) {
+    const schoolId = matchedStored.schoolId || 'tenant-riara';
+    const tenant = allTenants.find(t => t.id === schoolId) || allTenants[0];
+    return {
+      user: { ...matchedStored, schoolId: tenant.id },
+      expectedPassword: matchedStored.password || 'admin2026',
+      tenant
+    };
+  }
+
+  // 3. Search registered Tenant Schools
   for (const tenant of allTenants) {
     const tenantEmail = (tenant.email || '').toLowerCase().trim();
     const tenantDomain = (tenant.domain || '').toLowerCase().trim();
@@ -45,7 +62,7 @@ export function resolveSchoolUserAndTenant(
     const schoolSlug = tenant.shortName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const schoolCode = (tenant.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // 2a. Direct match on school's official administrative/contact email
+    // 3a. Direct match on school's official administrative/contact email
     if (tenantEmail && tenantEmail === cleanIdent) {
       const tenantAdmin: User = {
         id: `usr-admin-${tenant.id}`,
@@ -58,7 +75,7 @@ export function resolveSchoolUserAndTenant(
       return { user: tenantAdmin, expectedPassword: 'admin2026', tenant };
     }
 
-    // 2b. Check tenant roster generated specifically for this school
+    // 3b. Check tenant roster generated specifically for this school
     const tenantUsers = createTenantUsers(tenant);
     const matchedTenantUser = tenantUsers.find(u =>
       (u.email && u.email.toLowerCase() === cleanIdent) ||
@@ -129,23 +146,6 @@ export function resolveSchoolUserAndTenant(
         };
       }
     }
-  }
-
-  // 3. Check locally stored users in Storage
-  const storedUsers = Storage.getUsers();
-  const matchedStored = storedUsers.find(u =>
-    (u.email && u.email.toLowerCase() === cleanIdent) ||
-    (u.name && u.name.toLowerCase() === cleanIdent) ||
-    (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
-  );
-  if (matchedStored) {
-    const schoolId = matchedStored.schoolId || 'tenant-riara';
-    const tenant = allTenants.find(t => t.id === schoolId) || allTenants[0];
-    return {
-      user: { ...matchedStored, schoolId: tenant.id },
-      expectedPassword: matchedStored.password || 'admin2026',
-      tenant
-    };
   }
 
   // 4. Default Seed Users from INITIAL_USERS (Assigned strictly to Riara School tenant-riara)

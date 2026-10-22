@@ -1,0 +1,21 @@
+{
+  "collections": {
+    "edusmart_users_v1": [
+      {
+        "name": "Demo Test Teacher",
+        "email": "test.teacher@riaraschools.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-riara",
+        "password": "teach2026",
+        "id": "usr-teacher-1792654326346",
+        "isActive": true,
+        "registeredAt": "2026-10-22T07:32:06.346Z"
+      }
+    ]
+  },
+  "metadata": {
+    "initializedAt": "2026-10-22T07:32:06.346Z",
+    "lastUpdatedAt": "2026-10-22T07:32:06.346Z",
+    "totalWrites": 1
+  }
+}

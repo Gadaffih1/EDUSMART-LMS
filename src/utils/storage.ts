@@ -180,6 +180,8 @@ import {
   INITIAL_LESSON_IMAGES,
   INITIAL_E_LINKS
 } from '../data/initialData';
+import { INITIAL_TENANTS } from '../data/tenantsData';
+import { createTenantUsers } from './tenantDataFactory';
 import { SyncEngine } from './syncEngine';
 import { isSupabaseConfigured } from '../lib/supabase';
 
@@ -961,33 +963,93 @@ export const Storage = {
       if (stored.some(user => Object.prototype.hasOwnProperty.call(user, 'password'))) {
         setToStorage(KEYS.USERS, safeUsers);
       }
-      return safeUsers;
+      return tenantId 
+        ? safeUsers.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
+        : safeUsers;
     }
-    // Guarantee that all demo accounts from INITIAL_USERS are actively present in stored users
+
+    // Guarantee that all demo accounts across all schools are actively present in stored users
     let hasMissing = false;
     const existingIds = new Set(stored.map(u => u.id));
     const existingEmails = new Set(stored.map(u => u.email.toLowerCase()));
     const merged = [...stored];
 
+    // 1. Seed Riara School demo accounts
     for (const initUser of INITIAL_USERS) {
-      if (!existingIds.has(initUser.id) && !existingEmails.has(initUser.email.toLowerCase())) {
-        merged.push(initUser);
-        existingIds.add(initUser.id);
-        existingEmails.add(initUser.email.toLowerCase());
+      const taggedUser = {
+        ...initUser,
+        schoolId: initUser.schoolId || 'tenant-riara'
+      };
+      if (!existingIds.has(taggedUser.id) && !existingEmails.has(taggedUser.email.toLowerCase())) {
+        merged.push(taggedUser);
+        existingIds.add(taggedUser.id);
+        existingEmails.add(taggedUser.email.toLowerCase());
         hasMissing = true;
+      }
+    }
+
+    // 2. Seed all other school tenants demo accounts (Greenwood, Hillcrest, Sunrise, Westlands, St. Austin's)
+    for (const tenant of INITIAL_TENANTS) {
+      if (tenant.id === 'tenant-riara') continue;
+      const tenantUsers = createTenantUsers(tenant);
+      for (const tUser of tenantUsers) {
+        if (!existingIds.has(tUser.id) && !existingEmails.has(tUser.email.toLowerCase())) {
+          merged.push(tUser);
+          existingIds.add(tUser.id);
+          existingEmails.add(tUser.email.toLowerCase());
+          hasMissing = true;
+        }
       }
     }
 
     if (hasMissing) {
       setToStorage(KEYS.USERS, merged);
     }
+
+    if (tenantId) {
+      return merged.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'));
+    }
     return merged;
   },
+
   addUser(user: User): void {
     const users = this.getUsers();
-    users.push(user);
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    const existingIdx = users.findIndex(
+      u => u.id === user.id || (u.email && u.email.toLowerCase() === cleanEmail)
+    );
+
+    const completeUser: User = {
+      ...user,
+      email: cleanEmail,
+      schoolId: user.schoolId || 'tenant-riara',
+      isActive: user.isActive !== false
+    };
+
+    if (existingIdx >= 0) {
+      users[existingIdx] = { ...users[existingIdx], ...completeUser };
+    } else {
+      users.push(completeUser);
+    }
+
     setToStorage(KEYS.USERS, users);
+
+    // Synchronize newly created user account directly to server database
+    try {
+      fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: completeUser })
+      }).catch(err => {
+        console.warn('[storage] Background server database user register notice:', err);
+      });
+    } catch {
+      // Browser offline or non-blocking
+    }
+
+    window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
   },
+
   updateUser(id: string, updates: Partial<User>): User | null {
     const users = this.getUsers();
     const idx = users.findIndex(u => u.id === id);
@@ -1021,12 +1083,24 @@ export const Storage = {
     const cleanEmail = email.trim().toLowerCase();
     const userInStorage = this.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
     if (userInStorage) return userInStorage;
-    // Guaranteed fallback directly to INITIAL_USERS so it can NEVER fail even if cache is stale
+
+    // Fallback: search Riara initial users
     const userInInitial = INITIAL_USERS.find(u => u.email.toLowerCase() === cleanEmail);
     if (userInInitial) {
       this.addUser(userInInitial);
       return userInInitial;
     }
+
+    // Fallback: search all school tenants demo users
+    for (const tenant of INITIAL_TENANTS) {
+      const tenantUsers = createTenantUsers(tenant);
+      const match = tenantUsers.find(u => u.email.toLowerCase() === cleanEmail);
+      if (match) {
+        this.addUser(match);
+        return match;
+      }
+    }
+
     return undefined;
   },
 

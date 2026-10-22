@@ -298,6 +298,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       email: newEmail.trim().toLowerCase(),
       password: newPassword || (newRole === 'student' ? `GR${newGrade}@2026` : 'pass2026'),
       role: newRole,
+      schoolId: currentTenant?.id || 'tenant-riara',
+      isActive: true,
       grade: ['student', 'class_teacher'].includes(newRole) ? newGrade : undefined,
       stream: ['student', 'class_teacher'].includes(newRole) ? newStream : undefined,
       department: newRole === 'hod' ? newDepartment : undefined,

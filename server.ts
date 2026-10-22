@@ -43,6 +43,8 @@ async function startServer() {
 
   app.use(express.json());
 
+  const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
+
   // Health and readiness check endpoints for container orchestrators, load balancers, and Cloud Run
   const healthHandler = (_req: Request, res: Response) => {
     res.status(200).json({
@@ -61,6 +63,215 @@ async function startServer() {
   app.get('/healthz', healthHandler);
   app.get('/livez', healthHandler);
   app.get('/readyz', healthHandler);
+
+  // =========================================================================
+  // PERSISTENT DATABASE STORAGE & SYNC ENGINE BACKEND
+  // Provides disk-backed database persistence and synchronization for all LMS
+  // records, user accounts, and activity data.
+  // =========================================================================
+  const dbDir = path.resolve(rootDir, 'data');
+  const dbFile = path.resolve(dbDir, 'server_db.json');
+
+  // Ensure database directory exists
+  if (!fs.existsSync(dbDir)) {
+    try {
+      fs.mkdirSync(dbDir, { recursive: true });
+    } catch (e) {
+      console.warn('Could not create data directory:', e);
+    }
+  }
+
+  interface ServerDb {
+    collections: Record<string, any>;
+    metadata: {
+      initializedAt: string;
+      lastUpdatedAt: string;
+      totalWrites: number;
+    };
+  }
+
+  function readServerDb(): ServerDb {
+    try {
+      if (fs.existsSync(dbFile)) {
+        const raw = fs.readFileSync(dbFile, 'utf-8');
+        return JSON.parse(raw);
+      }
+    } catch (err) {
+      console.warn('Error reading server_db.json, reinitializing:', err);
+    }
+    return {
+      collections: {},
+      metadata: {
+        initializedAt: new Date().toISOString(),
+        lastUpdatedAt: new Date().toISOString(),
+        totalWrites: 0,
+      },
+    };
+  }
+
+  function writeServerDb(db: ServerDb): void {
+    try {
+      db.metadata.lastUpdatedAt = new Date().toISOString();
+      db.metadata.totalWrites = (db.metadata.totalWrites || 0) + 1;
+      const tmpFile = `${dbFile}.tmp`;
+      fs.writeFileSync(tmpFile, JSON.stringify(db, null, 2), 'utf-8');
+      fs.renameSync(tmpFile, dbFile);
+    } catch (err) {
+      console.error('Error writing server_db.json:', err);
+    }
+  }
+
+  // 1. Database Push / Synchronize Endpoint
+  app.post('/api/sync/push', (req: Request, res: Response) => {
+    try {
+      const { collection, records, tenantId = null, userId = null } = req.body;
+      if (!collection) {
+        return res.status(400).json({ error: 'collection name is required' });
+      }
+
+      const db = readServerDb();
+      const existing = db.collections[collection];
+
+      if (Array.isArray(records)) {
+        if (Array.isArray(existing)) {
+          // Merge items by id
+          const idMap = new Map<string, any>();
+          existing.forEach((item: any, idx: number) => {
+            const key = item?.id ? String(item.id) : `idx-${idx}`;
+            idMap.set(key, item);
+          });
+          records.forEach((item: any, idx: number) => {
+            const key = item?.id ? String(item.id) : `idx-${idx}`;
+            idMap.set(key, item);
+          });
+          db.collections[collection] = Array.from(idMap.values());
+        } else {
+          db.collections[collection] = records;
+        }
+      } else {
+        db.collections[collection] = records;
+      }
+
+      writeServerDb(db);
+
+      return res.json({
+        success: true,
+        collection,
+        tenantId,
+        userId,
+        count: Array.isArray(records) ? records.length : 1,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error('Error in /api/sync/push:', err);
+      return res.status(500).json({ error: 'Failed to push data to database', message: err?.message });
+    }
+  });
+
+  // 2. Database Pull / Synchronize Single Collection Endpoint
+  app.get('/api/sync/pull', (req: Request, res: Response) => {
+    try {
+      const collection = req.query.collection as string;
+      if (!collection) {
+        return res.status(400).json({ error: 'collection parameter is required' });
+      }
+
+      const db = readServerDb();
+      const data = db.collections[collection] ?? null;
+
+      return res.json({
+        success: true,
+        collection,
+        data,
+        timestamp: db.metadata.lastUpdatedAt,
+      });
+    } catch (err: any) {
+      console.error('Error in /api/sync/pull:', err);
+      return res.status(500).json({ error: 'Failed to pull from database', message: err?.message });
+    }
+  });
+
+  // 3. Database Pull All Collections (Fast Hydration on Boot)
+  app.get('/api/sync/all', (_req: Request, res: Response) => {
+    try {
+      const db = readServerDb();
+      return res.json({
+        success: true,
+        collections: db.collections,
+        totalCollections: Object.keys(db.collections).length,
+        timestamp: db.metadata.lastUpdatedAt,
+      });
+    } catch (err: any) {
+      console.error('Error in /api/sync/all:', err);
+      return res.status(500).json({ error: 'Failed to pull database collections', message: err?.message });
+    }
+  });
+
+  // 4. Database User Account Registration & Persistence Endpoint
+  app.post('/api/auth/register', (req: Request, res: Response) => {
+    try {
+      const { user } = req.body;
+      if (!user || !user.email || !user.name || !user.role) {
+        return res.status(400).json({ error: 'Missing required user registration fields (name, email, role)' });
+      }
+
+      const cleanEmail = String(user.email).trim().toLowerCase();
+      const db = readServerDb();
+      const usersCollection = 'edusmart_users_v1';
+      let users: any[] = Array.isArray(db.collections[usersCollection]) ? db.collections[usersCollection] : [];
+
+      const existingIndex = users.findIndex(
+        (u: any) => u.email && u.email.toLowerCase() === cleanEmail
+      );
+
+      const registeredUser = {
+        ...user,
+        email: cleanEmail,
+        id: user.id || `usr-${user.role}-${Date.now()}`,
+        schoolId: user.schoolId || 'tenant-riara',
+        isActive: true,
+        registeredAt: new Date().toISOString(),
+      };
+
+      if (existingIndex >= 0) {
+        users[existingIndex] = { ...users[existingIndex], ...registeredUser };
+      } else {
+        users.push(registeredUser);
+      }
+
+      db.collections[usersCollection] = users;
+      writeServerDb(db);
+
+      return res.json({
+        success: true,
+        user: registeredUser,
+        message: 'User account registered and synchronized to database successfully.',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      console.error('Error in /api/auth/register:', err);
+      return res.status(500).json({ error: 'Failed to register user account', message: err?.message });
+    }
+  });
+
+  // 5. Database Sync Engine Health & Telemetry Status
+  app.get('/api/sync/status', (_req: Request, res: Response) => {
+    try {
+      const db = readServerDb();
+      const collectionNames = Object.keys(db.collections);
+      return res.json({
+        status: 'connected',
+        persistence: 'server-json-database',
+        databaseFile: dbFile,
+        totalCollections: collectionNames.length,
+        collections: collectionNames,
+        lastUpdatedAt: db.metadata.lastUpdatedAt,
+        totalWrites: db.metadata.totalWrites,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed to check database status', message: err?.message });
+    }
+  });
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API
   app.post('/api/quiz-explanation', async (req: Request, res: Response) => {
@@ -505,7 +716,6 @@ Core rules:
     }
   });
 
-  const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
   const distPath = path.resolve(rootDir, 'dist');
   const indexHtmlPath = path.resolve(distPath, 'index.html');
   const isProd = process.env.NODE_ENV === 'production';

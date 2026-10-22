@@ -41,6 +41,8 @@ export interface HeroBannerMediaProps {
   isSuperAdminEditMode?: boolean;
   onEditClick?: () => void;
   onImageChange?: (newImageUrl: string) => void;
+  onAccessClick?: () => void;
+  isSubscribed?: boolean;
   className?: string;
   altText?: string;
 }
@@ -97,6 +99,8 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
   isSuperAdminEditMode = false,
   onEditClick,
   onImageChange,
+  onAccessClick,
+  isSubscribed = false,
   className = '',
   altText = 'EduSmart School Campus & CBC Learners'
 }) => {
@@ -280,9 +284,35 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
             </div>
           </div>
 
-          {/* Right: Pulsating Live Sync Badge + Quick Image Customizer Button */}
+          {/* Right: Subscription Access Status & Live Sync Badge */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 sm:px-3 py-1 rounded-full shadow-xs border ${
+            {/* Public Access Subscription Trigger Button */}
+            <button
+              type="button"
+              onClick={onAccessClick}
+              className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                isSubscribed
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white border border-emerald-300'
+                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 border border-amber-300'
+              }`}
+              title={isSubscribed ? "Active Subscription Pass: Click to enter interactive smart classroom" : "Public access via landing page is only available after subscription. Click to subscribe."}
+            >
+              {isSubscribed ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                  <span>Enter Smart Classroom</span>
+                  <span className="text-[9px] bg-white/20 text-white font-mono px-1.5 py-0.5 rounded-full">Pass Active</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Subscribe to Access</span>
+                  <span className="text-[9px] bg-slate-950/20 text-slate-950 font-bold px-1.5 py-0.5 rounded-full uppercase">Pass</span>
+                </>
+              )}
+            </button>
+
+            <span className={`inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2 sm:px-2.5 py-1 rounded-full shadow-xs border ${
               floatingCardBadgeColor === 'blue'
                 ? 'text-blue-300 bg-blue-950/80 border-blue-500/40'
                 : floatingCardBadgeColor === 'amber'
@@ -308,14 +338,12 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCustomizerOpen(true)}
-                className="px-2.5 py-1 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-black flex items-center gap-1.5 shadow-md border border-amber-300 transition-all cursor-pointer"
+                className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-amber-300 text-[11px] font-black flex items-center gap-1.5 shadow-md border border-amber-400/40 transition-all cursor-pointer"
                 title="Super Admin: Customize Hero Banner Image"
                 aria-label="Customize Hero Image (Super Admin)"
               >
-                <ShieldCheck className="w-3 h-3 text-slate-950" />
-                <Camera className="w-3 h-3 text-slate-950" />
+                <ShieldCheck className="w-3 h-3 text-amber-400" />
                 <span className="hidden sm:inline">Change Photo</span>
-                <span className="text-[9px] font-mono uppercase bg-slate-950 text-amber-300 px-1 py-0.5 rounded ml-0.5">Admin</span>
               </button>
             )}
           </div>
@@ -420,7 +448,34 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
           />
 
           {/* Subtle bottom vignette to ensure contrast */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-slate-950/15" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-slate-950/20" />
+
+          {/* Public Access Subscription Status & Launch Pill */}
+          <div className="absolute bottom-3 left-3 z-20">
+            <button
+              type="button"
+              onClick={onAccessClick}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md shadow-xl flex items-center gap-2 transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                isSubscribed
+                  ? 'bg-slate-950/90 hover:bg-slate-900 border border-emerald-400 text-white'
+                  : 'bg-slate-950/90 hover:bg-slate-900 border border-amber-400 text-white'
+              }`}
+            >
+              {isSubscribed ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="font-extrabold text-emerald-300">Smart Classroom Connected</span>
+                  <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full font-mono">Launch →</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-slate-200">Public Access: <strong className="text-amber-300 font-black">Subscription Required</strong></span>
+                  <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Subscribe</span>
+                </>
+              )}
+            </button>
+          </div>
 
           {/* Floating Hover Trigger for Instant Image Change - Strictly Super Admin Only */}
           {isSuperAdminEditMode && (

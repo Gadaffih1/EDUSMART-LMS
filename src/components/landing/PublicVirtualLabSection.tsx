@@ -17,18 +17,23 @@ import {
   Award,
   Check,
   Activity,
-  Code2
+  Code2,
+  Lock
 } from 'lucide-react';
 import { SubscriptionTier, PASS_OPTIONS } from '../virtuallab/VirtualLabSubscriptionModal';
 
 interface PublicVirtualLabSectionProps {
   onOpenTicketModal: (tier?: SubscriptionTier, step?: 'select' | 'checkout' | 'enter_ticket' | 'launch_lab', ticketCode?: string) => void;
   isSuperAdminEditMode?: boolean;
+  hasActiveSubscription?: boolean;
+  activeTicketCode?: string;
 }
 
 export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = ({
   onOpenTicketModal,
-  isSuperAdminEditMode = false
+  isSuperAdminEditMode = false,
+  hasActiveSubscription = false,
+  activeTicketCode = ''
 }) => {
   const [ticketInputCode, setTicketInputCode] = useState('');
   const [quickNotice, setQuickNotice] = useState<string | null>(null);
@@ -37,10 +42,22 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
     e.preventDefault();
     const code = ticketInputCode.trim().toUpperCase();
     if (!code) {
-      setQuickNotice('Please type your ticket number (e.g. VLAB-TICKET-829104 or VLAB-DEMO-2026).');
+      setQuickNotice('Please enter your purchased subscription ticket code (e.g. VLAB-TICKET-829104).');
       return;
     }
-    onOpenTicketModal('term', 'launch_lab', code);
+
+    try {
+      const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
+      const found = stored.find((t: any) => t.ticketId && t.ticketId.toUpperCase() === code);
+      if (found) {
+        onOpenTicketModal('term', 'launch_lab', found.ticketId);
+        setQuickNotice(null);
+      } else {
+        setQuickNotice(`No active subscription found for "${code}". Public access to the laboratory is restricted to subscribers only. Please purchase a pass below.`);
+      }
+    } catch {
+      onOpenTicketModal('term', 'select');
+    }
   };
 
   const SIMULATION_HIGHLIGHTS = [
@@ -107,6 +124,22 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
             Hands-on Kenyan CBC junior secondary & primary STEM experiments, PhET interactive physics apparatus (<span className="text-cyan-300 font-bold">Wave on a String</span>, <span className="text-amber-300 font-bold">Circuit Construction</span>, <span className="text-emerald-300 font-bold">Titration</span>), and Scratch coding. Accessible to homeschoolers, students, and the public through flexible ticketing passes.
           </p>
 
+          {hasActiveSubscription && (
+            <div className="p-3 bg-emerald-950/80 border border-emerald-500/60 rounded-2xl max-w-xl mx-auto flex items-center justify-between gap-3 text-xs text-emerald-200 shadow-xl">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Subscription Active: <strong className="font-mono text-white">{activeTicketCode}</strong></span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenTicketModal('term', 'launch_lab', activeTicketCode)}
+                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-lg transition-all cursor-pointer shadow-sm"
+              >
+                Launch Workspace →
+              </button>
+            </div>
+          )}
+
           {/* Quick Direct Ticket Access Banner */}
           <div className="pt-2 max-w-xl mx-auto">
             <form onSubmit={handleVerifyDirectTicket} className="p-2 sm:p-2.5 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-700 shadow-xl flex flex-col sm:flex-row items-center gap-2">
@@ -135,11 +168,12 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
 
                 <button
                   type="button"
-                  onClick={() => onOpenTicketModal('term', 'launch_lab', 'VLAB-DEMO-2026')}
-                  className="px-3.5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer shrink-0"
-                  title="Launch with Instant Demo Pass"
+                  onClick={() => onOpenTicketModal('term', 'select')}
+                  className="px-3.5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+                  title="Subscribe for Public Access Pass"
                 >
-                  Instant Demo
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Subscribe for Pass</span>
                 </button>
               </div>
             </form>
@@ -184,10 +218,30 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
 
                 <button
                   type="button"
-                  onClick={() => onOpenTicketModal('term', 'launch_lab', 'VLAB-DEMO-2026')}
-                  className="w-full pt-3 border-t border-white/10 flex items-center justify-between text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (hasActiveSubscription && activeTicketCode) {
+                      onOpenTicketModal('term', 'launch_lab', activeTicketCode);
+                    } else {
+                      onOpenTicketModal('term', 'select');
+                    }
+                  }}
+                  className={`w-full pt-3 border-t border-white/10 flex items-center justify-between text-xs font-bold transition-colors cursor-pointer ${
+                    hasActiveSubscription ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-400 hover:text-amber-300'
+                  }`}
                 >
-                  <span>Explore Simulation</span>
+                  <span className="flex items-center gap-1.5">
+                    {hasActiveSubscription ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Launch Simulation (Pass Active)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Subscribe to Unlock</span>
+                      </>
+                    )}
+                  </span>
                   <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
                 </button>
               </div>

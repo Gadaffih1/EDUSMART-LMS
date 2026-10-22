@@ -90,6 +90,7 @@ export interface VirtualLabSubscriptionModalProps {
   initialTier?: SubscriptionTier;
   initialStep?: 'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket';
   initialTicketCode?: string;
+  onSubscriptionSuccess?: (ticketId: string) => void;
 }
 
 export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalProps> = ({
@@ -97,7 +98,8 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
   onClose,
   initialTier = 'term',
   initialStep = 'select',
-  initialTicketCode = ''
+  initialTicketCode = '',
+  onSubscriptionSuccess
 }) => {
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>(initialTier);
   const [step, setStep] = useState<'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket'>(initialStep);
@@ -168,38 +170,41 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
         status: 'active'
       });
       SyncEngine.persistItem('edusmart_vlab_ticket_passes', JSON.stringify(existing));
+      try {
+        localStorage.setItem('edusmart_public_active_ticket', generatedTicketId);
+      } catch {}
+      if (onSubscriptionSuccess) {
+        onSubscriptionSuccess(generatedTicketId);
+      }
     }, 1200);
   };
 
   const handleValidateTicket = (codeToTest?: string) => {
     const raw = (codeToTest || existingTicketInput).trim().toUpperCase();
     if (!raw) {
-      setTicketValidationNotice('Please enter your ticket number (e.g. VLAB-TICKET-829104 or VLAB-DEMO-2026).');
+      setTicketValidationNotice('Please enter your subscription pass or ticket ID (e.g. VLAB-TICKET-829104).');
       return;
     }
 
     const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-    const found = stored.find((t: any) => t.ticketId.toUpperCase() === raw);
+    const found = stored.find((t: any) => t.ticketId && t.ticketId.toUpperCase() === raw);
 
-    // Accept valid stored tickets OR instant demo patterns
-    if (found || raw.startsWith('VLAB-') || raw.startsWith('DEMO-') || raw.includes('TICKET') || raw.includes('DEMO')) {
-      const activeCode = found?.ticketId || raw;
+    if (found) {
+      const activeCode = found.ticketId;
       setTicketNumber(activeCode);
-      if (found?.holderName) setFullName(found.holderName);
-      setTicketDate(found?.issuedAt || new Date().toLocaleString());
+      if (found.holderName) setFullName(found.holderName);
+      setTicketDate(found.issuedAt || new Date().toLocaleString());
+      try {
+        localStorage.setItem('edusmart_public_active_ticket', activeCode);
+      } catch {}
+      if (onSubscriptionSuccess) {
+        onSubscriptionSuccess(activeCode);
+      }
       setStep('launch_lab');
       setTicketValidationNotice(null);
     } else {
-      setTicketValidationNotice(`Ticket "${raw}" not found. You can enter demo code: VLAB-DEMO-2026 or purchase a new pass.`);
+      setTicketValidationNotice(`No active subscription found for "${raw}". Public access to the interactive classroom and laboratory via the landing page is restricted to subscribers only. Please purchase a pass.`);
     }
-  };
-
-  const handleInstantDemoPass = () => {
-    const demoId = `VLAB-DEMO-${Math.floor(1000 + Math.random() * 9000)}`;
-    setTicketNumber(demoId);
-    setFullName('Guest Explorer');
-    setTicketDate(new Date().toLocaleString());
-    setStep('launch_lab');
   };
 
   return (
@@ -322,14 +327,10 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
               <span>Enter Existing Ticket Code</span>
             </button>
 
-            <button
-              type="button"
-              onClick={handleInstantDemoPass}
-              className="ml-auto px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] rounded-lg shadow-xs flex items-center gap-1 cursor-pointer transition-transform active:scale-95"
-            >
-              <Sparkles className="w-3 h-3 text-slate-950" />
-              <span>Instant Free Demo Pass</span>
-            </button>
+            <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 border border-amber-400/40 text-amber-800 rounded-lg text-[11px] font-extrabold">
+              <Lock className="w-3.5 h-3.5 text-amber-600" />
+              <span>Public Access: Subscription Required</span>
+            </div>
           </div>
 
           {/* Body Content */}

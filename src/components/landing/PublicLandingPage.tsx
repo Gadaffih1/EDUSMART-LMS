@@ -234,6 +234,26 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const [virtualLabInitialStep, setVirtualLabInitialStep] = useState<'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket'>('select');
   const [virtualLabTicketCode, setVirtualLabTicketCode] = useState<string>('');
 
+  // Active Public Subscription status tracking
+  const [activePublicTicket, setActivePublicTicket] = useState<string>(() => {
+    try {
+      const active = localStorage.getItem('edusmart_public_active_ticket');
+      if (active) return active;
+      const raw = localStorage.getItem('edusmart_vlab_ticket_passes');
+      if (raw) {
+        const passes = JSON.parse(raw);
+        if (Array.isArray(passes) && passes.length > 0) {
+          return passes[0].ticketId || '';
+        }
+      }
+      return '';
+    } catch {
+      return '';
+    }
+  });
+
+  const hasActivePublicSubscription = Boolean(activePublicTicket);
+
   const handleOpenVirtualLabTicket = (
     tier: SubscriptionTier = 'term', 
     step: 'select' | 'checkout' | 'enter_ticket' | 'launch_lab' = 'select', 
@@ -243,6 +263,14 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     setVirtualLabInitialStep(step);
     setVirtualLabTicketCode(ticketCode);
     setShowVirtualLabModal(true);
+  };
+
+  const handleAccessSmartClassroom = () => {
+    if (hasActivePublicSubscription && activePublicTicket) {
+      handleOpenVirtualLabTicket('term', 'launch_lab', activePublicTicket);
+    } else {
+      handleOpenVirtualLabTicket('term', 'select');
+    }
   };
 
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(false);

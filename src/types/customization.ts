@@ -138,6 +138,7 @@ export interface LandingSectionsVisibility {
   hero: boolean;
   stats: boolean;
   features: boolean;
+  virtuallab?: boolean;
   showcase: boolean;
   about: boolean;
   testimonials: boolean;

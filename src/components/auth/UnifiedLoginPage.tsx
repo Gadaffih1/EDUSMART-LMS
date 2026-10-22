@@ -516,11 +516,20 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
           
           {/* Brand Logo & Title */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center gap-2.5 p-2 px-3 bg-blue-50/80 rounded-2xl border border-blue-100 mb-1">
-              <EduSmartGadsaLogo variant="emblem" size="md" />
+            <div className="inline-flex items-center justify-center gap-2.5 p-2 px-3 bg-white rounded-2xl border border-slate-200 shadow-xs mb-1">
+              <img 
+                src="/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg" 
+                alt="Edu-Smart PORTAL By Gadsa Systems" 
+                className="w-10 h-10 object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/edusmart-portal-logo.jpeg';
+                }}
+              />
               <div className="text-left leading-tight">
-                <span className="font-serif font-black text-blue-950 text-base block">EduSmart LMS</span>
-                <span className="text-[10px] font-mono font-bold text-blue-700 tracking-wider uppercase block">Kenya CBC Multi-Tenant System</span>
+                <span className="font-sans font-black text-blue-950 text-base block">
+                  <span className="text-[#0B3075]">Edu-</span><span className="text-[#F5A623]">Smart</span> <span className="text-[#0B3075] text-xs uppercase font-extrabold ml-1">PORTAL</span>
+                </span>
+                <span className="text-[10px] font-mono font-bold text-slate-500 tracking-wider block">By Gadsa Systems · Multi-Tenant</span>
               </div>
             </div>
 

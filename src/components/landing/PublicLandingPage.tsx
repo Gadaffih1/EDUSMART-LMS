@@ -16,6 +16,7 @@ import {
   MapPin, 
   Building2, 
   Lock, 
+  KeyRound,
   Send,
   HelpCircle,
   Clock,
@@ -50,7 +51,9 @@ import {
   Image as ImageIcon,
   Upload,
   AlertTriangle,
-  Save
+  Save,
+  FlaskConical,
+  Ticket
 } from 'lucide-react';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { useTenant } from '../../context/TenantContext';
@@ -65,6 +68,8 @@ import {
 } from '../../types/customization';
 import { HERO_VIDEO_PRESETS, HERO_IMAGE_PRESETS } from '../../data/heroMediaPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
+import { PublicVirtualLabSection } from './PublicVirtualLabSection';
+import { VirtualLabSubscriptionModal, SubscriptionTier } from '../virtuallab/VirtualLabSubscriptionModal';
 
 interface PublicLandingPageProps {
   onNavigateToLogin: () => void;
@@ -156,6 +161,90 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
   // Visual Editor State
   const [isSuperAdminEditMode, setIsSuperAdminEditMode] = useState<boolean>(false);
+  const [isSuperAdminVerified, setIsSuperAdminVerified] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('edusmart_super_admin_verified') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showSuperAdminAuthModal, setShowSuperAdminAuthModal] = useState<boolean>(false);
+  const [adminPasscode, setAdminPasscode] = useState<string>('');
+  const [showPasscodeText, setShowPasscodeText] = useState<boolean>(false);
+  const [adminEmailInput, setAdminEmailInput] = useState<string>('admin@edusmart.ac.ke');
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
+  const [pendingActionAfterAuth, setPendingActionAfterAuth] = useState<'toggle_edit' | 'hero_edit' | null>(null);
+
+  const requestSuperAdminAccess = (action: 'toggle_edit' | 'hero_edit' = 'toggle_edit') => {
+    if (isSuperAdminVerified) {
+      if (action === 'toggle_edit') {
+        setIsSuperAdminEditMode(prev => !prev);
+      } else if (action === 'hero_edit') {
+        setIsSuperAdminEditMode(true);
+        setActiveEditorSection('hero');
+      }
+    } else {
+      setPendingActionAfterAuth(action);
+      setAdminAuthError(null);
+      setAdminPasscode('');
+      setShowSuperAdminAuthModal(true);
+    }
+  };
+
+  const handleVerifySuperAdmin = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setAdminAuthError(null);
+    const code = adminPasscode.trim();
+
+    // Accepted Super Admin passcodes: 'admin2026', 'superadmin2026', 'gadsa2026'
+    if (code === 'admin2026' || code === 'superadmin2026' || code === 'gadsa2026') {
+      try {
+        sessionStorage.setItem('edusmart_super_admin_verified', 'true');
+      } catch {}
+      setIsSuperAdminVerified(true);
+      setIsSuperAdminEditMode(true);
+      setShowSuperAdminAuthModal(false);
+      setAdminPasscode('');
+
+      if (pendingActionAfterAuth === 'hero_edit') {
+        setActiveEditorSection('hero');
+      }
+
+      setToastMessage('🛡️ Super Admin verified! Hero banner customization is now active.');
+      setTimeout(() => setToastMessage(null), 3500);
+    } else {
+      setAdminAuthError('Invalid passcode. Customization of the hero banner can only be done by Super Admin.');
+    }
+  };
+
+  const handleLockSuperAdmin = () => {
+    try {
+      sessionStorage.removeItem('edusmart_super_admin_verified');
+    } catch {}
+    setIsSuperAdminVerified(false);
+    setIsSuperAdminEditMode(false);
+    setActiveEditorSection(null);
+    setToastMessage('Super Admin mode locked.');
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  // Public Virtual Lab Modal & Ticketing State
+  const [showVirtualLabModal, setShowVirtualLabModal] = useState<boolean>(false);
+  const [virtualLabInitialTier, setVirtualLabInitialTier] = useState<SubscriptionTier>('term');
+  const [virtualLabInitialStep, setVirtualLabInitialStep] = useState<'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket'>('select');
+  const [virtualLabTicketCode, setVirtualLabTicketCode] = useState<string>('');
+
+  const handleOpenVirtualLabTicket = (
+    tier: SubscriptionTier = 'term', 
+    step: 'select' | 'checkout' | 'enter_ticket' | 'launch_lab' = 'select', 
+    ticketCode: string = ''
+  ) => {
+    setVirtualLabInitialTier(tier);
+    setVirtualLabInitialStep(step);
+    setVirtualLabTicketCode(ticketCode);
+    setShowVirtualLabModal(true);
+  };
+
   const [isControlPanelOpen, setIsControlPanelOpen] = useState(false);
   const [activeEditorSection, setActiveEditorSection] = useState<string | null>(null);
   const [expandedFaqId, setExpandedFaqId] = useState<string | null>(faqs[0]?.id || null);
@@ -183,6 +272,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const [isVideoUploading, setIsVideoUploading] = useState<boolean>(false);
 
   const handleHeroVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isSuperAdminVerified) {
+      requestSuperAdminAccess('hero_edit');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -216,7 +309,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           videoBadgeLabel: '30s Custom Showcase'
         });
         setIsVideoUploading(false);
-        setToastMessage(`30s Hero video uploaded successfully (${Math.round(videoDuration)}s)`);
+        setToastMessage(`30s Hero video uploaded successfully by Super Admin (${Math.round(videoDuration)}s)`);
         setTimeout(() => setToastMessage(null), 3500);
       };
       reader.onerror = () => {
@@ -234,6 +327,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   };
 
   const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isSuperAdminVerified) {
+      requestSuperAdminAccess('hero_edit');
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -250,7 +347,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         mediaType: 'image',
         heroImageUrl: base64
       });
-      setToastMessage('Hero banner image updated successfully!');
+      setToastMessage('Hero banner image updated successfully by Super Admin!');
       setTimeout(() => setToastMessage(null), 3000);
     };
     reader.readAsDataURL(file);
@@ -379,23 +476,41 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
             <div className="space-y-3">
             
-            {/* Toggle Live Edit Mode */}
-            <button
-              onClick={() => setIsSuperAdminEditMode(!isSuperAdminEditMode)}
-              className={`w-full justify-center px-3 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                isSuperAdminEditMode
-                  ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-300'
-                  : 'bg-slate-800 text-amber-300 hover:bg-slate-700 border border-slate-700'
-              }`}
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>{isSuperAdminEditMode ? 'Live Edit: ON' : 'Turn On Live Edit'}</span>
-            </button>
+            {/* Toggle Live Edit Mode - Super Admin Access Required */}
+            <div className="space-y-1.5">
+              <button
+                onClick={() => requestSuperAdminAccess('toggle_edit')}
+                className={`w-full justify-center px-3 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                  isSuperAdminEditMode
+                    ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-300'
+                    : 'bg-slate-800 text-amber-300 hover:bg-slate-700 border border-slate-700'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isSuperAdminEditMode ? 'Super Admin Edit: ON' : 'Super Admin Live Edit'}</span>
+              </button>
+              {isSuperAdminVerified && (
+                <button
+                  type="button"
+                  onClick={handleLockSuperAdmin}
+                  className="w-full text-center text-[10px] text-slate-400 hover:text-red-400 cursor-pointer pt-0.5"
+                >
+                  Lock Super Admin Session
+                </button>
+              )}
+            </div>
 
             {/* Quick Section Selector Drawer */}
             <select
               value={activeEditorSection || ''}
-              onChange={(e) => setActiveEditorSection(e.target.value || null)}
+              onChange={(e) => {
+                const target = e.target.value || null;
+                if (target === 'hero' && !isSuperAdminVerified) {
+                  requestSuperAdminAccess('hero_edit');
+                } else {
+                  setActiveEditorSection(target);
+                }
+              }}
               className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
             >
               <option value="">Quick Customize Section...</option>
@@ -403,6 +518,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               <option value="hero">Hero Section</option>
               <option value="stats">Impact & Metrics</option>
               <option value="features">Core Features</option>
+              <option value="virtuallab">Virtual Lab Portal</option>
               <option value="about">About & Mission</option>
               <option value="testimonials">Testimonials & Reviews</option>
               <option value="pricing">Pricing Tiers</option>
@@ -547,15 +663,22 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             
             {/* Logo & Title */}
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-blue-700 to-cyan-600 p-2.5 rounded-2xl border border-white shadow-lg shadow-blue-900/15 flex items-center justify-center">
-                <EduSmartGadsaLogo variant="emblem" size="md" />
+              <div className="bg-white p-1 rounded-2xl border border-slate-200/90 shadow-md flex items-center justify-center shrink-0">
+                <img 
+                  src="/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg" 
+                  alt="Edu-Smart PORTAL By Gadsa Systems" 
+                  className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/edusmart-portal-logo.jpeg';
+                  }}
+                />
               </div>
               <div>
-                <span className="font-sans font-extrabold text-lg tracking-tight text-slate-950 block leading-tight">
-                  {header.brandName || 'EduSmart LMS'}
+                <span className="font-sans font-black text-lg sm:text-xl tracking-tight text-slate-950 block leading-tight">
+                  <span className="text-[#0B3075]">Edu-</span><span className="text-[#F5A623]">Smart</span> <span className="text-[#0B3075] text-xs sm:text-sm uppercase tracking-wider font-extrabold ml-1">PORTAL</span>
                 </span>
-                <span className="text-[10px] font-bold tracking-[0.12em] text-slate-500 uppercase block mt-0.5">
-                  {header.brandSubtitle || 'Multi-Tenant School Platform'}
+                <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.1em] text-slate-500 uppercase block mt-0.5">
+                  By Gadsa Systems · Multi-Tenant LMS
                 </span>
               </div>
             </div>
@@ -575,8 +698,18 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               ))}
             </nav>
 
-            {/* Header Action Button: [ School Login ] */}
+            {/* Header Action Button: [ Virtual Lab Pass | School Login ] */}
             <div className="hidden xl:flex items-center gap-3">
+              <button
+                onClick={() => handleOpenVirtualLabTicket('term', 'select')}
+                className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-900/10 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                title="Access Public Virtual STEM Laboratory via Ticketing"
+              >
+                <FlaskConical className="w-4 h-4 text-emerald-200" />
+                <span>Virtual Lab Pass</span>
+                <span className="text-[10px] bg-white/20 text-white font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider">Public</span>
+              </button>
+
               {header.showRegisterButton && (
                 <button
                   onClick={() => setShowRegisterModal(true)}
@@ -600,8 +733,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             {/* Mobile Menu Toggle */}
             <div className="flex xl:hidden items-center gap-2">
               <button
+                onClick={() => handleOpenVirtualLabTicket('term', 'select')}
+                className="px-2.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1 shadow-sm"
+                title="Virtual Lab"
+              >
+                <FlaskConical className="w-3.5 h-3.5 text-emerald-100" />
+                <span>Lab Pass</span>
+              </button>
+              <button
                 onClick={onNavigateToLogin}
-                className="px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-lg shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 {header.loginButtonLabel}
               </button>
@@ -630,6 +771,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 </button>
               ))}
               <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleOpenVirtualLabTicket('term', 'select');
+                  }}
+                  className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-sm rounded-xl text-center flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <FlaskConical className="w-4 h-4 text-emerald-200" />
+                  <span>Public Virtual Lab & Tickets</span>
+                </button>
                 <button
                   onClick={onNavigateToLogin}
                   className="w-full py-2.5 bg-blue-600 text-white font-bold text-sm rounded-xl text-center"
@@ -663,18 +814,18 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             <div className="absolute -bottom-48 left-[20%] h-80 w-80 rounded-full bg-cyan-100/50 blur-3xl" />
           </div>
           
-          {/* In-Context Hero Toolbar */}
+          {/* In-Context Hero Toolbar - Strictly Super Admin Only */}
           {isSuperAdminEditMode && (
             <div className="absolute top-2 right-4 z-20 flex items-center gap-2 bg-slate-950 text-white px-3 py-1.5 rounded-xl border border-amber-400 shadow-xl text-xs font-bold">
               <span className="text-amber-400 flex items-center gap-1">
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Hero Section:</span>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Super Admin Hero Control:</span>
               </span>
               <button
-                onClick={() => setActiveEditorSection('hero')}
+                onClick={() => requestSuperAdminAccess('hero_edit')}
                 className="px-2 py-0.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded text-[11px] font-black cursor-pointer"
               >
-                Edit Copy, Image & Buttons
+                Customize Hero Image & Copy
               </button>
               <button
                 onClick={() => toggleSectionVisibility('hero')}
@@ -784,13 +935,20 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     videoLoop={hero.videoLoop}
                     videoShowControls={hero.videoShowControls}
                     maxDurationSeconds={hero.videoMaxDuration || 30}
-                    floatingCardTitle={hero.floatingCardTitle}
-                    floatingCardSubtitle={hero.floatingCardSubtitle}
-                    floatingCardBadgeText={hero.floatingCardBadgeText || 'ACTIVE'}
+                    floatingCardTitle={hero.floatingCardTitle || 'Interactive Smart Classroom'}
+                    floatingCardSubtitle={hero.floatingCardSubtitle || 'Mr. Gadaffih & CBC learners connected in real time'}
+                    floatingCardBadgeText={hero.floatingCardBadgeText || 'LIVE SYNC'}
                     floatingCardBadgeColor={hero.floatingCardBadgeColor || 'emerald'}
                     showFloatingCard={hero.showFloatingCard}
                     isSuperAdminEditMode={isSuperAdminEditMode}
-                    onEditClick={() => setActiveEditorSection('hero')}
+                    onEditClick={() => requestSuperAdminAccess('hero_edit')}
+                    onImageChange={(newUrl) => {
+                      if (!isSuperAdminVerified) {
+                        requestSuperAdminAccess('hero_edit');
+                        return;
+                      }
+                      updateLandingHero({ heroImageUrl: newUrl, mediaType: 'image' });
+                    }}
                     altText="EduSmart Learners & School Campus"
                   />
 
@@ -968,6 +1126,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
           </div>
         </section>
+      )}
+
+      {/* ========================================================
+          4B. PUBLIC VIRTUAL LABORATORY PORTAL (ACCESSIBLE VIA TICKETING)
+          ======================================================== */}
+      {visibility.virtuallab !== false && (
+        <PublicVirtualLabSection 
+          onOpenTicketModal={handleOpenVirtualLabTicket}
+          isSuperAdminEditMode={isSuperAdminEditMode}
+        />
       )}
 
       {/* ========================================================
@@ -1887,16 +2055,23 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               
-              <div className="flex items-center gap-3">
-                <div className="bg-slate-800 p-2 rounded-xl border border-slate-700">
-                  <EduSmartGadsaLogo variant="emblem" size="sm" />
+              <div className="flex items-center gap-3.5">
+                <div className="bg-white p-1 rounded-2xl border border-slate-700 shadow-lg flex items-center justify-center shrink-0">
+                  <img 
+                    src="/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg" 
+                    alt="Edu-Smart PORTAL By Gadsa Systems" 
+                    className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/edusmart-portal-logo.jpeg';
+                    }}
+                  />
                 </div>
                 <div className="text-left">
-                  <span className="font-serif font-black text-white text-base block">
-                    {footer.brandName || 'EduSmart LMS'}
+                  <span className="font-sans font-black text-white text-base sm:text-lg block tracking-tight">
+                    <span className="text-white">Edu-</span><span className="text-amber-400">Smart</span> <span className="text-blue-300 text-xs sm:text-sm uppercase tracking-wider font-extrabold ml-1">PORTAL</span>
                   </span>
-                  <span className="text-[10px] text-slate-400">
-                    {footer.tagline}
+                  <span className="text-[11px] text-slate-400 block font-medium mt-0.5">
+                    By Gadsa Systems · Multi-Tenant Platform
                   </span>
                 </div>
               </div>
@@ -2053,9 +2228,19 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               </div>
             )}
 
-            {/* Section 2: HERO SECTION */}
+            {/* Section 2: HERO SECTION - SUPER ADMIN PROTECTED */}
             {activeEditorSection === 'hero' && (
               <div className="space-y-4 text-xs">
+                {/* Super Admin Authorization Badge */}
+                <div className="p-3 bg-amber-950/60 border border-amber-500/40 rounded-xl flex items-center justify-between text-amber-300">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span className="font-bold">Super Admin Hero Customizer</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full uppercase border border-amber-400/30">
+                    Super Admin Only
+                  </span>
+                </div>
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">Top Pill Tag Text</label>
                   <input
@@ -3157,6 +3342,129 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================
+          SUPER ADMIN VERIFICATION MODAL
+          Strictly guards Hero Banner customization and platform settings
+          ======================================================== */}
+      {showSuperAdminAuthModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-amber-400/50 rounded-3xl max-w-md w-full p-6 text-white shadow-2xl space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-400/15 border border-amber-400/30 rounded-2xl text-amber-400">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base sm:text-lg text-white">
+                    Super Admin Verification
+                  </h3>
+                  <p className="text-xs text-amber-300/80 font-medium mt-0.5">
+                    Platform Super Admin Authentication Required
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSuperAdminAuthModal(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs text-slate-300 leading-relaxed">
+              <p>
+                Customization of the <span className="text-amber-300 font-bold">Hero Banner</span>, classroom showcase media, and school platform configurations can only be done by authorized Platform Super Administrators.
+              </p>
+            </div>
+
+            {/* Verification Form */}
+            <form onSubmit={handleVerifySuperAdmin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Super Administrator Email
+                </label>
+                <input
+                  type="email"
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-400"
+                  placeholder="admin@edusmart.ac.ke"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Master Security Passcode / Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasscodeText ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    value={adminPasscode}
+                    onChange={(e) => {
+                      setAdminPasscode(e.target.value);
+                      if (adminAuthError) setAdminAuthError(null);
+                    }}
+                    placeholder="Enter Super Admin Passcode (e.g. admin2026)"
+                    className="w-full px-3.5 py-2.5 pr-10 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasscodeText(!showPasscodeText)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    {showPasscodeText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
+                  <span>Authorized for platform governance</span>
+                  <span className="font-mono text-amber-400/80">Default: admin2026</span>
+                </div>
+              </div>
+
+              {adminAuthError && (
+                <div className="p-3 bg-red-950/80 border border-red-700 rounded-xl text-red-300 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                  <span>{adminAuthError}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowSuperAdminAuthModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4 text-slate-950" />
+                  <span>Verify & Unlock Hero Customizer</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          PUBLIC VIRTUAL LAB TICKETING & WORKSPACE MODAL
+          ======================================================== */}
+      <VirtualLabSubscriptionModal
+        isOpen={showVirtualLabModal}
+        onClose={() => setShowVirtualLabModal(false)}
+        initialTier={virtualLabInitialTier}
+        initialStep={virtualLabInitialStep}
+        initialTicketCode={virtualLabTicketCode}
+      />
 
     </div>
   );

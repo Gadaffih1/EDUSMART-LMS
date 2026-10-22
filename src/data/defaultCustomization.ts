@@ -8,6 +8,7 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       hero: true,
       stats: true,
       features: true,
+      virtuallab: true,
       showcase: true,
       about: true,
       testimonials: true,
@@ -17,13 +18,14 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       footer: true
     },
     header: {
-      brandName: 'EduSmart LMS',
-      brandSubtitle: 'Multi-Tenant School Platform',
+      brandName: 'Edu-Smart PORTAL',
+      brandSubtitle: 'By Gadsa Systems · Multi-Tenant Platform',
       showLoginButton: true,
       loginButtonLabel: 'School Login',
       showRegisterButton: true,
       registerButtonLabel: 'Register a School',
       navLinks: [
+        { id: 'nav-virtuallab', label: 'Virtual Lab', sectionId: 'virtuallab-section', enabled: true },
         { id: 'nav-features', label: 'Features', sectionId: 'features-section', enabled: true },
         { id: 'nav-stats', label: 'Impact & Stats', sectionId: 'stats-section', enabled: true },
         { id: 'nav-about', label: 'About', sectionId: 'about-section', enabled: true },
@@ -360,8 +362,8 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       supportHours: 'Monday – Friday: 7:00 AM – 6:00 PM EAT · Saturday: 8:00 AM – 1:00 PM EAT'
     },
     footer: {
-      brandName: 'EduSmart LMS',
-      tagline: 'Smart Learning. Better Management. By Gadsa Systems',
+      brandName: 'Edu-Smart PORTAL',
+      tagline: 'By Gadsa Systems · Smart Learning, Better Management',
       copyrightText: '© 2026 EduSmart Systems Ltd. All rights reserved. Registered under Kenya Data Protection Act.',
       developerCredit: 'Designed & Engineered for African Academic Institutions'
     }

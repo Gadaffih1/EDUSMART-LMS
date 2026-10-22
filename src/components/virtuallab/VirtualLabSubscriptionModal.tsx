@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SyncEngine } from '../../utils/syncEngine';
 import { 
   X, 
@@ -20,19 +20,16 @@ import {
   Check, 
   Lock,
   Layers,
-  Award
+  Award,
+  KeyRound,
+  AlertCircle
 } from 'lucide-react';
 import { Storage } from '../../utils/storage';
 import { VirtualLabWorkspace } from './VirtualLabWorkspace';
 
-interface VirtualLabSubscriptionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
 export type SubscriptionTier = 'day' | 'term' | 'annual';
 
-interface PassOption {
+export interface PassOption {
   id: SubscriptionTier;
   title: string;
   badge: string;
@@ -42,7 +39,7 @@ interface PassOption {
   recommended?: boolean;
 }
 
-const PASS_OPTIONS: PassOption[] = [
+export const PASS_OPTIONS: PassOption[] = [
   {
     id: 'day',
     title: '1-Day Explorer Lab Ticket',
@@ -51,8 +48,8 @@ const PASS_OPTIONS: PassOption[] = [
     duration: '24 Hours',
     features: [
       'Access to all 75 CBC apparatus simulations',
-      'Chemistry titrations & Ohm circuit workbench',
-      'Scratch Computer Coding playground',
+      'Wave on a string, Chemistry titrations & Ohm circuit workbench',
+      'Scratch Computer Coding visual playground',
       'Instant access on phone, tablet & desktop'
     ]
   },
@@ -66,9 +63,9 @@ const PASS_OPTIONS: PassOption[] = [
     features: [
       'Unlimited access across all 3 months',
       'Complete 10-Stage CBC learner inquiry steps',
+      'Wave on a String & Physics harmonic experiments',
       'Interactive Scratch coding simulations & game labs',
-      'Digital lab observation notebooks & downloadable PDF reports',
-      'Email support from EduSmart STEM specialists'
+      'Digital lab observation notebooks & downloadable PDF reports'
     ]
   },
   {
@@ -87,24 +84,50 @@ const PASS_OPTIONS: PassOption[] = [
   }
 ];
 
+export interface VirtualLabSubscriptionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialTier?: SubscriptionTier;
+  initialStep?: 'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket';
+  initialTicketCode?: string;
+}
+
 export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  initialTier = 'term',
+  initialStep = 'select',
+  initialTicketCode = ''
 }) => {
-  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('term');
-  const [step, setStep] = useState<'select' | 'checkout' | 'ticket' | 'launch_lab'>('select');
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>(initialTier);
+  const [step, setStep] = useState<'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket'>(initialStep);
+  const [activeTab, setActiveTab] = useState<'buy' | 'redeem'>('buy');
   
   // Checkout Fields
-  const [fullName, setFullName] = useState('');
+  const [fullName, setFullName] = useState('Visiting Scholar');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('0712 345 678');
-  const [schoolName, setSchoolName] = useState('Visiting Learner / Homeschool');
+  const [schoolName, setSchoolName] = useState('Public STEM Learner / Homeschool');
   const [gradeLevel, setGradeLevel] = useState('Grade 7 (JSS)');
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Generated Ticket Info
-  const [ticketNumber, setTicketNumber] = useState('');
+  const [ticketNumber, setTicketNumber] = useState(initialTicketCode || 'VLAB-TICKET-829104');
   const [ticketDate, setTicketDate] = useState('');
+  const [existingTicketInput, setExistingTicketInput] = useState(initialTicketCode || '');
+  const [ticketValidationNotice, setTicketValidationNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTier) setSelectedTier(initialTier);
+    if (initialStep) {
+      setStep(initialStep);
+      if (initialStep === 'enter_ticket') setActiveTab('redeem');
+    }
+    if (initialTicketCode) {
+      setTicketNumber(initialTicketCode);
+      setExistingTicketInput(initialTicketCode);
+    }
+  }, [initialTier, initialStep, initialTicketCode, isOpen]);
 
   if (!isOpen) return null;
 
@@ -145,15 +168,46 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
         status: 'active'
       });
       SyncEngine.persistItem('edusmart_vlab_ticket_passes', JSON.stringify(existing));
-    }, 1500);
+    }, 1200);
+  };
+
+  const handleValidateTicket = (codeToTest?: string) => {
+    const raw = (codeToTest || existingTicketInput).trim().toUpperCase();
+    if (!raw) {
+      setTicketValidationNotice('Please enter your ticket number (e.g. VLAB-TICKET-829104 or VLAB-DEMO-2026).');
+      return;
+    }
+
+    const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
+    const found = stored.find((t: any) => t.ticketId.toUpperCase() === raw);
+
+    // Accept valid stored tickets OR instant demo patterns
+    if (found || raw.startsWith('VLAB-') || raw.startsWith('DEMO-') || raw.includes('TICKET') || raw.includes('DEMO')) {
+      const activeCode = found?.ticketId || raw;
+      setTicketNumber(activeCode);
+      if (found?.holderName) setFullName(found.holderName);
+      setTicketDate(found?.issuedAt || new Date().toLocaleString());
+      setStep('launch_lab');
+      setTicketValidationNotice(null);
+    } else {
+      setTicketValidationNotice(`Ticket "${raw}" not found. You can enter demo code: VLAB-DEMO-2026 or purchase a new pass.`);
+    }
+  };
+
+  const handleInstantDemoPass = () => {
+    const demoId = `VLAB-DEMO-${Math.floor(1000 + Math.random() * 9000)}`;
+    setTicketNumber(demoId);
+    setFullName('Guest Explorer');
+    setTicketDate(new Date().toLocaleString());
+    setStep('launch_lab');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
       {step === 'launch_lab' ? (
         /* Full-Screen Lab Explorer for Subscribed Non-Member */
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
-          <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+          <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md">
                 <FlaskConical className="w-5 h-5 animate-pulse" />
@@ -161,24 +215,35 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full">
-                    Active Non-Member Ticket: {ticketNumber}
+                    Active Ticket: {ticketNumber}
                   </span>
-                  <span className="text-[10px] text-slate-400">Pass Holder: {fullName}</span>
+                  <span className="text-[10px] text-slate-300 hidden sm:inline">Pass Holder: {fullName}</span>
                 </div>
-                <h3 className="text-sm sm:text-base font-extrabold text-white">
+                <h3 className="text-xs sm:text-sm font-extrabold text-white mt-0.5">
                   EduSmart CBC Virtual Science & Scratch Coding Studio
                 </h3>
               </div>
             </div>
-            <button
-              onClick={() => setStep('ticket')}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-            >
-              View Ticket Pass
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStep('ticket')}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                View Ticket Pass
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <X className="w-4 h-4" />
+                <span>Exit Lab</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-50">
             <VirtualLabWorkspace
               currentUser={{
                 id: `usr-vis-${ticketNumber}`,
@@ -190,7 +255,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                 admissionNumber: ticketNumber
               } as any}
               isEmbedded={true}
-              onClose={() => setStep('ticket')}
+              onClose={onClose}
             />
           </div>
         </div>
@@ -198,7 +263,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
         /* Subscription & Ticketing Flow Modal */
         <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full border border-slate-200 overflow-hidden max-h-[94vh] flex flex-col">
           {/* Top Banner */}
-          <div className="p-5 sm:p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+          <div className="p-4 sm:p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800">
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-emerald-400 to-teal-400 p-0.5 shadow-lg flex items-center justify-center shrink-0">
                 <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center">
@@ -207,20 +272,21 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-2xs">
-                    Non-Member Access Pass
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full shadow-xs">
+                    Public Non-Member Pass
                   </span>
                   <span className="text-[10px] font-bold bg-white/10 text-slate-300 px-2 py-0.5 rounded-full">
-                    School Ticketing Portal
+                    Ticketing Portal
                   </span>
                 </div>
-                <h3 className="text-lg sm:text-xl font-black tracking-tight text-white mt-1">
-                  Virtual Science Lab & Scratch Computer Studio Ticketing
+                <h3 className="text-base sm:text-xl font-black tracking-tight text-white mt-1">
+                  Virtual Science Laboratory & Scratch Studio Ticketing
                 </h3>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
             >
@@ -228,18 +294,117 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
             </button>
           </div>
 
+          {/* Subheader Navigation: Buy Ticket vs Enter Existing Ticket */}
+          <div className="px-5 pt-3 bg-slate-100 border-b border-slate-200 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setActiveTab('buy'); setStep('select'); }}
+              className={`px-4 py-2 font-bold text-xs rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'buy'
+                  ? 'bg-white text-slate-900 shadow-xs border-t-2 border-emerald-600'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Ticket className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Purchase Lab Ticket</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setActiveTab('redeem'); setStep('enter_ticket'); }}
+              className={`px-4 py-2 font-bold text-xs rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'redeem'
+                  ? 'bg-white text-slate-900 shadow-xs border-t-2 border-blue-600'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+              <span>Enter Existing Ticket Code</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleInstantDemoPass}
+              className="ml-auto px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] rounded-lg shadow-xs flex items-center gap-1 cursor-pointer transition-transform active:scale-95"
+            >
+              <Sparkles className="w-3 h-3 text-slate-950" />
+              <span>Instant Free Demo Pass</span>
+            </button>
+          </div>
+
           {/* Body Content */}
           <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-50 space-y-6">
             
-            {/* STEP 1: SELECT PASS TIER */}
-            {step === 'select' && (
+            {/* TAB: ENTER EXISTING TICKET CODE */}
+            {activeTab === 'redeem' && (
+              <div className="max-w-xl mx-auto space-y-5 py-4">
+                <div className="text-center space-y-1">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 mx-auto flex items-center justify-center mb-2">
+                    <KeyRound className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-lg font-black text-slate-900">
+                    Redeem Your Lab Admission Ticket
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Enter the ticket number or pass code sent via SMS or printed on your receipt.
+                  </p>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Ticket Code / Pass Identifier
+                    </label>
+                    <input
+                      type="text"
+                      value={existingTicketInput}
+                      onChange={(e) => {
+                        setExistingTicketInput(e.target.value);
+                        if (ticketValidationNotice) setTicketValidationNotice(null);
+                      }}
+                      placeholder="e.g. VLAB-TICKET-829104 or VLAB-DEMO-2026"
+                      className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+                    />
+                  </div>
+
+                  {ticketValidationNotice && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                      <span>{ticketValidationNotice}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleValidateTicket()}
+                      className="w-full sm:flex-1 py-3 bg-blue-700 hover:bg-blue-800 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Verify Ticket & Launch Virtual Lab</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleValidateTicket('VLAB-DEMO-2026')}
+                      className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                    >
+                      Use Demo Code
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB: SELECT PASS TIER */}
+            {activeTab === 'buy' && step === 'select' && (
               <div className="space-y-6">
                 <div>
                   <h4 className="text-base font-extrabold text-slate-900">
-                    Choose Your Virtual Lab Non-Member Access Pass
+                    Choose Your Virtual Lab Access Pass
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Experience all 75 CBC JSS science apparatus items, interactive experiments, and computer coding with Scratch.
+                    Experience all 75 CBC JSS science apparatus items, PhET simulations (Wave on a String, Circuit Construction, Titration), and Scratch computer coding.
                   </p>
                 </div>
 
@@ -323,7 +488,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
             )}
 
             {/* STEP 2: CHECKOUT & M-PESA TICKETING */}
-            {step === 'checkout' && (
+            {activeTab === 'buy' && step === 'checkout' && (
               <form onSubmit={handleCompleteSubscription} className="space-y-6">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div>
@@ -337,7 +502,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                   <button
                     type="button"
                     onClick={() => setStep('select')}
-                    className="text-xs font-bold text-slate-600 hover:underline"
+                    className="text-xs font-bold text-slate-600 hover:underline cursor-pointer"
                   >
                     ← Change Pass
                   </button>
@@ -361,12 +526,12 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Subscriber / Learner Full Name *</span>
+                      <span>Full Name of Learner / Scholar *</span>
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Joy Wanjiku"
+                      placeholder="e.g. Brian Ochieng"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -376,7 +541,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       <Mail className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Email Address (For Ticket Delivery) *</span>
+                      <span>Parent / Guardian Email Address *</span>
                     </label>
                     <input
                       type="email"
@@ -465,7 +630,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
             )}
 
             {/* STEP 3: ISSUED TICKETING PASS */}
-            {step === 'ticket' && (
+            {activeTab === 'buy' && step === 'ticket' && (
               <div className="space-y-6">
                 <div className="p-6 bg-gradient-to-br from-emerald-900 via-teal-900 to-slate-900 text-white rounded-3xl border border-emerald-500/40 shadow-xl relative overflow-hidden">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/20">
@@ -518,6 +683,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
 
                   <div className="flex items-center gap-3 w-full sm:w-auto">
                     <button
+                      type="button"
                       onClick={() => window.print()}
                       className="px-4 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
                     >
@@ -526,6 +692,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                     </button>
                     
                     <button
+                      type="button"
                       onClick={() => setStep('launch_lab')}
                       className="flex-1 sm:flex-initial px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer transition-all animate-pulse"
                     >

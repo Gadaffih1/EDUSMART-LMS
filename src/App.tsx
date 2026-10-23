@@ -152,6 +152,15 @@ function AppContent({
   }, [allTenants, currentTenant.id, currentUser, switchTenant]);
 
   React.useEffect(() => {
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    const isMainPage = path === '/' || path === '/index.html';
+    if (isMainPage) {
+      if (path === '/index.html') {
+        window.history.replaceState({ view: 'public_landing' }, '', '/');
+      }
+      if (portalView !== 'public_landing') navigateToPortal('public_landing', currentTenant.id, true);
+      return;
+    }
     if (currentUser && isPlatformSuperAdmin(currentUser)) {
       if (portalView !== 'super_admin' && portalView !== 'public_landing') navigateToPortal('super_admin');
       return;

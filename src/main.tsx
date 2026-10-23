@@ -10,6 +10,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { getAuthenticatedAppUser } from './utils/supabaseAuth';
 import { Storage } from './utils/storage';
 import type { User } from './types';
+import { toAppPath } from './utils/appPath';
 
 // Register PWA Service Worker for offline CBC materials caching
 OfflineCacheManager.registerServiceWorker();
@@ -29,7 +30,7 @@ function showBootSplash() {
 
 async function mount() {
   showBootSplash();
-  if (window.location.pathname === '/auth/setup-password') {
+  if (toAppPath(window.location.pathname) === '/auth/setup-password') {
     const rootElement = document.getElementById('root');
     if (rootElement) {
       rootElement.innerHTML = '';

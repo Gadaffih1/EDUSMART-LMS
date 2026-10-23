@@ -5,6 +5,8 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // GitHub Pages serves this repo at /EDUSMART-LMS/. Local dev stays at /.
+    base: process.env.GITHUB_PAGES === 'true' ? '/EDUSMART-LMS/' : '/',
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     plugins: [react(), tailwindcss()],
     resolve: {

@@ -42,12 +42,13 @@ import { findSystemRole } from './utils/systemRoles';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { SyncEngine } from './utils/syncEngine';
 import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
+import { fromAppPath, toAppPath } from './utils/appPath';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
 const SCHOOL_ROUTE_STORAGE_PREFIX = 'edusmart:school-route:';
 
 function getPortalRoute(pathname: string): { view: PortalView; routeId?: string } {
-  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  const normalizedPath = toAppPath(pathname);
 
   if (normalizedPath === '/login') {
     return { view: 'unified_login' };
@@ -102,13 +103,13 @@ function AppContent({
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
 
   const navigateToPortal = (view: PortalView, schoolId = currentTenant.id, replace = false) => {
-    const path = view === 'public_landing'
+    const path = fromAppPath(view === 'public_landing'
       ? '/'
       : view === 'unified_login'
         ? '/login'
         : view === 'super_admin'
           ? '/admin'
-          : `/school/${createSchoolRouteId(schoolId)}`;
+          : `/school/${createSchoolRouteId(schoolId)}`);
 
     if (window.location.pathname !== path) {
       const updateHistory = replace ? window.history.replaceState : window.history.pushState;
@@ -152,11 +153,11 @@ function AppContent({
   }, [allTenants, currentTenant.id, currentUser, switchTenant]);
 
   React.useEffect(() => {
-    const path = window.location.pathname.replace(/\/+$/, '') || '/';
-    const isMainPage = path === '/' || path === '/index.html';
+    const path = toAppPath(window.location.pathname);
+    const isMainPage = path === '/';
     if (isMainPage) {
-      if (path === '/index.html') {
-        window.history.replaceState({ view: 'public_landing' }, '', '/');
+      if (window.location.pathname.endsWith('/index.html')) {
+        window.history.replaceState({ view: 'public_landing' }, '', fromAppPath('/'));
       }
       if (portalView !== 'public_landing') navigateToPortal('public_landing', currentTenant.id, true);
       return;

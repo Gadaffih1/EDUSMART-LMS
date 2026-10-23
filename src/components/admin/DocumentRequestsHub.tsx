@@ -7,6 +7,7 @@ import {
   UserRole 
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { useTenant } from '../../context/TenantContext';
 import { 
   FileText, 
   UploadCloud, 
@@ -41,6 +42,8 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
   currentUser,
   onBack 
 }) => {
+  const { currentTenant } = useTenant();
+  const schoolId = currentUser.schoolId || currentTenant.id;
   const [requests, setRequests] = useState<DocumentSubmissionRequest[]>(() => Storage.getDocumentRequests());
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>(() => Storage.getDocumentSubmissions());
   const [allUsers, setAllUsers] = useState<User[]>(() => Storage.getUsers());
@@ -121,7 +124,8 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
       requiredDocTypes: newRequiredTypes.length > 0 ? newRequiredTypes : ['Official Document (PDF)'],
       mandatory: newMandatory,
       createdAt: new Date().toISOString(),
-      status: 'active'
+      status: 'active',
+      schoolId
     };
 
     Storage.addDocumentRequest(newReq);
@@ -192,8 +196,10 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
     }, 600);
   };
 
+  const schoolRequests = requests.filter((request) => !request.schoolId || request.schoolId === schoolId);
+
   // Filter requests
-  const filteredRequests = requests.filter(r => {
+  const filteredRequests = schoolRequests.filter(r => {
     const matchesSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           r.requestedByUserName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -211,7 +217,7 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
   });
 
   // Submissions targeting currently logged-in user
-  const myTargetedRequests = requests.filter(r => {
+  const myTargetedRequests = schoolRequests.filter(r => {
     const targetedDirectly = r.targetUserIds.includes(currentUser.id);
     const targetedRole = r.targetRole && r.targetRole === currentUser.role;
     const targetedGrade = r.targetGrade && currentUser.grade && r.targetGrade === currentUser.grade;
@@ -219,7 +225,7 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
   });
 
   // Metrics
-  const totalRequestsCount = requests.length;
+  const totalRequestsCount = schoolRequests.length;
   const totalSubmissionsCount = submissions.length;
   const verifiedCount = submissions.filter(s => s.status === 'verified').length;
   const pendingReviewCount = submissions.filter(s => s.status === 'submitted').length;
@@ -325,7 +331,7 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
           }`}
         >
           <FileText className="w-3.5 h-3.5" />
-          <span>Active Document Requests ({requests.length})</span>
+          <span>Active Document Requests ({schoolRequests.length})</span>
         </button>
 
         <button
@@ -387,6 +393,52 @@ export const DocumentRequestsHub: React.FC<DocumentRequestsHubProps> = ({
                 <option value="active">Active & Open</option>
                 <option value="closed">Closed / Archived</option>
               </select>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200">
+              <h3 className="text-sm font-black text-slate-900">Request register</h3>
+              <p className="text-[11px] text-slate-500">Who asked, when they asked, and what they asked for.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Who</th>
+                    <th className="py-3 px-3">When</th>
+                    <th className="py-3 px-4">What</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[...filteredRequests]
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .map((req) => {
+                      const askedAt = new Date(req.createdAt);
+                      const whenLabel = Number.isNaN(askedAt.getTime())
+                        ? req.createdAt
+                        : askedAt.toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' });
+                      return (
+                        <tr key={req.id} className="hover:bg-slate-50/80">
+                          <td className="py-3 px-4 align-top">
+                            <div className="font-bold text-slate-900">{req.requestedByUserName}</div>
+                            <div className="text-[10px] text-slate-500 capitalize">{req.requestedByUserRole.replace(/_/g, ' ')}</div>
+                          </td>
+                          <td className="py-3 px-3 align-top text-slate-600 font-mono whitespace-nowrap">{whenLabel}</td>
+                          <td className="py-3 px-4 align-top">
+                            <div className="font-bold text-slate-900">{req.title}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{req.requiredDocTypes.join(', ')}</div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {filteredRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-6 px-4 text-center text-slate-500">No document requests for this school yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 

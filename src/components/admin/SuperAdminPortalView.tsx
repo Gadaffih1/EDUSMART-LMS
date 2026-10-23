@@ -37,6 +37,8 @@ import { SuperAdminActionMenu, type SuperAdminTab } from './SuperAdminActionMenu
 import { CampusSwitcherWindow } from '../layout/CampusSwitcherWindow';
 import { PlatformStudioCustomizer } from './PlatformStudioCustomizer';
 import { SuperAdminOperationsControl } from './SuperAdminOperationsControl';
+import { DocumentRequestsHub } from './DocumentRequestsHub';
+import { PlatformAdminSettings } from './PlatformAdminSettings';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool?: (schoolId: string) => void;
@@ -55,7 +57,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
     const stored = sessionStorage.getItem('edusmart_super_admin_tab');
-    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify'];
+    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
@@ -242,6 +244,8 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                 {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
                 {activeConsoleTab === 'categories' && 'Categories'}
                 {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
+                {activeConsoleTab === 'doc_requests' && 'Document Requests'}
+                {activeConsoleTab === 'settings' && 'Account Settings'}
               </h2>
               <p className="text-xs sm:text-sm text-slate-600">
                 Manage all schools, subscriptions and platform settings.
@@ -551,6 +555,18 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
         /* Visual Studio & Customizer View */
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           <PlatformStudioCustomizer onPreviewLanding={onBackToLanding} />
+        </main>
+      ) : activeConsoleTab === 'doc_requests' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <DocumentRequestsHub currentUser={superAdminUser} />
+        </main>
+      ) : activeConsoleTab === 'settings' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          {platformAdmin ? (
+            <PlatformAdminSettings key={platformAdmin.email} admin={platformAdmin} />
+          ) : (
+            <p className="text-sm text-slate-600">The platform admin account is not loaded yet.</p>
+          )}
         </main>
       ) : (
         /* Detailed Deep Configuration Dashboard */

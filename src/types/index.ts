@@ -1849,6 +1849,7 @@ export interface DocumentSubmissionRequest {
   createdAt: string;
   status: 'active' | 'closed';
   instructions?: string;
+  schoolId?: string;
 }
 
 export interface DocumentSubmission {

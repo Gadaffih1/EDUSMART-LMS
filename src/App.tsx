@@ -650,6 +650,17 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
 
   React.useEffect(() => {
+    const handlePlatformAdminSession = (event: Event) => {
+      const user = (event as CustomEvent<User>).detail;
+      if (!user) return;
+      Storage.setCurrentUser(user);
+      setCurrentUser(user);
+    };
+    window.addEventListener('platform-admin-session', handlePlatformAdminSession);
+    return () => window.removeEventListener('platform-admin-session', handlePlatformAdminSession);
+  }, []);
+
+  React.useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {

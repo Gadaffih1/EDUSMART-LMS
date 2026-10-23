@@ -3,10 +3,12 @@ import {
   Bell,
   ChevronLeft,
   DollarSign,
+  FileText,
   FolderPlus,
   LayoutDashboard,
   Palette,
   School,
+  Settings,
   Sparkles,
   SpellCheck,
   Users,
@@ -23,7 +25,9 @@ export type SuperAdminTab =
   | 'users'
   | 'spelling'
   | 'categories'
-  | 'notify';
+  | 'notify'
+  | 'doc_requests'
+  | 'settings';
 
 interface ActionItem {
   id: SuperAdminTab;
@@ -76,6 +80,13 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
       title: 'Operations',
       items: [
         { id: 'operations', label: 'Finance & Operations', icon: DollarSign },
+        { id: 'doc_requests', label: 'Document Requests', icon: FileText },
+      ],
+    },
+    {
+      title: 'Account',
+      items: [
+        { id: 'settings', label: 'Account Settings', icon: Settings },
       ],
     },
   ];

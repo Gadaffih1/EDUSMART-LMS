@@ -6,8 +6,6 @@
  * Supports intermittent internet connectivity for students and teachers across Kenya.
  */
 
-import { INITIAL_LESSON_NOTES } from '../data/initialData';
-
 export interface CachedCBCModule {
   id: string;
   title: string;

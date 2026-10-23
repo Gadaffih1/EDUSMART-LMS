@@ -42,7 +42,7 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
-import { StaffAppraisalModule } from './StaffAppraisalModule';
+import { SchoolStaffAppraisal } from '../admin/TeacherAppraisalPages';
 
 interface SeniorTeacherWorkspaceProps {
   currentUser: User;
@@ -666,7 +666,7 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
           TAB: TEACHER & STAFF PERFORMANCE APPRAISAL (TSC TPAD)
           ======================================================== */}
       {activeTab === 'staff_appraisal' && (
-        <StaffAppraisalModule currentUser={currentUser} />
+        <SchoolStaffAppraisal currentUser={currentUser} />
       )}
 
       {/* ========================================================

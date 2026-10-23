@@ -10,7 +10,7 @@
  *
  *  READ  : components keep calling Storage.getX()  → served from localStorage.
  *  WRITE : Storage.setX() → localStorage (instant) → markDirty(key) →
- *          debounced push to Supabase (`app_records` table, one row per record).
+ *          debounced push when a Supabase client is configured.
  *  BOOT  : main.tsx awaits hydrate() BEFORE React renders, so the first paint
  *          already contains the latest cloud data.
  *  OFFLINE: pushes stay queued (dirty set is persisted); they flush on 'online'
@@ -32,6 +32,7 @@
  * ============================================================================
  */
 import { supabase } from '../lib/supabase';
+import { isRemoteDataActive } from './supabaseHydrate';
 
 export type SyncStatus = 'disabled' | 'idle' | 'hydrating' | 'syncing' | 'offline' | 'error';
 
@@ -161,6 +162,15 @@ function activateIdentity(userId: string | null, tenantId?: string | null): void
   const nextTenantId = userId ? tenantId || null : null;
   if (activeIdentity === userId && activeTenantId === nextTenantId) return;
   if (activeIdentity) storeIdentityCache(activeIdentity, activeTenantId);
+
+  if (isRemoteDataActive()) {
+    activeIdentity = userId;
+    activeTenantId = nextTenantId;
+    if (userId) localStorage.setItem(IDENTITY_KEY, JSON.stringify(userId));
+    else localStorage.removeItem(IDENTITY_KEY);
+    if (nextTenantId) localStorage.setItem('edusmart_active_tenant_id', nextTenantId);
+    return;
+  }
 
   clearRegisteredLocalData();
   mirror = userId ? loadJSON(identityStorageKey(MIRROR_KEY, userId, nextTenantId), {}) : {};

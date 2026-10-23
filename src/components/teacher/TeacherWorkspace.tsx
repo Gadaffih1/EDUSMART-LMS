@@ -34,7 +34,7 @@ import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSide
 import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { ComputerLabModule } from './ComputerLabModule';
-import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { OwnStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { 
   ClipboardCheck,
@@ -610,7 +610,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             TAB: MY STAFF PERFORMANCE APPRAISAL (TSC TPAD)
             ======================================================== */}
         {activeTab === 'staff_appraisal' && (
-          <StaffAppraisalModule currentUser={currentUser} />
+          <OwnStaffAppraisal currentUser={currentUser} />
         )}
 
       {/* ========================================================

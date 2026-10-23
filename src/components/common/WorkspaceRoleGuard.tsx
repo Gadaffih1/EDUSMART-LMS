@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, UserRole } from '../../types';
 import { useTenant } from '../../context/TenantContext';
+import { isPlatformSuperAdmin } from '../../utils/platformAdminAuth';
 import { 
   ShieldAlert, 
   Lock, 
@@ -84,7 +85,7 @@ export const WorkspaceRoleGuard: React.FC<WorkspaceRoleGuardProps> = ({
               onClick={onLogout}
               className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
             >
-              Go to School Login Gateway
+              Go to Login
             </button>
           )}
         </div>
@@ -94,7 +95,7 @@ export const WorkspaceRoleGuard: React.FC<WorkspaceRoleGuardProps> = ({
 
   // 2. Check: Tenant School Isolation Check
   // User must belong to the current active tenant (or be in platform super admin mode)
-  const isSuperAdminUser = currentUser.role === 'admin' && (currentUser.email === 'superadmin@edusmart.ac.ke' || currentUser.email === 'admin@edusmart.ac.ke');
+  const isSuperAdminUser = isPlatformSuperAdmin(currentUser);
   const userSchoolId = currentUser.schoolId || 'tenant-riara';
   const isSchoolMismatch = !isSuperAdminUser && userSchoolId && userSchoolId !== currentTenant.id;
 

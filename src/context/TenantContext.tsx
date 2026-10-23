@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Tenant, TenantContextType } from '../types/tenant';
-import { INITIAL_TENANTS } from '../data/tenantsData';
 import { SyncEngine } from '../utils/syncEngine';
+import { mergeDurableSchools, removeDurableSchool, saveDurableSchool } from '../utils/schoolRegistry';
+import { isRemoteDataActive } from '../utils/supabaseHydrate';
 
 const TENANT_STORAGE_KEY = 'edusmart_active_tenant_id';
 const ALL_TENANTS_STORAGE_KEY = 'edusmart_all_tenants_registry';
@@ -15,26 +16,14 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item: Tenant) => {
-            const initialMatch = INITIAL_TENANTS.find(it => it.id === item.id);
-            if (initialMatch) {
-              const merged = { ...initialMatch, ...item };
-              if (merged.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg') {
-                merged.heroImageUrl = '/gad@edusmart.jpeg';
-              }
-              if (merged.heroVideoPoster === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg') {
-                merged.heroVideoPoster = '/gad@edusmart.jpeg';
-              }
-              return merged;
-            }
-            return item;
-          });
+          if (isRemoteDataActive()) return parsed;
+          return parsed as Tenant[];
         }
       }
     } catch {
       // Fallback
     }
-    return INITIAL_TENANTS;
+    return mergeDurableSchools([]);
   });
 
   const [currentTenantId, setCurrentTenantId] = useState<string>(() => {
@@ -49,7 +38,33 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return allTenants[0]?.id || 'tenant-staustins';
   });
 
-  const currentTenant = allTenants.find(t => t.id === currentTenantId) || allTenants[0] || INITIAL_TENANTS[0];
+  const currentTenant = allTenants.find(t => t.id === currentTenantId) || allTenants[0] || {
+    id: '',
+    name: '',
+    shortName: '',
+    motto: '',
+    code: '',
+    crestIcon: 'school' as const,
+    themeColor: 'blue',
+    badgeColorClass: '',
+    headerBgClass: '',
+    domain: '',
+    address: '',
+    city: '',
+    county: '',
+    phone: '',
+    email: '',
+    principalName: '',
+    principalTitle: '',
+    registrationNumber: '',
+    curriculum: '',
+    establishedYear: new Date().getFullYear(),
+    gradeLevels: '',
+    term: '',
+    academicYear: '',
+    totalStudents: 0,
+    totalFaculty: 0,
+  };
 
   const switchTenant = (tenantId: string) => {
     const target = allTenants.find(t => t.id === tenantId);
@@ -70,6 +85,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const updated = prev.map(t => (t.id === targetId ? { ...t, ...updates } : t));
       try {
         SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        saveDurableSchool(updated.find((tenant) => tenant.id === targetId) || { ...updates, id: targetId } as Tenant);
         window.dispatchEvent(new CustomEvent('tenant-branding-updated', { detail: { tenantId: targetId, updates } }));
       } catch (err) {
         console.error('Failed to save updated tenant branding:', err);
@@ -87,6 +103,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         : [...prev, newTenant];
       try {
         SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        saveDurableSchool(newTenant);
         window.dispatchEvent(new CustomEvent('tenant-registered', { detail: newTenant }));
       } catch (err) {
         console.error('Failed to save registered tenant:', err);
@@ -100,6 +117,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const updated = prev.map(t => (t.id === tenantId ? { ...t, ...updates } : t));
       try {
         SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        const saved = updated.find((tenant) => tenant.id === tenantId);
+        if (saved) saveDurableSchool(saved);
         window.dispatchEvent(new CustomEvent('tenant-updated', { detail: { tenantId, updates } }));
       } catch (err) {
         console.error('Failed to update tenant:', err);
@@ -117,6 +136,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const updated = prev.filter(t => t.id !== tenantId);
       try {
         SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
+        removeDurableSchool(tenantId);
         if (currentTenantId === tenantId) {
           const nextId = updated[0]?.id || 'tenant-staustins';
           setCurrentTenantId(nextId);
@@ -132,7 +152,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     try {
-      SyncEngine.persistItem(TENANT_STORAGE_KEY, currentTenant.id);
+      if (currentTenant.id) SyncEngine.persistItem(TENANT_STORAGE_KEY, currentTenant.id);
     } catch {
       // Ignore
     }

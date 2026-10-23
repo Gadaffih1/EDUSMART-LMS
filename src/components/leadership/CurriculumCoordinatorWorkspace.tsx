@@ -18,7 +18,7 @@ import { DocumentRequestsHub } from '../admin/DocumentRequestsHub';
 import { CMSPostsSectionsHub } from '../admin/CMSPostsSectionsHub';
 import { ComputerLabModule } from '../teacher/ComputerLabModule';
 import { CBATaskMappingModule } from './CBATaskMappingModule';
-import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { SchoolStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { CurriculumReportWriterModule } from './CurriculumReportWriterModule';
 import { 
   Compass, 
@@ -1210,7 +1210,7 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
             TAB 5: TEACHER PERFORMANCE APPRAISAL (TSC TPAD)
             ======================================================== */}
         {activeTab === 'appraisal' && (
-          <StaffAppraisalModule currentUser={currentUser} />
+          <SchoolStaffAppraisal currentUser={currentUser} />
         )}
 
         {/* ========================================================

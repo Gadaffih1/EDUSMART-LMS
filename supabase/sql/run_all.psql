@@ -1,6 +1,0 @@
-\set ON_ERROR_STOP on
-\ir app_records_schema.sql
-\ir ../migrations/0002_authenticated_app_records.sql
-\ir ../migrations/0003_normalized_accounts.sql
-\ir ../migrations/0004_admin_accounts.sql
-\ir app_records_seed_tenant_456.sql

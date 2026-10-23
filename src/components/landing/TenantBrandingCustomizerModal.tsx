@@ -25,7 +25,7 @@ import { useTenant } from '../../context/TenantContext';
 import { Tenant } from '../../types/tenant';
 import { TenantPrintHeader, TenantPrintFooter } from '../common/TenantPrintHeader';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
-import { HERO_VIDEO_PRESETS, HERO_IMAGE_PRESETS } from '../../data/heroMediaPresets';
+import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
 
 
@@ -718,7 +718,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                         Or Pick Curated 30-Second Showcase Video:
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {HERO_VIDEO_PRESETS.map((preset) => (
+                        {listHeroVideoPresets().map((preset) => (
                           <button
                             key={preset.id}
                             type="button"
@@ -773,7 +773,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                     <div>
                       <span className="text-[11px] font-bold text-slate-600 block mb-1">Campus Image Presets:</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {HERO_IMAGE_PRESETS.map((preset) => (
+                        {listHeroImagePresets().map((preset) => (
                           <button
                             key={preset.id}
                             type="button"

@@ -12,11 +12,6 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "seed:supabase": "tsx scripts/seed-supabase.ts",
-    "seed:curriculum-reports": "tsx scripts/seed-curriculum-reports.ts",
-    "generate:supabase-sql": "tsx scripts/generate-supabase-sql.ts",
-    "invite:admin": "tsx scripts/invite-admin.ts",
-    "verify:accounts": "tsx scripts/verify-normalized-accounts.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -66,7 +66,7 @@ import {
   LandingFaqItem,
   LandingSectionsVisibility
 } from '../../types/customization';
-import { HERO_VIDEO_PRESETS, HERO_IMAGE_PRESETS } from '../../data/heroMediaPresets';
+import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
 import { PublicVirtualLabSection } from './PublicVirtualLabSection';
 import { VirtualLabSubscriptionModal, SubscriptionTier } from '../virtuallab/VirtualLabSubscriptionModal';
@@ -2432,7 +2432,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                           <span>Choose Curated 30-Second Showcase:</span>
                         </span>
                         <div className="grid grid-cols-1 gap-1.5">
-                          {HERO_VIDEO_PRESETS.map((preset) => {
+                          {listHeroVideoPresets().map((preset) => {
                             const isSelected = hero.heroVideoUrl === preset.url;
                             return (
                               <button
@@ -2538,7 +2538,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                       />
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         <span className="text-[10px] text-slate-400 self-center">Presets:</span>
-                        {HERO_IMAGE_PRESETS.map((preset) => (
+                        {listHeroImagePresets().map((preset) => (
                           <button
                             key={preset.id}
                             type="button"

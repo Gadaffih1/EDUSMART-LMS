@@ -136,8 +136,10 @@ export interface User {
   role: UserRole;
   grade?: GradeLevel; // Exactly 1 grade for student
   stream?: StreamName; // Exactly 1 stream for student, or assigned stream for class teacher
+  className?: string;
   assignedStreams?: { grade: GradeLevel; stream: StreamName }[]; // For teachers who teach multiple streams
   assignedSubjects?: SubjectName[]; // For teachers who teach multiple subjects
+  assignedActivities?: string[]; // For non-teaching staff, such as drivers
   department?: string; // For HOD (e.g. 'Sciences & Mathematics', 'Languages', 'Humanities')
   childrenIds?: string[]; // For Parent (IDs of student children)
   phone?: string;
@@ -148,7 +150,10 @@ export interface User {
   parentPhone?: string;
   parentEmail?: string;
   tscNumber?: string; // Teachers Service Commission ID
+  staffNumber?: string; // Generated staff number, editable. Format STF/YEAR/sequence
   designation?: string;
+  roleStartedAt?: string; // When this person began the role seat they currently hold
+  roleReleasedAt?: string; // Set when they are removed from a role; their seat data stays
   customPermissions?: Partial<RoleAccessRights>;
   // 🛡️ EXTRA ADMINISTRATOR ASSIGNMENTS:
   extraRoles?: ('document_requester' | 'delegated_post_editor' | 'category_curator' | 'double_access_teacher' | 'cms_content_master')[];
@@ -169,6 +174,8 @@ export interface User {
   };
   // 🏢 MULTI-SCHOOL ASSIGNMENT & ACCOUNT STATUS (Super Admin Control)
   schoolId?: string;           // Assigned Tenant ID
+  accessScope?: 'super_admin_only';
+  rights?: string[];
   isActive?: boolean;          // Active (true) or Deactivated (false) - controlled by Super Admin
   deactivatedReason?: string;
   lastActive?: string;

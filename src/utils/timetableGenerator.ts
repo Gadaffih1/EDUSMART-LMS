@@ -9,7 +9,7 @@ import {
   PRIMARY_STREAMS,
   JUNIOR_STREAMS
 } from '../types';
-import { getCurriculumDemandForGrade } from '../data/timetableData';
+import { getCurriculumDemandForGrade } from './curriculumDemand';
 
 export interface AutoGenOptions {
   gradesToGenerate?: GradeLevel[];

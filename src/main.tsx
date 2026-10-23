@@ -5,6 +5,7 @@ import { OfflineCacheManager } from './utils/offlineCacheManager';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { SetPasswordPage } from './components/auth/SetPasswordPage';
 import { SyncEngine } from './utils/syncEngine';
+import { hydrateFromSupabase, isRemoteDataActive } from './utils/supabaseHydrate';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { getAuthenticatedAppUser } from './utils/supabaseAuth';
 import { Storage } from './utils/storage';
@@ -43,6 +44,10 @@ async function mount() {
   let initialUser: User | null = null;
 
   if (isSupabaseConfigured && supabase) {
+    await Promise.race([
+      hydrateFromSupabase(),
+      new Promise((resolve) => setTimeout(resolve, 15000)),
+    ]);
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error) throw error;
@@ -63,7 +68,7 @@ async function mount() {
       }
     }
 
-    if (initialUser) {
+    if (initialUser && !isRemoteDataActive()) {
       await Promise.race([
         SyncEngine.hydrate(),
         new Promise(resolve => setTimeout(resolve, 6000)),

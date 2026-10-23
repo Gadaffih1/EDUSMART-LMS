@@ -22,7 +22,7 @@ import { ReportingHub } from '../reports/ReportingHub';
 import { ExtraRolesManager } from './ExtraRolesManager';
 import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
-import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { SchoolStaffAppraisal, TeacherAppraisalPages } from './TeacherAppraisalPages';
 import { BulkUserImportModule } from './BulkUserImportModule';
 import { SchoolKpiAnalyticsCharts } from '../analytics/SchoolKpiAnalyticsCharts';
 import { 
@@ -35,9 +35,9 @@ import {
   Check, 
   Lock, 
   FileText, 
-  BarChart3, 
-  Search,
+  BarChart3,
   School,
+  GraduationCap,
   AlertCircle,
   RefreshCw,
   HeartPulse,
@@ -54,11 +54,29 @@ import {
   CheckCircle2,
   Shield,
   SlidersHorizontal,
-  Building2
+  Building2,
+  ChevronLeft,
+  Menu
 } from 'lucide-react';
 import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 
 import { useTenant } from '../../context/TenantContext';
+import { listSystemRoles } from '../../utils/systemRoles';
+import {
+  buildUsername,
+  nextRegistryNumber,
+  registryKindCode,
+  rolePassword,
+  uniqueUsername,
+} from '../../utils/accountCredentials';
+import { findSchoolAccountBySchoolId } from '../../utils/schoolAccounts';
+import { saveProvisionedAccount } from '../../utils/provisionedAccounts';
+import { assignUserToRole, isDirectoryRole, keptProfile } from '../../utils/roleSeatStore';
+import { SchoolActionMenu, type AdminActionTab } from './SchoolActionMenu';
+import { StudentDirectoryPage } from './StudentDirectoryPage';
+import { GradeClassPages } from './GradeClassPages';
+import { DepartmentPages } from './DepartmentPages';
+import { RoleDirectory } from './RoleDirectory';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -73,29 +91,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
   // Sub-tabs: Default to overview (Panel 3 School Dashboard)
   const defaultTab = 'overview';
-  const [activeTab, setActiveTab] = useState<
-    | 'overview'
-    | 'analytics'
-    | 'users' 
-    | 'create_user' 
-    | 'bulk_import'
-    | 'extra_roles'
-    | 'cms_hub'
-    | 'doc_requests'
-    | 'staff_appraisal'
-    | 'permissions'
-    | 'passwords' 
-    | 'virtual_rooms' 
-    | 'work_entry_audit' 
-    | 'timetable' 
-    | 'sanatorium' 
-    | 'lunch_register' 
-    | 'transport' 
-    | 'cocurricular' 
-    | 'oversight' 
-    | 'reports'
-    | 'operations'
-  >(defaultTab);
+  const [activeTab, setActiveTab] = useState<AdminActionTab>(() => {
+    const stored = sessionStorage.getItem('edusmart_school_admin_tab');
+    return (stored as AdminActionTab) || defaultTab;
+  });
+  const openTab = (tab: AdminActionTab) => {
+    sessionStorage.setItem('edusmart_school_admin_tab', tab);
+    setActiveTab(tab);
+  };
+  const [menuCollapsed, setMenuCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // User state synced with Storage
   const [allUsers, setAllUsers] = useState<User[]>(() => Storage.getUsers());
@@ -118,8 +123,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['overview', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
-          setActiveTab(tab as any);
+        if (['overview', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
+          openTab(tab as AdminActionTab);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
         } else if (tab === 'gradebook') {
@@ -156,7 +161,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<UserRole>('student');
+  const [newRole, setNewRole] = useState<UserRole | ''>('');
+  const [systemRoles] = useState(() => listSystemRoles());
   const [newGrade, setNewGrade] = useState<GradeLevel>(4);
   const [newStream, setNewStream] = useState<StreamName>('Dove');
   const [newIdNumber, setNewIdNumber] = useState('');
@@ -170,22 +176,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [editingGrade, setEditingGrade] = useState<GradeLevel | null>(null);
   const [editPassValue, setEditPassValue] = useState('');
 
-  // Search filter
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-
   const workLogs = Storage.getWorkEntryLogs();
   const gatePasses = Storage.getGatePasses();
   const virtualClasses = Storage.getVirtualClasses();
-
-  // Filtered users
-  const filteredUsers = allUsers.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (u.designation && u.designation.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
 
   // Open Edit User & Assign Role Modal
   const handleOpenEditUserModal = (user: User) => {
@@ -227,8 +220,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       customPermissions: Object.keys(editCustomPermissions).length > 0 ? editCustomPermissions : undefined
     };
 
+    const previousRole = editingUser.role;
     const updated = Storage.updateUser(editingUser.id, updates);
     if (updated) {
+      if (updated.role !== previousRole && isDirectoryRole(updated.role)) {
+        const seat = assignUserToRole(currentTenant.id, updated.role, updated, keptProfile(editingUser));
+        const started = [...seat.holders].reverse().find((holder) => !holder.endedAt)?.startedAt;
+        if (started) Storage.updateUser(updated.id, { roleStartedAt: started, roleReleasedAt: undefined });
+      }
+      saveProvisionedAccount(Storage.getUsers().find((user) => user.id === updated.id) || updated);
       setAllUsers(Storage.getUsers());
       showToast(`User ${updated.name} successfully updated! Role assigned as ${editRole.replace('_', ' ').toUpperCase()}.`, 'success');
       setEditingUser(null);
@@ -281,8 +281,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     setCreateUserError('');
     setCreateUserSuccess(false);
 
-    if (!newEmail.includes('@')) {
-      setCreateUserError('Please provide a valid email username.');
+    const selectedRole = systemRoles.find((role) => role.slug === newRole);
+    if (!newName.trim() || !newEmail.includes('@')) {
+      setCreateUserError('Type the full legal name so the username can be created.');
+      return;
+    }
+    if (!selectedRole || !newPassword) {
+      setCreateUserError('Choose an account role so the password can be created.');
+      return;
+    }
+    if (selectedRole.numberKind !== 'none' && !newIdNumber.trim()) {
+      setCreateUserError('The admission or staff number is still empty.');
       return;
     }
 
@@ -294,28 +303,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
     const newUser: User = {
       id: `usr-${newRole}-${Date.now()}`,
-      name: newName,
+      name: newName.trim(),
       email: newEmail.trim().toLowerCase(),
-      password: newPassword || (newRole === 'student' ? `GR${newGrade}@2026` : 'pass2026'),
-      role: newRole,
+      password: newPassword,
+      role: newRole as UserRole,
       schoolId: currentTenant?.id || 'tenant-riara',
       isActive: true,
-      grade: ['student', 'class_teacher'].includes(newRole) ? newGrade : undefined,
-      stream: ['student', 'class_teacher'].includes(newRole) ? newStream : undefined,
+      grade: newRole === 'student' || newRole === 'class_teacher' ? newGrade : undefined,
+      stream: newRole === 'student' || newRole === 'class_teacher' ? newStream : undefined,
       department: newRole === 'hod' ? newDepartment : undefined,
       childrenIds: newRole === 'parent' ? [newSelectedChildId] : undefined,
-      admissionNumber: newRole === 'student' ? (newIdNumber || `ADM/2026/0${newGrade}${Math.floor(10 + Math.random() * 90)}`) : undefined,
-      tscNumber: ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'deputy_head', 'librarian', 'head_teacher'].includes(newRole) 
-        ? (newIdNumber || `TSC/${Math.floor(10000 + Math.random() * 90000)}/ED`) 
-        : undefined,
+      admissionNumber: selectedRole.numberKind === 'admission' ? newIdNumber.trim() : undefined,
+      staffNumber: selectedRole.numberKind === 'staff' ? newIdNumber.trim() : undefined,
+      designation: selectedRole.name,
       assignedSubjects: newRole === 'teacher' ? ['Mathematics', 'Integrated Science'] : undefined
     };
 
     Storage.addUser(newUser);
+    saveProvisionedAccount(newUser);
     setCreateUserSuccess(true);
     setNewName('');
     setNewEmail('');
     setNewPassword('');
+    setNewRole('');
     setNewIdNumber('');
     setTimeout(() => setCreateUserSuccess(false), 3000);
   };
@@ -330,11 +340,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      
+    <div className="flex w-full items-start">
+      <SchoolActionMenu
+        activeTab={activeTab}
+        onSelect={openTab}
+        collapsed={menuCollapsed}
+        onToggleCollapsed={() => setMenuCollapsed((open) => !open)}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+        userCount={allUsers.length}
+        workLogCount={workLogs.length}
+      />
+      <div className="min-w-0 flex-1 px-4 py-6 space-y-6 sm:px-6 lg:px-8">
       {/* Leadership & Admin Banner */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700"
+            aria-label="Open action menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <div className="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 hidden sm:flex items-center justify-center">
             <EduSmartGadsaLogo variant="horizontal" size="sm" />
           </div>
@@ -371,224 +399,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
-            activeTab === 'overview' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <School className="w-3.5 h-3.5" />
-          <span>Dashboard Overview</span>
-        </button>
+      {activeTab === 'grades' && (
+        <GradeClassPages
+          schoolId={currentTenant.id}
+          domain={findSchoolAccountBySchoolId(currentTenant.id)?.domain || currentTenant.domain}
+        />
+      )}
 
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
-            activeTab === 'analytics' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-3.5 h-3.5 text-blue-500" />
-          <span>Attendance & Academic KPIs</span>
-          <span className="text-[10px] bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded font-bold">Recharts</span>
-        </button>
+      {activeTab === 'students' && (
+        <StudentDirectoryPage
+          schoolId={currentTenant.id}
+          domain={findSchoolAccountBySchoolId(currentTenant.id)?.domain || currentTenant.domain}
+        />
+      )}
 
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
-            activeTab === 'users' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5" />
-          <span>User Directory ({allUsers.length})</span>
-        </button>
+      {activeTab === 'departments' && (
+        <DepartmentPages schoolId={currentTenant.id} />
+      )}
 
-        <button
-          onClick={() => setActiveTab('create_user')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'create_user' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <UserPlus className="w-3.5 h-3.5" />
-          <span>Create New User Account</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('bulk_import')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'bulk_import' ? 'bg-indigo-700 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Bulk Onboarding & Admissions</span>
-          <span className="text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.2 rounded font-bold">Term Opening</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('permissions')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'permissions' ? 'bg-indigo-900 text-white shadow-xs' : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Role Permissions & Access Matrix</span>
-          <span className="text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.2 rounded font-bold">Admin Control</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('extra_roles')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'extra_roles' ? 'bg-purple-900 text-white shadow-xs' : 'bg-purple-50 text-purple-900 border border-purple-200 hover:bg-purple-100'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
-          <span>Extra Roles & Delegations (5 Roles)</span>
-          <span className="text-[10px] bg-purple-200 text-purple-900 px-1.5 py-0.2 rounded font-bold">Admin Assigned</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cms_hub')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'cms_hub' ? 'bg-amber-900 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
-          }`}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
-          <span>CMS Posts, Categories & Sections</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('doc_requests')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'doc_requests' ? 'bg-blue-900 text-white shadow-xs' : 'bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5 text-blue-600" />
-          <span>Document Requests Hub</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('staff_appraisal')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'staff_appraisal' ? 'bg-indigo-900 text-white shadow-xs' : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'
-          }`}
-        >
-          <Award className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Staff Appraisal (TSC TPAD)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('passwords')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'passwords' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <KeyRound className="w-3.5 h-3.5" />
-          <span>Grade Passwords Management</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('virtual_rooms')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'virtual_rooms' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Video className="w-3.5 h-3.5" />
-          <span>Google Meet Room Links</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('work_entry_audit')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'work_entry_audit' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <FileText className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Work Entry Sign-Ins ({workLogs.length})</span>
-          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 px-1.5 py-0.5 rounded font-mono font-bold">Locked</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('timetable')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'timetable' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <CalendarDays className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Curriculum Timetable & Bell Schedule</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('sanatorium')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'sanatorium' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <HeartPulse className="w-3.5 h-3.5 text-rose-400" />
-          <span>Sanatorium Logs</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('lunch_register')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'lunch_register' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Utensils className="w-3.5 h-3.5 text-amber-400" />
-          <span>Learner Lunch Register</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('transport')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'transport' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Bus className="w-3.5 h-3.5 text-amber-400" />
-          <span>School Transport</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('cocurricular')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'cocurricular' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <Trophy className="w-3.5 h-3.5 text-purple-400" />
-          <span>Co-Curricular Programmes</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('oversight')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'oversight' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          <BarChart3 className="w-3.5 h-3.5" />
-          <span>Executive Oversight & Logs</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'reports' ? 'bg-slate-900 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-          }`}
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Reports & Dossiers (Print / PDF)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('operations')}
-          className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${
-            activeTab === 'operations' ? 'bg-slate-900 text-white shadow-xs' : 'bg-teal-50 text-teal-900 hover:bg-teal-100 border border-teal-300'
-          }`}
-        >
-          <Building2 className="w-3.5 h-3.5 text-teal-600" />
-          <span>Finance, Procurement, Stores & HR Hub</span>
-          <span className="text-[10px] bg-teal-200 text-teal-950 px-1.5 py-0.2 rounded font-black">Connected</span>
-        </button>
-      </div>
+      {activeTab === 'teachers' && (
+        <TeacherAppraisalPages
+          schoolId={currentTenant.id}
+          domain={findSchoolAccountBySchoolId(currentTenant.id)?.domain || currentTenant.domain}
+          currentUser={currentUser}
+        />
+      )}
 
       {/* ========================================================
           OVERVIEW TAB (MATCHING PANEL 3 IN USER ARCHITECTURAL DIAGRAM)
@@ -638,14 +473,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
               <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={() => setActiveTab('users')}
+                  onClick={() => openTab('grades')}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  <span>Create grade</span>
+                </button>
+                <button
+                  onClick={() => openTab('users')}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Users className="w-4 h-4" />
                   <span>Manage Users</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab('reports')}
+                  onClick={() => openTab('reports')}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
@@ -853,144 +695,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         </section>
       )}
 
-      {/* ========================================================
-          TAB 1: USER DIRECTORY
-          ======================================================== */}
       {activeTab === 'users' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Institutional User Directory
-              </h2>
-              <p className="text-xs text-slate-500">
-                All registered students, teachers, class teachers, and executive leadership.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search name or email..."
-                  className="pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 w-48 sm:w-64"
-                />
-              </div>
-
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg font-bold bg-white"
-              >
-                <option value="all">All Roles (15 Roles)</option>
-                <option value="admin">System Administrator</option>
-                <option value="head_teacher">Head Teacher (Principal)</option>
-                <option value="deputy_head">Deputy Head Teacher</option>
-                <option value="dean_of_studies">Dean of Studies</option>
-                <option value="senior_teacher">Senior Teacher</option>
-                <option value="hod">HOD (Department)</option>
-                <option value="class_teacher">Class Teacher</option>
-                <option value="teacher">Subject Teacher</option>
-                <option value="nurse">School Sanatorium Nurse</option>
-                <option value="school_admin_staff">School Admin Staff</option>
-                <option value="librarian">School Librarian</option>
-                <option value="transport_team">Transport Team</option>
-                <option value="cocurricular_team">Co-Curricular Team</option>
-                <option value="parent">Parent / Guardian</option>
-                <option value="student">Learner / Student</option>
-              </select>
-            </div>
-          </div>
-
-          {actionToast && (
-            <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
-              actionToast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
-              actionToast.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-900' :
-              'bg-blue-50 border-blue-200 text-blue-900'
-            }`}>
-              <div className="flex items-center gap-2 font-medium">
-                {actionToast.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <ShieldAlert className="w-4 h-4 text-rose-600" />}
-                <span>{actionToast.message}</span>
-              </div>
-              <button onClick={() => setActionToast(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-3">Name</th>
-                  <th className="py-2.5 px-3">Username (Email)</th>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Grade & Stream</th>
-                  <th className="py-2.5 px-3">ID / TSC No.</th>
-                  <th className="py-2.5 px-3 text-right">Password</th>
-                  <th className="py-2.5 px-3 text-right font-bold text-slate-900">Access & Role Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredUsers.map((u) => {
-                  const isNurseUser = u.role === 'nurse' || u.email === 'nurse@edusmart.ac.ke';
-                  return (
-                    <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2.5 px-3 font-bold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span>{u.name}</span>
-                          {u.customPermissions && Object.keys(u.customPermissions).length > 0 && (
-                            <span className="text-[9px] font-mono bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded font-bold" title="Custom access rights applied">
-                              Custom Rights
-                            </span>
-                          )}
-                        </div>
-                        {u.designation && (
-                          <div className="text-[10px] text-slate-400 font-normal">{u.designation}</div>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-slate-600">{u.email}</td>
-                      <td className="py-2.5 px-3">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase border ${
-                          u.role === 'admin' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                          u.role === 'nurse' || isNurseUser ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                          u.role === 'deputy_head' || u.role === 'dean_of_studies' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                          u.role === 'head_teacher' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}>
-                          {u.role === 'nurse' || isNurseUser ? '🏥 Nurse (Clinic)' : u.role.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-600">
-                        {u.grade ? `Grade ${u.grade} ${u.stream ? `(${u.stream})` : ''}` : 'School-Wide'}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-slate-500">
-                        {u.admissionNumber || u.tscNumber || 'ADM/STAFF'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-700 font-bold">
-                        {u.password || '••••••••'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right">
-                        <button
-                          onClick={() => handleOpenEditUserModal(u)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-lg transition-all shadow-2xs cursor-pointer"
-                          title="Assign roles and limit or expand access rights"
-                        >
-                          <Edit2 className="w-3 h-3 text-indigo-600" />
-                          <span>Edit & Assign Role</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <RoleDirectory
+          schoolId={currentTenant.id}
+          users={allUsers}
+          onEdit={handleOpenEditUserModal}
+          onChanged={(message) => { setAllUsers(Storage.getUsers()); showToast(message, 'success'); }}
+        />
       )}
+
 
       {/* ========================================================
           TAB 2: CREATE USER ACCOUNT (ADMIN ONLY)
@@ -1002,7 +715,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               Create New School User Account
             </h2>
             <p className="text-xs text-slate-500">
-              Admin provisioned accounts: username must be an email address, with assigned password and strict grade/stream allocation.
+              Type the full legal name to preview the username. Choose the role to preview the password and the admission or staff number.
             </p>
           </div>
 
@@ -1021,73 +734,103 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           )}
 
           <form onSubmit={handleCreateUser} className="space-y-4 max-w-2xl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Full Legal Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. John Ochieng"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Full Legal Name
+              </label>
+              <input
+                type="text"
+                required
+                value={newName}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setNewName(name);
+                  const domain = findSchoolAccountBySchoolId(currentTenant.id)?.domain || currentTenant.domain || '';
+                  const taken = Storage.getUsers().map((user) => user.email).filter(Boolean);
+                  setNewEmail(uniqueUsername(buildUsername(name, domain), taken));
+                }}
+                placeholder="e.g. Mary Wanjiku Kamau"
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
+              />
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Username (Email Address)
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="e.g. john.ochieng@student.edusmart.ac.ke"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={newEmail}
+                placeholder="Username appears here as you type the full name"
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Account Role
+              </label>
+              <select
+                required
+                value={newRole}
+                onChange={(e) => {
+                  const slug = e.target.value as UserRole;
+                  setNewRole(slug);
+                  const role = systemRoles.find((item) => item.slug === slug);
+                  if (!role) {
+                    setNewPassword('');
+                    setNewIdNumber('');
+                    return;
+                  }
+                  setNewPassword(rolePassword(role.passwordPrefix));
+                  const code = registryKindCode(role.numberKind);
+                  if (!code) {
+                    setNewIdNumber('');
+                    return;
+                  }
+                  const year = new Date().getFullYear();
+                  const existing = Storage.getUsers()
+                    .filter((user) => (user.schoolId || currentTenant.id) === currentTenant.id)
+                    .flatMap((user) => [user.admissionNumber, user.staffNumber, user.tscNumber].filter(Boolean) as string[]);
+                  setNewIdNumber(nextRegistryNumber(code, year, existing));
+                }}
+                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
+              >
+                <option value="">Choose an account role</option>
+                {systemRoles.map((role) => (
+                  <option key={role.id} value={role.slug}>{role.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Account Password
+                  Password
                 </label>
                 <input
                   type="text"
-                  required
+                  readOnly
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder={newRole === 'student' ? `GR${newGrade}@2026` : 'teach2026'}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-bold"
+                  placeholder="Password appears after you choose the role"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono font-bold text-slate-900"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Account Role
-                </label>
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                >
-                  <option value="student">Learner / Student (Own academic & school info)</option>
-                  <option value="parent">Parent (Their children's information)</option>
-                  <option value="teacher">Subject Teacher (Assigned classes & subjects)</option>
-                  <option value="class_teacher">Class Teacher (Assigned class + learners)</option>
-                  <option value="hod">HOD (Department)</option>
-                  <option value="senior_teacher">Senior Teacher (Academic/learner supervision)</option>
-                  <option value="deputy_head">Deputy Head Teacher (Operations/discipline/staff)</option>
-                  <option value="dean_of_studies">Dean of Studies (Academic/assessment)</option>
-                  <option value="librarian">Librarian (Library)</option>
-                  <option value="head_teacher">Head Teacher (School-wide management)</option>
-                  <option value="admin">System Administrator (Full system administration)</option>
-                </select>
-              </div>
+              {systemRoles.find((role) => role.slug === newRole)?.numberKind !== 'none' && newRole !== '' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {systemRoles.find((role) => role.slug === newRole)?.numberKind === 'admission' ? 'Admission number' : 'Staff number'}
+                  </label>
+                  <input
+                    type="text"
+                    value={newIdNumber}
+                    onChange={(e) => setNewIdNumber(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono bg-white"
+                  />
+                </div>
+              )}
             </div>
 
             {/* If Student or Class Teacher: select exactly 1 grade and 1 stream */}
@@ -1167,19 +910,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 </select>
               </div>
             )}
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {newRole === 'student' ? 'Admission Number' : 'TSC Number / Staff ID'} (Optional)
-              </label>
-              <input
-                type="text"
-                value={newIdNumber}
-                onChange={(e) => setNewIdNumber(e.target.value)}
-                placeholder={newRole === 'student' ? 'ADM/2026/0491' : 'TSC/99812/ED'}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono"
-              />
-            </div>
 
             <div className="pt-2">
               <button
@@ -1749,8 +1479,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       {activeTab === 'extra_roles' && (
         <ExtraRolesManager 
           currentUser={currentUser} 
-          onNavigateToDocs={() => setActiveTab('doc_requests')}
-          onNavigateToCMS={() => setActiveTab('cms_hub')}
+          onNavigateToDocs={() => openTab('doc_requests')}
+          onNavigateToCMS={() => openTab('cms_hub')}
         />
       )}
 
@@ -1772,7 +1502,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           TAB: TEACHER & STAFF PERFORMANCE APPRAISAL (TSC TPAD)
           ======================================================== */}
       {activeTab === 'staff_appraisal' && (
-        <StaffAppraisalModule currentUser={currentUser} />
+        <SchoolStaffAppraisal currentUser={currentUser} />
       )}
 
       {/* ========================================================
@@ -2064,6 +1794,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 /**
  * Supabase browser client.
@@ -11,13 +11,16 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
  * See .env.local / .env.example for the split.
  */
 const runtimeEnv = import.meta.env || {};
-const supabaseUrl = runtimeEnv.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = runtimeEnv.VITE_SUPABASE_ANON_KEY as string | undefined;
+const supabaseUrl = (runtimeEnv.VITE_SUPABASE_URL || runtimeEnv.NEXT_PUBLIC_SUPABASE_URL) as string | undefined;
+const supabaseAnonKey = (
+  runtimeEnv.VITE_SUPABASE_ANON_KEY || runtimeEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+) as string | undefined;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
+export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl as string, supabaseAnonKey as string, {
+      db: { schema: 'edusmart' },
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
       realtime: { params: { eventsPerSecond: 10 } },
     })

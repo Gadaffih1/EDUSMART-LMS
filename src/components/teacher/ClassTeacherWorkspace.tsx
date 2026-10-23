@@ -15,7 +15,7 @@ import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { StudentGateExit } from './StudentGateExit';
 import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
 import { TimetablePortal } from '../timetable/TimetablePortal';
-import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { OwnStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { 
   UserCheck, 
@@ -897,7 +897,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
               ======================================================== */}
           {activeTab === 'staff_appraisal' && (
             <div className="space-y-6">
-              <StaffAppraisalModule currentUser={currentUser} />
+              <OwnStaffAppraisal currentUser={currentUser} />
             </div>
           )}
 

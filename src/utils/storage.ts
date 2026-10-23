@@ -94,96 +94,10 @@ import {
   AffectedLessonSlot,
   OnboardingBatchRecord
 } from '../types';
-import { INITIAL_CODING_CHALLENGES } from '../data/codingChallengeData';
-import {
-  INITIAL_POST_CATEGORIES,
-  INITIAL_PORTAL_SECTIONS,
-  INITIAL_DOCUMENT_REQUESTS,
-  INITIAL_DOCUMENT_SUBMISSIONS
-} from '../data/extraRolesData';
-import { INITIAL_CBA_TASK_MAPPINGS } from '../data/cbaTaskMappingData';
-import { INITIAL_STAFF_APPRAISALS } from '../data/staffAppraisalData';
-import { INITIAL_CURRICULUM_WRITTEN_REPORTS } from '../data/curriculumWrittenReportsData';
-import {
-  INITIAL_COORDINATOR_SCHEMES_OF_WORK,
-  INITIAL_COORDINATOR_SYLLABUS_TRACKING,
-  INITIAL_COORDINATOR_CBA_MODERATIONS
-} from '../data/coordinatorCurriculumData';
-import {
-  INITIAL_FIXED_LESSON_CONDITIONS,
-  INITIAL_SHARED_FACILITIES
-} from '../data/timetableData';
-import {
-  INITIAL_USERS,
-  INITIAL_GRADE_PASSWORDS,
-  INITIAL_TOPICS,
-  INITIAL_LESSON_NOTES,
-  INITIAL_VIDEOS,
-  INITIAL_AUDIOS,
-  INITIAL_QUIZZES,
-  INITIAL_QUIZ_ATTEMPTS,
-  INITIAL_ASSIGNMENTS,
-  INITIAL_ANNOUNCEMENTS,
-  INITIAL_VIRTUAL_CLASSES,
-  INITIAL_WORK_ENTRY_LOGS,
-  INITIAL_GATE_EXIT_PASSES,
-  INITIAL_ATTENDANCE,
-  INITIAL_TIMETABLE,
-  INITIAL_REPORT_CARDS,
-  INITIAL_CHAT_MESSAGES,
-  INITIAL_LIBRARY_BOOKS,
-  INITIAL_BORROW_RECORDS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_BADGES,
-  INITIAL_PORTFOLIO_ITEMS,
-  INITIAL_PERIODIC_REPORTS,
-  INITIAL_EXTERNAL_TOOLS,
-  INITIAL_SEARCH_AUDIT_LOGS,
-  INITIAL_CALENDAR_EVENTS,
-  INITIAL_EVENT_TICKETS,
-  INITIAL_ASSESSMENT_RECORDS,
-  INITIAL_TEACHER_UPLOAD_ASSIGNMENTS,
-  INITIAL_PARENT_COMMUNICATIONS,
-  INITIAL_EXAM_TIMETABLE,
-  INITIAL_SANATORIUM_RECORDS,
-  INITIAL_SCHOOL_BUSES,
-  INITIAL_TRANSPORT_ROUTES,
-  INITIAL_STUDENT_TRANSPORT_PROFILES,
-  INITIAL_TRANSPORT_TRIP_RECORDS,
-  INITIAL_TRANSPORT_INCIDENTS,
-  INITIAL_TRANSPORT_ALERTS,
-  INITIAL_CO_CURRICULAR_ACTIVITIES,
-  INITIAL_LEARNER_CO_CURRICULAR_PROFILES,
-  INITIAL_CO_CURRICULAR_ATTENDANCE,
-  INITIAL_CO_CURRICULAR_COMPETITIONS,
-  INITIAL_CO_CURRICULAR_EQUIPMENT,
-  INITIAL_CO_CURRICULAR_TRIPS,
-  INITIAL_CO_CURRICULAR_ANNOUNCEMENTS,
-  INITIAL_CO_CURRICULAR_BUDGET,
-  INITIAL_LIBRARY_RESERVATIONS,
-  INITIAL_LIBRARY_FINES,
-  INITIAL_LIBRARY_ACQUISITIONS,
-  INITIAL_LIBRARY_SHELVES,
-  INITIAL_DIGITAL_LIBRARY_ITEMS,
-  INITIAL_READING_PROGRAMME_MEMBERS,
-  INITIAL_LIBRARY_ATTENDANCE,
-  INITIAL_LIBRARY_TIMETABLE,
-  INITIAL_LIBRARY_EVENTS,
-  INITIAL_LIBRARY_POLICIES,
-  INITIAL_LIBRARY_AUDIT_LOGS,
-  INITIAL_LIBRARY_ROOMS,
-  INITIAL_LIBRARY_ROOM_BOOKINGS,
-  INITIAL_BELL_SCHEDULE,
-  INITIAL_LUNCH_RECORDS,
-  INITIAL_STAFF_DUTY_ROSTER,
-  INITIAL_DROPOFF_VERIFICATIONS,
-  INITIAL_LESSON_IMAGES,
-  INITIAL_E_LINKS
-} from '../data/initialData';
-import { INITIAL_TENANTS } from '../data/tenantsData';
-import { createTenantUsers } from './tenantDataFactory';
 import { SyncEngine } from './syncEngine';
+import { getStudentRecord, studentRecordToUser } from './schoolDirectoryStore';
 import { isSupabaseConfigured } from '../lib/supabase';
+import { isRemoteDataActive } from './supabaseHydrate';
 
 const KEYS = {
   USERS: 'edusmart_users_v1',
@@ -288,6 +202,9 @@ function getFromStorage<T>(key: string, defaultValue: T): T {
     }
     const item = localStorage.getItem(key);
     if (!item || item === 'undefined' || item === 'null') {
+      if (isRemoteDataActive()) {
+        return Array.isArray(defaultValue) ? [] as T : defaultValue;
+      }
       if (!isSupabaseConfigured) {
         // Factory seed: written locally only — uploaded on first sync if the
         // cloud copy of this collection is empty (never overwrites cloud data).
@@ -721,87 +638,98 @@ export const INITIAL_ONBOARDING_BATCHES: OnboardingBatchRecord[] = [
   }
 ];
 
+const REMOVED_ACCOUNTS_KEY = 'edusmart_removed_accounts_v1';
+
+function removedAccountIds(): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REMOVED_ACCOUNTS_KEY) || '[]');
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
 export const Storage = {
   getInitialSeedCollections(): Record<string, unknown> {
     return {
       [KEYS.ROLE_PERMISSIONS]: DEFAULT_ROLE_PERMISSIONS,
-      [KEYS.TOPICS]: INITIAL_TOPICS,
-      [KEYS.NOTES]: INITIAL_LESSON_NOTES,
-      [KEYS.VIDEOS]: INITIAL_VIDEOS,
-      [KEYS.AUDIOS]: INITIAL_AUDIOS,
-      [KEYS.QUIZZES]: INITIAL_QUIZZES,
-      [KEYS.QUIZ_ATTEMPTS]: INITIAL_QUIZ_ATTEMPTS,
-      [KEYS.ASSIGNMENTS]: INITIAL_ASSIGNMENTS,
-      [KEYS.ANNOUNCEMENTS]: INITIAL_ANNOUNCEMENTS,
-      [KEYS.VIRTUAL_CLASSES]: INITIAL_VIRTUAL_CLASSES,
-      [KEYS.WORK_ENTRY_LOGS]: INITIAL_WORK_ENTRY_LOGS,
-      [KEYS.GATE_PASSES]: INITIAL_GATE_EXIT_PASSES,
-      [KEYS.ATTENDANCE]: INITIAL_ATTENDANCE,
-      [KEYS.TIMETABLE]: INITIAL_TIMETABLE,
-      [KEYS.BELL_SCHEDULE]: INITIAL_BELL_SCHEDULE,
-      [KEYS.FIXED_LESSON_CONDITIONS]: INITIAL_FIXED_LESSON_CONDITIONS,
-      [KEYS.SHARED_RESOURCES]: INITIAL_SHARED_FACILITIES,
-      [KEYS.LUNCH_RECORDS]: INITIAL_LUNCH_RECORDS,
-      [KEYS.REPORT_CARDS]: INITIAL_REPORT_CARDS,
-      [KEYS.CHAT_MESSAGES]: INITIAL_CHAT_MESSAGES,
-      [KEYS.LIBRARY_BOOKS]: INITIAL_LIBRARY_BOOKS,
-      [KEYS.BORROW_RECORDS]: INITIAL_BORROW_RECORDS,
-      [KEYS.LIBRARY_ACQUISITIONS]: INITIAL_LIBRARY_ACQUISITIONS,
-      [KEYS.NOTIFICATIONS]: INITIAL_NOTIFICATIONS,
-      [KEYS.BADGES]: INITIAL_BADGES,
-      [KEYS.PORTFOLIO]: INITIAL_PORTFOLIO_ITEMS,
-      [KEYS.PERIODIC_REPORTS]: INITIAL_PERIODIC_REPORTS,
-      [KEYS.EXTERNAL_TOOLS]: INITIAL_EXTERNAL_TOOLS,
-      [KEYS.SEARCH_AUDIT]: INITIAL_SEARCH_AUDIT_LOGS,
-      [KEYS.CALENDAR_EVENTS]: INITIAL_CALENDAR_EVENTS,
-      [KEYS.PARENT_COMMUNICATIONS]: INITIAL_PARENT_COMMUNICATIONS,
-      [KEYS.EXAM_TIMETABLE]: INITIAL_EXAM_TIMETABLE,
-      [KEYS.SANATORIUM_RECORDS]: INITIAL_SANATORIUM_RECORDS,
-      [KEYS.TRANSPORT_BUSES]: INITIAL_SCHOOL_BUSES,
-      [KEYS.TRANSPORT_ROUTES]: INITIAL_TRANSPORT_ROUTES,
-      [KEYS.TRANSPORT_STUDENTS]: INITIAL_STUDENT_TRANSPORT_PROFILES,
-      [KEYS.TRANSPORT_TRIP_RECORDS]: INITIAL_TRANSPORT_TRIP_RECORDS,
-      [KEYS.TRANSPORT_INCIDENTS]: INITIAL_TRANSPORT_INCIDENTS,
-      [KEYS.TRANSPORT_ALERTS]: INITIAL_TRANSPORT_ALERTS,
-      [KEYS.CO_CURRICULAR_ACTIVITIES]: INITIAL_CO_CURRICULAR_ACTIVITIES,
-      [KEYS.CO_CURRICULAR_PROFILES]: INITIAL_LEARNER_CO_CURRICULAR_PROFILES,
-      [KEYS.CO_CURRICULAR_ATTENDANCE]: INITIAL_CO_CURRICULAR_ATTENDANCE,
-      [KEYS.CO_CURRICULAR_COMPETITIONS]: INITIAL_CO_CURRICULAR_COMPETITIONS,
-      [KEYS.CO_CURRICULAR_EQUIPMENT]: INITIAL_CO_CURRICULAR_EQUIPMENT,
-      [KEYS.CO_CURRICULAR_TRIPS]: INITIAL_CO_CURRICULAR_TRIPS,
-      [KEYS.CO_CURRICULAR_ANNOUNCEMENTS]: INITIAL_CO_CURRICULAR_ANNOUNCEMENTS,
-      [KEYS.CO_CURRICULAR_BUDGET]: INITIAL_CO_CURRICULAR_BUDGET,
-      [KEYS.LIBRARY_RESERVATIONS]: INITIAL_LIBRARY_RESERVATIONS,
-      [KEYS.LIBRARY_FINES]: INITIAL_LIBRARY_FINES,
-      [KEYS.LIBRARY_ACQUISITIONS]: INITIAL_LIBRARY_ACQUISITIONS,
-      [KEYS.LIBRARY_SHELVES]: INITIAL_LIBRARY_SHELVES,
-      [KEYS.LIBRARY_DIGITAL_ITEMS]: INITIAL_DIGITAL_LIBRARY_ITEMS,
-      [KEYS.LIBRARY_READING_PROGRAMME]: INITIAL_READING_PROGRAMME_MEMBERS,
-      [KEYS.LIBRARY_ATTENDANCE]: INITIAL_LIBRARY_ATTENDANCE,
-      [KEYS.LIBRARY_TIMETABLE]: INITIAL_LIBRARY_TIMETABLE,
-      [KEYS.LIBRARY_EVENTS]: INITIAL_LIBRARY_EVENTS,
-      [KEYS.LIBRARY_POLICIES]: INITIAL_LIBRARY_POLICIES,
-      [KEYS.LIBRARY_AUDIT_LOGS]: INITIAL_LIBRARY_AUDIT_LOGS,
-      [KEYS.LIBRARY_ROOMS]: INITIAL_LIBRARY_ROOMS,
-      [KEYS.LIBRARY_ROOM_BOOKINGS]: INITIAL_LIBRARY_ROOM_BOOKINGS,
-      [KEYS.STAFF_DUTY_ROSTER]: INITIAL_STAFF_DUTY_ROSTER,
-      [KEYS.DROPOFF_VERIFICATIONS]: INITIAL_DROPOFF_VERIFICATIONS,
-      [KEYS.LESSON_IMAGES]: INITIAL_LESSON_IMAGES,
-      [KEYS.E_LINKS]: INITIAL_E_LINKS,
-      [KEYS.EVENT_TICKETS]: INITIAL_EVENT_TICKETS,
-      [KEYS.ASSESSMENT_RECORDS]: INITIAL_ASSESSMENT_RECORDS,
-      [KEYS.TEACHER_UPLOAD_ASSIGNMENTS]: INITIAL_TEACHER_UPLOAD_ASSIGNMENTS,
-      [KEYS.CODING_CHALLENGES]: INITIAL_CODING_CHALLENGES,
-      [KEYS.DOCUMENT_REQUESTS]: INITIAL_DOCUMENT_REQUESTS,
-      [KEYS.DOCUMENT_SUBMISSIONS]: INITIAL_DOCUMENT_SUBMISSIONS,
-      [KEYS.POST_CATEGORIES]: INITIAL_POST_CATEGORIES,
-      [KEYS.PORTAL_SECTIONS]: INITIAL_PORTAL_SECTIONS,
-      [KEYS.CBA_TASK_MAPPINGS]: INITIAL_CBA_TASK_MAPPINGS,
-      [KEYS.STAFF_APPRAISALS]: INITIAL_STAFF_APPRAISALS,
-      [KEYS.CURRICULUM_WRITTEN_REPORTS]: INITIAL_CURRICULUM_WRITTEN_REPORTS,
-      [KEYS.COORDINATOR_SCHEMES_OF_WORK]: INITIAL_COORDINATOR_SCHEMES_OF_WORK,
-      [KEYS.COORDINATOR_SYLLABUS_TRACKING]: INITIAL_COORDINATOR_SYLLABUS_TRACKING,
-      [KEYS.COORDINATOR_CBA_MODERATIONS]: INITIAL_COORDINATOR_CBA_MODERATIONS,
+      [KEYS.TOPICS]: [],
+      [KEYS.NOTES]: [],
+      [KEYS.VIDEOS]: [],
+      [KEYS.AUDIOS]: [],
+      [KEYS.QUIZZES]: [],
+      [KEYS.QUIZ_ATTEMPTS]: [],
+      [KEYS.ASSIGNMENTS]: [],
+      [KEYS.ANNOUNCEMENTS]: [],
+      [KEYS.VIRTUAL_CLASSES]: [],
+      [KEYS.WORK_ENTRY_LOGS]: [],
+      [KEYS.GATE_PASSES]: [],
+      [KEYS.ATTENDANCE]: [],
+      [KEYS.TIMETABLE]: [],
+      [KEYS.BELL_SCHEDULE]: [],
+      [KEYS.FIXED_LESSON_CONDITIONS]: [],
+      [KEYS.SHARED_RESOURCES]: [],
+      [KEYS.LUNCH_RECORDS]: [],
+      [KEYS.REPORT_CARDS]: [],
+      [KEYS.CHAT_MESSAGES]: [],
+      [KEYS.LIBRARY_BOOKS]: [],
+      [KEYS.BORROW_RECORDS]: [],
+      [KEYS.LIBRARY_ACQUISITIONS]: [],
+      [KEYS.NOTIFICATIONS]: [],
+      [KEYS.BADGES]: [],
+      [KEYS.PORTFOLIO]: [],
+      [KEYS.PERIODIC_REPORTS]: [],
+      [KEYS.EXTERNAL_TOOLS]: [],
+      [KEYS.SEARCH_AUDIT]: [],
+      [KEYS.CALENDAR_EVENTS]: [],
+      [KEYS.PARENT_COMMUNICATIONS]: [],
+      [KEYS.EXAM_TIMETABLE]: [],
+      [KEYS.SANATORIUM_RECORDS]: [],
+      [KEYS.TRANSPORT_BUSES]: [],
+      [KEYS.TRANSPORT_ROUTES]: [],
+      [KEYS.TRANSPORT_STUDENTS]: [],
+      [KEYS.TRANSPORT_TRIP_RECORDS]: [],
+      [KEYS.TRANSPORT_INCIDENTS]: [],
+      [KEYS.TRANSPORT_ALERTS]: [],
+      [KEYS.CO_CURRICULAR_ACTIVITIES]: [],
+      [KEYS.CO_CURRICULAR_PROFILES]: [],
+      [KEYS.CO_CURRICULAR_ATTENDANCE]: [],
+      [KEYS.CO_CURRICULAR_COMPETITIONS]: [],
+      [KEYS.CO_CURRICULAR_EQUIPMENT]: [],
+      [KEYS.CO_CURRICULAR_TRIPS]: [],
+      [KEYS.CO_CURRICULAR_ANNOUNCEMENTS]: [],
+      [KEYS.CO_CURRICULAR_BUDGET]: [],
+      [KEYS.LIBRARY_RESERVATIONS]: [],
+      [KEYS.LIBRARY_FINES]: [],
+      [KEYS.LIBRARY_ACQUISITIONS]: [],
+      [KEYS.LIBRARY_SHELVES]: [],
+      [KEYS.LIBRARY_DIGITAL_ITEMS]: [],
+      [KEYS.LIBRARY_READING_PROGRAMME]: [],
+      [KEYS.LIBRARY_ATTENDANCE]: [],
+      [KEYS.LIBRARY_TIMETABLE]: [],
+      [KEYS.LIBRARY_EVENTS]: [],
+      [KEYS.LIBRARY_POLICIES]: [],
+      [KEYS.LIBRARY_AUDIT_LOGS]: [],
+      [KEYS.LIBRARY_ROOMS]: [],
+      [KEYS.LIBRARY_ROOM_BOOKINGS]: [],
+      [KEYS.STAFF_DUTY_ROSTER]: [],
+      [KEYS.DROPOFF_VERIFICATIONS]: [],
+      [KEYS.LESSON_IMAGES]: [],
+      [KEYS.E_LINKS]: [],
+      [KEYS.EVENT_TICKETS]: [],
+      [KEYS.ASSESSMENT_RECORDS]: [],
+      [KEYS.TEACHER_UPLOAD_ASSIGNMENTS]: [],
+      [KEYS.CODING_CHALLENGES]: [],
+      [KEYS.DOCUMENT_REQUESTS]: [],
+      [KEYS.DOCUMENT_SUBMISSIONS]: [],
+      [KEYS.POST_CATEGORIES]: [],
+      [KEYS.PORTAL_SECTIONS]: [],
+      [KEYS.CBA_TASK_MAPPINGS]: [],
+      [KEYS.STAFF_APPRAISALS]: [],
+      [KEYS.CURRICULUM_WRITTEN_REPORTS]: [],
+      [KEYS.COORDINATOR_SCHEMES_OF_WORK]: [],
+      [KEYS.COORDINATOR_SYLLABUS_TRACKING]: [],
+      [KEYS.COORDINATOR_CBA_MODERATIONS]: [],
       [KEYS.ONBOARDING_BATCHES]: INITIAL_ONBOARDING_BATCHES,
     };
   },
@@ -812,59 +740,59 @@ export const Storage = {
       console.error('[storage] Demo data reset is disabled when Supabase is configured.');
       return;
     }
-    persistItem(KEYS.USERS, JSON.stringify(INITIAL_USERS));
-    persistItem(KEYS.GRADE_PASSWORDS, JSON.stringify(INITIAL_GRADE_PASSWORDS));
-    persistItem(KEYS.TOPICS, JSON.stringify(INITIAL_TOPICS));
-    persistItem(KEYS.NOTES, JSON.stringify(INITIAL_LESSON_NOTES));
-    persistItem(KEYS.VIDEOS, JSON.stringify(INITIAL_VIDEOS));
-    persistItem(KEYS.AUDIOS, JSON.stringify(INITIAL_AUDIOS));
-    persistItem(KEYS.QUIZZES, JSON.stringify(INITIAL_QUIZZES));
-    persistItem(KEYS.QUIZ_ATTEMPTS, JSON.stringify(INITIAL_QUIZ_ATTEMPTS));
-    persistItem(KEYS.ASSIGNMENTS, JSON.stringify(INITIAL_ASSIGNMENTS));
-    persistItem(KEYS.ANNOUNCEMENTS, JSON.stringify(INITIAL_ANNOUNCEMENTS));
-    persistItem(KEYS.VIRTUAL_CLASSES, JSON.stringify(INITIAL_VIRTUAL_CLASSES));
-    persistItem(KEYS.WORK_ENTRY_LOGS, JSON.stringify(INITIAL_WORK_ENTRY_LOGS));
-    persistItem(KEYS.GATE_PASSES, JSON.stringify(INITIAL_GATE_EXIT_PASSES));
-    persistItem(KEYS.ATTENDANCE, JSON.stringify(INITIAL_ATTENDANCE));
-    persistItem(KEYS.TIMETABLE, JSON.stringify(INITIAL_TIMETABLE));
-    persistItem(KEYS.BELL_SCHEDULE, JSON.stringify(INITIAL_BELL_SCHEDULE));
-    persistItem(KEYS.LUNCH_RECORDS, JSON.stringify(INITIAL_LUNCH_RECORDS));
-    persistItem(KEYS.REPORT_CARDS, JSON.stringify(INITIAL_REPORT_CARDS));
-    persistItem(KEYS.CHAT_MESSAGES, JSON.stringify(INITIAL_CHAT_MESSAGES));
-    persistItem(KEYS.LIBRARY_BOOKS, JSON.stringify(INITIAL_LIBRARY_BOOKS));
-    persistItem(KEYS.BORROW_RECORDS, JSON.stringify(INITIAL_BORROW_RECORDS));
-    persistItem(KEYS.SANATORIUM_RECORDS, JSON.stringify(INITIAL_SANATORIUM_RECORDS));
-    persistItem(KEYS.TRANSPORT_BUSES, JSON.stringify(INITIAL_SCHOOL_BUSES));
-    persistItem(KEYS.TRANSPORT_ROUTES, JSON.stringify(INITIAL_TRANSPORT_ROUTES));
-    persistItem(KEYS.TRANSPORT_STUDENTS, JSON.stringify(INITIAL_STUDENT_TRANSPORT_PROFILES));
-    persistItem(KEYS.TRANSPORT_TRIP_RECORDS, JSON.stringify(INITIAL_TRANSPORT_TRIP_RECORDS));
-    persistItem(KEYS.TRANSPORT_INCIDENTS, JSON.stringify(INITIAL_TRANSPORT_INCIDENTS));
-    persistItem(KEYS.TRANSPORT_ALERTS, JSON.stringify(INITIAL_TRANSPORT_ALERTS));
-    persistItem(KEYS.CO_CURRICULAR_ACTIVITIES, JSON.stringify(INITIAL_CO_CURRICULAR_ACTIVITIES));
-    persistItem(KEYS.CO_CURRICULAR_PROFILES, JSON.stringify(INITIAL_LEARNER_CO_CURRICULAR_PROFILES));
-    persistItem(KEYS.CO_CURRICULAR_ATTENDANCE, JSON.stringify(INITIAL_CO_CURRICULAR_ATTENDANCE));
-    persistItem(KEYS.CO_CURRICULAR_COMPETITIONS, JSON.stringify(INITIAL_CO_CURRICULAR_COMPETITIONS));
-    persistItem(KEYS.CO_CURRICULAR_EQUIPMENT, JSON.stringify(INITIAL_CO_CURRICULAR_EQUIPMENT));
-    persistItem(KEYS.CO_CURRICULAR_TRIPS, JSON.stringify(INITIAL_CO_CURRICULAR_TRIPS));
-    persistItem(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, JSON.stringify(INITIAL_CO_CURRICULAR_ANNOUNCEMENTS));
-    persistItem(KEYS.CO_CURRICULAR_BUDGET, JSON.stringify(INITIAL_CO_CURRICULAR_BUDGET));
-    persistItem(KEYS.LIBRARY_RESERVATIONS, JSON.stringify(INITIAL_LIBRARY_RESERVATIONS));
-    persistItem(KEYS.LIBRARY_FINES, JSON.stringify(INITIAL_LIBRARY_FINES));
-    persistItem(KEYS.LIBRARY_ACQUISITIONS, JSON.stringify(INITIAL_LIBRARY_ACQUISITIONS));
-    persistItem(KEYS.LIBRARY_SHELVES, JSON.stringify(INITIAL_LIBRARY_SHELVES));
-    persistItem(KEYS.LIBRARY_DIGITAL_ITEMS, JSON.stringify(INITIAL_DIGITAL_LIBRARY_ITEMS));
-    persistItem(KEYS.LIBRARY_READING_PROGRAMME, JSON.stringify(INITIAL_READING_PROGRAMME_MEMBERS));
-    persistItem(KEYS.LIBRARY_ATTENDANCE, JSON.stringify(INITIAL_LIBRARY_ATTENDANCE));
-    persistItem(KEYS.LIBRARY_TIMETABLE, JSON.stringify(INITIAL_LIBRARY_TIMETABLE));
-    persistItem(KEYS.LIBRARY_EVENTS, JSON.stringify(INITIAL_LIBRARY_EVENTS));
-    persistItem(KEYS.LIBRARY_POLICIES, JSON.stringify(INITIAL_LIBRARY_POLICIES));
-    persistItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify(INITIAL_LIBRARY_AUDIT_LOGS));
-    persistItem(KEYS.LESSON_IMAGES, JSON.stringify(INITIAL_LESSON_IMAGES));
-    persistItem(KEYS.E_LINKS, JSON.stringify(INITIAL_E_LINKS));
-    persistItem(KEYS.DOCUMENT_REQUESTS, JSON.stringify(INITIAL_DOCUMENT_REQUESTS));
-    persistItem(KEYS.DOCUMENT_SUBMISSIONS, JSON.stringify(INITIAL_DOCUMENT_SUBMISSIONS));
-    persistItem(KEYS.POST_CATEGORIES, JSON.stringify(INITIAL_POST_CATEGORIES));
-    persistItem(KEYS.PORTAL_SECTIONS, JSON.stringify(INITIAL_PORTAL_SECTIONS));
+    persistItem(KEYS.USERS, JSON.stringify([]));
+    persistItem(KEYS.GRADE_PASSWORDS, JSON.stringify([]));
+    persistItem(KEYS.TOPICS, JSON.stringify([]));
+    persistItem(KEYS.NOTES, JSON.stringify([]));
+    persistItem(KEYS.VIDEOS, JSON.stringify([]));
+    persistItem(KEYS.AUDIOS, JSON.stringify([]));
+    persistItem(KEYS.QUIZZES, JSON.stringify([]));
+    persistItem(KEYS.QUIZ_ATTEMPTS, JSON.stringify([]));
+    persistItem(KEYS.ASSIGNMENTS, JSON.stringify([]));
+    persistItem(KEYS.ANNOUNCEMENTS, JSON.stringify([]));
+    persistItem(KEYS.VIRTUAL_CLASSES, JSON.stringify([]));
+    persistItem(KEYS.WORK_ENTRY_LOGS, JSON.stringify([]));
+    persistItem(KEYS.GATE_PASSES, JSON.stringify([]));
+    persistItem(KEYS.ATTENDANCE, JSON.stringify([]));
+    persistItem(KEYS.TIMETABLE, JSON.stringify([]));
+    persistItem(KEYS.BELL_SCHEDULE, JSON.stringify([]));
+    persistItem(KEYS.LUNCH_RECORDS, JSON.stringify([]));
+    persistItem(KEYS.REPORT_CARDS, JSON.stringify([]));
+    persistItem(KEYS.CHAT_MESSAGES, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_BOOKS, JSON.stringify([]));
+    persistItem(KEYS.BORROW_RECORDS, JSON.stringify([]));
+    persistItem(KEYS.SANATORIUM_RECORDS, JSON.stringify([]));
+    persistItem(KEYS.TRANSPORT_BUSES, JSON.stringify([]));
+    persistItem(KEYS.TRANSPORT_ROUTES, JSON.stringify([]));
+    persistItem(KEYS.TRANSPORT_STUDENTS, JSON.stringify([]));
+    persistItem(KEYS.TRANSPORT_TRIP_RECORDS, JSON.stringify([]));
+    persistItem(KEYS.TRANSPORT_INCIDENTS, JSON.stringify([]));
+    persistItem(KEYS.TRANSPORT_ALERTS, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_ACTIVITIES, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_PROFILES, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_ATTENDANCE, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_COMPETITIONS, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_EQUIPMENT, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_TRIPS, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, JSON.stringify([]));
+    persistItem(KEYS.CO_CURRICULAR_BUDGET, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_RESERVATIONS, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_FINES, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_ACQUISITIONS, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_SHELVES, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_DIGITAL_ITEMS, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_READING_PROGRAMME, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_ATTENDANCE, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_TIMETABLE, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_EVENTS, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_POLICIES, JSON.stringify([]));
+    persistItem(KEYS.LIBRARY_AUDIT_LOGS, JSON.stringify([]));
+    persistItem(KEYS.LESSON_IMAGES, JSON.stringify([]));
+    persistItem(KEYS.E_LINKS, JSON.stringify([]));
+    persistItem(KEYS.DOCUMENT_REQUESTS, JSON.stringify([]));
+    persistItem(KEYS.DOCUMENT_SUBMISSIONS, JSON.stringify([]));
+    persistItem(KEYS.POST_CATEGORIES, JSON.stringify([]));
+    persistItem(KEYS.PORTAL_SECTIONS, JSON.stringify([]));
   },
 
   // Role Permissions & Access Control
@@ -957,59 +885,25 @@ export const Storage = {
 
   // Users
   getUsers(tenantId?: string): User[] {
-    const stored = getFromStorage<User[]>(KEYS.USERS, INITIAL_USERS);
+    const stored = getFromStorage<User[]>(KEYS.USERS, isRemoteDataActive() ? [] : []);
+    if (isRemoteDataActive()) {
+      return tenantId
+        ? stored.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
+        : stored;
+    }
     if (isSupabaseConfigured) {
-      const safeUsers = stored.map(({ password: _password, ...user }) => user);
-      if (stored.some(user => Object.prototype.hasOwnProperty.call(user, 'password'))) {
-        setToStorage(KEYS.USERS, safeUsers);
-      }
-      return tenantId 
-        ? safeUsers.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
-        : safeUsers;
+      return tenantId
+        ? stored.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
+        : stored;
     }
 
-    // Guarantee that all demo accounts across all schools are actively present in stored users
-    let hasMissing = false;
-    const existingIds = new Set(stored.map(u => u.id));
-    const existingEmails = new Set(stored.map(u => u.email.toLowerCase()));
-    const merged = [...stored];
-
-    // 1. Seed Riara School demo accounts
-    for (const initUser of INITIAL_USERS) {
-      const taggedUser = {
-        ...initUser,
-        schoolId: initUser.schoolId || 'tenant-riara'
-      };
-      if (!existingIds.has(taggedUser.id) && !existingEmails.has(taggedUser.email.toLowerCase())) {
-        merged.push(taggedUser);
-        existingIds.add(taggedUser.id);
-        existingEmails.add(taggedUser.email.toLowerCase());
-        hasMissing = true;
-      }
-    }
-
-    // 2. Seed all other school tenants demo accounts (Greenwood, Hillcrest, Sunrise, Westlands, St. Austin's)
-    for (const tenant of INITIAL_TENANTS) {
-      if (tenant.id === 'tenant-riara') continue;
-      const tenantUsers = createTenantUsers(tenant);
-      for (const tUser of tenantUsers) {
-        if (!existingIds.has(tUser.id) && !existingEmails.has(tUser.email.toLowerCase())) {
-          merged.push(tUser);
-          existingIds.add(tUser.id);
-          existingEmails.add(tUser.email.toLowerCase());
-          hasMissing = true;
-        }
-      }
-    }
-
-    if (hasMissing) {
-      setToStorage(KEYS.USERS, merged);
-    }
+    const removed = removedAccountIds();
+    const visible = removed.size > 0 ? stored.filter((user) => !removed.has(user.id)) : stored;
 
     if (tenantId) {
-      return merged.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'));
+      return visible.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'));
     }
-    return merged;
+    return visible;
   },
 
   addUser(user: User): void {
@@ -1075,6 +969,9 @@ export const Storage = {
     return users[idx];
   },
   deleteUser(id: string): void {
+    const removed = removedAccountIds();
+    removed.add(id);
+    localStorage.setItem(REMOVED_ACCOUNTS_KEY, JSON.stringify([...removed]));
     const users = this.getUsers().filter(u => u.id !== id);
     setToStorage(KEYS.USERS, users);
     window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
@@ -1082,26 +979,7 @@ export const Storage = {
   findUserByEmail(email: string): User | undefined {
     const cleanEmail = email.trim().toLowerCase();
     const userInStorage = this.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
-    if (userInStorage) return userInStorage;
-
-    // Fallback: search Riara initial users
-    const userInInitial = INITIAL_USERS.find(u => u.email.toLowerCase() === cleanEmail);
-    if (userInInitial) {
-      this.addUser(userInInitial);
-      return userInInitial;
-    }
-
-    // Fallback: search all school tenants demo users
-    for (const tenant of INITIAL_TENANTS) {
-      const tenantUsers = createTenantUsers(tenant);
-      const match = tenantUsers.find(u => u.email.toLowerCase() === cleanEmail);
-      if (match) {
-        this.addUser(match);
-        return match;
-      }
-    }
-
-    return undefined;
+    return userInStorage;
   },
 
   // Bulk User & Student Import for Term Openings
@@ -1178,7 +1056,7 @@ export const Storage = {
 
   // Grade Passwords
   getGradePasswords(): GradePassword[] {
-    return getFromStorage<GradePassword[]>(KEYS.GRADE_PASSWORDS, INITIAL_GRADE_PASSWORDS);
+    return getFromStorage<GradePassword[]>(KEYS.GRADE_PASSWORDS, []);
   },
   updateGradePassword(grade: GradeLevel, newPassword: string): void {
     const passwords = this.getGradePasswords();
@@ -1198,7 +1076,7 @@ export const Storage = {
 
   // Topics
   getTopics(grade?: GradeLevel): Topic[] {
-    const topics = getFromStorage<Topic[]>(KEYS.TOPICS, INITIAL_TOPICS);
+    const topics = getFromStorage<Topic[]>(KEYS.TOPICS, []);
     if (grade) {
       return topics.filter(t => t.grade === grade);
     }
@@ -1212,7 +1090,7 @@ export const Storage = {
 
   // Notes
   getNotes(grade?: GradeLevel): LessonNote[] {
-    const notes = getFromStorage<LessonNote[]>(KEYS.NOTES, INITIAL_LESSON_NOTES);
+    const notes = getFromStorage<LessonNote[]>(KEYS.NOTES, []);
     if (grade) {
       return notes.filter(n => n.grade === grade);
     }
@@ -1230,7 +1108,7 @@ export const Storage = {
 
   // Videos
   getVideos(grade?: GradeLevel): VideoLesson[] {
-    const videos = getFromStorage<VideoLesson[]>(KEYS.VIDEOS, INITIAL_VIDEOS);
+    const videos = getFromStorage<VideoLesson[]>(KEYS.VIDEOS, []);
     if (grade) {
       return videos.filter(v => v.grade === grade);
     }
@@ -1250,7 +1128,7 @@ export const Storage = {
 
   // Audios
   getAudios(grade?: GradeLevel): AudioLesson[] {
-    const audios = getFromStorage<AudioLesson[]>(KEYS.AUDIOS, INITIAL_AUDIOS);
+    const audios = getFromStorage<AudioLesson[]>(KEYS.AUDIOS, []);
     if (grade) {
       return audios.filter(a => a.grade === grade);
     }
@@ -1270,7 +1148,7 @@ export const Storage = {
 
   // Lesson Images (Diagrams, Charts, Visual Resources)
   getLessonImages(grade?: GradeLevel): LessonImage[] {
-    const images = getFromStorage<LessonImage[]>(KEYS.LESSON_IMAGES, INITIAL_LESSON_IMAGES);
+    const images = getFromStorage<LessonImage[]>(KEYS.LESSON_IMAGES, []);
     if (grade) {
       return images.filter(img => img.grade === grade);
     }
@@ -1292,7 +1170,7 @@ export const Storage = {
 
   // E-Links (Curated Digital Web Links for Library & Subject Teachers)
   getELinks(): ELink[] {
-    return getFromStorage<ELink[]>(KEYS.E_LINKS, INITIAL_E_LINKS);
+    return getFromStorage<ELink[]>(KEYS.E_LINKS, []);
   },
   saveELinks(links: ELink[]): void {
     setToStorage(KEYS.E_LINKS, links);
@@ -1315,7 +1193,7 @@ export const Storage = {
 
   // Quizzes
   getQuizzes(grade?: GradeLevel): Quiz[] {
-    const quizzes = getFromStorage<Quiz[]>(KEYS.QUIZZES, INITIAL_QUIZZES);
+    const quizzes = getFromStorage<Quiz[]>(KEYS.QUIZZES, []);
     if (grade) {
       return quizzes.filter(q => q.grade === grade);
     }
@@ -1329,7 +1207,7 @@ export const Storage = {
 
   // Quiz Attempts
   getQuizAttempts(studentId?: string): QuizAttempt[] {
-    const attempts = getFromStorage<QuizAttempt[]>(KEYS.QUIZ_ATTEMPTS, INITIAL_QUIZ_ATTEMPTS);
+    const attempts = getFromStorage<QuizAttempt[]>(KEYS.QUIZ_ATTEMPTS, []);
     if (studentId) {
       return attempts.filter(a => a.studentId === studentId);
     }
@@ -1343,7 +1221,7 @@ export const Storage = {
 
   // Assignments
   getAssignments(grade?: GradeLevel): Assignment[] {
-    const assignments = getFromStorage<Assignment[]>(KEYS.ASSIGNMENTS, INITIAL_ASSIGNMENTS);
+    const assignments = getFromStorage<Assignment[]>(KEYS.ASSIGNMENTS, []);
     if (grade) {
       return assignments.filter(a => a.grade === grade);
     }
@@ -1357,7 +1235,7 @@ export const Storage = {
 
   // Announcements
   getAnnouncements(grade?: GradeLevel): Announcement[] {
-    const list = getFromStorage<Announcement[]>(KEYS.ANNOUNCEMENTS, INITIAL_ANNOUNCEMENTS);
+    const list = getFromStorage<Announcement[]>(KEYS.ANNOUNCEMENTS, []);
     if (grade) {
       // announcements for this grade or for entire school (no targetGrade)
       return list.filter(a => !a.targetGrade || a.targetGrade === grade);
@@ -1372,7 +1250,7 @@ export const Storage = {
 
   // Virtual Classes
   getVirtualClasses(grade?: GradeLevel): VirtualClassRoom[] {
-    const rooms = getFromStorage<VirtualClassRoom[]>(KEYS.VIRTUAL_CLASSES, INITIAL_VIRTUAL_CLASSES);
+    const rooms = getFromStorage<VirtualClassRoom[]>(KEYS.VIRTUAL_CLASSES, []);
     if (grade) {
       return rooms.filter(r => r.grade === grade);
     }
@@ -1394,7 +1272,7 @@ export const Storage = {
 
   // Work Entry Logs
   getWorkEntryLogs(teacherId?: string): WorkEntryLog[] {
-    const rawLogs = getFromStorage<WorkEntryLog[]>(KEYS.WORK_ENTRY_LOGS, INITIAL_WORK_ENTRY_LOGS);
+    const rawLogs = getFromStorage<WorkEntryLog[]>(KEYS.WORK_ENTRY_LOGS, []);
     const normalizedLogs = rawLogs.map(l => ({
       ...l,
       staffNo: l.staffNo || (l.teacherId === 'usr-teach-kiprono' ? 'TSC/44120/ED' : 'TSC/39821/ED'),
@@ -1425,7 +1303,7 @@ export const Storage = {
 
   // Gate Exit Passes
   getGatePasses(): GateExitPass[] {
-    return getFromStorage<GateExitPass[]>(KEYS.GATE_PASSES, INITIAL_GATE_EXIT_PASSES);
+    return getFromStorage<GateExitPass[]>(KEYS.GATE_PASSES, []);
   },
   addGatePass(pass: GateExitPass): void {
     const passes = this.getGatePasses();
@@ -1451,7 +1329,7 @@ export const Storage = {
 
   // Attendance
   getAttendanceRecords(grade?: GradeLevel, stream?: StreamName): AttendanceRecord[] {
-    const records = getFromStorage<AttendanceRecord[]>(KEYS.ATTENDANCE, INITIAL_ATTENDANCE);
+    const records = getFromStorage<AttendanceRecord[]>(KEYS.ATTENDANCE, []);
     return records.filter(r => {
       if (grade && r.grade !== grade) return false;
       if (stream && r.stream !== stream) return false;
@@ -1463,7 +1341,7 @@ export const Storage = {
     return records.find(r => r.date === date);
   },
   saveAttendanceRecord(record: AttendanceRecord): void {
-    const records = getFromStorage<AttendanceRecord[]>(KEYS.ATTENDANCE, INITIAL_ATTENDANCE);
+    const records = getFromStorage<AttendanceRecord[]>(KEYS.ATTENDANCE, []);
     const existingIndex = records.findIndex(r => r.date === record.date && r.grade === record.grade && r.stream === record.stream);
     if (existingIndex !== -1) {
       records[existingIndex] = record;
@@ -1481,7 +1359,7 @@ export const Storage = {
     attendanceRate: number;
     history: { date: string; status: 'present' | 'absent' | 'late' | 'excused'; remarks?: string }[];
   } {
-    const records = getFromStorage<AttendanceRecord[]>(KEYS.ATTENDANCE, INITIAL_ATTENDANCE);
+    const records = getFromStorage<AttendanceRecord[]>(KEYS.ATTENDANCE, []);
     let totalMarkedDays = 0;
     let daysPresent = 0;
     let daysAbsent = 0;
@@ -1551,7 +1429,7 @@ export const Storage = {
 
   // Report Cards
   getReportCards(studentId?: string, grade?: GradeLevel, stream?: StreamName): ReportCard[] {
-    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, INITIAL_REPORT_CARDS);
+    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, []);
     return reports.filter(r => {
       if (studentId && r.studentId !== studentId) return false;
       if (grade && r.grade !== grade) return false;
@@ -1560,7 +1438,7 @@ export const Storage = {
     });
   },
   saveReportCard(report: ReportCard): void {
-    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, INITIAL_REPORT_CARDS);
+    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, []);
     const idx = reports.findIndex(r => r.studentId === report.studentId && r.term === report.term);
     if (idx !== -1) {
       reports[idx] = report;
@@ -1578,7 +1456,7 @@ export const Storage = {
     publisherRole: string,
     auditNotes?: string
   ): ReportCard | null {
-    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, INITIAL_REPORT_CARDS);
+    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, []);
     let idx = reports.findIndex(r => r.id === reportId);
     const now = new Date().toISOString();
     if (idx === -1) {
@@ -1638,7 +1516,7 @@ export const Storage = {
       subjectRemarks?: { subject: SubjectName; remarks: string }[];
     }
   ): ReportCard | null {
-    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, INITIAL_REPORT_CARDS);
+    const reports = getFromStorage<ReportCard[]>(KEYS.REPORT_CARDS, []);
     const idx = reports.findIndex(r => r.id === reportId);
     if (idx === -1) return null;
     const current = reports[idx];
@@ -1665,7 +1543,7 @@ export const Storage = {
 
   // Chat Messages
   getChatMessages(grade: GradeLevel, stream?: StreamName): ChatMessage[] {
-    const messages = getFromStorage<ChatMessage[]>(KEYS.CHAT_MESSAGES, INITIAL_CHAT_MESSAGES);
+    const messages = getFromStorage<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     return messages.filter(m => {
       if (m.grade !== grade) return false;
       if (stream && m.stream && m.stream !== stream && !m.isDirect) return false;
@@ -1673,17 +1551,17 @@ export const Storage = {
     });
   },
   sendChatMessage(message: ChatMessage): void {
-    const messages = getFromStorage<ChatMessage[]>(KEYS.CHAT_MESSAGES, INITIAL_CHAT_MESSAGES);
+    const messages = getFromStorage<ChatMessage[]>(KEYS.CHAT_MESSAGES, []);
     messages.push(message);
     setToStorage(KEYS.CHAT_MESSAGES, messages);
   },
 
   // Library Management
   getLibraryBooks(): LibraryBook[] {
-    return getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, INITIAL_LIBRARY_BOOKS);
+    return getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
   },
   saveLibraryBook(book: LibraryBook): void {
-    const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, INITIAL_LIBRARY_BOOKS);
+    const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
     const idx = books.findIndex(b => b.id === book.id);
     if (idx !== -1) {
       books[idx] = book;
@@ -1693,15 +1571,15 @@ export const Storage = {
     setToStorage(KEYS.LIBRARY_BOOKS, books);
   },
   getBorrowRecords(): LibraryBorrowRecord[] {
-    return getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, INITIAL_BORROW_RECORDS);
+    return getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
   },
   borrowBook(record: LibraryBorrowRecord): void {
-    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, INITIAL_BORROW_RECORDS);
+    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
     records.unshift(record);
     setToStorage(KEYS.BORROW_RECORDS, records);
 
     // decrease available count
-    const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, INITIAL_LIBRARY_BOOKS);
+    const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
     const bk = books.find(b => b.id === record.bookId);
     if (bk && bk.copiesAvailable > 0) {
       bk.copiesAvailable -= 1;
@@ -1711,7 +1589,7 @@ export const Storage = {
     window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
   },
   returnBook(recordIdOrCopyId: string, remarks?: string): LibraryBorrowRecord | null {
-    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, INITIAL_BORROW_RECORDS);
+    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
     // Find either by borrow record id or by unique copy id (case-insensitive trim)
     const rec = records.find(r => 
       (r.id === recordIdOrCopyId || (r.bookCopyId && r.bookCopyId.trim().toUpperCase() === recordIdOrCopyId.trim().toUpperCase())) &&
@@ -1725,7 +1603,7 @@ export const Storage = {
       setToStorage(KEYS.BORROW_RECORDS, records);
 
       // increase available count
-      const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, INITIAL_LIBRARY_BOOKS);
+      const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
       const bk = books.find(b => b.id === rec.bookId);
       if (bk && bk.copiesAvailable < bk.totalCopies) {
         bk.copiesAvailable += 1;
@@ -1757,7 +1635,7 @@ export const Storage = {
   },
 
   getLibraryReservations(): LibraryReservation[] {
-    return getFromStorage<LibraryReservation[]>(KEYS.LIBRARY_RESERVATIONS, INITIAL_LIBRARY_RESERVATIONS);
+    return getFromStorage<LibraryReservation[]>(KEYS.LIBRARY_RESERVATIONS, []);
   },
   saveLibraryReservations(res: LibraryReservation[]): void {
     setToStorage(KEYS.LIBRARY_RESERVATIONS, res);
@@ -1775,7 +1653,7 @@ export const Storage = {
   },
 
   getLibraryFines(): LibraryFine[] {
-    return getFromStorage<LibraryFine[]>(KEYS.LIBRARY_FINES, INITIAL_LIBRARY_FINES);
+    return getFromStorage<LibraryFine[]>(KEYS.LIBRARY_FINES, []);
   },
   saveLibraryFines(fines: LibraryFine[]): void {
     setToStorage(KEYS.LIBRARY_FINES, fines);
@@ -1793,7 +1671,7 @@ export const Storage = {
   },
 
   getLibraryAcquisitions(): LibraryAcquisition[] {
-    return getFromStorage<LibraryAcquisition[]>(KEYS.LIBRARY_ACQUISITIONS, INITIAL_LIBRARY_ACQUISITIONS);
+    return getFromStorage<LibraryAcquisition[]>(KEYS.LIBRARY_ACQUISITIONS, []);
   },
   saveLibraryAcquisitions(acqs: LibraryAcquisition[]): void {
     setToStorage(KEYS.LIBRARY_ACQUISITIONS, acqs);
@@ -1811,7 +1689,7 @@ export const Storage = {
   },
 
   getLibraryShelves(): LibraryShelfLocation[] {
-    return getFromStorage<LibraryShelfLocation[]>(KEYS.LIBRARY_SHELVES, INITIAL_LIBRARY_SHELVES);
+    return getFromStorage<LibraryShelfLocation[]>(KEYS.LIBRARY_SHELVES, []);
   },
   saveLibraryShelves(shelves: LibraryShelfLocation[]): void {
     setToStorage(KEYS.LIBRARY_SHELVES, shelves);
@@ -1824,7 +1702,7 @@ export const Storage = {
   },
 
   getDigitalLibraryItems(): DigitalLibraryItem[] {
-    return getFromStorage<DigitalLibraryItem[]>(KEYS.LIBRARY_DIGITAL_ITEMS, INITIAL_DIGITAL_LIBRARY_ITEMS);
+    return getFromStorage<DigitalLibraryItem[]>(KEYS.LIBRARY_DIGITAL_ITEMS, []);
   },
   saveDigitalLibraryItems(items: DigitalLibraryItem[]): void {
     setToStorage(KEYS.LIBRARY_DIGITAL_ITEMS, items);
@@ -1837,7 +1715,7 @@ export const Storage = {
   },
 
   getReadingProgrammeMembers(): ReadingProgrammeMember[] {
-    return getFromStorage<ReadingProgrammeMember[]>(KEYS.LIBRARY_READING_PROGRAMME, INITIAL_READING_PROGRAMME_MEMBERS);
+    return getFromStorage<ReadingProgrammeMember[]>(KEYS.LIBRARY_READING_PROGRAMME, []);
   },
   saveReadingProgrammeMembers(members: ReadingProgrammeMember[]): void {
     setToStorage(KEYS.LIBRARY_READING_PROGRAMME, members);
@@ -1855,7 +1733,7 @@ export const Storage = {
   },
 
   getLibraryAttendance(): LibraryAttendanceLog[] {
-    return getFromStorage<LibraryAttendanceLog[]>(KEYS.LIBRARY_ATTENDANCE, INITIAL_LIBRARY_ATTENDANCE);
+    return getFromStorage<LibraryAttendanceLog[]>(KEYS.LIBRARY_ATTENDANCE, []);
   },
   saveLibraryAttendance(logs: LibraryAttendanceLog[]): void {
     setToStorage(KEYS.LIBRARY_ATTENDANCE, logs);
@@ -1868,7 +1746,7 @@ export const Storage = {
   },
 
   getLibraryTimetable(): LibraryTimetableSlot[] {
-    return getFromStorage<LibraryTimetableSlot[]>(KEYS.LIBRARY_TIMETABLE, INITIAL_LIBRARY_TIMETABLE);
+    return getFromStorage<LibraryTimetableSlot[]>(KEYS.LIBRARY_TIMETABLE, []);
   },
   saveLibraryTimetable(slots: LibraryTimetableSlot[]): void {
     setToStorage(KEYS.LIBRARY_TIMETABLE, slots);
@@ -1881,7 +1759,7 @@ export const Storage = {
   },
 
   getLibraryEvents(): LibraryEvent[] {
-    return getFromStorage<LibraryEvent[]>(KEYS.LIBRARY_EVENTS, INITIAL_LIBRARY_EVENTS);
+    return getFromStorage<LibraryEvent[]>(KEYS.LIBRARY_EVENTS, []);
   },
   saveLibraryEvents(events: LibraryEvent[]): void {
     setToStorage(KEYS.LIBRARY_EVENTS, events);
@@ -1894,7 +1772,7 @@ export const Storage = {
   },
 
   getLibraryPolicies(): LibraryPolicy[] {
-    return getFromStorage<LibraryPolicy[]>(KEYS.LIBRARY_POLICIES, INITIAL_LIBRARY_POLICIES);
+    return getFromStorage<LibraryPolicy[]>(KEYS.LIBRARY_POLICIES, []);
   },
   saveLibraryPolicies(policies: LibraryPolicy[]): void {
     setToStorage(KEYS.LIBRARY_POLICIES, policies);
@@ -1907,7 +1785,7 @@ export const Storage = {
   },
 
   getLibraryAuditLogs(): LibraryAuditLog[] {
-    return getFromStorage<LibraryAuditLog[]>(KEYS.LIBRARY_AUDIT_LOGS, INITIAL_LIBRARY_AUDIT_LOGS);
+    return getFromStorage<LibraryAuditLog[]>(KEYS.LIBRARY_AUDIT_LOGS, []);
   },
   addLibraryAuditLog(log: LibraryAuditLog): void {
     const list = this.getLibraryAuditLogs();
@@ -1918,14 +1796,14 @@ export const Storage = {
 
   // Library Rooms & Room Booking Portal
   getLibraryRooms(): LibraryRoom[] {
-    return getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, INITIAL_LIBRARY_ROOMS);
+    return getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, []);
   },
   saveLibraryRooms(rooms: LibraryRoom[]): void {
     setToStorage(KEYS.LIBRARY_ROOMS, rooms);
     window.dispatchEvent(new CustomEvent('library-rooms-updated', { detail: rooms }));
   },
   getLibraryRoomBookings(): LibraryRoomBooking[] {
-    return getFromStorage<LibraryRoomBooking[]>(KEYS.LIBRARY_ROOM_BOOKINGS, INITIAL_LIBRARY_ROOM_BOOKINGS);
+    return getFromStorage<LibraryRoomBooking[]>(KEYS.LIBRARY_ROOM_BOOKINGS, []);
   },
   saveLibraryRoomBookings(bookings: LibraryRoomBooking[]): void {
     setToStorage(KEYS.LIBRARY_ROOM_BOOKINGS, bookings);
@@ -1951,15 +1829,20 @@ export const Storage = {
   getParentChildren(parentUser: User): User[] {
     const all = this.getUsers();
     if (parentUser.childrenIds && parentUser.childrenIds.length > 0) {
-      return all.filter(u => parentUser.childrenIds?.includes(u.id));
+      const fromUsers = all.filter(u => parentUser.childrenIds?.includes(u.id));
+      const missing = parentUser.childrenIds.filter((id) => !fromUsers.some((user) => user.id === id));
+      const fromDirectory = missing
+        .map((id) => getStudentRecord(id))
+        .filter((row): row is NonNullable<ReturnType<typeof getStudentRecord>> => Boolean(row))
+        .map((row) => studentRecordToUser(row));
+      return [...fromUsers, ...fromDirectory];
     }
-    // Fallback: Brian Otieno
     return all.filter(u => u.id === 'usr-stu-brian');
   },
 
   // Centralized Notifications
   getNotifications(user?: User | null): AppNotification[] {
-    const list = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    const list = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     if (!user) return list;
 
     // Filter relevant to user's role, grade, or user ID
@@ -1994,7 +1877,7 @@ export const Storage = {
   },
 
   markNotificationAsRead(notificationId: string, userId: string): void {
-    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     const item = all.find(n => n.id === notificationId);
     if (item) {
       if (!item.readByUserIds) item.readByUserIds = [];
@@ -2006,7 +1889,7 @@ export const Storage = {
   },
 
   markAllNotificationsAsRead(userId: string): void {
-    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     all.forEach(n => {
       if (!n.readByUserIds) n.readByUserIds = [];
       if (!n.readByUserIds.includes(userId)) {
@@ -2017,14 +1900,14 @@ export const Storage = {
   },
 
   addNotification(notif: AppNotification): void {
-    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     all.unshift(notif);
     setToStorage(KEYS.NOTIFICATIONS, all);
     window.dispatchEvent(new CustomEvent('notifications-updated', { detail: all }));
   },
 
   deleteNotification(notificationId: string): void {
-    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
+    const all = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     const updated = all.filter(n => n.id !== notificationId);
     setToStorage(KEYS.NOTIFICATIONS, updated);
     window.dispatchEvent(new CustomEvent('notifications-updated', { detail: updated }));
@@ -2032,7 +1915,7 @@ export const Storage = {
 
   // 1. Gamification: Badges & Certification Points
   getBadges(): LearnerBadge[] {
-    return getFromStorage<LearnerBadge[]>(KEYS.BADGES, INITIAL_BADGES);
+    return getFromStorage<LearnerBadge[]>(KEYS.BADGES, []);
   },
   saveBadges(badges: LearnerBadge[]): void {
     setToStorage(KEYS.BADGES, badges);
@@ -2142,7 +2025,7 @@ export const Storage = {
 
   // 2. E-Portfolio: Projects & Practical Artifacts
   getPortfolioItems(studentId?: string): PortfolioItem[] {
-    const items = getFromStorage<PortfolioItem[]>(KEYS.PORTFOLIO, INITIAL_PORTFOLIO_ITEMS);
+    const items = getFromStorage<PortfolioItem[]>(KEYS.PORTFOLIO, []);
     if (studentId) {
       return items.filter(p => p.studentId === studentId);
     }
@@ -2156,7 +2039,7 @@ export const Storage = {
 
   // 3. Periodic Reports: Weekly, Monthly, Termly, Annually
   getPeriodicReports(studentId?: string, periodType?: string): PeriodicReport[] {
-    const reports = getFromStorage<PeriodicReport[]>(KEYS.PERIODIC_REPORTS, INITIAL_PERIODIC_REPORTS);
+    const reports = getFromStorage<PeriodicReport[]>(KEYS.PERIODIC_REPORTS, []);
     return reports.filter(r => {
       const matchStudent = !studentId || r.studentId === studentId;
       const matchPeriod = !periodType || periodType === 'all' || r.periodType === periodType;
@@ -2166,12 +2049,12 @@ export const Storage = {
 
   // 4. External Learning Tools & Integrations
   getExternalTools(): ExternalTool[] {
-    return getFromStorage<ExternalTool[]>(KEYS.EXTERNAL_TOOLS, INITIAL_EXTERNAL_TOOLS);
+    return getFromStorage<ExternalTool[]>(KEYS.EXTERNAL_TOOLS, []);
   },
 
   // 5. Learner Discipline: Safe Search & Content Filtration
   getSearchAuditLogs(): SearchAuditLog[] {
-    return getFromStorage<SearchAuditLog[]>(KEYS.SEARCH_AUDIT, INITIAL_SEARCH_AUDIT_LOGS);
+    return getFromStorage<SearchAuditLog[]>(KEYS.SEARCH_AUDIT, []);
   },
   logSearchQuery(log: SearchAuditLog): void {
     const logs = this.getSearchAuditLogs();
@@ -2286,7 +2169,7 @@ export const Storage = {
 
   // School Calendar Management
   getCalendarEvents(): SchoolCalendarEvent[] {
-    const rawEvents = getFromStorage<SchoolCalendarEvent[]>(KEYS.CALENDAR_EVENTS, INITIAL_CALENDAR_EVENTS);
+    const rawEvents = getFromStorage<SchoolCalendarEvent[]>(KEYS.CALENDAR_EVENTS, []);
     // Enforce business rule: Event tickets apply EXCLUSIVELY to co-curricular events.
     // Strip ticketing data from any academic or other non-co-curricular events.
     return rawEvents.map(evt => {
@@ -2409,7 +2292,7 @@ export const Storage = {
 
   // Event Ticketing & Pass Purchase Management
   getEventTicketPurchases(): EventTicketPurchase[] {
-    return getFromStorage<EventTicketPurchase[]>(KEYS.EVENT_TICKETS, INITIAL_EVENT_TICKETS);
+    return getFromStorage<EventTicketPurchase[]>(KEYS.EVENT_TICKETS, []);
   },
 
   saveEventTicketPurchases(tickets: EventTicketPurchase[]): void {
@@ -2504,7 +2387,7 @@ export const Storage = {
 
   // Parents Communications
   getParentCommunications(): ParentCommunication[] {
-    return getFromStorage<ParentCommunication[]>(KEYS.PARENT_COMMUNICATIONS, INITIAL_PARENT_COMMUNICATIONS);
+    return getFromStorage<ParentCommunication[]>(KEYS.PARENT_COMMUNICATIONS, []);
   },
 
   saveParentCommunications(comms: ParentCommunication[]): void {
@@ -2524,7 +2407,7 @@ export const Storage = {
 
   // Exam Timetables
   getExamTimetables(): ExamTimetableEntry[] {
-    return getFromStorage<ExamTimetableEntry[]>(KEYS.EXAM_TIMETABLE, INITIAL_EXAM_TIMETABLE);
+    return getFromStorage<ExamTimetableEntry[]>(KEYS.EXAM_TIMETABLE, []);
   },
 
   saveExamTimetables(exams: ExamTimetableEntry[]): void {
@@ -2543,15 +2426,7 @@ export const Storage = {
   },
 
   getAllTimetableSlots(): TimetableSlot[] {
-    const stored = getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, INITIAL_TIMETABLE);
-    const existingIds = new Set(stored.map(s => s.id));
-    const missing = INITIAL_TIMETABLE.filter(s => !existingIds.has(s.id));
-    if (missing.length > 0) {
-      const merged = [...stored, ...missing];
-      setToStorage(KEYS.TIMETABLE, merged);
-      return merged;
-    }
-    return stored;
+    return getFromStorage<TimetableSlot[]>(KEYS.TIMETABLE, []);
   },
 
   setAllTimetableSlots(slots: TimetableSlot[]): void {
@@ -2564,14 +2439,14 @@ export const Storage = {
   // ========================================================
 
   getBellSchedule(): BellPeriodDef[] {
-    const stored = getFromStorage<BellPeriodDef[]>(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
+    const stored = getFromStorage<BellPeriodDef[]>(KEYS.BELL_SCHEDULE, []);
     const hasPeriod9Instructional = stored.some(b => b.period === 9 && !b.isBreak);
     const hasPeriod10 = stored.some(b => b.period === 10);
     const hasPeriod11 = stored.some(b => b.period === 11);
     const breakAfter4 = stored.findIndex(b => b.period === 4) < stored.findIndex(b => b.isBreak && b.breakType === 'morning_tea');
     if (!hasPeriod9Instructional || !hasPeriod10 || !hasPeriod11 || !breakAfter4) {
-      setToStorage(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
-      return INITIAL_BELL_SCHEDULE;
+      setToStorage(KEYS.BELL_SCHEDULE, []);
+      return [];
     }
     return stored;
   },
@@ -2607,13 +2482,13 @@ export const Storage = {
   },
 
   resetBellSchedule(): BellPeriodDef[] {
-    setToStorage(KEYS.BELL_SCHEDULE, INITIAL_BELL_SCHEDULE);
-    window.dispatchEvent(new CustomEvent('bell-schedule-updated', { detail: INITIAL_BELL_SCHEDULE }));
-    return INITIAL_BELL_SCHEDULE;
+    setToStorage(KEYS.BELL_SCHEDULE, []);
+    window.dispatchEvent(new CustomEvent('bell-schedule-updated', { detail: [] }));
+    return [];
   },
 
   getFixedLessonConditions(): FixedLessonCondition[] {
-    return getFromStorage<FixedLessonCondition[]>(KEYS.FIXED_LESSON_CONDITIONS, INITIAL_FIXED_LESSON_CONDITIONS);
+    return getFromStorage<FixedLessonCondition[]>(KEYS.FIXED_LESSON_CONDITIONS, []);
   },
 
   saveFixedLessonCondition(condition: FixedLessonCondition): void {
@@ -2638,13 +2513,13 @@ export const Storage = {
   },
 
   resetFixedLessonConditions(): FixedLessonCondition[] {
-    setToStorage(KEYS.FIXED_LESSON_CONDITIONS, INITIAL_FIXED_LESSON_CONDITIONS);
-    window.dispatchEvent(new CustomEvent('fixed-lessons-updated', { detail: INITIAL_FIXED_LESSON_CONDITIONS }));
-    return INITIAL_FIXED_LESSON_CONDITIONS;
+    setToStorage(KEYS.FIXED_LESSON_CONDITIONS, []);
+    window.dispatchEvent(new CustomEvent('fixed-lessons-updated', { detail: [] }));
+    return [];
   },
 
   getSharedFacilities(): SharedResourceFacility[] {
-    return getFromStorage<SharedResourceFacility[]>(KEYS.SHARED_RESOURCES, INITIAL_SHARED_FACILITIES);
+    return getFromStorage<SharedResourceFacility[]>(KEYS.SHARED_RESOURCES, []);
   },
 
   // ========================================================
@@ -2652,7 +2527,7 @@ export const Storage = {
   // ========================================================
 
   getSanatoriumRecords(studentId?: string, grade?: GradeLevel, stream?: StreamName): SanatoriumRecord[] {
-    const records = getFromStorage<SanatoriumRecord[]>(KEYS.SANATORIUM_RECORDS, INITIAL_SANATORIUM_RECORDS);
+    const records = getFromStorage<SanatoriumRecord[]>(KEYS.SANATORIUM_RECORDS, []);
     return records.filter(r => {
       if (studentId && r.studentId !== studentId) return false;
       if (grade !== undefined && r.grade !== grade) return false;
@@ -2689,7 +2564,7 @@ export const Storage = {
   // ========================================================
 
   getLunchRecords(date?: string, grade?: GradeLevel, stream?: StreamName, studentId?: string): LearnerLunchRecord[] {
-    const records = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const records = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, []);
     return records.filter(r => {
       if (date && r.date !== date) return false;
       if (grade !== undefined && r.grade !== grade) return false;
@@ -2700,7 +2575,7 @@ export const Storage = {
   },
 
   saveLunchRecord(record: LearnerLunchRecord): void {
-    const records = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const records = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, []);
     const idx = records.findIndex(r => r.id === record.id || (r.studentId === record.studentId && r.date === record.date));
     let updated: LearnerLunchRecord[];
     if (idx !== -1) {
@@ -2714,7 +2589,7 @@ export const Storage = {
   },
 
   batchSaveLunchRecords(newRecords: LearnerLunchRecord[]): void {
-    const existing = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const existing = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, []);
     const map = new Map<string, LearnerLunchRecord>();
     existing.forEach(r => map.set(`${r.studentId}-${r.date}`, r));
     newRecords.forEach(r => map.set(`${r.studentId}-${r.date}`, r));
@@ -2729,7 +2604,7 @@ export const Storage = {
     details?: Partial<LearnerLunchRecord>
   ): LearnerLunchRecord {
     const today = details?.date || new Date().toISOString().split('T')[0];
-    const existingList = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, INITIAL_LUNCH_RECORDS);
+    const existingList = getFromStorage<LearnerLunchRecord[]>(KEYS.LUNCH_RECORDS, []);
     const existing = existingList.find(r => r.studentId === studentId && r.date === today);
 
     const now = new Date();
@@ -2774,7 +2649,7 @@ export const Storage = {
   // ========================================================
 
   getSchoolBuses(): SchoolBus[] {
-    return getFromStorage<SchoolBus[]>(KEYS.TRANSPORT_BUSES, INITIAL_SCHOOL_BUSES);
+    return getFromStorage<SchoolBus[]>(KEYS.TRANSPORT_BUSES, []);
   },
 
   saveSchoolBuses(buses: SchoolBus[]): void {
@@ -2789,7 +2664,7 @@ export const Storage = {
   },
 
   getTransportRoutes(): TransportRoute[] {
-    return getFromStorage<TransportRoute[]>(KEYS.TRANSPORT_ROUTES, INITIAL_TRANSPORT_ROUTES);
+    return getFromStorage<TransportRoute[]>(KEYS.TRANSPORT_ROUTES, []);
   },
 
   saveTransportRoutes(routes: TransportRoute[]): void {
@@ -2810,7 +2685,7 @@ export const Storage = {
   },
 
   getStudentTransportProfiles(studentId?: string, routeId?: string, grade?: GradeLevel): StudentTransportProfile[] {
-    const profiles = getFromStorage<StudentTransportProfile[]>(KEYS.TRANSPORT_STUDENTS, INITIAL_STUDENT_TRANSPORT_PROFILES);
+    const profiles = getFromStorage<StudentTransportProfile[]>(KEYS.TRANSPORT_STUDENTS, []);
     return profiles.filter(p => {
       if (studentId && p.studentId !== studentId) return false;
       if (routeId && p.routeId !== routeId) return false;
@@ -2843,7 +2718,7 @@ export const Storage = {
   },
 
   getTransportTripRecords(date?: string, tripType?: TripType, routeId?: string, studentId?: string): TransportTripRecord[] {
-    const records = getFromStorage<TransportTripRecord[]>(KEYS.TRANSPORT_TRIP_RECORDS, INITIAL_TRANSPORT_TRIP_RECORDS);
+    const records = getFromStorage<TransportTripRecord[]>(KEYS.TRANSPORT_TRIP_RECORDS, []);
     return records.filter(r => {
       if (date && r.date !== date) return false;
       if (tripType && r.tripType !== tripType) return false;
@@ -2871,7 +2746,7 @@ export const Storage = {
   },
 
   getTransportIncidents(): TransportIncident[] {
-    return getFromStorage<TransportIncident[]>(KEYS.TRANSPORT_INCIDENTS, INITIAL_TRANSPORT_INCIDENTS);
+    return getFromStorage<TransportIncident[]>(KEYS.TRANSPORT_INCIDENTS, []);
   },
 
   saveTransportIncidents(incidents: TransportIncident[]): void {
@@ -2892,7 +2767,7 @@ export const Storage = {
   },
 
   getTransportAlerts(): TransportAlert[] {
-    return getFromStorage<TransportAlert[]>(KEYS.TRANSPORT_ALERTS, INITIAL_TRANSPORT_ALERTS);
+    return getFromStorage<TransportAlert[]>(KEYS.TRANSPORT_ALERTS, []);
   },
 
   saveTransportAlerts(alerts: TransportAlert[]): void {
@@ -2911,7 +2786,7 @@ export const Storage = {
   // ========================================================
 
   getCoCurricularActivities(): CoCurricularActivity[] {
-    return getFromStorage<CoCurricularActivity[]>(KEYS.CO_CURRICULAR_ACTIVITIES, INITIAL_CO_CURRICULAR_ACTIVITIES);
+    return getFromStorage<CoCurricularActivity[]>(KEYS.CO_CURRICULAR_ACTIVITIES, []);
   },
 
   saveCoCurricularActivities(activities: CoCurricularActivity[]): void {
@@ -2932,7 +2807,7 @@ export const Storage = {
   },
 
   getLearnerCoCurricularProfiles(): LearnerCoCurricularProfile[] {
-    return getFromStorage<LearnerCoCurricularProfile[]>(KEYS.CO_CURRICULAR_PROFILES, INITIAL_LEARNER_CO_CURRICULAR_PROFILES);
+    return getFromStorage<LearnerCoCurricularProfile[]>(KEYS.CO_CURRICULAR_PROFILES, []);
   },
 
   saveLearnerCoCurricularProfiles(profiles: LearnerCoCurricularProfile[]): void {
@@ -2959,7 +2834,7 @@ export const Storage = {
   },
 
   getCoCurricularAttendance(): CoCurricularAttendanceRecord[] {
-    return getFromStorage<CoCurricularAttendanceRecord[]>(KEYS.CO_CURRICULAR_ATTENDANCE, INITIAL_CO_CURRICULAR_ATTENDANCE);
+    return getFromStorage<CoCurricularAttendanceRecord[]>(KEYS.CO_CURRICULAR_ATTENDANCE, []);
   },
 
   saveCoCurricularAttendance(records: CoCurricularAttendanceRecord[]): void {
@@ -2974,7 +2849,7 @@ export const Storage = {
   },
 
   getCoCurricularCompetitions(): CoCurricularCompetition[] {
-    return getFromStorage<CoCurricularCompetition[]>(KEYS.CO_CURRICULAR_COMPETITIONS, INITIAL_CO_CURRICULAR_COMPETITIONS);
+    return getFromStorage<CoCurricularCompetition[]>(KEYS.CO_CURRICULAR_COMPETITIONS, []);
   },
 
   saveCoCurricularCompetitions(competitions: CoCurricularCompetition[]): void {
@@ -2995,7 +2870,7 @@ export const Storage = {
   },
 
   getCoCurricularEquipment(): CoCurricularEquipment[] {
-    return getFromStorage<CoCurricularEquipment[]>(KEYS.CO_CURRICULAR_EQUIPMENT, INITIAL_CO_CURRICULAR_EQUIPMENT);
+    return getFromStorage<CoCurricularEquipment[]>(KEYS.CO_CURRICULAR_EQUIPMENT, []);
   },
 
   saveCoCurricularEquipment(equipment: CoCurricularEquipment[]): void {
@@ -3016,7 +2891,7 @@ export const Storage = {
   },
 
   getCoCurricularTrips(): CoCurricularTrip[] {
-    return getFromStorage<CoCurricularTrip[]>(KEYS.CO_CURRICULAR_TRIPS, INITIAL_CO_CURRICULAR_TRIPS);
+    return getFromStorage<CoCurricularTrip[]>(KEYS.CO_CURRICULAR_TRIPS, []);
   },
 
   saveCoCurricularTrips(trips: CoCurricularTrip[]): void {
@@ -3037,7 +2912,7 @@ export const Storage = {
   },
 
   getCoCurricularAnnouncements(): CoCurricularAnnouncement[] {
-    return getFromStorage<CoCurricularAnnouncement[]>(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, INITIAL_CO_CURRICULAR_ANNOUNCEMENTS);
+    return getFromStorage<CoCurricularAnnouncement[]>(KEYS.CO_CURRICULAR_ANNOUNCEMENTS, []);
   },
 
   saveCoCurricularAnnouncements(announcements: CoCurricularAnnouncement[]): void {
@@ -3052,7 +2927,7 @@ export const Storage = {
   },
 
   getCoCurricularBudgets(): CoCurricularBudgetItem[] {
-    return getFromStorage<CoCurricularBudgetItem[]>(KEYS.CO_CURRICULAR_BUDGET, INITIAL_CO_CURRICULAR_BUDGET);
+    return getFromStorage<CoCurricularBudgetItem[]>(KEYS.CO_CURRICULAR_BUDGET, []);
   },
 
   saveCoCurricularBudgets(items: CoCurricularBudgetItem[]): void {
@@ -3074,7 +2949,7 @@ export const Storage = {
 
   // Staff Weekly Duty Rosters
   getStaffDutyRosters(): StaffDutyAssignment[] {
-    return getFromStorage<StaffDutyAssignment[]>(KEYS.STAFF_DUTY_ROSTER, INITIAL_STAFF_DUTY_ROSTER);
+    return getFromStorage<StaffDutyAssignment[]>(KEYS.STAFF_DUTY_ROSTER, []);
   },
 
   saveStaffDutyRosters(rosters: StaffDutyAssignment[]): void {
@@ -3102,7 +2977,7 @@ export const Storage = {
 
   // Transport Dropoff Verifications (Afternoon Drop-off Parent Consent OTP)
   getDropoffVerifications(): TransportDropoffVerification[] {
-    return getFromStorage<TransportDropoffVerification[]>(KEYS.DROPOFF_VERIFICATIONS, INITIAL_DROPOFF_VERIFICATIONS);
+    return getFromStorage<TransportDropoffVerification[]>(KEYS.DROPOFF_VERIFICATIONS, []);
   },
 
   saveDropoffVerifications(verifs: TransportDropoffVerification[]): void {
@@ -3128,7 +3003,7 @@ export const Storage = {
   // CBC ASSESSMENT RECORDS & WHOLE GRADE RESULTS
   // ========================================================
   getAssessmentRecords(filter?: { grade?: GradeLevel; term?: 1 | 2 | 3; cycle?: AssessmentCycle; studentId?: string; isPublished?: boolean }): StudentAssessmentRecord[] {
-    let records = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    let records = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, []);
     if (!filter) return records;
     if (filter.grade !== undefined) records = records.filter(r => r.grade === filter.grade);
     if (filter.term !== undefined) records = records.filter(r => r.term === filter.term);
@@ -3139,7 +3014,7 @@ export const Storage = {
   },
 
   saveAssessmentRecord(record: StudentAssessmentRecord): void {
-    const records = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const records = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, []);
     const index = records.findIndex(r => r.id === record.id);
     if (index >= 0) {
       records[index] = record;
@@ -3151,7 +3026,7 @@ export const Storage = {
   },
 
   saveGradeAssessmentRecords(recordsToSave: StudentAssessmentRecord[]): void {
-    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, []);
     for (const rec of recordsToSave) {
       const idx = allRecords.findIndex(r => r.id === rec.id || (r.studentId === rec.studentId && r.grade === rec.grade && r.term === rec.term && r.assessmentCycle === rec.assessmentCycle));
       if (idx >= 0) {
@@ -3165,7 +3040,7 @@ export const Storage = {
   },
 
   publishGradeAssessments(grade: GradeLevel, cycle: AssessmentCycle, term: 1 | 2 | 3, published: boolean, publishedBy: string): void {
-    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, []);
     const updated = allRecords.map(r => {
       if (r.grade === grade && r.assessmentCycle === cycle && r.term === term) {
         return {
@@ -3182,7 +3057,7 @@ export const Storage = {
   },
 
   deleteAssessmentRecord(id: string): void {
-    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, INITIAL_ASSESSMENT_RECORDS);
+    const allRecords = getFromStorage<StudentAssessmentRecord[]>(KEYS.ASSESSMENT_RECORDS, []);
     const filtered = allRecords.filter(r => r.id !== id);
     setToStorage(KEYS.ASSESSMENT_RECORDS, filtered);
     window.dispatchEvent(new CustomEvent('assessment-records-updated', { detail: filtered }));
@@ -3192,7 +3067,7 @@ export const Storage = {
   // TEACHER RESULT UPLOAD ASSIGNMENTS
   // ========================================================
   getTeacherUploadAssignments(teacherId?: string): TeacherResultUploadAssignment[] {
-    const assignments = getFromStorage<TeacherResultUploadAssignment[]>(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, INITIAL_TEACHER_UPLOAD_ASSIGNMENTS);
+    const assignments = getFromStorage<TeacherResultUploadAssignment[]>(KEYS.TEACHER_UPLOAD_ASSIGNMENTS, []);
     if (teacherId) {
       return assignments.filter(a => a.teacherId === teacherId);
     }
@@ -3232,7 +3107,7 @@ export const Storage = {
   // 💻 COMPUTER LAB: CODING CHALLENGES
   // ========================================================
   getCodingChallenges(grade?: GradeLevel): CodingChallenge[] {
-    const list = getFromStorage<CodingChallenge[]>(KEYS.CODING_CHALLENGES, INITIAL_CODING_CHALLENGES);
+    const list = getFromStorage<CodingChallenge[]>(KEYS.CODING_CHALLENGES, []);
     if (grade) {
       return list.filter(c => c.grade === grade || c.stream === 'ALL');
     }
@@ -3445,7 +3320,7 @@ export const Storage = {
   // 1. DOCUMENT SUBMISSION REQUESTS & SUBMISSIONS
   // ========================================================
   getDocumentRequests(): DocumentSubmissionRequest[] {
-    return getFromStorage<DocumentSubmissionRequest[]>(KEYS.DOCUMENT_REQUESTS, INITIAL_DOCUMENT_REQUESTS);
+    return getFromStorage<DocumentSubmissionRequest[]>(KEYS.DOCUMENT_REQUESTS, []);
   },
 
   saveDocumentRequests(requests: DocumentSubmissionRequest[]): void {
@@ -3475,7 +3350,7 @@ export const Storage = {
   },
 
   getDocumentSubmissions(requestId?: string): DocumentSubmission[] {
-    const list = getFromStorage<DocumentSubmission[]>(KEYS.DOCUMENT_SUBMISSIONS, INITIAL_DOCUMENT_SUBMISSIONS);
+    const list = getFromStorage<DocumentSubmission[]>(KEYS.DOCUMENT_SUBMISSIONS, []);
     if (requestId) {
       return list.filter(s => s.requestId === requestId);
     }
@@ -3506,7 +3381,7 @@ export const Storage = {
   // 2. POST CATEGORIES & TAXONOMY
   // ========================================================
   getPostCategories(): PostCategory[] {
-    return getFromStorage<PostCategory[]>(KEYS.POST_CATEGORIES, INITIAL_POST_CATEGORIES);
+    return getFromStorage<PostCategory[]>(KEYS.POST_CATEGORIES, []);
   },
 
   savePostCategories(categories: PostCategory[]): void {
@@ -3539,7 +3414,7 @@ export const Storage = {
   // 3. PORTAL SECTIONS MANAGEMENT
   // ========================================================
   getPortalSections(): PortalSection[] {
-    return getFromStorage<PortalSection[]>(KEYS.PORTAL_SECTIONS, INITIAL_PORTAL_SECTIONS);
+    return getFromStorage<PortalSection[]>(KEYS.PORTAL_SECTIONS, []);
   },
 
   savePortalSections(sections: PortalSection[]): void {
@@ -3623,7 +3498,7 @@ export const Storage = {
   // 6. CBA TASK MAPPING & CURRICULUM ALIGNMENT
   // ========================================================
   getCBATaskMappings(): CBATaskMapping[] {
-    return getFromStorage<CBATaskMapping[]>(KEYS.CBA_TASK_MAPPINGS, INITIAL_CBA_TASK_MAPPINGS);
+    return getFromStorage<CBATaskMapping[]>(KEYS.CBA_TASK_MAPPINGS, []);
   },
 
   saveCBATaskMappings(mappings: CBATaskMapping[]): void {
@@ -3708,7 +3583,7 @@ export const Storage = {
   // 7. STAFF PERFORMANCE APPRAISAL & DEVELOPMENT (TSC TPAD)
   // ========================================================
   getStaffAppraisals(): StaffAppraisalRecord[] {
-    return getFromStorage<StaffAppraisalRecord[]>(KEYS.STAFF_APPRAISALS, INITIAL_STAFF_APPRAISALS);
+    return getFromStorage<StaffAppraisalRecord[]>(KEYS.STAFF_APPRAISALS, []);
   },
 
   saveStaffAppraisals(appraisals: StaffAppraisalRecord[]): void {
@@ -3758,7 +3633,7 @@ export const Storage = {
   // 8. CURRICULUM WRITTEN REPORTS & QUALITATIVE COMMENTS
   // ========================================================
   getCurriculumWrittenReports(): CurriculumWrittenReport[] {
-    return getFromStorage<CurriculumWrittenReport[]>(KEYS.CURRICULUM_WRITTEN_REPORTS, INITIAL_CURRICULUM_WRITTEN_REPORTS);
+    return getFromStorage<CurriculumWrittenReport[]>(KEYS.CURRICULUM_WRITTEN_REPORTS, []);
   },
 
   saveCurriculumWrittenReports(reports: CurriculumWrittenReport[]): void {
@@ -3847,7 +3722,7 @@ export const Storage = {
   // 9. COORDINATOR SCHEMES OF WORK & PEDAGOGICAL VERIFICATION
   // ========================================================
   getCoordinatorSchemesOfWork(): CoordinatorSchemeOfWork[] {
-    return getFromStorage<CoordinatorSchemeOfWork[]>(KEYS.COORDINATOR_SCHEMES_OF_WORK, INITIAL_COORDINATOR_SCHEMES_OF_WORK);
+    return getFromStorage<CoordinatorSchemeOfWork[]>(KEYS.COORDINATOR_SCHEMES_OF_WORK, []);
   },
 
   saveCoordinatorSchemesOfWork(schemes: CoordinatorSchemeOfWork[]): void {
@@ -3914,7 +3789,7 @@ export const Storage = {
   // 10. COORDINATOR SYLLABUS PACING & TOPIC TRACKING
   // ========================================================
   getCoordinatorSyllabusTracking(): CoordinatorSyllabusTopic[] {
-    return getFromStorage<CoordinatorSyllabusTopic[]>(KEYS.COORDINATOR_SYLLABUS_TRACKING, INITIAL_COORDINATOR_SYLLABUS_TRACKING);
+    return getFromStorage<CoordinatorSyllabusTopic[]>(KEYS.COORDINATOR_SYLLABUS_TRACKING, []);
   },
 
   saveCoordinatorSyllabusTracking(topics: CoordinatorSyllabusTopic[]): void {
@@ -3982,7 +3857,7 @@ export const Storage = {
   // 11. COORDINATOR CBA MODERATION & ATTAINMENT HARMONIZATION
   // ========================================================
   getCoordinatorCBAModerations(): CoordinatorCBAModeration[] {
-    return getFromStorage<CoordinatorCBAModeration[]>(KEYS.COORDINATOR_CBA_MODERATIONS, INITIAL_COORDINATOR_CBA_MODERATIONS);
+    return getFromStorage<CoordinatorCBAModeration[]>(KEYS.COORDINATOR_CBA_MODERATIONS, []);
   },
 
   saveCoordinatorCBAModerations(records: CoordinatorCBAModeration[]): void {
@@ -4050,7 +3925,7 @@ export const Storage = {
   // ========================================================
 
   getTeacherAbsenceReports(): TeacherAbsenceReport[] {
-    return getFromStorage<TeacherAbsenceReport[]>(KEYS.TEACHER_ABSENCE_REPORTS, INITIAL_TEACHER_ABSENCE_REPORTS);
+    return getFromStorage<TeacherAbsenceReport[]>(KEYS.TEACHER_ABSENCE_REPORTS, []);
   },
 
   saveTeacherAbsenceReports(reports: TeacherAbsenceReport[]): void {
@@ -4195,7 +4070,7 @@ export const Storage = {
   }
 };
 
-export const INITIAL_TEACHER_ABSENCE_REPORTS: TeacherAbsenceReport[] = [
+export const []: TeacherAbsenceReport[] = [
   {
     id: 'abs-rep-01',
     teacherId: 'usr-tea-01',

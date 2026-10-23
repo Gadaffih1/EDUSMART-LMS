@@ -38,8 +38,10 @@ import { QuickActionsFloatingMenu } from './components/layout/QuickActionsFloati
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { WorkspaceRoleGuard } from './components/common/WorkspaceRoleGuard';
 import { Maximize2, CheckCheck, Megaphone, Sparkles } from 'lucide-react';
+import { findSystemRole } from './utils/systemRoles';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { SyncEngine } from './utils/syncEngine';
+import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
 const SCHOOL_ROUTE_STORAGE_PREFIX = 'edusmart:school-route:';
@@ -150,6 +152,10 @@ function AppContent({
   }, [allTenants, currentTenant.id, currentUser, switchTenant]);
 
   React.useEffect(() => {
+    if (currentUser && isPlatformSuperAdmin(currentUser)) {
+      if (portalView !== 'super_admin' && portalView !== 'public_landing') navigateToPortal('super_admin');
+      return;
+    }
     if (currentUser && portalView !== 'super_admin' && portalView !== 'school_lms') {
       navigateToPortal('school_lms', currentTenant.id, true);
     }
@@ -166,8 +172,8 @@ function AppContent({
     };
   }, []);
 
-  // 1. Public Landing Page (Screen 1 in diagram): Always accessible, no Super Admin button
-  if (!currentUser && portalView === 'public_landing') {
+  // Public landing stays available, including while the platform admin is signed in.
+  if (portalView === 'public_landing' && (!currentUser || isPlatformSuperAdmin(currentUser))) {
     return (
       <PublicLandingPage
         onNavigateToLogin={() => navigateToPortal('unified_login')}
@@ -191,12 +197,12 @@ function AppContent({
     );
   }
 
-  const isPlatformSuperAdmin = currentUser?.role === 'admin' && (currentUser.email === 'admin@edusmart.ac.ke' || currentUser.email === 'superadmin@edusmart.ac.ke');
+  const platformAdminSession = Boolean(currentUser && isPlatformSuperAdmin(currentUser));
 
-  if (currentUser && portalView === 'super_admin' && !isPlatformSuperAdmin) {
+  if (currentUser && portalView === 'super_admin' && !platformAdminSession) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
-        <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-xl">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <section className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <h1 className="text-xl font-bold text-slate-900">Platform Super Administrator sign-in required</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Tenant school accounts are strictly confined to their own institution ({currentTenant.name}). Cross-campus access is prohibited under multi-tenant data protection.
@@ -220,17 +226,15 @@ function AppContent({
     );
   }
 
-  if (currentUser && portalView === 'super_admin' && isPlatformSuperAdmin) {
+  if (currentUser && platformAdminSession) {
     return (
       <SuperAdminPortalView
-        onEnterSchool={(schoolId) => {
-          setIsPlatformAdminSession(true);
-          navigateToPortal('school_lms', schoolId);
-        }}
-        onBackToLanding={async () => {
-          await onLogout();
-          setIsPlatformAdminSession(false);
+        onBackToLanding={() => {
           navigateToPortal('public_landing');
+        }}
+        onSignOut={() => {
+          navigateToPortal('public_landing');
+          void onLogout();
         }}
       />
     );
@@ -349,6 +353,15 @@ function AppContent({
             ) : !isWorkspaceEnabled(currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
               /* Informative notice if Super Admin deactivated this workspace for this tenant */
               <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-4">
+            ) : findSystemRole(currentUser.role)?.builtIn === false ? (
+              <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-3">
+                <h3 className="text-xl font-black font-serif text-slate-900">
+                  {findSystemRole(currentUser.role)?.name || 'School account'}
+                </h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {currentUser.name} is signed in at {currentTenant.name}. This role was added by the platform administrator and is ready for assignment.
+                </p>
+              </div>
                 <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-inner">
                   <Sparkles className="w-7 h-7 text-amber-600" />
                 </div>
@@ -656,10 +669,7 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
   const handleLogout = async () => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('[auth] Sign-out failed', error);
-        return;
-      }
+      if (error) console.error('[auth] Sign-out failed', error);
       SyncEngine.activateIdentity(null);
     }
     Storage.setCurrentUser(null);

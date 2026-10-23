@@ -1,0 +1,30 @@
+-- Run these files in the Supabase SQL editor, in this order.
+-- Each file commits its own transaction and can be re-run.
+-- Tables live in schema edusmart.
+-- Shape: platform admin, then a school, then that school’s own rows.
+-- platform_admins sits above every school.
+-- tenants is the school. Creating a school adds one row here.
+-- system_roles, subject_catalog, activity_catalog, and platform_customization are the feature pack every school starts with.
+-- Every other table carries school_id. One school customises its own rows and does not see another school.
+-- \i supabase/fresh/01_tenants.sql
+-- \i supabase/fresh/02_hero_media_presets.sql
+-- \i supabase/fresh/03_platform_customization.sql
+-- \i supabase/fresh/04_timetable_rules.sql
+-- \i supabase/fresh/05_starter_package_docs.sql
+-- \i supabase/fresh/06_staff_appraisal.sql
+-- \i supabase/fresh/07_finance_operations.sql
+-- \i supabase/fresh/08_extra_roles.sql
+-- \i supabase/fresh/09_curriculum_written_reports.sql
+-- \i supabase/fresh/10_coordinator_curriculum.sql
+-- \i supabase/fresh/11_coding_challenges.sql
+-- \i supabase/fresh/12_cba_task_mappings.sql
+-- \i supabase/fresh/13_initial_data.sql
+-- \i supabase/fresh/14_platform_admins.sql
+-- \i supabase/fresh/15_system_roles.sql
+-- \i supabase/fresh/16_school_accounts.sql
+-- \i supabase/fresh/17_provisioned_accounts.sql
+-- \i supabase/fresh/18_students.sql
+-- \i supabase/fresh/19_departments.sql
+-- \i supabase/fresh/20_subjects.sql
+-- \i supabase/fresh/21_activities.sql
+-- \i supabase/fresh/22_browser_access.sql

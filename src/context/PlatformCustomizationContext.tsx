@@ -18,10 +18,39 @@ import {
   ClassTeacherModulePolicy,
   OperationsGovernancePolicy
 } from '../types/customization';
-import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 import { SyncEngine } from '../utils/syncEngine';
 
 const STORAGE_KEY = 'edusmart_platform_customization_v6';
+const PACK_KEY = 'edusmart_platform_customization_pack_v1';
+
+function customizationDefaults(): PlatformCustomizationState {
+  try {
+    const raw = localStorage.getItem(PACK_KEY);
+    if (raw) return JSON.parse(raw) as PlatformCustomizationState;
+  } catch {
+    // The pack is loaded from Supabase before the app renders.
+  }
+  return {
+    landingPage: {
+      visibility: {} as LandingSectionsVisibility,
+      header: {} as LandingHeaderConfig,
+      hero: {} as LandingHeroConfig,
+      stats: [],
+      features: [],
+      about: {} as LandingAboutConfig,
+      testimonials: [],
+      pricing: [],
+      faqs: [],
+      contact: {} as LandingContactConfig,
+      footer: {} as LandingFooterConfig,
+    },
+    workspaces: [],
+    globalSettings: {} as GlobalPlatformSettings,
+    classTeacherPolicy: {} as ClassTeacherModulePolicy,
+    operationsPolicy: {} as OperationsGovernancePolicy,
+    schoolOverrides: {},
+  };
+}
 
 interface PlatformCustomizationContextType {
   customization: PlatformCustomizationState;
@@ -75,23 +104,29 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
       if (stored) {
         const parsed = JSON.parse(stored);
         return {
-          ...DEFAULT_PLATFORM_CUSTOMIZATION,
+          ...customizationDefaults(),
           ...parsed,
           landingPage: {
-            ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage,
+            ...customizationDefaults().landingPage,
             ...(parsed.landingPage || {}),
             visibility: {
-              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.visibility,
+              ...customizationDefaults().landingPage.visibility,
               ...(parsed.landingPage?.visibility || {})
             },
             header: {
-              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.header,
-              ...(parsed.landingPage?.header || {})
+              ...customizationDefaults().landingPage.header,
+              ...(parsed.landingPage?.header || {}),
+              loginButtonLabel: parsed.landingPage?.header?.loginButtonLabel && parsed.landingPage.header.loginButtonLabel !== 'School Login'
+                ? parsed.landingPage.header.loginButtonLabel
+                : 'Login',
             },
             hero: {
-              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.hero,
+              ...customizationDefaults().landingPage.hero,
               ...(parsed.landingPage?.hero || {}),
               mediaType: parsed.landingPage?.hero?.mediaType === 'video' ? 'image' : (parsed.landingPage?.hero?.mediaType || 'image'),
+              primaryCta: parsed.landingPage?.hero?.primaryCta && parsed.landingPage.hero.primaryCta !== 'School Login'
+                ? parsed.landingPage.hero.primaryCta
+                : 'Login',
               heroImageUrl: (!parsed.landingPage?.hero?.heroImageUrl || parsed.landingPage?.hero?.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg' || parsed.landingPage?.hero?.heroImageUrl === '/gad@edusmart.jpeg')
                 ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
                 : parsed.landingPage.hero.heroImageUrl,
@@ -100,25 +135,25 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
                 : parsed.landingPage.hero.heroVideoPoster
             },
             about: {
-              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.about,
+              ...customizationDefaults().landingPage.about,
               ...(parsed.landingPage?.about || {})
             },
             contact: {
-              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.contact,
+              ...customizationDefaults().landingPage.contact,
               ...(parsed.landingPage?.contact || {})
             },
             footer: {
-              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.footer,
+              ...customizationDefaults().landingPage.footer,
               ...(parsed.landingPage?.footer || {})
             }
           },
           workspaces: (() => {
             if (!parsed.workspaces || parsed.workspaces.length === 0) {
-              return DEFAULT_PLATFORM_CUSTOMIZATION.workspaces;
+              return customizationDefaults().workspaces;
             }
             const existingIds = new Set(parsed.workspaces.map((w: any) => w.id));
             const merged = [...parsed.workspaces];
-            for (const defWs of DEFAULT_PLATFORM_CUSTOMIZATION.workspaces) {
+            for (const defWs of customizationDefaults().workspaces) {
               if (!existingIds.has(defWs.id)) {
                 merged.push(defWs);
                 existingIds.add(defWs.id);
@@ -127,15 +162,15 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
             return merged;
           })(),
           globalSettings: {
-            ...DEFAULT_PLATFORM_CUSTOMIZATION.globalSettings,
+            ...customizationDefaults().globalSettings,
             ...(parsed.globalSettings || {})
           },
           classTeacherPolicy: {
-            ...DEFAULT_PLATFORM_CUSTOMIZATION.classTeacherPolicy,
+            ...customizationDefaults().classTeacherPolicy,
             ...(parsed.classTeacherPolicy || {})
           },
           operationsPolicy: {
-            ...DEFAULT_PLATFORM_CUSTOMIZATION.operationsPolicy,
+            ...customizationDefaults().operationsPolicy,
             ...(parsed.operationsPolicy || {})
           }
         };
@@ -143,7 +178,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
     } catch (e) {
       console.error('Failed to load platform customization from localStorage', e);
     }
-    return DEFAULT_PLATFORM_CUSTOMIZATION;
+    return customizationDefaults();
   });
 
   // Save to localStorage on changes
@@ -503,7 +538,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
     setCustomization(prev => ({
       ...prev,
       classTeacherPolicy: {
-        ...(prev.classTeacherPolicy || DEFAULT_PLATFORM_CUSTOMIZATION.classTeacherPolicy!),
+        ...(prev.classTeacherPolicy || customizationDefaults().classTeacherPolicy!),
         ...policy
       }
     }));
@@ -513,7 +548,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
     setCustomization(prev => ({
       ...prev,
       operationsPolicy: {
-        ...(prev.operationsPolicy || DEFAULT_PLATFORM_CUSTOMIZATION.operationsPolicy!),
+        ...(prev.operationsPolicy || customizationDefaults().operationsPolicy!),
         ...policy
       }
     }));
@@ -533,7 +568,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
   };
 
   const resetToDefaults = () => {
-    setCustomization(DEFAULT_PLATFORM_CUSTOMIZATION);
+    setCustomization(customizationDefaults());
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (e) {

@@ -57,7 +57,7 @@ import {
   LandingSectionsVisibility,
   WorkspaceModuleConfig 
 } from '../../types/customization';
-import { HERO_VIDEO_PRESETS, HERO_IMAGE_PRESETS } from '../../data/heroMediaPresets';
+import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
 
 
@@ -189,7 +189,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
       headlineMid: 'Management.',
       headlineHighlight: 'Better CBC Learning.',
       subtitle: 'A complete digital platform for school administration, teaching, assessment and communication. Built specifically for Kenyan CBC and modern global curricula.',
-      primaryCta: 'School Login',
+      primaryCta: 'Login',
       primaryCtaAction: 'login' as const,
       secondaryCta: 'Register a School',
       secondaryCtaAction: 'register' as const
@@ -629,7 +629,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">School Login Button Text</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Login Button Text</label>
                   <input
                     type="text"
                     value={customization.landingPage.header.loginButtonLabel}
@@ -875,7 +875,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                             value={customization.landingPage.hero.primaryCta}
                             onChange={(e) => updateLandingHero({ primaryCta: e.target.value })}
                             className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white font-bold"
-                            placeholder="e.g. School Login"
+                            placeholder="e.g. Login"
                           />
                         </div>
 
@@ -886,7 +886,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                             onChange={(e) => updateLandingHero({ primaryCtaAction: e.target.value as any })}
                             className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
                           >
-                            <option value="login">🔐 Navigate to Unified School Login</option>
+                            <option value="login">Navigate to Login</option>
                             <option value="portals">📱 Scroll to Interactive Portals Grid</option>
                             <option value="register">🏫 Open School Registration Modal</option>
                             <option value="demo">📅 Request Platform Interactive Demo</option>
@@ -938,7 +938,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                             className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
                           >
                             <option value="register">🏫 Open School Registration Modal</option>
-                            <option value="login">🔐 Navigate to Unified School Login</option>
+                            <option value="login">Navigate to Login</option>
                             <option value="portals">📱 Scroll to Interactive Portals Grid</option>
                             <option value="contact">📞 Scroll to Contact & Inquiries</option>
                             <option value="demo">📅 Request Platform Interactive Demo</option>
@@ -1083,7 +1083,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                             <span>Or Choose Curated 30-Second Showcase Video:</span>
                           </span>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {HERO_VIDEO_PRESETS.map((preset) => {
+                            {listHeroVideoPresets().map((preset) => {
                               const isSelected = customization.landingPage.hero.heroVideoUrl === preset.url;
                               return (
                                 <button
@@ -1215,7 +1215,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
                         {/* Presets */}
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           <span className="text-[10px] text-slate-500 self-center mr-1">Presets:</span>
-                          {HERO_IMAGE_PRESETS.map((preset) => (
+                          {listHeroImagePresets().map((preset) => (
                             <button
                               key={preset.id}
                               type="button"

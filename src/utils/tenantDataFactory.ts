@@ -10,7 +10,6 @@ import {
   BellPeriodDef
 } from '../types';
 import { Tenant } from '../types/tenant';
-import { INITIAL_USERS } from '../data/initialData';
 
 /**
  * Tenant Data Isolation Factory
@@ -19,14 +18,6 @@ import { INITIAL_USERS } from '../data/initialData';
  */
 
 export function createTenantUsers(tenant: Tenant): User[] {
-  // If Riara School, return standard INITIAL_USERS scoped to tenant-riara
-  if (tenant.id === 'tenant-riara') {
-    return INITIAL_USERS.map(u => ({
-      ...u,
-      schoolId: 'tenant-riara'
-    }));
-  }
-
   const domain = tenant.domain || `${tenant.code.toLowerCase().replace(/[^a-z0-9]/g, '')}.edusmart.ac.ke`;
   const schoolCode = tenant.code || 'SCH-001';
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GradeLevel, User, PRIMARY_STREAMS, JUNIOR_STREAMS, SchoolCalendarEvent } from '../../types';
 import { Storage } from '../../utils/storage';
-import { INITIAL_USERS } from '../../data/initialData';
 import { useTenant } from '../../context/TenantContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { EventTicketModal } from '../events/EventTicketModal';
@@ -9,6 +8,7 @@ import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { VirtualLabSubscriptionModal } from '../virtuallab/VirtualLabSubscriptionModal';
 import { PortalAccessAppModal, PORTAL_APPS_CONFIG } from './PortalAccessAppModal';
 import { resolveSchoolUserAndTenant } from '../../utils/schoolAuthResolver';
+import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
 import { 
   GraduationCap, 
   Lock, 
@@ -229,6 +229,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     setErrorMsg('');
 
     const cleanEmail = email.trim().toLowerCase();
+    if (findActivePlatformAdmin(cleanEmail)) {
+      setErrorMsg('This account can only open the Super Admin console.');
+      return;
+    }
     const resolved = resolveSchoolUserAndTenant(cleanEmail, allTenants, currentTenant);
 
     if (!resolved) {

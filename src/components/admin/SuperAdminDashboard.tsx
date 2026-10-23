@@ -46,14 +46,36 @@ import { Tenant } from '../../types/tenant';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { RegistryNumberKind } from '../../utils/systemRoles';
+import { addSystemRole, listSystemRoles } from '../../utils/systemRoles';
+import {
+  buildUsername,
+  nextRegistryNumber,
+  registryKindCode,
+  rolePassword,
+  suggestSchoolEmail,
+  uniqueUsername,
+} from '../../utils/accountCredentials';
+import {
+  findSchoolAccountByEmail,
+  findSchoolAccountBySchoolId,
+  nextSchoolPassword,
+  removeSchoolAccount,
+  saveSchoolAccount,
+} from '../../utils/schoolAccounts';
+import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
+import { saveProvisionedAccount } from '../../utils/provisionedAccounts';
+import { ensureDepartments } from '../../utils/departmentStore';
 
 interface SuperAdminDashboardProps {
   currentUser: User;
   onNavigateTab?: (tab: string) => void;
   onEnterSchoolPortal?: (schoolId: string) => void;
+  section?: SuperTab;
+  onSectionChange?: (section: SuperTab) => void;
 }
 
-type SuperTab = 'schools' | 'branding' | 'users' | 'categories' | 'spelling' | 'notify';
+export type SuperTab = 'schools' | 'branding' | 'users' | 'categories' | 'spelling' | 'notify';
 
 // Built-in common spelling dictionary for Kenyan CBC education system
 const COMMON_SPELLING_DICTIONARY: { typo: string; correction: string; context: string }[] = [
@@ -101,12 +123,19 @@ const HEADER_GRADIENTS = [
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   currentUser,
   onNavigateTab,
-  onEnterSchoolPortal
+  onEnterSchoolPortal,
+  section,
+  onSectionChange,
 }) => {
   const { currentTenant, allTenants, switchTenant, updateTenantBranding, registerTenant, updateTenant, deleteTenant } = useTenant();
 
   // Active top-level subtab within Super Admin Command Hub
-  const [activeSubTab, setActiveSubTab] = useState<SuperTab>('schools');
+  const [internalSubTab, setInternalSubTab] = useState<SuperTab>('schools');
+  const activeSubTab = section || internalSubTab;
+  const setActiveSubTab = (tab: SuperTab) => {
+    if (onSectionChange) onSectionChange(tab);
+    else setInternalSubTab(tab);
+  };
 
   // Selected school to configure (defaults to current tenant)
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>(currentTenant.id);
@@ -163,6 +192,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     county: 'Nairobi County',
     phone: '',
     email: '',
+    domain: '',
+    loginPassword: '',
     principalName: '',
     principalTitle: 'Head of Institution & Principal',
     establishedYear: 2020,
@@ -175,8 +206,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     categories: ['Science & STEM', 'Creative Arts', 'Sports & Athletics']
   });
 
+  const [schoolEmailTouched, setSchoolEmailTouched] = useState(false);
+
+  const patchSchoolIdentity = (
+    current: typeof schoolForm,
+    patch: Partial<typeof schoolForm>,
+    emailTouched = schoolEmailTouched,
+  ) => {
+    const next = { ...current, ...patch };
+    if (!emailTouched) {
+      next.email = suggestSchoolEmail(next.name, next.shortName, next.domain);
+    }
+    return next;
+  };
+
   const handleOpenNewSchoolModal = () => {
     setEditingSchoolId(null);
+    setSchoolEmailTouched(false);
     setSchoolForm({
       name: '',
       shortName: '',
@@ -188,7 +234,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       city: 'Nairobi',
       county: 'Nairobi County',
       phone: '+254 700 000 000',
-      email: 'admissions@school.edusmart.ac.ke',
+      email: '',
+      domain: '',
+      loginPassword: nextSchoolPassword(),
       principalName: 'Dr. Jane Mwangi, PhD',
       principalTitle: 'Head of Institution & Principal',
       establishedYear: new Date().getFullYear(),
@@ -204,7 +252,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   };
 
   const handleOpenEditSchoolModal = (school: Tenant) => {
+    const account = findSchoolAccountBySchoolId(school.id);
     setEditingSchoolId(school.id);
+    setSchoolEmailTouched(true);
     setSchoolForm({
       name: school.name,
       shortName: school.shortName,
@@ -216,7 +266,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       city: school.city,
       county: school.county,
       phone: school.phone,
-      email: school.email,
+      email: account?.email || school.email,
+      domain: account?.domain || school.domain,
+      loginPassword: account?.password || nextSchoolPassword(),
       principalName: school.principalName,
       principalTitle: school.principalTitle,
       establishedYear: school.establishedYear,
@@ -233,8 +285,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const handleSaveSchool = (e: React.FormEvent) => {
     e.preventDefault();
+    const domain = schoolForm.domain.trim().toLowerCase();
+    const email = schoolForm.email.trim().toLowerCase();
     if (!schoolForm.name.trim() || !schoolForm.code.trim()) {
       showToast('School name and registration code are required.', 'error');
+      return;
+    }
+    if (!email.includes('@') || !domain.includes('.')) {
+      showToast('Enter the school login email and a domain such as schoolname.ac.ke.', 'error');
+      return;
+    }
+    if (findActivePlatformAdmin(email)) {
+      showToast('That email is reserved for the Super Admin console.', 'error');
+      return;
+    }
+    const taken = findSchoolAccountByEmail(email);
+    if (taken && taken.schoolId !== editingSchoolId) {
+      showToast('Another school already uses this login email.', 'error');
       return;
     }
 
@@ -250,7 +317,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         city: schoolForm.city,
         county: schoolForm.county,
         phone: schoolForm.phone,
-        email: schoolForm.email,
+        email,
+        domain,
         principalName: schoolForm.principalName,
         principalTitle: schoolForm.principalTitle,
         establishedYear: Number(schoolForm.establishedYear),
@@ -262,7 +330,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         totalFaculty: Number(schoolForm.totalFaculty),
         categories: schoolForm.categories
       });
-      showToast(`Updated details for "${schoolForm.name}".`);
+      saveSchoolAccount({
+        id: `school-login-${editingSchoolId}`,
+        schoolId: editingSchoolId,
+        email,
+        password: schoolForm.loginPassword,
+        domain,
+        createdAt: new Date().toISOString(),
+      });
+      showToast(`School login saved. Email ${email}. Password ${schoolForm.loginPassword}.`, 'success', true);
     } else {
       const newId = `tenant-${schoolForm.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15)}-${Date.now()}`;
       const newTenant: Tenant = {
@@ -273,12 +349,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         code: schoolForm.code,
         registrationNumber: schoolForm.registrationNumber,
         curriculum: schoolForm.curriculum,
-        domain: `${schoolForm.code.toLowerCase().replace(/[^a-z0-9]/g, '')}.edusmart.ac.ke`,
+        domain,
         address: schoolForm.address || 'School Road',
         city: schoolForm.city,
         county: schoolForm.county,
         phone: schoolForm.phone,
-        email: schoolForm.email,
+        email,
         principalName: schoolForm.principalName,
         principalTitle: schoolForm.principalTitle,
         establishedYear: Number(schoolForm.establishedYear),
@@ -297,8 +373,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         registeredAt: new Date().toISOString()
       };
       registerTenant(newTenant);
+      saveSchoolAccount({
+        id: `school-login-${newId}`,
+        schoolId: newId,
+        email,
+        password: schoolForm.loginPassword,
+        domain,
+        createdAt: new Date().toISOString(),
+      });
+      ensureDepartments(newId);
       setSelectedSchoolId(newTenant.id);
-      showToast(`Registered new school: "${newTenant.name}"!`);
+      showToast(`School login created. Email ${email}. Password ${schoolForm.loginPassword}.`, 'success', true);
     }
     setShowSchoolModal(false);
   };
@@ -306,6 +391,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const handleDeleteSchool = (school: Tenant) => {
     if (confirm(`Are you sure you want to remove school "${school.name}" (${school.code}) from the multi-tenant registry?`)) {
       deleteTenant(school.id);
+      removeSchoolAccount(school.id);
       showToast(`Removed school "${school.name}".`, 'info');
     }
   };
@@ -363,20 +449,65 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [numberEdited, setNumberEdited] = useState(false);
+  const [systemRoles, setSystemRoles] = useState(() => listSystemRoles());
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [roleForm, setRoleForm] = useState({
+    name: '',
+    passwordPrefix: '',
+    numberKind: 'staff' as RegistryNumberKind,
+  });
   const [userForm, setUserForm] = useState({
     name: '',
     email: '',
+    password: '',
     phone: '',
     role: 'teacher' as UserRole,
     schoolId: targetSchool.id,
     grade: 1 as GradeLevel,
     stream: 'Dove' as StreamName,
     admissionNumber: '',
+    staffNumber: '',
     tscNumber: '',
     designation: '',
     department: '',
     isActive: true
   });
+
+  const buildUserDraft = (
+    draft: typeof userForm,
+    keepNumber: boolean,
+    editingId: string | null = editingUserId,
+  ) => {
+    if (editingId) return draft;
+    const school = allTenants.find((tenant) => tenant.id === draft.schoolId);
+    const account = school ? findSchoolAccountBySchoolId(school.id) : undefined;
+    const domain = account?.domain || school?.domain || '';
+    const role = systemRoles.find((item) => item.slug === draft.role) || listSystemRoles().find((item) => item.slug === draft.role);
+    const taken = Storage.getUsers().map((user) => user.email).filter(Boolean);
+    const email = uniqueUsername(buildUsername(draft.name, domain), taken);
+    const password = role ? rolePassword(role.passwordPrefix) : '';
+    let admissionNumber = draft.admissionNumber;
+    let staffNumber = draft.staffNumber;
+    if (!keepNumber && role) {
+      const year = new Date().getFullYear();
+      const existing = Storage.getUsers()
+        .filter((user) => (user.schoolId || '') === draft.schoolId)
+        .flatMap((user) => [user.admissionNumber, user.staffNumber, user.tscNumber].filter(Boolean) as string[]);
+      const code = registryKindCode(role.numberKind);
+      if (code === 'ADM') {
+        admissionNumber = nextRegistryNumber('ADM', year, existing);
+        staffNumber = '';
+      } else if (code === 'STF') {
+        staffNumber = nextRegistryNumber('STF', year, existing);
+        admissionNumber = '';
+      } else {
+        admissionNumber = '';
+        staffNumber = '';
+      }
+    }
+    return { ...draft, email, password, admissionNumber, staffNumber };
+  };
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
@@ -384,6 +515,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
         u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
         (u.admissionNumber && u.admissionNumber.toLowerCase().includes(userSearch.toLowerCase())) ||
+        (u.staffNumber && u.staffNumber.toLowerCase().includes(userSearch.toLowerCase())) ||
         (u.phone && u.phone.includes(userSearch));
 
       const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
@@ -407,34 +539,41 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const handleOpenAddUser = () => {
     setEditingUserId(null);
-    setUserForm({
+    setNumberEdited(false);
+    const draft = buildUserDraft({
       name: '',
       email: '',
+      password: '',
       phone: '+254 7',
-      role: 'teacher',
+      role: '' as UserRole,
       schoolId: targetSchool.id,
       grade: 4,
       stream: 'Dove',
-      admissionNumber: `ADM-${Math.floor(1000 + Math.random() * 9000)}`,
-      tscNumber: `TSC/${Math.floor(10000 + Math.random() * 90000)}/ED`,
-      designation: 'Senior Faculty Member',
-      department: 'Sciences & Mathematics',
+      admissionNumber: '',
+      staffNumber: '',
+      tscNumber: '',
+      designation: '',
+      department: '',
       isActive: true
-    });
+    }, false, null);
+    setUserForm(draft);
     setShowUserModal(true);
   };
 
   const handleOpenEditUser = (user: User) => {
     setEditingUserId(user.id);
+    setNumberEdited(true);
     setUserForm({
       name: user.name,
       email: user.email,
+      password: user.password || '',
       phone: user.phone || '',
       role: user.role,
       schoolId: user.schoolId || currentTenant.id,
       grade: user.grade || 1,
       stream: user.stream || 'Dove',
       admissionNumber: user.admissionNumber || '',
+      staffNumber: user.staffNumber || '',
       tscNumber: user.tscNumber || '',
       designation: user.designation || '',
       department: user.department || '',
@@ -445,47 +584,94 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
+    const role = systemRoles.find((item) => item.slug === userForm.role);
     if (!userForm.name.trim() || !userForm.email.trim()) {
-      showToast('Name and email are required.', 'error');
+      showToast('Enter the legal name so the username can be created.', 'error');
       return;
     }
+    if (role?.numberKind === 'admission' && !userForm.admissionNumber.trim()) {
+      showToast('Enter the admission number.', 'error');
+      return;
+    }
+    if (role?.numberKind === 'staff' && !userForm.staffNumber.trim()) {
+      showToast('Enter the staff number.', 'error');
+      return;
+    }
+
+    const registryNumber = role?.numberKind === 'admission'
+      ? userForm.admissionNumber.trim()
+      : role?.numberKind === 'staff'
+        ? userForm.staffNumber.trim()
+        : '';
 
     if (editingUserId) {
       Storage.updateUser(editingUserId, {
         name: userForm.name,
         email: userForm.email,
+        password: userForm.password,
         phone: userForm.phone,
         role: userForm.role,
         schoolId: userForm.schoolId,
         grade: userForm.role === 'student' ? userForm.grade : undefined,
         stream: userForm.role === 'student' ? userForm.stream : undefined,
-        admissionNumber: userForm.role === 'student' ? userForm.admissionNumber : undefined,
-        tscNumber: ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'head_teacher'].includes(userForm.role) ? userForm.tscNumber : undefined,
+        admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
+        staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
+        tscNumber: userForm.tscNumber,
         designation: userForm.designation,
         department: userForm.department,
         isActive: userForm.isActive
       });
-      showToast(`User ${userForm.name} updated successfully.`);
+      saveProvisionedAccount({
+        id: editingUserId,
+        name: userForm.name,
+        email: userForm.email.toLowerCase().trim(),
+        password: userForm.password,
+        phone: userForm.phone,
+        role: userForm.role,
+        schoolId: userForm.schoolId,
+        admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
+        staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
+        isActive: userForm.isActive,
+      });
+      showToast(`Updated ${userForm.name}. Username ${userForm.email}.`, 'success', true);
     } else {
       const newUser: User = {
         id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: userForm.name,
         email: userForm.email.toLowerCase().trim(),
+        password: userForm.password,
         phone: userForm.phone,
         role: userForm.role,
         schoolId: userForm.schoolId,
         grade: userForm.role === 'student' ? userForm.grade : undefined,
         stream: userForm.role === 'student' ? userForm.stream : undefined,
-        admissionNumber: userForm.role === 'student' ? userForm.admissionNumber : undefined,
-        tscNumber: userForm.tscNumber,
-        designation: userForm.designation,
+        admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
+        staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
+        designation: role?.name || userForm.designation,
         department: userForm.department,
         isActive: userForm.isActive
       };
       Storage.addUser(newUser);
-      showToast(`User ${newUser.name} created!`);
+      saveProvisionedAccount(newUser);
+      showToast(
+        `Created ${newUser.name}. Username ${newUser.email}. Password ${newUser.password}.${registryNumber ? ` Number ${registryNumber}.` : ''}`,
+        'success',
+        true,
+      );
     }
     setShowUserModal(false);
+  };
+
+  const handleSaveRole = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const created = addSystemRole(roleForm);
+      setSystemRoles(listSystemRoles());
+      setRoleForm({ name: '', passwordPrefix: '', numberKind: 'staff' });
+      showToast(`Role ${created.name} added. New accounts use password ${created.passwordPrefix}@${new Date().getFullYear()}.`, 'success', true);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not add that role.', 'error');
+    }
   };
 
   const handleDeleteUser = (user: User) => {
@@ -856,6 +1042,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       </div>
 
       {/* Sub Navigation Bar with Distinct Tool Modules */}
+      {!section && (
       <div className="bg-white rounded-2xl p-2 shadow-sm border border-slate-200 flex flex-wrap items-center gap-1.5">
         <button
           onClick={() => setActiveSubTab('schools')}
@@ -935,6 +1122,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <span>6. Broadcast Alert Center</span>
         </button>
       </div>
+      )}
 
       {/* ========================================================
           SUB-TAB 1: REGISTER SCHOOLS & CAMPUS MANAGEMENT
@@ -1409,13 +1597,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <h2 className="text-base font-black text-slate-900">System Users & Account Governance</h2>
               <p className="text-xs text-slate-500">Manage, edit, activate, deactivate, or assign accounts across all schools.</p>
             </div>
-            <button
-              onClick={handleOpenAddUser}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New User</span>
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowRoleModal(true)}
+                className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Layers className="w-4 h-4" />
+                <span>Manage Roles</span>
+              </button>
+              <button
+                onClick={handleOpenAddUser}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add New User</span>
+              </button>
+            </div>
           </div>
 
           {/* Filters Bar */}
@@ -1438,17 +1635,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white cursor-pointer font-bold"
               >
                 <option value="all">All Roles (Any)</option>
-                <option value="teacher">Subject Teacher</option>
-                <option value="class_teacher">Class Teacher</option>
-                <option value="student">Student / Learner</option>
-                <option value="parent">Parent</option>
-                <option value="hod">Head of Department (HOD)</option>
-                <option value="senior_teacher">Senior Teacher</option>
-                <option value="deputy_head">Deputy Head Teacher</option>
-                <option value="head_teacher">Head Teacher</option>
-                <option value="school_admin_staff">School Admin Staff</option>
-                <option value="librarian">Librarian</option>
-                <option value="admin">System Administrator</option>
+                {systemRoles.map((role) => (
+                  <option key={role.id} value={role.slug}>{role.name}</option>
+                ))}
               </select>
             </div>
 
@@ -1925,7 +2114,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     type="text"
                     required
                     value={schoolForm.name}
-                    onChange={(e) => setSchoolForm({ ...schoolForm, name: e.target.value })}
+                    onChange={(e) => setSchoolForm(patchSchoolIdentity(schoolForm, { name: e.target.value }))}
                     placeholder="e.g. St. Austin's Academy"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 font-serif"
                   />
@@ -1936,7 +2125,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <input
                     type="text"
                     value={schoolForm.shortName}
-                    onChange={(e) => setSchoolForm({ ...schoolForm, shortName: e.target.value })}
+                    onChange={(e) => setSchoolForm(patchSchoolIdentity(schoolForm, { shortName: e.target.value }))}
                     placeholder="e.g. St. Austin's"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500"
                   />
@@ -2048,6 +2237,46 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">School domain *</label>
+                  <input
+                    type="text"
+                    required
+                    value={schoolForm.domain}
+                    onChange={(e) => setSchoolForm(patchSchoolIdentity(schoolForm, { domain: e.target.value }))}
+                    placeholder="staustins.ac.ke"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 font-mono bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">School login email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={schoolForm.email}
+                    onChange={(e) => {
+                      setSchoolEmailTouched(true);
+                      setSchoolForm({ ...schoolForm, email: e.target.value });
+                    }}
+                    placeholder="staustins@staustins.ac.ke"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 font-mono bg-white"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="font-bold text-slate-700 block mb-1">Generated school password</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={schoolForm.loginPassword}
+                    className="w-full px-3 py-2 rounded-xl border border-indigo-200 bg-white font-mono font-bold text-indigo-950"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    This email and password open the school portal. Staff and learner usernames use the domain above.
+                  </p>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
                 <button
                   type="button"
@@ -2088,22 +2317,24 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   type="text"
                   required
                   value={userForm.name}
-                  onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-                  placeholder="e.g. Mary Wanjiku"
+                  onChange={(e) => setUserForm(buildUserDraft({ ...userForm, name: e.target.value }, numberEdited))}
+                  placeholder="e.g. Mary Wanjiku Kamau"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500"
                 />
+                <p className="mt-1 text-[11px] text-slate-500">The first and last names, split on spaces, become the username.</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Email Address *</label>
+                  <label className="font-bold text-slate-700 block mb-1">Username</label>
                   <input
                     type="email"
                     required
+                    readOnly={!editingUserId}
                     value={userForm.email}
                     onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                    placeholder="mary@school.edusmart.ac.ke"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 font-mono"
+                    placeholder="mary.kamau@school-domain"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 font-mono bg-slate-50"
                   />
                 </div>
 
@@ -2124,20 +2355,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <label className="font-bold text-slate-700 block mb-1">System Role *</label>
                   <select
                     value={userForm.role}
-                    onChange={(e) => setUserForm({ ...userForm, role: e.target.value as any })}
+                    onChange={(e) => setUserForm(buildUserDraft({ ...userForm, role: e.target.value as UserRole }, numberEdited))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold bg-white"
                   >
-                    <option value="student">Student / Learner</option>
-                    <option value="parent">Parent</option>
-                    <option value="teacher">Subject Teacher</option>
-                    <option value="class_teacher">Class Teacher</option>
-                    <option value="hod">Head of Department (HOD)</option>
-                    <option value="senior_teacher">Senior Teacher</option>
-                    <option value="deputy_head">Deputy Head Teacher</option>
-                    <option value="head_teacher">Head Teacher</option>
-                    <option value="school_admin_staff">School Admin Staff</option>
-                    <option value="librarian">Librarian</option>
-                    <option value="admin">System Administrator</option>
+                    <option value="">Choose an account role</option>
+                    {systemRoles.map((role) => (
+                      <option key={role.id} value={role.slug}>{role.name}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -2145,7 +2369,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <label className="font-bold text-slate-700 block mb-1">Assigned School Campus</label>
                   <select
                     value={userForm.schoolId}
-                    onChange={(e) => setUserForm({ ...userForm, schoolId: e.target.value })}
+                    onChange={(e) => setUserForm(buildUserDraft({ ...userForm, schoolId: e.target.value }, numberEdited))}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold bg-white"
                   >
                     {allTenants.map(t => (
@@ -2155,8 +2379,51 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Generated password</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={userForm.password}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono font-bold bg-white"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Role prefix, then @, then the year. A student is st@{new Date().getFullYear()}.</p>
+                </div>
+                {systemRoles.find((role) => role.slug === userForm.role)?.numberKind === 'admission' && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Admission number</label>
+                    <input
+                      type="text"
+                      value={userForm.admissionNumber}
+                      onChange={(e) => {
+                        setNumberEdited(true);
+                        setUserForm({ ...userForm, admissionNumber: e.target.value });
+                      }}
+                      placeholder={`ADM/${new Date().getFullYear()}/001`}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono bg-white"
+                    />
+                  </div>
+                )}
+                {systemRoles.find((role) => role.slug === userForm.role)?.numberKind === 'staff' && (
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Staff number</label>
+                    <input
+                      type="text"
+                      value={userForm.staffNumber}
+                      onChange={(e) => {
+                        setNumberEdited(true);
+                        setUserForm({ ...userForm, staffNumber: e.target.value });
+                      }}
+                      placeholder={`STF/${new Date().getFullYear()}/001`}
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+
               {userForm.role === 'student' && (
-                <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Grade</label>
                     <input
@@ -2176,16 +2443,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       onChange={(e) => setUserForm({ ...userForm, stream: e.target.value as StreamName })}
                       placeholder="Dove"
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Admission #</label>
-                    <input
-                      type="text"
-                      value={userForm.admissionNumber}
-                      onChange={(e) => setUserForm({ ...userForm, admissionNumber: e.target.value })}
-                      placeholder="ADM-2026-001"
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono bg-white"
                     />
                   </div>
                 </div>
@@ -2219,6 +2476,71 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 >
                   {editingUserId ? 'Save User' : 'Create User'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showRoleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 overflow-y-auto backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <h3 className="text-lg font-black text-slate-900">Account roles</h3>
+              <button onClick={() => setShowRoleModal(false)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
+            </div>
+            <p className="mt-3 text-[11px] text-slate-500">
+              New accounts take the password prefix, then @, then the year. A student is st@{new Date().getFullYear()}.
+            </p>
+            <ul className="mt-3 max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
+              {systemRoles.map((role) => (
+                <li key={role.id} className="px-3 py-2 flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-800">{role.name}</span>
+                  <span className="font-mono text-slate-500">{role.passwordPrefix}@{new Date().getFullYear()} · {role.numberKind}</span>
+                </li>
+              ))}
+            </ul>
+            <form onSubmit={handleSaveRole} className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">New role name</label>
+                <input
+                  type="text"
+                  required
+                  value={roleForm.name}
+                  onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                  placeholder="e.g. School Counselor"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Password prefix</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    value={roleForm.passwordPrefix}
+                    onChange={(e) => setRoleForm({ ...roleForm, passwordPrefix: e.target.value.toLowerCase() })}
+                    placeholder="sc"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Number</label>
+                  <select
+                    value={roleForm.numberKind}
+                    onChange={(e) => setRoleForm({ ...roleForm, numberKind: e.target.value as RegistryNumberKind })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold"
+                  >
+                    <option value="staff">Staff number</option>
+                    <option value="admission">Admission number</option>
+                    <option value="none">No number</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowRoleModal(false)} className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold cursor-pointer">Close</button>
+                <button type="submit" className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-black cursor-pointer">Add role</button>
               </div>
             </form>
           </div>

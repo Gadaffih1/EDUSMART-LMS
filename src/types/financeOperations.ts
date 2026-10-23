@@ -389,4 +389,4 @@ export interface OperationsAuditLog {
   amountImpacted?: number;
 }
 
-export { calculateKenyanPayrollDeductions } from '../data/financeOperationsData';
+export { calculateKenyanPayrollDeductions } from '../utils/kenyanPayroll';

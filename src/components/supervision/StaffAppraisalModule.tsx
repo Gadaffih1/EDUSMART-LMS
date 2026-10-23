@@ -11,7 +11,7 @@ import {
   JUNIOR_SUBJECTS
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { INITIAL_TPAD_STANDARDS } from '../../data/staffAppraisalData';
+import { loadTpadStandards } from '../../utils/tpadStandards';
 import { 
   Award, 
   FileCheck2, 
@@ -234,7 +234,7 @@ export const StaffAppraisalModule: React.FC<StaffAppraisalModuleProps> = ({
       return;
     }
 
-    const defaultStandards: TPADStandardRating[] = INITIAL_TPAD_STANDARDS.map(s => ({
+    const defaultStandards: TPADStandardRating[] = loadTpadStandards().map(s => ({
       ...s,
       selfScore: 4,
       appraiserScore: 4,

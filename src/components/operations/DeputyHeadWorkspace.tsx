@@ -58,7 +58,7 @@ import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
-import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { SchoolStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { 
   Bus,
   Trophy,
@@ -1649,7 +1649,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           TAB: TEACHER & STAFF PERFORMANCE APPRAISAL (TSC TPAD)
           ======================================================== */}
       {activeTab === 'staff_appraisal' && (
-        <StaffAppraisalModule currentUser={currentUser} />
+        <SchoolStaffAppraisal currentUser={currentUser} />
       )}
 
       {/* ========================================================

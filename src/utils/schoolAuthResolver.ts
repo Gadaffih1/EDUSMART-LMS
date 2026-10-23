@@ -1,8 +1,10 @@
 import { User, UserRole } from '../types';
 import { Tenant } from '../types/tenant';
 import { Storage } from './storage';
-import { INITIAL_USERS } from '../data/initialData';
 import { createTenantUsers } from './tenantDataFactory';
+import { findSchoolAccountByEmail } from './schoolAccounts';
+import { findProvisionedAccount } from './provisionedAccounts';
+import { findDirectoryLogin } from './schoolDirectoryStore';
 
 export interface ResolvedSchoolAuth {
   user: User;
@@ -18,31 +20,21 @@ export interface ResolvedSchoolAuth {
 export function resolveSchoolUserAndTenant(
   rawIdent: string,
   allTenants: Tenant[],
-  fallbackTenant?: Tenant
+  _fallbackTenant?: Tenant
 ): ResolvedSchoolAuth | null {
   const cleanIdent = rawIdent.trim().toLowerCase();
   if (!cleanIdent) return null;
 
-  // 1. Platform Super Admin Check (Platform owner only - not bound to any single school)
-  if (cleanIdent === 'admin@edusmart.ac.ke' || cleanIdent === 'superadmin@edusmart.ac.ke') {
-    const defaultTenant = fallbackTenant || allTenants[0];
-    const superAdmin: User = {
-      id: 'usr-admin-1',
-      name: 'Main Administrator (Platform Super Admin)',
-      email: cleanIdent,
-      role: 'admin',
-      schoolId: defaultTenant.id,
-      isActive: true,
-    };
-    return { user: superAdmin, expectedPassword: 'admin2026', tenant: defaultTenant };
-  }
-
-  // 2. Check explicitly stored user accounts in Storage first (User Registration & Data Retention)
+  // Platform super admins are not school accounts. They are authenticated
+  // from platformAdminsData and can open only the super admin console.
+  // 1. Check explicitly stored user accounts in Storage first (User Registration & Data Retention)
   const storedUsers = Storage.getUsers();
   const matchedStored = storedUsers.find(u =>
     (u.email && u.email.toLowerCase() === cleanIdent) ||
     (u.name && u.name.toLowerCase() === cleanIdent) ||
-    (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
+    (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent) ||
+    (u.staffNumber && u.staffNumber.toLowerCase() === cleanIdent) ||
+    (u.tscNumber && u.tscNumber.toLowerCase() === cleanIdent)
   );
   if (matchedStored) {
     const schoolId = matchedStored.schoolId || 'tenant-riara';
@@ -52,6 +44,47 @@ export function resolveSchoolUserAndTenant(
       expectedPassword: matchedStored.password || 'admin2026',
       tenant
     };
+  }
+
+  const provisioned = findProvisionedAccount(cleanIdent);
+  if (provisioned) {
+    const schoolId = provisioned.schoolId || 'tenant-riara';
+    const tenant = allTenants.find((item) => item.id === schoolId) || allTenants[0];
+    if (tenant) {
+      return {
+        user: { ...provisioned, schoolId: tenant.id },
+        expectedPassword: provisioned.password || 'admin2026',
+        tenant,
+      };
+    }
+  }
+
+  const directory = findDirectoryLogin(cleanIdent);
+  if (directory) {
+    const tenant = allTenants.find((item) => item.id === directory.user.schoolId) || allTenants[0];
+    if (tenant) {
+      return {
+        user: { ...directory.user, schoolId: tenant.id },
+        expectedPassword: directory.password,
+        tenant,
+      };
+    }
+  }
+
+  const schoolAccount = findSchoolAccountByEmail(cleanIdent);
+  if (schoolAccount) {
+    const tenant = allTenants.find((item) => item.id === schoolAccount.schoolId);
+    if (tenant) {
+      const schoolLogin: User = {
+        id: `usr-school-login-${tenant.id}`,
+        name: tenant.principalName || `${tenant.shortName} School Login`,
+        email: schoolAccount.email,
+        role: 'admin',
+        schoolId: tenant.id,
+        isActive: true,
+      };
+      return { user: schoolLogin, expectedPassword: schoolAccount.password, tenant };
+    }
   }
 
   // 3. Search registered Tenant Schools
@@ -146,21 +179,6 @@ export function resolveSchoolUserAndTenant(
         };
       }
     }
-  }
-
-  // 4. Default Seed Users from INITIAL_USERS (Assigned strictly to Riara School tenant-riara)
-  const matchedSeed = INITIAL_USERS.find(u =>
-    (u.email && u.email.toLowerCase() === cleanIdent) ||
-    (u.name && u.name.toLowerCase() === cleanIdent) ||
-    (u.admissionNumber && u.admissionNumber.toLowerCase() === cleanIdent)
-  );
-  if (matchedSeed) {
-    const riaraTenant = allTenants.find(t => t.id === 'tenant-riara') || allTenants[0];
-    return {
-      user: { ...matchedSeed, schoolId: riaraTenant.id },
-      expectedPassword: matchedSeed.password,
-      tenant: riaraTenant
-    };
   }
 
   return null;

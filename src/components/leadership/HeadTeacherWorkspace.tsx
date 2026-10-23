@@ -17,7 +17,7 @@ import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
-import { StaffAppraisalModule } from '../supervision/StaffAppraisalModule';
+import { SchoolStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 import { SchoolKpiAnalyticsCharts } from '../analytics/SchoolKpiAnalyticsCharts';
 import { useTenant } from '../../context/TenantContext';
@@ -433,7 +433,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           TAB: TEACHER PERFORMANCE APPRAISAL (TSC TPAD) & RATIFICATION
           ======================================================== */}
       {activeTab === 'staff_appraisal' && (
-        <StaffAppraisalModule currentUser={currentUser} />
+        <SchoolStaffAppraisal currentUser={currentUser} />
       )}
 
       {/* ========================================================

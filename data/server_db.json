@@ -6,16 +6,4222 @@
         "email": "test.teacher@riaraschools.ac.ke",
         "role": "teacher",
         "schoolId": "tenant-riara",
-        "password": "teach2026",
         "id": "usr-teacher-1792654326346",
         "isActive": true,
         "registeredAt": "2026-10-22T07:32:06.346Z"
+      },
+      {
+        "id": "usr-admin-1",
+        "name": "Main Administrator",
+        "email": "admin@edusmart.ac.ke",
+        "role": "admin",
+        "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-admin-staff-1",
+        "name": "Mrs. Sarah Cherono",
+        "email": "adminstaff@edusmart.ac.ke",
+        "role": "school_admin_staff",
+        "tscNumber": "ADM/45120/SEC",
+        "designation": "Senior Administrative Officer & Academic Registrar",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-nurse-grace",
+        "name": "Sister Grace Wambui, RN",
+        "email": "nurse@edusmart.ac.ke",
+        "role": "nurse",
+        "tscNumber": "NCK/RN-58921",
+        "designation": "School Nursing Officer In-Charge · Sanatorium Bay",
+        "avatarUrl": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-lead",
+        "name": "Mr. Josephat Kipkoech",
+        "email": "transport@edusmart.ac.ke",
+        "role": "transport_team",
+        "phone": "+254 712 345 678",
+        "tscNumber": "NTSA/PSV-78412",
+        "designation": "Lead School Bus Driver & Fleet Operations Supervisor",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-assistant",
+        "name": "Ms. Mary Wambui",
+        "email": "chaperone@edusmart.ac.ke",
+        "role": "transport_team",
+        "phone": "+254 723 456 789",
+        "tscNumber": "TRN/CHP-014",
+        "designation": "Senior Bus Chaperone & Student Roll Officer",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-cocurricular-lead",
+        "name": "Coach Benjamin Omwenga",
+        "email": "cocurricular@edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "phone": "+254 722 789 012",
+        "tscNumber": "TSC/SP-38910",
+        "designation": "Director of Sports & Head Football Academy Coach",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-patron-debate",
+        "name": "Madame Grace Achieng",
+        "email": "patron@edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "phone": "+254 721 345 987",
+        "tscNumber": "TSC/CL-49201",
+        "designation": "Senior Patron, Great Debaters Society & Drama Troupe",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-head-1",
+        "name": "Dr. Arthur Mwangi",
+        "email": "headteacher@edusmart.ac.ke",
+        "role": "head_teacher",
+        "tscNumber": "TSC/14982/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-deputy-1",
+        "name": "Mr. Charles Omondi",
+        "email": "deputy@edusmart.ac.ke",
+        "role": "deputy_head",
+        "tscNumber": "TSC/23491/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-dean-1",
+        "name": "Ms. Beatrice Wanjiku",
+        "email": "dean@edusmart.ac.ke",
+        "role": "dean_of_studies",
+        "tscNumber": "TSC/38910/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-coord-curriculum",
+        "name": "Mrs. Beatrice Omari",
+        "email": "curriculum@edusmart.ac.ke",
+        "role": "curriculum_coordinator",
+        "tscNumber": "TSC/41029/ED",
+        "designation": "Director of Curriculum Coordination & CBC Assessment",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hod-sciences",
+        "name": "Dr. Mercy Mwangi",
+        "email": "hod.sciences@edusmart.ac.ke",
+        "role": "hod",
+        "department": "Sciences & Mathematics",
+        "tscNumber": "TSC/31204/ED",
+        "assignedSubjects": [
+          "Integrated Science",
+          "Mathematics"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-senior-ochieng",
+        "name": "Mr. Peter Ochieng",
+        "email": "senior.teacher@edusmart.ac.ke",
+        "role": "senior_teacher",
+        "tscNumber": "TSC/29410/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-lib-esther",
+        "name": "Mrs. Esther Kamau",
+        "email": "librarian@edusmart.ac.ke",
+        "role": "librarian",
+        "tscNumber": "TSC/48102/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-parent-otieno",
+        "name": "Mrs. Grace Otieno (Parent)",
+        "email": "parent.otieno@edusmart.ac.ke",
+        "role": "parent",
+        "phone": "+254 722 123 456",
+        "childrenIds": [
+          "usr-stu-brian",
+          "usr-stu-faith",
+          "usr-stu-peter"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teach-kiprono",
+        "name": "Mr. David Kiprono",
+        "email": "mr.kiprono@edusmart.ac.ke",
+        "role": "class_teacher",
+        "grade": 4,
+        "stream": "Dove",
+        "tscNumber": "TSC/44120/ED",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 4,
+            "stream": "Eagle"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Integrated Science"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teach-akinyi",
+        "name": "Mrs. Florence Akinyi",
+        "email": "mrs.akinyi@edusmart.ac.ke",
+        "role": "class_teacher",
+        "grade": 8,
+        "stream": "Mara",
+        "tscNumber": "TSC/51294/ED",
+        "assignedStreams": [
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 8,
+            "stream": "Athi"
+          }
+        ],
+        "assignedSubjects": [
+          "English",
+          "Social Studies"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teach-mutua",
+        "name": "Mr. Peter Mutua",
+        "email": "mr.mutua@edusmart.ac.ke",
+        "role": "teacher",
+        "tscNumber": "TSC/67891/ED",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 7,
+            "stream": "Kerio"
+          },
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 9,
+            "stream": "Tana"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Pretechnical Education",
+          "Agriculture and Nutrition"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-brian",
+        "name": "Brian Otieno",
+        "email": "brian.otieno@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "ADM/2023/0412",
+        "avatarUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-amina",
+        "name": "Amina Hassan",
+        "email": "amina.hassan@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "ADM/2023/0413",
+        "avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-kelvin",
+        "name": "Kelvin Kiprop",
+        "email": "kelvin.kiprop@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "ADM/2023/0414"
+      },
+      {
+        "id": "usr-stu-mercy",
+        "name": "Mercy Chebet",
+        "email": "mercy.chebet@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "ADM/2023/0415"
+      },
+      {
+        "id": "usr-stu-daniel",
+        "name": "Daniel Njoroge",
+        "email": "daniel.njoroge@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "ADM/2023/0416"
+      },
+      {
+        "id": "usr-stu-faith",
+        "name": "Faith Wanjiru",
+        "email": "faith.wanjiru@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "ADM/2021/0819",
+        "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-ian",
+        "name": "Ian Mwangi",
+        "email": "ian.mwangi@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "ADM/2021/0820"
+      },
+      {
+        "id": "usr-stu-sharon",
+        "name": "Sharon Cherono",
+        "email": "sharon.cherono@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "ADM/2021/0821"
+      },
+      {
+        "id": "usr-stu-victor",
+        "name": "Victor Ochieng",
+        "email": "victor.ochieng@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "ADM/2021/0822"
+      },
+      {
+        "id": "usr-stu-kevin2",
+        "name": "Kevin Maina",
+        "email": "kevin.maina@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "ADM/2025/0201"
+      },
+      {
+        "id": "usr-stu-peter",
+        "name": "Peter Otieno",
+        "email": "peter.otieno@student.edusmart.ac.ke",
+        "role": "student",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "ADM/2025/0202",
+        "avatarUrl": "https://images.unsplash.com/photo-1543610892-0b1f7e6d8ac1?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-fin-david",
+        "name": "Mr. David Mwangi",
+        "email": "finance@edusmart.ac.ke",
+        "role": "finance_officer",
+        "tscNumber": "FIN/09281/BUR",
+        "designation": "Senior Finance Officer & School Bursar",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-procure-linda",
+        "name": "Ms. Linda Kiprop",
+        "email": "procurement@edusmart.ac.ke",
+        "role": "procurement_officer",
+        "tscNumber": "KISM/PR-44120",
+        "designation": "Head of Procurement & Supply Chain",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stores-joseph",
+        "name": "Mr. Joseph Otieno",
+        "email": "stores@edusmart.ac.ke",
+        "role": "storekeeper",
+        "tscNumber": "STR/LOG-38102",
+        "designation": "Central Stores & Inventory Master",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hr-caroline",
+        "name": "Mrs. Caroline Nduta",
+        "email": "hr@edusmart.ac.ke",
+        "role": "hr_manager",
+        "tscNumber": "IHRM/HR-51204",
+        "designation": "Director of Human Resources & Payroll",
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-admin-tenant-greenwood",
+        "name": "Dr. Jane Muthoni Wanjiru",
+        "email": "admin@greenwood.edusmart.ac.ke",
+        "role": "admin",
+        "schoolId": "tenant-greenwood",
+        "designation": "Head of Institution",
+        "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-registrar-tenant-greenwood",
+        "name": "Mrs. Sarah Greenwood",
+        "email": "registrar@greenwood.edusmart.ac.ke",
+        "role": "school_admin_staff",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "ADM/GW-NBI-002/SEC",
+        "designation": "Academic Registrar & Secretariat · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-nurse-tenant-greenwood",
+        "name": "Sister Grace Wanjiru, RN (Greenwood)",
+        "email": "nurse@greenwood.edusmart.ac.ke",
+        "role": "nurse",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "NCK/RN-51048",
+        "designation": "School Nursing Officer In-Charge · Greenwood Sanatorium",
+        "avatarUrl": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-tenant-greenwood",
+        "name": "Mr. Josephat Kipkoech (Greenwood)",
+        "email": "transport@greenwood.edusmart.ac.ke",
+        "role": "transport_team",
+        "schoolId": "tenant-greenwood",
+        "phone": "+254 20 374 9900 / +254 722 441 552",
+        "tscNumber": "NTSA/PSV-72870",
+        "designation": "Lead Fleet Operations & Bus Supervisor · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-cocurricular-tenant-greenwood",
+        "name": "Coach Benjamin Omwenga (Greenwood)",
+        "email": "cocurricular@greenwood.edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/SP-17282",
+        "designation": "Director of Sports & Activities · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-head-tenant-greenwood",
+        "name": "Dr. Jane Muthoni Wanjiru",
+        "email": "headteacher@greenwood.edusmart.ac.ke",
+        "role": "head_teacher",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/26352/ED",
+        "designation": "Head of Institution & Principal · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-deputy-tenant-greenwood",
+        "name": "Mr. Charles Omondi (Greenwood)",
+        "email": "deputy@greenwood.edusmart.ac.ke",
+        "role": "deputy_head",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/68472/ED",
+        "designation": "Deputy Principal - Operations & Discipline · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-dean-tenant-greenwood",
+        "name": "Ms. Beatrice Wanjiku (Greenwood)",
+        "email": "dean@greenwood.edusmart.ac.ke",
+        "role": "dean_of_studies",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/16850/ED",
+        "designation": "Dean of Studies & Academic Programs · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-curriculum-tenant-greenwood",
+        "name": "Mrs. Beatrice Omari (Greenwood)",
+        "email": "curriculum@greenwood.edusmart.ac.ke",
+        "role": "curriculum_coordinator",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/90492/ED",
+        "designation": "Director of Curriculum Coordination & CBC Assessment · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hod-tenant-greenwood",
+        "name": "Dr. Mercy Mwangi (Greenwood)",
+        "email": "hod.sciences@greenwood.edusmart.ac.ke",
+        "role": "hod",
+        "schoolId": "tenant-greenwood",
+        "department": "Sciences & Mathematics",
+        "assignedSubjects": [
+          "Integrated Science",
+          "Mathematics"
+        ],
+        "tscNumber": "TSC/44832/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-senior-tenant-greenwood",
+        "name": "Mr. Peter Ochieng (Greenwood)",
+        "email": "senior.teacher@greenwood.edusmart.ac.ke",
+        "role": "senior_teacher",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/73841/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-lib-tenant-greenwood",
+        "name": "Mrs. Esther Kamau (Greenwood)",
+        "email": "librarian@greenwood.edusmart.ac.ke",
+        "role": "librarian",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "TSC/53823/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr4-tenant-greenwood",
+        "name": "Mr. David Kiprono (Greenwood)",
+        "email": "teacher.gr4@greenwood.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-greenwood",
+        "grade": 4,
+        "stream": "Dove",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 4,
+            "stream": "Eagle"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Integrated Science"
+        ],
+        "tscNumber": "TSC/34426/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr8-tenant-greenwood",
+        "name": "Mrs. Florence Akinyi (Greenwood)",
+        "email": "teacher.gr8@greenwood.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-greenwood",
+        "grade": 8,
+        "stream": "Mara",
+        "assignedStreams": [
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 8,
+            "stream": "Athi"
+          }
+        ],
+        "assignedSubjects": [
+          "English",
+          "Social Studies"
+        ],
+        "tscNumber": "TSC/62267/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teacher-tenant-greenwood",
+        "name": "Mr. Peter Mutua (Greenwood)",
+        "email": "teacher.mutua@greenwood.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-greenwood",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 7,
+            "stream": "Kerio"
+          },
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 9,
+            "stream": "Tana"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Pretechnical Education",
+          "Agriculture and Nutrition"
+        ],
+        "tscNumber": "TSC/49310/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-fin-tenant-greenwood",
+        "name": "Mr. David Mwangi (Greenwood)",
+        "email": "finance@greenwood.edusmart.ac.ke",
+        "role": "finance_officer",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "FIN/GW-NBI-002/BUR",
+        "designation": "Senior Finance Officer & Bursar · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-procure-tenant-greenwood",
+        "name": "Ms. Linda Kiprop (Greenwood)",
+        "email": "procurement@greenwood.edusmart.ac.ke",
+        "role": "procurement_officer",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "KISM/GW-NBI-002/PR",
+        "designation": "Head of Procurement & Supply Chain · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stores-tenant-greenwood",
+        "name": "Mr. Joseph Otieno (Greenwood)",
+        "email": "stores@greenwood.edusmart.ac.ke",
+        "role": "storekeeper",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "STR/GW-NBI-002/LOG",
+        "designation": "Central Stores & Inventory Master · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hr-tenant-greenwood",
+        "name": "Mrs. Caroline Nduta (Greenwood)",
+        "email": "hr@greenwood.edusmart.ac.ke",
+        "role": "hr_manager",
+        "schoolId": "tenant-greenwood",
+        "tscNumber": "IHRM/GW-NBI-002/HR",
+        "designation": "Human Resources & Payroll Director · Greenwood",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-1-tenant-greenwood",
+        "name": "Brian Otieno (Greenwood)",
+        "email": "brian.tenant-greenwood@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-greenwood",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "GW-NBI-002/2023/0412",
+        "avatarUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-2-tenant-greenwood",
+        "name": "Faith Wanjiru (Greenwood)",
+        "email": "faith.tenant-greenwood@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-greenwood",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "GW-NBI-002/2021/0819",
+        "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-3-tenant-greenwood",
+        "name": "Amina Hassan (Greenwood)",
+        "email": "amina.tenant-greenwood@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-greenwood",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "GW-NBI-002/2023/0413",
+        "avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-4-tenant-greenwood",
+        "name": "Kevin Maina (Greenwood)",
+        "email": "kevin.tenant-greenwood@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-greenwood",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "GW-NBI-002/2025/0201"
+      },
+      {
+        "id": "usr-parent-tenant-greenwood",
+        "name": "Mrs. Grace Otieno (Parent · Greenwood)",
+        "email": "parent.tenant-greenwood@edusmart.ac.ke",
+        "role": "parent",
+        "schoolId": "tenant-greenwood",
+        "phone": "+254 20 374 9900 / +254 722 441 552",
+        "childrenIds": [
+          "usr-stu-1-tenant-greenwood",
+          "usr-stu-2-tenant-greenwood",
+          "usr-stu-4-tenant-greenwood"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-admin-tenant-hillcrest",
+        "name": "Mr. David Kiprop Korir",
+        "email": "admin@hillcrest.edusmart.ac.ke",
+        "role": "admin",
+        "schoolId": "tenant-hillcrest",
+        "designation": "Principal",
+        "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-registrar-tenant-hillcrest",
+        "name": "Mrs. Sarah Hillcrest",
+        "email": "registrar@hillcrest.edusmart.ac.ke",
+        "role": "school_admin_staff",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "ADM/HH-NBI-003/SEC",
+        "designation": "Academic Registrar & Secretariat · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-nurse-tenant-hillcrest",
+        "name": "Sister Grace Wanjiru, RN (Hillcrest)",
+        "email": "nurse@hillcrest.edusmart.ac.ke",
+        "role": "nurse",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "NCK/RN-52385",
+        "designation": "School Nursing Officer In-Charge · Hillcrest Sanatorium",
+        "avatarUrl": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-tenant-hillcrest",
+        "name": "Mr. Josephat Kipkoech (Hillcrest)",
+        "email": "transport@hillcrest.edusmart.ac.ke",
+        "role": "transport_team",
+        "schoolId": "tenant-hillcrest",
+        "phone": "+254 20 889 1234 / +254 733 998 877",
+        "tscNumber": "NTSA/PSV-65349",
+        "designation": "Lead Fleet Operations & Bus Supervisor · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-cocurricular-tenant-hillcrest",
+        "name": "Coach Benjamin Omwenga (Hillcrest)",
+        "email": "cocurricular@hillcrest.edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/SP-24641",
+        "designation": "Director of Sports & Activities · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-head-tenant-hillcrest",
+        "name": "Mr. David Kiprop Korir",
+        "email": "headteacher@hillcrest.edusmart.ac.ke",
+        "role": "head_teacher",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/85548/ED",
+        "designation": "Head of Institution & Principal · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-deputy-tenant-hillcrest",
+        "name": "Mr. Charles Omondi (Hillcrest)",
+        "email": "deputy@hillcrest.edusmart.ac.ke",
+        "role": "deputy_head",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/38704/ED",
+        "designation": "Deputy Principal - Operations & Discipline · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-dean-tenant-hillcrest",
+        "name": "Ms. Beatrice Wanjiku (Hillcrest)",
+        "email": "dean@hillcrest.edusmart.ac.ke",
+        "role": "dean_of_studies",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/18664/ED",
+        "designation": "Dean of Studies & Academic Programs · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-curriculum-tenant-hillcrest",
+        "name": "Mrs. Beatrice Omari (Hillcrest)",
+        "email": "curriculum@hillcrest.edusmart.ac.ke",
+        "role": "curriculum_coordinator",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/18242/ED",
+        "designation": "Director of Curriculum Coordination & CBC Assessment · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hod-tenant-hillcrest",
+        "name": "Dr. Mercy Mwangi (Hillcrest)",
+        "email": "hod.sciences@hillcrest.edusmart.ac.ke",
+        "role": "hod",
+        "schoolId": "tenant-hillcrest",
+        "department": "Sciences & Mathematics",
+        "assignedSubjects": [
+          "Integrated Science",
+          "Mathematics"
+        ],
+        "tscNumber": "TSC/14773/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-senior-tenant-hillcrest",
+        "name": "Mr. Peter Ochieng (Hillcrest)",
+        "email": "senior.teacher@hillcrest.edusmart.ac.ke",
+        "role": "senior_teacher",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/99093/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-lib-tenant-hillcrest",
+        "name": "Mrs. Esther Kamau (Hillcrest)",
+        "email": "librarian@hillcrest.edusmart.ac.ke",
+        "role": "librarian",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "TSC/97262/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr4-tenant-hillcrest",
+        "name": "Mr. David Kiprono (Hillcrest)",
+        "email": "teacher.gr4@hillcrest.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-hillcrest",
+        "grade": 4,
+        "stream": "Dove",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 4,
+            "stream": "Eagle"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Integrated Science"
+        ],
+        "tscNumber": "TSC/80682/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr8-tenant-hillcrest",
+        "name": "Mrs. Florence Akinyi (Hillcrest)",
+        "email": "teacher.gr8@hillcrest.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-hillcrest",
+        "grade": 8,
+        "stream": "Mara",
+        "assignedStreams": [
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 8,
+            "stream": "Athi"
+          }
+        ],
+        "assignedSubjects": [
+          "English",
+          "Social Studies"
+        ],
+        "tscNumber": "TSC/32923/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teacher-tenant-hillcrest",
+        "name": "Mr. Peter Mutua (Hillcrest)",
+        "email": "teacher.mutua@hillcrest.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-hillcrest",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 7,
+            "stream": "Kerio"
+          },
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 9,
+            "stream": "Tana"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Pretechnical Education",
+          "Agriculture and Nutrition"
+        ],
+        "tscNumber": "TSC/83898/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-fin-tenant-hillcrest",
+        "name": "Mr. David Mwangi (Hillcrest)",
+        "email": "finance@hillcrest.edusmart.ac.ke",
+        "role": "finance_officer",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "FIN/HH-NBI-003/BUR",
+        "designation": "Senior Finance Officer & Bursar · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-procure-tenant-hillcrest",
+        "name": "Ms. Linda Kiprop (Hillcrest)",
+        "email": "procurement@hillcrest.edusmart.ac.ke",
+        "role": "procurement_officer",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "KISM/HH-NBI-003/PR",
+        "designation": "Head of Procurement & Supply Chain · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stores-tenant-hillcrest",
+        "name": "Mr. Joseph Otieno (Hillcrest)",
+        "email": "stores@hillcrest.edusmart.ac.ke",
+        "role": "storekeeper",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "STR/HH-NBI-003/LOG",
+        "designation": "Central Stores & Inventory Master · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hr-tenant-hillcrest",
+        "name": "Mrs. Caroline Nduta (Hillcrest)",
+        "email": "hr@hillcrest.edusmart.ac.ke",
+        "role": "hr_manager",
+        "schoolId": "tenant-hillcrest",
+        "tscNumber": "IHRM/HH-NBI-003/HR",
+        "designation": "Human Resources & Payroll Director · Hillcrest",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-1-tenant-hillcrest",
+        "name": "Brian Otieno (Hillcrest)",
+        "email": "brian.tenant-hillcrest@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-hillcrest",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "HH-NBI-003/2023/0412",
+        "avatarUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-2-tenant-hillcrest",
+        "name": "Faith Wanjiru (Hillcrest)",
+        "email": "faith.tenant-hillcrest@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-hillcrest",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "HH-NBI-003/2021/0819",
+        "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-3-tenant-hillcrest",
+        "name": "Amina Hassan (Hillcrest)",
+        "email": "amina.tenant-hillcrest@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-hillcrest",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "HH-NBI-003/2023/0413",
+        "avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-4-tenant-hillcrest",
+        "name": "Kevin Maina (Hillcrest)",
+        "email": "kevin.tenant-hillcrest@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-hillcrest",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "HH-NBI-003/2025/0201"
+      },
+      {
+        "id": "usr-parent-tenant-hillcrest",
+        "name": "Mrs. Grace Otieno (Parent · Hillcrest)",
+        "email": "parent.tenant-hillcrest@edusmart.ac.ke",
+        "role": "parent",
+        "schoolId": "tenant-hillcrest",
+        "phone": "+254 20 889 1234 / +254 733 998 877",
+        "childrenIds": [
+          "usr-stu-1-tenant-hillcrest",
+          "usr-stu-2-tenant-hillcrest",
+          "usr-stu-4-tenant-hillcrest"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-admin-tenant-sunrise",
+        "name": "Mrs. Grace Wambui Kariuki",
+        "email": "admin@sunrise.edusmart.ac.ke",
+        "role": "admin",
+        "schoolId": "tenant-sunrise",
+        "designation": "Head Teacher",
+        "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-registrar-tenant-sunrise",
+        "name": "Mrs. Sarah Sunrise",
+        "email": "registrar@sunrise.edusmart.ac.ke",
+        "role": "school_admin_staff",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "ADM/SP-NBI-004/SEC",
+        "designation": "Academic Registrar & Secretariat · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-nurse-tenant-sunrise",
+        "name": "Sister Grace Wanjiru, RN (Sunrise)",
+        "email": "nurse@sunrise.edusmart.ac.ke",
+        "role": "nurse",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "NCK/RN-86172",
+        "designation": "School Nursing Officer In-Charge · Sunrise Sanatorium",
+        "avatarUrl": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-tenant-sunrise",
+        "name": "Mr. Josephat Kipkoech (Sunrise)",
+        "email": "transport@sunrise.edusmart.ac.ke",
+        "role": "transport_team",
+        "schoolId": "tenant-sunrise",
+        "phone": "+254 711 234 567",
+        "tscNumber": "NTSA/PSV-60283",
+        "designation": "Lead Fleet Operations & Bus Supervisor · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-cocurricular-tenant-sunrise",
+        "name": "Coach Benjamin Omwenga (Sunrise)",
+        "email": "cocurricular@sunrise.edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/SP-53923",
+        "designation": "Director of Sports & Activities · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-head-tenant-sunrise",
+        "name": "Mrs. Grace Wambui Kariuki",
+        "email": "headteacher@sunrise.edusmart.ac.ke",
+        "role": "head_teacher",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/27642/ED",
+        "designation": "Head of Institution & Principal · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-deputy-tenant-sunrise",
+        "name": "Mr. Charles Omondi (Sunrise)",
+        "email": "deputy@sunrise.edusmart.ac.ke",
+        "role": "deputy_head",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/21042/ED",
+        "designation": "Deputy Principal - Operations & Discipline · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-dean-tenant-sunrise",
+        "name": "Ms. Beatrice Wanjiku (Sunrise)",
+        "email": "dean@sunrise.edusmart.ac.ke",
+        "role": "dean_of_studies",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/39860/ED",
+        "designation": "Dean of Studies & Academic Programs · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-curriculum-tenant-sunrise",
+        "name": "Mrs. Beatrice Omari (Sunrise)",
+        "email": "curriculum@sunrise.edusmart.ac.ke",
+        "role": "curriculum_coordinator",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/13335/ED",
+        "designation": "Director of Curriculum Coordination & CBC Assessment · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hod-tenant-sunrise",
+        "name": "Dr. Mercy Mwangi (Sunrise)",
+        "email": "hod.sciences@sunrise.edusmart.ac.ke",
+        "role": "hod",
+        "schoolId": "tenant-sunrise",
+        "department": "Sciences & Mathematics",
+        "assignedSubjects": [
+          "Integrated Science",
+          "Mathematics"
+        ],
+        "tscNumber": "TSC/54913/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-senior-tenant-sunrise",
+        "name": "Mr. Peter Ochieng (Sunrise)",
+        "email": "senior.teacher@sunrise.edusmart.ac.ke",
+        "role": "senior_teacher",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/26419/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-lib-tenant-sunrise",
+        "name": "Mrs. Esther Kamau (Sunrise)",
+        "email": "librarian@sunrise.edusmart.ac.ke",
+        "role": "librarian",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "TSC/41583/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr4-tenant-sunrise",
+        "name": "Mr. David Kiprono (Sunrise)",
+        "email": "teacher.gr4@sunrise.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-sunrise",
+        "grade": 4,
+        "stream": "Dove",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 4,
+            "stream": "Eagle"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Integrated Science"
+        ],
+        "tscNumber": "TSC/40934/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr8-tenant-sunrise",
+        "name": "Mrs. Florence Akinyi (Sunrise)",
+        "email": "teacher.gr8@sunrise.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-sunrise",
+        "grade": 8,
+        "stream": "Mara",
+        "assignedStreams": [
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 8,
+            "stream": "Athi"
+          }
+        ],
+        "assignedSubjects": [
+          "English",
+          "Social Studies"
+        ],
+        "tscNumber": "TSC/62658/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teacher-tenant-sunrise",
+        "name": "Mr. Peter Mutua (Sunrise)",
+        "email": "teacher.mutua@sunrise.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-sunrise",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 7,
+            "stream": "Kerio"
+          },
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 9,
+            "stream": "Tana"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Pretechnical Education",
+          "Agriculture and Nutrition"
+        ],
+        "tscNumber": "TSC/97657/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-fin-tenant-sunrise",
+        "name": "Mr. David Mwangi (Sunrise)",
+        "email": "finance@sunrise.edusmart.ac.ke",
+        "role": "finance_officer",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "FIN/SP-NBI-004/BUR",
+        "designation": "Senior Finance Officer & Bursar · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-procure-tenant-sunrise",
+        "name": "Ms. Linda Kiprop (Sunrise)",
+        "email": "procurement@sunrise.edusmart.ac.ke",
+        "role": "procurement_officer",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "KISM/SP-NBI-004/PR",
+        "designation": "Head of Procurement & Supply Chain · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stores-tenant-sunrise",
+        "name": "Mr. Joseph Otieno (Sunrise)",
+        "email": "stores@sunrise.edusmart.ac.ke",
+        "role": "storekeeper",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "STR/SP-NBI-004/LOG",
+        "designation": "Central Stores & Inventory Master · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hr-tenant-sunrise",
+        "name": "Mrs. Caroline Nduta (Sunrise)",
+        "email": "hr@sunrise.edusmart.ac.ke",
+        "role": "hr_manager",
+        "schoolId": "tenant-sunrise",
+        "tscNumber": "IHRM/SP-NBI-004/HR",
+        "designation": "Human Resources & Payroll Director · Sunrise",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-1-tenant-sunrise",
+        "name": "Brian Otieno (Sunrise)",
+        "email": "brian.tenant-sunrise@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-sunrise",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "SP-NBI-004/2023/0412",
+        "avatarUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-2-tenant-sunrise",
+        "name": "Faith Wanjiru (Sunrise)",
+        "email": "faith.tenant-sunrise@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-sunrise",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "SP-NBI-004/2021/0819",
+        "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-3-tenant-sunrise",
+        "name": "Amina Hassan (Sunrise)",
+        "email": "amina.tenant-sunrise@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-sunrise",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "SP-NBI-004/2023/0413",
+        "avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-4-tenant-sunrise",
+        "name": "Kevin Maina (Sunrise)",
+        "email": "kevin.tenant-sunrise@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-sunrise",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "SP-NBI-004/2025/0201"
+      },
+      {
+        "id": "usr-parent-tenant-sunrise",
+        "name": "Mrs. Grace Otieno (Parent · Sunrise)",
+        "email": "parent.tenant-sunrise@edusmart.ac.ke",
+        "role": "parent",
+        "schoolId": "tenant-sunrise",
+        "phone": "+254 711 234 567",
+        "childrenIds": [
+          "usr-stu-1-tenant-sunrise",
+          "usr-stu-2-tenant-sunrise",
+          "usr-stu-4-tenant-sunrise"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-admin-tenant-westlands",
+        "name": "Dr. Samuel Mwangi Njoroge",
+        "email": "admin@westlands.edusmart.ac.ke",
+        "role": "admin",
+        "schoolId": "tenant-westlands",
+        "designation": "Executive Director",
+        "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-registrar-tenant-westlands",
+        "name": "Mrs. Sarah Westlands",
+        "email": "registrar@westlands.edusmart.ac.ke",
+        "role": "school_admin_staff",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "ADM/WS-NBI-005/SEC",
+        "designation": "Academic Registrar & Secretariat · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-nurse-tenant-westlands",
+        "name": "Sister Grace Wanjiru, RN (Westlands)",
+        "email": "nurse@westlands.edusmart.ac.ke",
+        "role": "nurse",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "NCK/RN-31088",
+        "designation": "School Nursing Officer In-Charge · Westlands Sanatorium",
+        "avatarUrl": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-tenant-westlands",
+        "name": "Mr. Josephat Kipkoech (Westlands)",
+        "email": "transport@westlands.edusmart.ac.ke",
+        "role": "transport_team",
+        "schoolId": "tenant-westlands",
+        "phone": "+254 20 444 8811 / +254 721 889 001",
+        "tscNumber": "NTSA/PSV-24893",
+        "designation": "Lead Fleet Operations & Bus Supervisor · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-cocurricular-tenant-westlands",
+        "name": "Coach Benjamin Omwenga (Westlands)",
+        "email": "cocurricular@westlands.edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/SP-32506",
+        "designation": "Director of Sports & Activities · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-head-tenant-westlands",
+        "name": "Dr. Samuel Mwangi Njoroge",
+        "email": "headteacher@westlands.edusmart.ac.ke",
+        "role": "head_teacher",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/67306/ED",
+        "designation": "Head of Institution & Principal · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-deputy-tenant-westlands",
+        "name": "Mr. Charles Omondi (Westlands)",
+        "email": "deputy@westlands.edusmart.ac.ke",
+        "role": "deputy_head",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/60976/ED",
+        "designation": "Deputy Principal - Operations & Discipline · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-dean-tenant-westlands",
+        "name": "Ms. Beatrice Wanjiku (Westlands)",
+        "email": "dean@westlands.edusmart.ac.ke",
+        "role": "dean_of_studies",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/62227/ED",
+        "designation": "Dean of Studies & Academic Programs · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-curriculum-tenant-westlands",
+        "name": "Mrs. Beatrice Omari (Westlands)",
+        "email": "curriculum@westlands.edusmart.ac.ke",
+        "role": "curriculum_coordinator",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/85701/ED",
+        "designation": "Director of Curriculum Coordination & CBC Assessment · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hod-tenant-westlands",
+        "name": "Dr. Mercy Mwangi (Westlands)",
+        "email": "hod.sciences@westlands.edusmart.ac.ke",
+        "role": "hod",
+        "schoolId": "tenant-westlands",
+        "department": "Sciences & Mathematics",
+        "assignedSubjects": [
+          "Integrated Science",
+          "Mathematics"
+        ],
+        "tscNumber": "TSC/54900/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-senior-tenant-westlands",
+        "name": "Mr. Peter Ochieng (Westlands)",
+        "email": "senior.teacher@westlands.edusmart.ac.ke",
+        "role": "senior_teacher",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/38589/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-lib-tenant-westlands",
+        "name": "Mrs. Esther Kamau (Westlands)",
+        "email": "librarian@westlands.edusmart.ac.ke",
+        "role": "librarian",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "TSC/39274/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr4-tenant-westlands",
+        "name": "Mr. David Kiprono (Westlands)",
+        "email": "teacher.gr4@westlands.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-westlands",
+        "grade": 4,
+        "stream": "Dove",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 4,
+            "stream": "Eagle"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Integrated Science"
+        ],
+        "tscNumber": "TSC/47494/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr8-tenant-westlands",
+        "name": "Mrs. Florence Akinyi (Westlands)",
+        "email": "teacher.gr8@westlands.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-westlands",
+        "grade": 8,
+        "stream": "Mara",
+        "assignedStreams": [
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 8,
+            "stream": "Athi"
+          }
+        ],
+        "assignedSubjects": [
+          "English",
+          "Social Studies"
+        ],
+        "tscNumber": "TSC/85157/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teacher-tenant-westlands",
+        "name": "Mr. Peter Mutua (Westlands)",
+        "email": "teacher.mutua@westlands.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-westlands",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 7,
+            "stream": "Kerio"
+          },
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 9,
+            "stream": "Tana"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Pretechnical Education",
+          "Agriculture and Nutrition"
+        ],
+        "tscNumber": "TSC/69598/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-fin-tenant-westlands",
+        "name": "Mr. David Mwangi (Westlands)",
+        "email": "finance@westlands.edusmart.ac.ke",
+        "role": "finance_officer",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "FIN/WS-NBI-005/BUR",
+        "designation": "Senior Finance Officer & Bursar · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-procure-tenant-westlands",
+        "name": "Ms. Linda Kiprop (Westlands)",
+        "email": "procurement@westlands.edusmart.ac.ke",
+        "role": "procurement_officer",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "KISM/WS-NBI-005/PR",
+        "designation": "Head of Procurement & Supply Chain · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stores-tenant-westlands",
+        "name": "Mr. Joseph Otieno (Westlands)",
+        "email": "stores@westlands.edusmart.ac.ke",
+        "role": "storekeeper",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "STR/WS-NBI-005/LOG",
+        "designation": "Central Stores & Inventory Master · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hr-tenant-westlands",
+        "name": "Mrs. Caroline Nduta (Westlands)",
+        "email": "hr@westlands.edusmart.ac.ke",
+        "role": "hr_manager",
+        "schoolId": "tenant-westlands",
+        "tscNumber": "IHRM/WS-NBI-005/HR",
+        "designation": "Human Resources & Payroll Director · Westlands",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-1-tenant-westlands",
+        "name": "Brian Otieno (Westlands)",
+        "email": "brian.tenant-westlands@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-westlands",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "WS-NBI-005/2023/0412",
+        "avatarUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-2-tenant-westlands",
+        "name": "Faith Wanjiru (Westlands)",
+        "email": "faith.tenant-westlands@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-westlands",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "WS-NBI-005/2021/0819",
+        "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-3-tenant-westlands",
+        "name": "Amina Hassan (Westlands)",
+        "email": "amina.tenant-westlands@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-westlands",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "WS-NBI-005/2023/0413",
+        "avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-4-tenant-westlands",
+        "name": "Kevin Maina (Westlands)",
+        "email": "kevin.tenant-westlands@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-westlands",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "WS-NBI-005/2025/0201"
+      },
+      {
+        "id": "usr-parent-tenant-westlands",
+        "name": "Mrs. Grace Otieno (Parent · Westlands)",
+        "email": "parent.tenant-westlands@edusmart.ac.ke",
+        "role": "parent",
+        "schoolId": "tenant-westlands",
+        "phone": "+254 20 444 8811 / +254 721 889 001",
+        "childrenIds": [
+          "usr-stu-1-tenant-westlands",
+          "usr-stu-2-tenant-westlands",
+          "usr-stu-4-tenant-westlands"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-admin-tenant-staustins",
+        "name": "Dr. Elizabeth Mutua, PhD",
+        "email": "admin@staustins.edusmart.ac.ke",
+        "role": "admin",
+        "schoolId": "tenant-staustins",
+        "designation": "Head of Institution & Principal",
+        "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-registrar-tenant-staustins",
+        "name": "Mrs. Sarah St.",
+        "email": "registrar@staustins.edusmart.ac.ke",
+        "role": "school_admin_staff",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "ADM/SAA-NBI-006/SEC",
+        "designation": "Academic Registrar & Secretariat · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-nurse-tenant-staustins",
+        "name": "Sister Grace Wanjiru, RN (St. Austin’s)",
+        "email": "nurse@staustins.edusmart.ac.ke",
+        "role": "nurse",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "NCK/RN-12690",
+        "designation": "School Nursing Officer In-Charge · St. Austin’s Sanatorium",
+        "avatarUrl": "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-transport-tenant-staustins",
+        "name": "Mr. Josephat Kipkoech (St. Austin’s)",
+        "email": "transport@staustins.edusmart.ac.ke",
+        "role": "transport_team",
+        "schoolId": "tenant-staustins",
+        "phone": "+254 20 387 2345 / +254 712 345 678",
+        "tscNumber": "NTSA/PSV-69429",
+        "designation": "Lead Fleet Operations & Bus Supervisor · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-cocurricular-tenant-staustins",
+        "name": "Coach Benjamin Omwenga (St. Austin’s)",
+        "email": "cocurricular@staustins.edusmart.ac.ke",
+        "role": "cocurricular_team",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/SP-45701",
+        "designation": "Director of Sports & Activities · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-head-tenant-staustins",
+        "name": "Dr. Elizabeth Mutua, PhD",
+        "email": "headteacher@staustins.edusmart.ac.ke",
+        "role": "head_teacher",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/29473/ED",
+        "designation": "Head of Institution & Principal · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-deputy-tenant-staustins",
+        "name": "Mr. Charles Omondi (St. Austin’s)",
+        "email": "deputy@staustins.edusmart.ac.ke",
+        "role": "deputy_head",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/80270/ED",
+        "designation": "Deputy Principal - Operations & Discipline · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-dean-tenant-staustins",
+        "name": "Ms. Beatrice Wanjiku (St. Austin’s)",
+        "email": "dean@staustins.edusmart.ac.ke",
+        "role": "dean_of_studies",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/40412/ED",
+        "designation": "Dean of Studies & Academic Programs · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-curriculum-tenant-staustins",
+        "name": "Mrs. Beatrice Omari (St. Austin’s)",
+        "email": "curriculum@staustins.edusmart.ac.ke",
+        "role": "curriculum_coordinator",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/26466/ED",
+        "designation": "Director of Curriculum Coordination & CBC Assessment · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hod-tenant-staustins",
+        "name": "Dr. Mercy Mwangi (St. Austin’s)",
+        "email": "hod.sciences@staustins.edusmart.ac.ke",
+        "role": "hod",
+        "schoolId": "tenant-staustins",
+        "department": "Sciences & Mathematics",
+        "assignedSubjects": [
+          "Integrated Science",
+          "Mathematics"
+        ],
+        "tscNumber": "TSC/91309/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-senior-tenant-staustins",
+        "name": "Mr. Peter Ochieng (St. Austin’s)",
+        "email": "senior.teacher@staustins.edusmart.ac.ke",
+        "role": "senior_teacher",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/94996/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-lib-tenant-staustins",
+        "name": "Mrs. Esther Kamau (St. Austin’s)",
+        "email": "librarian@staustins.edusmart.ac.ke",
+        "role": "librarian",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "TSC/97817/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr4-tenant-staustins",
+        "name": "Mr. David Kiprono (St. Austin’s)",
+        "email": "teacher.gr4@staustins.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-staustins",
+        "grade": 4,
+        "stream": "Dove",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 4,
+            "stream": "Eagle"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Integrated Science"
+        ],
+        "tscNumber": "TSC/15453/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-classteach-gr8-tenant-staustins",
+        "name": "Mrs. Florence Akinyi (St. Austin’s)",
+        "email": "teacher.gr8@staustins.edusmart.ac.ke",
+        "role": "class_teacher",
+        "schoolId": "tenant-staustins",
+        "grade": 8,
+        "stream": "Mara",
+        "assignedStreams": [
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 8,
+            "stream": "Athi"
+          }
+        ],
+        "assignedSubjects": [
+          "English",
+          "Social Studies"
+        ],
+        "tscNumber": "TSC/48687/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-teacher-tenant-staustins",
+        "name": "Mr. Peter Mutua (St. Austin’s)",
+        "email": "teacher.mutua@staustins.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-staustins",
+        "assignedStreams": [
+          {
+            "grade": 4,
+            "stream": "Dove"
+          },
+          {
+            "grade": 7,
+            "stream": "Kerio"
+          },
+          {
+            "grade": 8,
+            "stream": "Mara"
+          },
+          {
+            "grade": 9,
+            "stream": "Tana"
+          }
+        ],
+        "assignedSubjects": [
+          "Mathematics",
+          "Pretechnical Education",
+          "Agriculture and Nutrition"
+        ],
+        "tscNumber": "TSC/65320/ED",
+        "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-fin-tenant-staustins",
+        "name": "Mr. David Mwangi (St. Austin’s)",
+        "email": "finance@staustins.edusmart.ac.ke",
+        "role": "finance_officer",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "FIN/SAA-NBI-006/BUR",
+        "designation": "Senior Finance Officer & Bursar · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-procure-tenant-staustins",
+        "name": "Ms. Linda Kiprop (St. Austin’s)",
+        "email": "procurement@staustins.edusmart.ac.ke",
+        "role": "procurement_officer",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "KISM/SAA-NBI-006/PR",
+        "designation": "Head of Procurement & Supply Chain · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stores-tenant-staustins",
+        "name": "Mr. Joseph Otieno (St. Austin’s)",
+        "email": "stores@staustins.edusmart.ac.ke",
+        "role": "storekeeper",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "STR/SAA-NBI-006/LOG",
+        "designation": "Central Stores & Inventory Master · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-hr-tenant-staustins",
+        "name": "Mrs. Caroline Nduta (St. Austin’s)",
+        "email": "hr@staustins.edusmart.ac.ke",
+        "role": "hr_manager",
+        "schoolId": "tenant-staustins",
+        "tscNumber": "IHRM/SAA-NBI-006/HR",
+        "designation": "Human Resources & Payroll Director · St. Austin’s",
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-1-tenant-staustins",
+        "name": "Brian Otieno (St. Austin’s)",
+        "email": "brian.tenant-staustins@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-staustins",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "SAA-NBI-006/2023/0412",
+        "avatarUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-2-tenant-staustins",
+        "name": "Faith Wanjiru (St. Austin’s)",
+        "email": "faith.tenant-staustins@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-staustins",
+        "grade": 8,
+        "stream": "Mara",
+        "admissionNumber": "SAA-NBI-006/2021/0819",
+        "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-3-tenant-staustins",
+        "name": "Amina Hassan (St. Austin’s)",
+        "email": "amina.tenant-staustins@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-staustins",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "SAA-NBI-006/2023/0413",
+        "avatarUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-stu-4-tenant-staustins",
+        "name": "Kevin Maina (St. Austin’s)",
+        "email": "kevin.tenant-staustins@student.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-staustins",
+        "grade": 2,
+        "stream": "Eagle",
+        "admissionNumber": "SAA-NBI-006/2025/0201"
+      },
+      {
+        "id": "usr-parent-tenant-staustins",
+        "name": "Mrs. Grace Otieno (Parent · St. Austin’s)",
+        "email": "parent.tenant-staustins@edusmart.ac.ke",
+        "role": "parent",
+        "schoolId": "tenant-staustins",
+        "phone": "+254 20 387 2345 / +254 712 345 678",
+        "childrenIds": [
+          "usr-stu-1-tenant-staustins",
+          "usr-stu-2-tenant-staustins",
+          "usr-stu-4-tenant-staustins"
+        ],
+        "avatarUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=150&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": "usr-1792715307245-559",
+        "name": "Mary Wanjiku Kamau",
+        "email": "mary.kamau@brookside.ac.ke",
+        "phone": "+254 7",
+        "role": "student",
+        "schoolId": "tenant-brooksideacadem-1792715226502",
+        "grade": 4,
+        "stream": "Dove",
+        "admissionNumber": "ADM/2026/014",
+        "designation": "Student / Learner",
+        "department": "",
+        "isActive": true,
+        "registeredAt": "2026-10-23T00:28:27.569Z"
+      },
+      {
+        "id": "stu-1792717429001",
+        "name": "Asha Njeri Otieno",
+        "email": "asha.otieno@riara.edusmart.ac.ke",
+        "role": "student",
+        "schoolId": "tenant-riara",
+        "isActive": true,
+        "grade": 1,
+        "admissionNumber": "ADM/2026/021",
+        "designation": "Student / Learner"
+      },
+      {
+        "id": "parent-stu-1792717429001-1792717561479",
+        "name": "Jane Akinyi Otieno",
+        "email": "jane.otieno@riara.edusmart.ac.ke",
+        "role": "parent",
+        "schoolId": "tenant-riara",
+        "isActive": true,
+        "childrenIds": [
+          "stu-1792717429001"
+        ],
+        "designation": "Parent / Guardian"
+      },
+      {
+        "id": "teacher-1792718203997",
+        "name": "Jane Wanjiku Kamau",
+        "email": "jane.kamau@riara.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-riara",
+        "isActive": true,
+        "staffNumber": "STF/2026/001",
+        "tscNumber": "TSC/771204/KE",
+        "designation": "Subject Teacher",
+        "department": "Mathematics & Computational Sciences",
+        "assignedSubjects": [
+          "Mathematics"
+        ],
+        "roleStartedAt": "2026-10-23T01:26:58.897Z"
+      },
+      {
+        "id": "teacher-1792718330592",
+        "name": "fdf",
+        "email": "fdf@riara.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-riara",
+        "isActive": true,
+        "staffNumber": "STF/2026/002",
+        "tscNumber": "gd",
+        "designation": "Subject Teacher",
+        "department": "Technical & Applied Sciences",
+        "assignedSubjects": [
+          "Kiswahili"
+        ],
+        "roleStartedAt": "2026-10-23T01:27:27.427Z"
+      },
+      {
+        "id": "teacher-1792719123703",
+        "name": "Daniel Otieno Kariuki",
+        "email": "daniel.kariuki@riara.edusmart.ac.ke",
+        "role": "teacher",
+        "schoolId": "tenant-riara",
+        "isActive": true,
+        "staffNumber": "STF/2026/003",
+        "tscNumber": "TSC/880011/KE",
+        "designation": "Subject Teacher",
+        "department": "Sports Science",
+        "assignedSubjects": [
+          "Mathematics"
+        ],
+        "roleStartedAt": "2026-01-08T08:30:00.000Z"
+      }
+    ],
+    "edusmart_vlab_ticket_passes": [
+      {
+        "ticketId": "VLAB-TICKET-896202",
+        "tier": "day",
+        "priceKes": 150,
+        "holderName": "Visiting Scholar",
+        "email": "dsa@ad.com",
+        "phone": "0712 345 678",
+        "schoolName": "Public STEM Learner / Homeschool",
+        "gradeLevel": "Grade 7 (JSS)",
+        "issuedAt": "Oct 23, 2026, 2:48 AM",
+        "status": "active"
+      }
+    ],
+    "edusmart_ops_fee_invoices_v1": [
+      {
+        "id": "inv-usr-stu-brian",
+        "invoiceNumber": "INV-2026-1000",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-brian",
+        "studentName": "Brian Otieno",
+        "admissionNumber": "ADM/2023/0412",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-amina",
+        "invoiceNumber": "INV-2026-1001",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-amina",
+        "studentName": "Amina Hassan",
+        "admissionNumber": "ADM/2023/0413",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-kelvin",
+        "invoiceNumber": "INV-2026-1002",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-kelvin",
+        "studentName": "Kelvin Kiprop",
+        "admissionNumber": "ADM/2023/0414",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-mercy",
+        "invoiceNumber": "INV-2026-1003",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-mercy",
+        "studentName": "Mercy Chebet",
+        "admissionNumber": "ADM/2023/0415",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-daniel",
+        "invoiceNumber": "INV-2026-1004",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-daniel",
+        "studentName": "Daniel Njoroge",
+        "admissionNumber": "ADM/2023/0416",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-faith",
+        "invoiceNumber": "INV-2026-1005",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-faith",
+        "studentName": "Faith Wanjiru",
+        "admissionNumber": "ADM/2021/0819",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 20000,
+        "balanceAmount": 45500,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-ian",
+        "invoiceNumber": "INV-2026-1006",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-ian",
+        "studentName": "Ian Mwangi",
+        "admissionNumber": "ADM/2021/0820",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 65500,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-sharon",
+        "invoiceNumber": "INV-2026-1007",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-sharon",
+        "studentName": "Sharon Cherono",
+        "admissionNumber": "ADM/2021/0821",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 50500,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-victor",
+        "invoiceNumber": "INV-2026-1008",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-victor",
+        "studentName": "Victor Ochieng",
+        "admissionNumber": "ADM/2021/0822",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 20000,
+        "balanceAmount": 45500,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-kevin2",
+        "invoiceNumber": "INV-2026-1009",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-kevin2",
+        "studentName": "Kevin Maina",
+        "admissionNumber": "ADM/2025/0201",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-peter",
+        "invoiceNumber": "INV-2026-1010",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-peter",
+        "studentName": "Peter Otieno",
+        "admissionNumber": "ADM/2025/0202",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-1-tenant-greenwood",
+        "invoiceNumber": "INV-2026-1011",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-1-tenant-greenwood",
+        "studentName": "Brian Otieno (Greenwood)",
+        "admissionNumber": "GW-NBI-002/2023/0412",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-2-tenant-greenwood",
+        "invoiceNumber": "INV-2026-1012",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-2-tenant-greenwood",
+        "studentName": "Faith Wanjiru (Greenwood)",
+        "admissionNumber": "GW-NBI-002/2021/0819",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 65500,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-3-tenant-greenwood",
+        "invoiceNumber": "INV-2026-1013",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-3-tenant-greenwood",
+        "studentName": "Amina Hassan (Greenwood)",
+        "admissionNumber": "GW-NBI-002/2023/0413",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-4-tenant-greenwood",
+        "invoiceNumber": "INV-2026-1014",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-4-tenant-greenwood",
+        "studentName": "Kevin Maina (Greenwood)",
+        "admissionNumber": "GW-NBI-002/2025/0201",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-1-tenant-hillcrest",
+        "invoiceNumber": "INV-2026-1015",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-1-tenant-hillcrest",
+        "studentName": "Brian Otieno (Hillcrest)",
+        "admissionNumber": "HH-NBI-003/2023/0412",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-2-tenant-hillcrest",
+        "invoiceNumber": "INV-2026-1016",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-2-tenant-hillcrest",
+        "studentName": "Faith Wanjiru (Hillcrest)",
+        "admissionNumber": "HH-NBI-003/2021/0819",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 50500,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-3-tenant-hillcrest",
+        "invoiceNumber": "INV-2026-1017",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-3-tenant-hillcrest",
+        "studentName": "Amina Hassan (Hillcrest)",
+        "admissionNumber": "HH-NBI-003/2023/0413",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-4-tenant-hillcrest",
+        "invoiceNumber": "INV-2026-1018",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-4-tenant-hillcrest",
+        "studentName": "Kevin Maina (Hillcrest)",
+        "admissionNumber": "HH-NBI-003/2025/0201",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-1-tenant-sunrise",
+        "invoiceNumber": "INV-2026-1019",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-1-tenant-sunrise",
+        "studentName": "Brian Otieno (Sunrise)",
+        "admissionNumber": "SP-NBI-004/2023/0412",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-2-tenant-sunrise",
+        "invoiceNumber": "INV-2026-1020",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-2-tenant-sunrise",
+        "studentName": "Faith Wanjiru (Sunrise)",
+        "admissionNumber": "SP-NBI-004/2021/0819",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 20000,
+        "balanceAmount": 45500,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-3-tenant-sunrise",
+        "invoiceNumber": "INV-2026-1021",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-3-tenant-sunrise",
+        "studentName": "Amina Hassan (Sunrise)",
+        "admissionNumber": "SP-NBI-004/2023/0413",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-4-tenant-sunrise",
+        "invoiceNumber": "INV-2026-1022",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-4-tenant-sunrise",
+        "studentName": "Kevin Maina (Sunrise)",
+        "admissionNumber": "SP-NBI-004/2025/0201",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-1-tenant-westlands",
+        "invoiceNumber": "INV-2026-1023",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-1-tenant-westlands",
+        "studentName": "Brian Otieno (Westlands)",
+        "admissionNumber": "WS-NBI-005/2023/0412",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-2-tenant-westlands",
+        "invoiceNumber": "INV-2026-1024",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-2-tenant-westlands",
+        "studentName": "Faith Wanjiru (Westlands)",
+        "admissionNumber": "WS-NBI-005/2021/0819",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 65500,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-3-tenant-westlands",
+        "invoiceNumber": "INV-2026-1025",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-3-tenant-westlands",
+        "studentName": "Amina Hassan (Westlands)",
+        "admissionNumber": "WS-NBI-005/2023/0413",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-4-tenant-westlands",
+        "invoiceNumber": "INV-2026-1026",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-4-tenant-westlands",
+        "studentName": "Kevin Maina (Westlands)",
+        "admissionNumber": "WS-NBI-005/2025/0201",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-1-tenant-staustins",
+        "invoiceNumber": "INV-2026-1027",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-1-tenant-staustins",
+        "studentName": "Brian Otieno (St. Austin’s)",
+        "admissionNumber": "SAA-NBI-006/2023/0412",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-usr-stu-2-tenant-staustins",
+        "invoiceNumber": "INV-2026-1028",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-2-tenant-staustins",
+        "studentName": "Faith Wanjiru (St. Austin’s)",
+        "admissionNumber": "SAA-NBI-006/2021/0819",
+        "grade": 8,
+        "stream": "Mara",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Junior School Academic Tuition",
+            "amount": 48000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Science Laboratory & STEM Levy",
+            "amount": 6500
+          }
+        ],
+        "totalAmount": 65500,
+        "paidAmount": 50500,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-3-tenant-staustins",
+        "invoiceNumber": "INV-2026-1029",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-3-tenant-staustins",
+        "studentName": "Amina Hassan (St. Austin’s)",
+        "admissionNumber": "SAA-NBI-006/2023/0413",
+        "grade": 4,
+        "stream": "Dove",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 20000,
+        "balanceAmount": 34000,
+        "status": "Partially Paid"
+      },
+      {
+        "id": "inv-usr-stu-4-tenant-staustins",
+        "invoiceNumber": "INV-2026-1030",
+        "tenantId": "tenant-riara",
+        "studentId": "usr-stu-4-tenant-staustins",
+        "studentName": "Kevin Maina (St. Austin’s)",
+        "admissionNumber": "SAA-NBI-006/2025/0201",
+        "grade": 2,
+        "stream": "Eagle",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 54000,
+        "balanceAmount": 0,
+        "status": "Paid in Full"
+      },
+      {
+        "id": "inv-stu-1792717429001",
+        "invoiceNumber": "INV-2026-1031",
+        "tenantId": "tenant-riara",
+        "studentId": "stu-1792717429001",
+        "studentName": "Asha Njeri Otieno",
+        "admissionNumber": "ADM/2026/021",
+        "grade": 1,
+        "stream": "Athi",
+        "term": "Term 1, 2026",
+        "academicYear": "2026",
+        "issueDate": "2026-01-06",
+        "dueDate": "2026-02-15",
+        "lineItems": [
+          {
+            "description": "Primary Academic Tuition",
+            "amount": 38000
+          },
+          {
+            "description": "Termly Nutritious Hot Lunch Program",
+            "amount": 11000
+          },
+          {
+            "description": "Activity & Sports Levy",
+            "amount": 5000
+          }
+        ],
+        "totalAmount": 54000,
+        "paidAmount": 39000,
+        "balanceAmount": 15000,
+        "status": "Partially Paid"
+      }
+    ],
+    "edusmart_all_tenants_registry": [
+      {
+        "id": "tenant-riara",
+        "name": "Riara School",
+        "shortName": "Riara School",
+        "motto": "Learn · Grow · Succeed",
+        "code": "RS-NBI-001",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-rs\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%231e3a8a\"/><stop offset=\"100%\" stop-color=\"%23172554\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-rs)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%233b82f6\" stroke-width=\"2.5\"/><polygon points=\"50,18 78,32 50,46 22,32\" fill=\"%2360a5fa\"/><polygon points=\"50,46 72,35 72,58 50,68 28,58 28,35\" fill=\"%232563eb\" opacity=\"0.9\"/><circle cx=\"50\" cy=\"30\" r=\"5\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">RIARA</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%2393c5fd\" text-anchor=\"middle\">EST. 1974</text></svg>",
+        "crestIcon": "school",
+        "themeColor": "blue",
+        "badgeColorClass": "bg-blue-100 text-blue-800 border-blue-300",
+        "headerBgClass": "from-blue-900 via-slate-900 to-indigo-950",
+        "domain": "riara.edusmart.ac.ke",
+        "address": "Riara Road, Kilimani",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 703 038 100 / +254 703 038 200",
+        "email": "admin@riaraschools.ac.ke",
+        "principalName": "Mr. Patrick Kamau",
+        "principalTitle": "School Administrator & Principal",
+        "registrationNumber": "MOE/PRI-JSS/NBI/1974/0112",
+        "curriculum": "Kenyan CBC Curriculum (Grades 1-9)",
+        "establishedYear": 1974,
+        "gradeLevels": "PP1 through Grade 9 (Junior School)",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 1248,
+        "totalFaculty": 86,
+        "totalClasses": 42,
+        "attendanceToday": 96,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "12 Apr 2026",
+        "taglineNotes": "Academic Discipline · Holistic CBC Development · Moral Integrity",
+        "heroTitle": "WELCOME TO RIARA SCHOOL PORTAL",
+        "heroSubtitle": "\"Learn · Grow · Succeed\" — A secure digital platform connecting learners, teachers, parents and school leadership.",
+        "curriculumBadgeText": "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9",
+        "portalCardBadge": "Official Campus Portal",
+        "heroMediaType": "image",
+        "heroImageUrl": "/gad@edusmart.jpeg",
+        "heroVideoUrl": "https://assets.mixkit.co/videos/preview/mixkit-students-in-a-classroom-with-their-teacher-41147-large.mp4",
+        "heroVideoPoster": "/gad@edusmart.jpeg",
+        "heroVideoBadge": "30s Campus Tour",
+        "printHeaderTheme": "formal",
+        "printFooterNotes": "Official Riara School Document. Authorized by Ministry of Education NEMIS & School Board of Management. Learn · Grow · Succeed.",
+        "printWatermarkText": "RIARA SCHOOL · OFFICIAL ACADEMIC DOCUMENT",
+        "primaryColorHex": "#1e3a8a",
+        "accentColorHex": "#fbbf24"
+      },
+      {
+        "id": "tenant-greenwood",
+        "name": "Greenwood Academy",
+        "shortName": "Greenwood",
+        "motto": "Inspiring Excellence, Fostering Innovation",
+        "code": "GW-NBI-002",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-gw\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23064e3b\"/><stop offset=\"100%\" stop-color=\"%23022c22\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-gw)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%2334d399\" stroke-width=\"2.5\"/><polygon points=\"50,22 66,48 34,48\" fill=\"%23fbbf24\"/><polygon points=\"34,48 50,68 18,68\" fill=\"%2310b981\" opacity=\"0.9\"/><polygon points=\"66,48 82,68 50,68\" fill=\"%2310b981\" opacity=\"0.9\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">GWA</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23a7f3d0\" text-anchor=\"middle\">EST. 2008</text></svg>",
+        "crestIcon": "graduation-cap",
+        "themeColor": "emerald",
+        "badgeColorClass": "bg-emerald-100 text-emerald-800 border-emerald-300",
+        "headerBgClass": "from-emerald-900 via-slate-900 to-emerald-950",
+        "domain": "greenwood.edusmart.ac.ke",
+        "address": "Parklands Avenue, Highridge",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 374 9900 / +254 722 441 552",
+        "email": "info@greenwood.edusmart.ac.ke",
+        "principalName": "Dr. Jane Muthoni Wanjiru",
+        "principalTitle": "Head of Institution",
+        "registrationNumber": "MOE/PRI-JSS/NBI/2008/0441",
+        "curriculum": "CBC Integrated STEM Track",
+        "establishedYear": 2008,
+        "gradeLevels": "Grade 1 through Grade 9 CBC",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 890,
+        "totalFaculty": 64,
+        "totalClasses": 32,
+        "attendanceToday": 94,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "20 Jun 2026",
+        "taglineNotes": "Inspiring Excellence · Fostering Innovation · Sustainable Leadership",
+        "heroTitle": "WELCOME TO GREENWOOD ACADEMY PORTAL",
+        "heroSubtitle": "\"Inspiring Excellence, Fostering Innovation\" — A modern STEM & CBC portal connecting students, staff and guardians.",
+        "curriculumBadgeText": "CBC INTEGRATED STEM TRACK · GRADES 1 TO 9",
+        "portalCardBadge": "Greenwood Digital Campus",
+        "printHeaderTheme": "modern",
+        "printFooterNotes": "Greenwood Academy Official Record. Certified under Ministry of Education Guidelines. Fostering Innovation.",
+        "printWatermarkText": "GREENWOOD ACADEMY · OFFICIAL RECORD",
+        "primaryColorHex": "#064e3b",
+        "accentColorHex": "#10b981"
+      },
+      {
+        "id": "tenant-hillcrest",
+        "name": "Hillcrest High",
+        "shortName": "Hillcrest",
+        "motto": "Knowledge is Power, Integrity is Strength",
+        "code": "HH-NBI-003",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-hh\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23312e81\"/><stop offset=\"100%\" stop-color=\"%231e1b4b\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-hh)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%23818cf8\" stroke-width=\"2.5\"/><polygon points=\"50,22 66,48 34,48\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">HILLCREST</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23c7d2fe\" text-anchor=\"middle\">EST. 1965</text></svg>",
+        "crestIcon": "book-open",
+        "themeColor": "indigo",
+        "badgeColorClass": "bg-indigo-100 text-indigo-800 border-indigo-300",
+        "headerBgClass": "from-indigo-900 via-slate-900 to-purple-950",
+        "domain": "hillcrest.edusmart.ac.ke",
+        "address": "Langata Road, Karen",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 889 1234 / +254 733 998 877",
+        "email": "admissions@hillcrest.edusmart.ac.ke",
+        "principalName": "Mr. David Kiprop Korir",
+        "principalTitle": "Principal",
+        "registrationNumber": "MOE/SEC/NBI/1965/0024",
+        "curriculum": "CBC Junior & Senior Secondary Pathway",
+        "establishedYear": 1965,
+        "gradeLevels": "Grade 7 to Grade 10",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 760,
+        "totalFaculty": 52,
+        "totalClasses": 28,
+        "attendanceToday": 95,
+        "status": "active",
+        "plan": "Standard",
+        "expiryDate": "05 Aug 2026",
+        "taglineNotes": "Knowledge is Power · Integrity is Strength · Global Academic Leadership",
+        "heroTitle": "WELCOME TO HILLCREST HIGH PORTAL",
+        "heroSubtitle": "\"Knowledge is Power, Integrity is Strength\" — Institutional portal for secondary pathways and university readiness.",
+        "curriculumBadgeText": "CBC JUNIOR & SENIOR SECONDARY PATHWAYS · GRADES 7 TO 10",
+        "portalCardBadge": "Hillcrest Executive Portal",
+        "printHeaderTheme": "executive",
+        "printFooterNotes": "Hillcrest High Official Academic Transcript. Registered MOE/SEC/NBI/1965/0024. Integrity is Strength.",
+        "printWatermarkText": "HILLCREST HIGH · OFFICIAL TRANSCRIPT",
+        "primaryColorHex": "#312e81",
+        "accentColorHex": "#818cf8"
+      },
+      {
+        "id": "tenant-sunrise",
+        "name": "Sunrise Primary",
+        "shortName": "Sunrise",
+        "motto": "Shining Bright in Foundational CBC Learning",
+        "code": "SP-NBI-004",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-sp\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23ea580c\"/><stop offset=\"100%\" stop-color=\"%239a3412\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-sp)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%23fdba74\" stroke-width=\"2.5\"/><circle cx=\"50\" cy=\"40\" r=\"14\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">SUNRISE</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23fed7aa\" text-anchor=\"middle\">EST. 2017</text></svg>",
+        "crestIcon": "school",
+        "themeColor": "amber",
+        "badgeColorClass": "bg-amber-100 text-amber-900 border-amber-300",
+        "headerBgClass": "from-amber-900 via-slate-900 to-orange-950",
+        "domain": "sunrise.edusmart.ac.ke",
+        "address": "Eastern Bypass, Utawala",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 711 234 567",
+        "email": "info@sunrise.edusmart.ac.ke",
+        "principalName": "Mrs. Grace Wambui Kariuki",
+        "principalTitle": "Head Teacher",
+        "registrationNumber": "MOE/PRI/NBI/2017/0932",
+        "curriculum": "CBC Early Years & Primary",
+        "establishedYear": 2017,
+        "gradeLevels": "PP1 to Grade 6",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 430,
+        "totalFaculty": 28,
+        "totalClasses": 18,
+        "attendanceToday": 92,
+        "status": "pending",
+        "plan": "Basic",
+        "expiryDate": "Pending Review",
+        "taglineNotes": "Nurturing Potential · Foundational Literacy · Joyful CBC Discovery",
+        "heroTitle": "WELCOME TO SUNRISE PRIMARY PORTAL",
+        "heroSubtitle": "\"Shining Bright in Foundational CBC Learning\" — Early Childhood & Primary Education Digital Gateway.",
+        "curriculumBadgeText": "CBC EARLY YEARS & PRIMARY FOUNDATION · PP1 TO GRADE 6",
+        "portalCardBadge": "Sunrise Portal",
+        "printHeaderTheme": "classic",
+        "printFooterNotes": "Sunrise Primary School Official Documentation. Early Childhood & Primary Education Ministry Approved.",
+        "printWatermarkText": "SUNRISE PRIMARY · OFFICIAL TRANSCRIPT",
+        "primaryColorHex": "#ea580c",
+        "accentColorHex": "#f59e0b"
+      },
+      {
+        "id": "tenant-westlands",
+        "name": "Westlands School",
+        "shortName": "Westlands",
+        "motto": "Excellence in Academic and Creative Pursuit",
+        "code": "WS-NBI-005",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-ws\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%230f766e\"/><stop offset=\"100%\" stop-color=\"%23115e59\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-ws)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%232dd4bf\" stroke-width=\"2.5\"/><polygon points=\"50,20 75,34 50,48 25,34\" fill=\"%235eead4\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">WESTLANDS</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%2399f6e4\" text-anchor=\"middle\">EST. 1992</text></svg>",
+        "crestIcon": "shield",
+        "themeColor": "teal",
+        "badgeColorClass": "bg-teal-100 text-teal-800 border-teal-300",
+        "headerBgClass": "from-teal-900 via-slate-900 to-teal-950",
+        "domain": "westlands.edusmart.ac.ke",
+        "address": "Waiyaki Way, Westlands",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 444 8811 / +254 721 889 001",
+        "email": "admin@westlands.edusmart.ac.ke",
+        "principalName": "Dr. Samuel Mwangi Njoroge",
+        "principalTitle": "Executive Director",
+        "registrationNumber": "MOE/PRI-JSS/NBI/1992/0178",
+        "curriculum": "Kenyan CBC Curriculum & Creative Arts",
+        "establishedYear": 1992,
+        "gradeLevels": "Grade 1 through Grade 9 CBC",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 1120,
+        "totalFaculty": 78,
+        "totalClasses": 38,
+        "attendanceToday": 97,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "14 Sep 2026",
+        "taglineNotes": "Excellence in Academic and Creative Pursuit · CBC Talent Academy",
+        "heroTitle": "WELCOME TO WESTLANDS SCHOOL PORTAL",
+        "heroSubtitle": "\"Excellence in Academic and Creative Pursuit\" — Dedicated Arts, Sports, Sciences & CBC Streams.",
+        "curriculumBadgeText": "KENYAN CBC CURRICULUM & TALENT PATHWAY · GRADES 1 TO 9",
+        "portalCardBadge": "Westlands Campus",
+        "printHeaderTheme": "modern",
+        "printFooterNotes": "Westlands School Official Transcript. Certified under Ministry of Education Kenya. Creative Pursuit.",
+        "printWatermarkText": "WESTLANDS SCHOOL · OFFICIAL RECORD",
+        "primaryColorHex": "#0f766e",
+        "accentColorHex": "#2dd4bf"
+      },
+      {
+        "id": "tenant-staustins",
+        "name": "St. Austin's Academy",
+        "shortName": "St. Austin’s",
+        "motto": "Excellence in Character, Scholarship and Service",
+        "code": "SAA-NBI-006",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g1\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23064e3b\"/><stop offset=\"100%\" stop-color=\"%23022c22\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g1)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%23fbbf24\" stroke-width=\"2.5\"/><polygon points=\"50,18 78,32 50,46 22,32\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">SAA</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23a7f3d0\" text-anchor=\"middle\">EST. 1982</text></svg>",
+        "crestIcon": "graduation-cap",
+        "themeColor": "emerald",
+        "badgeColorClass": "bg-emerald-100 text-emerald-800 border-emerald-300",
+        "headerBgClass": "from-emerald-900 via-slate-900 to-emerald-950",
+        "domain": "staustins.edusmart.ac.ke",
+        "address": "James Gichuru Road, Lavington",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 387 2345 / +254 712 345 678",
+        "email": "info@staustins.edusmart.ac.ke",
+        "principalName": "Dr. Elizabeth Mutua, PhD",
+        "principalTitle": "Head of Institution & Principal",
+        "registrationNumber": "MOE/PRI-JSS/NBI/2014/0842",
+        "curriculum": "Kenyan CBC Curriculum (Grades 1-9)",
+        "establishedYear": 1982,
+        "gradeLevels": "Grade 1 through Grade 9 (Junior School)",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 740,
+        "totalFaculty": 48,
+        "totalClasses": 26,
+        "attendanceToday": 95,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "31 Dec 2026",
+        "taglineNotes": "Excellence in Character · Scholarship and Service · Holistic Leadership",
+        "heroTitle": "WELCOME TO ST. AUSTIN’S ACADEMY PORTAL",
+        "heroSubtitle": "\"Excellence in Character, Scholarship and Service\" — Connecting learners, teachers, parents and school leadership.",
+        "curriculumBadgeText": "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9",
+        "portalCardBadge": "St. Austin’s Portal",
+        "printHeaderTheme": "formal",
+        "printFooterNotes": "St. Austin’s Academy Official Academic Record. Authorized by Ministry of Education & KICD. Excellence in Character.",
+        "printWatermarkText": "ST. AUSTIN’S ACADEMY · OFFICIAL TRANSCRIPT",
+        "primaryColorHex": "#064e3b",
+        "accentColorHex": "#fbbf24"
+      },
+      {
+        "id": "tenant-brooksideacadem-1792715226502",
+        "name": "Brookside Academy",
+        "shortName": "Brookside",
+        "motto": "Excellence in Scholarship & Character",
+        "code": "SCH-974",
+        "registrationNumber": "MOE/PRI-JSS/2026/6636",
+        "curriculum": "Kenyan CBC Curriculum (Grades 1-9)",
+        "domain": "brookside.ac.ke",
+        "address": "School Road",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 700 000 000",
+        "email": "brookside@brookside.ac.ke",
+        "principalName": "Dr. Jane Mwangi, PhD",
+        "principalTitle": "Head of Institution & Principal",
+        "establishedYear": 2026,
+        "gradeLevels": "Grade 1 through Grade 9 CBC",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 350,
+        "totalFaculty": 25,
+        "crestIcon": "graduation-cap",
+        "themeColor": "emerald",
+        "backgroundColor": "#f8fafc",
+        "headerBgClass": "from-emerald-900 via-slate-900 to-emerald-950",
+        "badgeColorClass": "bg-emerald-100 text-emerald-800 border-emerald-300",
+        "status": "active",
+        "categories": [
+          "Science & STEM",
+          "Creative Arts",
+          "Sports & Athletics"
+        ],
+        "registeredAt": "2026-10-23T00:27:06.502Z"
+      }
+    ],
+    "edusmart_staff_appraisals_v1": [
+      {
+        "id": "appraisal-teacher-1792718203997",
+        "teacherId": "teacher-1792718203997",
+        "teacherName": "Jane Wanjiku Kamau",
+        "tscNumber": "TSC/771204/KE",
+        "designation": "Subject Teacher",
+        "department": "Mathematics & Computational Sciences",
+        "subjectsTaught": [
+          "Mathematics"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "countersigned",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation and updating of Schemes of Work from KICD curriculum designs",
+              "Development of competency-focused Lesson Plans with clear specific learning outcomes",
+              "Integration of teaching-learning resources including digital tools and concrete apparatus",
+              "Adherence to lesson timetables, work entry records, and continuous syllabus pacing"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Schemes of work and lesson plans submitted for Mathematics.",
+            "appraiserRemarks": ""
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly, and learner-centered classroom physical/virtual environment",
+              "Effective classroom management, gender equity, and pastoral inclusion",
+              "Display of dynamic curriculum talking walls, charts, and learner exhibits",
+              "Clear learner conduct standards and positive behavioral reinforcement"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Classroom displays and learner conduct records checked.",
+            "appraiserRemarks": ""
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Identification of personal pedagogical gaps and participation in TPD modules",
+              "Attendance at school-based subject department panels, workshops, and KICD seminars",
+              "Continuous ICT capacity building and incorporation of educational technology",
+              "Mentorship of student teachers, novice faculty, and peer lesson co-planning"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Attended the department TPD workshop.",
+            "appraiserRemarks": ""
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Adherence to Children Act 2022, child safeguarding, and zero corporal punishment",
+              "Early detection and supportive referral of vulnerable, distressed, or unwell learners",
+              "Integration of core CBC values (integrity, patriotism, love, peace, respect)",
+              "Active supervision during school break times, laboratory sessions, and games"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Child safeguarding briefing completed.",
+            "appraiserRemarks": ""
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality in class reporting, morning assemblies, and scheduled teacher-on-duty rosters",
+              "Timely assessment marking, constructive feedback, and submission of student marks",
+              "Professional communication and collaborative partnership with parents and guardians",
+              "Compliance with Teachers Service Commission (TSC) Code of Regulation and Ethics"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Duty roster and mark submission on time.",
+            "appraiserRemarks": ""
+          }
+        ],
+        "lessonObservations": [
+          {
+            "id": "obs-1792718267923",
+            "date": "2026-10-23",
+            "subject": "Mathematics",
+            "grade": 4,
+            "strandOrTopic": "Fractions and equivalence",
+            "observationScore": 80,
+            "strengths": [],
+            "areasForGrowth": [],
+            "observerName": "Mr. Patrick Kamau"
+          }
+        ],
+        "tpdGapIdentified": "",
+        "targetInterventions": "",
+        "appraiserName": "Mr. Patrick Kamau",
+        "appraiserRole": "admin",
+        "overallPercentage": 80,
+        "performanceGrade": "Very Good (80-89%)",
+        "createdAt": "2026-10-23T01:16:43.998Z",
+        "submittedAt": "2026-10-23T01:17:23.949Z",
+        "updatedAt": "2026-10-23T01:18:21.892Z",
+        "appraiserGeneralRemarks": "",
+        "completedAt": "2026-10-23T01:18:07.527Z",
+        "countersigningOfficerName": "Mr. Patrick Kamau (Head Teacher)",
+        "countersigningRemarks": "Appraisal ratings certified for Teachers Service Commission records.",
+        "countersignedAt": "2026-10-23T01:18:21.892Z"
+      },
+      {
+        "id": "appraisal-001",
+        "teacherId": "u-teacher-01",
+        "teacherName": "Ms. Sarah Mwangi",
+        "tscNumber": "TSC/489211/KE",
+        "designation": "Senior Teacher II / Head of Mathematics",
+        "department": "Mathematics & Computational Sciences",
+        "subjectsTaught": [
+          "Mathematics"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "countersigned",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation of Schemes of Work",
+              "Competency-focused Lesson Plans"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Schemes of Work for Term 2 submitted in Week 1; 100% lesson plans verified with manipulative aids for fractions.",
+            "appraiserRemarks": "Flawless pedagogical documentation. Exemplary use of concrete realia."
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly classroom climate",
+              "Display of dynamic talking walls"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Interactive math talking wall featuring fraction strips and geometric origami; zero disciplinary referrals.",
+            "appraiserRemarks": "Classroom displays actively reinforce learner curiosity and self-assessment."
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Participation in TPD modules",
+              "Continuous ICT integration"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Completed CEMASTEA Module 3 on Inquiry-Based Math Instruction; conducted peer workshop for junior school math teachers.",
+            "appraiserRemarks": "Good departmental initiative in cascading CEMASTEA techniques."
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Child safeguarding compliance",
+              "Integration of core CBC values"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Coordinated math clinic for struggling learners; established supportive peer-buddy groups.",
+            "appraiserRemarks": "Commendable empathy and pastoral attentiveness."
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality and duty rosters",
+              "Timely assessment marking"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Assigned as Teacher-on-Duty Week 3; 100% daily morning briefing attendance; CAT marks submitted 2 days ahead of deadline.",
+            "appraiserRemarks": "Model professional conduct and institutional dedication."
+          }
+        ],
+        "lessonObservations": [
+          {
+            "id": "obs-01",
+            "date": "2026-10-03",
+            "subject": "Mathematics",
+            "grade": 4,
+            "stream": "East",
+            "strandOrTopic": "Fractions & Equivalence Models",
+            "observationScore": 96,
+            "strengths": [
+              "High learner engagement using physical paper strip folding",
+              "Clear formative questioning techniques targeting critical thinking",
+              "Excellent pace distribution across introduction, inquiry, and conclusion"
+            ],
+            "areasForGrowth": [
+              "Extend challenge problems for learners who master equivalent fractions ahead of class"
+            ],
+            "observerName": "Mrs. Beatrice Omari (Curriculum Coordinator)"
+          }
+        ],
+        "tpdGapIdentified": "Advanced digital spreadsheet modelling for Junior Secondary Grade 7 mathematics.",
+        "targetInterventions": "Enroll in upcoming KICD Digital Mathematics Teaching Practicum in Term 3.",
+        "appraiserName": "Mr. James Wafula (Deputy Head Teacher)",
+        "appraiserRole": "Deputy Head Teacher",
+        "countersigningOfficerName": "Dr. Arthur Onyango (Head Teacher)",
+        "overallPercentage": 96,
+        "performanceGrade": "Exemplary (90-100%)",
+        "teacherComments": "Grateful for constructive feedback on fraction realia. Looking forward to expanding digital math lessons.",
+        "appraiserGeneralRemarks": "Consistently exceptional instructor who elevates school academic standards.",
+        "countersigningRemarks": "Appraisal ratified by Head Teacher. Commended for exemplary devotion to learner outcome excellence.",
+        "submittedAt": "2026-10-05T08:00:00Z",
+        "completedAt": "2026-10-07T14:30:00Z",
+        "countersignedAt": "2026-10-08T10:15:00Z",
+        "createdAt": "2026-10-01T09:00:00Z"
+      },
+      {
+        "id": "appraisal-002",
+        "teacherId": "u-teacher-02",
+        "teacherName": "Mr. David Omondi",
+        "tscNumber": "TSC/512940/KE",
+        "designation": "Instructor / Science Faculty Lead",
+        "department": "Pure & Integrated Sciences",
+        "subjectsTaught": [
+          "Integrated Science"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "completed",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation of Schemes of Work",
+              "Competency-focused Lesson Plans"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Executed 6 laboratory practical sessions on capillary action and natural plant indicators; schemes up to date.",
+            "appraiserRemarks": "Hands-on practical experiments executed safely and effectively."
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly classroom climate",
+              "Display of dynamic talking walls"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Science lab apparatus clearly demarcated; safety eye wash stations inspected weekly.",
+            "appraiserRemarks": "Good laboratory hygiene and chemical storage protocols."
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Participation in TPD modules",
+              "Continuous ICT integration"
+            ],
+            "selfScore": 3,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Integrated EduSmart Virtual Science Lab simulations into Grade 8 chemistry lessons.",
+            "appraiserRemarks": "Notable improvement in leveraging digital laboratory workbench tools."
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Child safeguarding compliance",
+              "Integration of core CBC values"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Strict enforcement of lab PPE coats and goggles; environmental cleanup of biological specimens.",
+            "appraiserRemarks": "High emphasis on laboratory hazard mitigation."
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality and duty rosters",
+              "Timely assessment marking"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Regular duty supervision; marks recorded and uploaded in timely fashion.",
+            "appraiserRemarks": "Dependable and cooperative faculty member."
+          }
+        ],
+        "lessonObservations": [
+          {
+            "id": "obs-02",
+            "date": "2026-10-06",
+            "subject": "Integrated Science",
+            "grade": 8,
+            "stream": "all",
+            "strandOrTopic": "Natural Acid-Base Indicators & pH Testing",
+            "observationScore": 88,
+            "strengths": [
+              "Effective guided discovery using crushed hibiscus petals",
+              "Good safety reinforcement before distributing chemical reagents",
+              "Active collaborative team dynamics in laboratory groups"
+            ],
+            "areasForGrowth": [
+              "Ensure all groups complete written hypothesis prior to beginning laboratory manipulation"
+            ],
+            "observerName": "Mrs. Beatrice Omari (Curriculum Coordinator)"
+          }
+        ],
+        "tpdGapIdentified": "Formative rubric development for laboratory psychomotor skills.",
+        "targetInterventions": "Collaborate with Curriculum Coordinator on CBA Performance Task rubrics.",
+        "appraiserName": "Mrs. Beatrice Omari (Curriculum Coordinator)",
+        "appraiserRole": "Curriculum Coordinator",
+        "countersigningOfficerName": "Dr. Arthur Onyango (Head Teacher)",
+        "overallPercentage": 88,
+        "performanceGrade": "Very Good (80-89%)",
+        "teacherComments": "Enjoyed integrating the virtual lab alongside physical apparatus. Will standardize lab rubrics.",
+        "appraiserGeneralRemarks": "Solid STEM educator with strong commitment to learner practical proficiency.",
+        "submittedAt": "2026-10-06T10:00:00Z",
+        "completedAt": "2026-10-09T11:00:00Z",
+        "createdAt": "2026-10-02T08:30:00Z"
+      },
+      {
+        "id": "appraisal-003",
+        "teacherId": "u-teacher-03",
+        "teacherName": "Mr. John Kamau",
+        "tscNumber": "TSC/630144/KE",
+        "designation": "Senior Faculty / ICT & Computing Lead",
+        "department": "Technical & Applied Sciences",
+        "subjectsTaught": [
+          "Computer Studies"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "countersigned",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation of Schemes of Work",
+              "Competency-focused Lesson Plans"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Authored complete Term 2 Scratch Algorithm challenges and spreadsheet financial templates.",
+            "appraiserRemarks": "Exceptional mastery of junior secondary computing designs."
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly classroom climate",
+              "Display of dynamic talking walls"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Computer Lab projected environment maintained with zero workstation downtime; keyboard shortcut posters installed.",
+            "appraiserRemarks": "Computer Lab is in world-class instructional condition."
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Participation in TPD modules",
+              "Continuous ICT integration"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Conducted whole-school staff training on Scratch coding projection and digital attendance tracking.",
+            "appraiserRemarks": "A key school-wide catalyst for ICT adoption across disciplines."
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Child safeguarding compliance",
+              "Integration of core CBC values"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Strict digital safety protocols in place; SafeSearch browser and content firewalls configured for all student terminals.",
+            "appraiserRemarks": "Exemplary diligence regarding student digital safety and cyber hygiene."
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality and duty rosters",
+              "Timely assessment marking"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Always punctual; maintains computerized equipment log and manages school website portal updates.",
+            "appraiserRemarks": "Outstanding work ethic and selfless institutional service."
+          }
+        ],
+        "lessonObservations": [
+          {
+            "id": "obs-03",
+            "date": "2026-10-04",
+            "subject": "Computer Studies",
+            "grade": 7,
+            "stream": "West",
+            "strandOrTopic": "Scratch Broadcast Messaging & Animation Control",
+            "observationScore": 98,
+            "strengths": [
+              "High energy interactive coding demonstration in projected mode",
+              "Instant gamified feedback via Challenge Library bonus points",
+              "Peer mentoring where fast coders assist adjacent students"
+            ],
+            "areasForGrowth": [
+              "Capture screenshots of top learner animations for digital portfolio display"
+            ],
+            "observerName": "Mrs. Beatrice Omari (Curriculum Coordinator)"
+          }
+        ],
+        "tpdGapIdentified": "Artificial intelligence ethics and introductory Python for Grade 9 curriculum rollout.",
+        "targetInterventions": "Attend National KICD Emerging Computing Technologies summit in November 2026.",
+        "appraiserName": "Mr. James Wafula (Deputy Head Teacher)",
+        "appraiserRole": "Deputy Head Teacher",
+        "countersigningOfficerName": "Dr. Arthur Onyango (Head Teacher)",
+        "overallPercentage": 98,
+        "performanceGrade": "Exemplary (90-100%)",
+        "teacherComments": "Excited about student enthusiasm for Scratch challenges and coding streaks.",
+        "appraiserGeneralRemarks": "Indispensable leader in digital transformation. Recommended for TSC national award.",
+        "countersigningRemarks": "Approved with highest recommendation. The school leads the sub-county in ICT integration thanks to Mr. Kamau.",
+        "submittedAt": "2026-10-04T14:00:00Z",
+        "completedAt": "2026-10-06T16:00:00Z",
+        "countersignedAt": "2026-10-07T09:30:00Z",
+        "createdAt": "2026-10-01T10:00:00Z"
+      },
+      {
+        "id": "appraisal-004",
+        "teacherId": "u-teacher-04",
+        "teacherName": "Mrs. Grace Njeri",
+        "tscNumber": "TSC/467812/KE",
+        "designation": "Senior Teacher / Workshop Administrator",
+        "department": "Pretechnical & Creative Arts",
+        "subjectsTaught": [
+          "Pretechnical Education"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "appraisal_meeting_pending",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation of Schemes of Work",
+              "Competency-focused Lesson Plans"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Technical drawing plates compiled; workshop tool maintenance logs kept up to date.",
+            "appraiserRemarks": "Strong technical accuracy and drafting competency."
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly classroom climate",
+              "Display of dynamic talking walls"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Workshop floor hazard markings freshly repainted; safety goggles sterilized after each period.",
+            "appraiserRemarks": "Top-tier workshop safety culture."
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Participation in TPD modules",
+              "Continuous ICT integration"
+            ],
+            "selfScore": 3,
+            "appraiserScore": 3,
+            "agreedScore": 3,
+            "evidenceDescription": "Attended regional TVET transition workshop.",
+            "appraiserRemarks": "Encouraged to integrate more CAD/digital 3D drafting into junior school lessons."
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Child safeguarding compliance",
+              "Integration of core CBC values"
+            ],
+            "selfScore": 5,
+            "appraiserScore": 5,
+            "agreedScore": 5,
+            "evidenceDescription": "Zero workshop incidents recorded; excellent learner discipline regarding cutting blades.",
+            "appraiserRemarks": "Flawless safety oversight."
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality and duty rosters",
+              "Timely assessment marking"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Consistent punctuality and reliable equipment inventory management.",
+            "appraiserRemarks": "Very dependable senior teacher."
+          }
+        ],
+        "lessonObservations": [
+          {
+            "id": "obs-04",
+            "date": "2026-10-05",
+            "subject": "Pretechnical Education",
+            "grade": 8,
+            "stream": "all",
+            "strandOrTopic": "Workshop Tool Station Inspection & Rust Prevention",
+            "observationScore": 90,
+            "strengths": [
+              "Step-by-step practical demonstration on linseed oil application",
+              "Strict enforcement of safety zone walkways",
+              "Individual checks on learner grip technique"
+            ],
+            "areasForGrowth": [
+              "Introduce digital stopwatches for measuring learner station transition efficiency"
+            ],
+            "observerName": "Mr. James Wafula (Deputy Head Teacher)"
+          }
+        ],
+        "tpdGapIdentified": "Digital CAD software integration for Junior Secondary isometric drawing.",
+        "targetInterventions": "Pair with Mr. Kamau for sketchup / online CAD modules in Computer Lab.",
+        "appraiserName": "Mr. James Wafula (Deputy Head Teacher)",
+        "appraiserRole": "Deputy Head Teacher",
+        "overallPercentage": 86,
+        "performanceGrade": "Very Good (80-89%)",
+        "teacherComments": "Meeting scheduled with Deputy Head to finalize agreed ratings and submit to Head Teacher.",
+        "appraiserGeneralRemarks": "Robust technical instructor with impeccable safety records.",
+        "submittedAt": "2026-10-05T11:00:00Z",
+        "createdAt": "2026-10-02T11:00:00Z"
+      },
+      {
+        "id": "appraisal-005",
+        "teacherId": "u-teacher-05",
+        "teacherName": "Mr. Patrick Mutiso",
+        "tscNumber": "TSC/582910/KE",
+        "designation": "Faculty / Arts & Music Lead",
+        "department": "Creative Arts & Sports",
+        "subjectsTaught": [
+          "Creative Arts"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "submitted_for_appraisal",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation of Schemes of Work",
+              "Competency-focused Lesson Plans"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 3,
+            "agreedScore": 3,
+            "evidenceDescription": "Indigenous fiber weaving schemes prepared; lesson plans updated for Grade 5.",
+            "appraiserRemarks": "Pacing lag noted in Week 5; catch-up remedial sessions required."
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly classroom climate",
+              "Display of dynamic talking walls"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Art studio displays learner placemats and traditional Kenyan beadwork exhibits.",
+            "appraiserRemarks": "Vibrant, colorful cultural studio atmosphere."
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Participation in TPD modules",
+              "Continuous ICT integration"
+            ],
+            "selfScore": 3,
+            "appraiserScore": 3,
+            "agreedScore": 3,
+            "evidenceDescription": "Attended county cultural music festival adjudication training.",
+            "appraiserRemarks": "Recommended to document digital photographic portfolios of learner artworks."
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Child safeguarding compliance",
+              "Integration of core CBC values"
+            ],
+            "selfScore": 4,
+            "appraiserScore": 4,
+            "agreedScore": 4,
+            "evidenceDescription": "Safe storage of craft cutting instruments and non-toxic dyes.",
+            "appraiserRemarks": "Safe material handling observed."
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality and duty rosters",
+              "Timely assessment marking"
+            ],
+            "selfScore": 3,
+            "appraiserScore": 3,
+            "agreedScore": 3,
+            "evidenceDescription": "Conducts choir practice punctually; working on speeding up mark uploads.",
+            "appraiserRemarks": "Needs to ensure gradebook submissions meet official administrative timelines."
+          }
+        ],
+        "lessonObservations": [
+          {
+            "id": "obs-05",
+            "date": "2026-10-07",
+            "subject": "Creative Arts",
+            "grade": 5,
+            "stream": "North",
+            "strandOrTopic": "Indigenous Cardboard Loom Weaving",
+            "observationScore": 78,
+            "strengths": [
+              "Excellent cultural storytelling regarding indigenous sisal fiber extraction",
+              "Learners excited and engaged in tactile yarn threading"
+            ],
+            "areasForGrowth": [
+              "Demonstrate edge tension control more clearly to prevent hour-glassing of placemats",
+              "Accelerate pacing to cover remaining strands on schedule"
+            ],
+            "observerName": "Mrs. Beatrice Omari (Curriculum Coordinator)"
+          }
+        ],
+        "tpdGapIdentified": "Syllabus pacing acceleration and formative rubric calibration for psychomotor crafts.",
+        "targetInterventions": "Attend Curriculum Coordinator coaching sessions on CBC pacing recovery.",
+        "appraiserName": "Mrs. Beatrice Omari (Curriculum Coordinator)",
+        "appraiserRole": "Curriculum Coordinator",
+        "overallPercentage": 74,
+        "performanceGrade": "Good (60-79%)",
+        "teacherComments": "Working diligently on catch-up weaving schedule.",
+        "appraiserGeneralRemarks": "Creative teacher with strong cultural passion. Pacing support in progress.",
+        "submittedAt": "2026-10-07T12:00:00Z",
+        "createdAt": "2026-10-03T09:00:00Z"
+      },
+      {
+        "id": "appraisal-teacher-1792718330592",
+        "teacherId": "teacher-1792718330592",
+        "teacherName": "fdf",
+        "tscNumber": "gd",
+        "designation": "Subject Teacher",
+        "department": "Technical & Applied Sciences",
+        "subjectsTaught": [
+          "Kiswahili"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "countersigned",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation and updating of Schemes of Work from KICD curriculum designs",
+              "Development of competency-focused Lesson Plans with clear specific learning outcomes",
+              "Integration of teaching-learning resources including digital tools and concrete apparatus",
+              "Adherence to lesson timetables, work entry records, and continuous syllabus pacing"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly, and learner-centered classroom physical/virtual environment",
+              "Effective classroom management, gender equity, and pastoral inclusion",
+              "Display of dynamic curriculum talking walls, charts, and learner exhibits",
+              "Clear learner conduct standards and positive behavioral reinforcement"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Identification of personal pedagogical gaps and participation in TPD modules",
+              "Attendance at school-based subject department panels, workshops, and KICD seminars",
+              "Continuous ICT capacity building and incorporation of educational technology",
+              "Mentorship of student teachers, novice faculty, and peer lesson co-planning"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Adherence to Children Act 2022, child safeguarding, and zero corporal punishment",
+              "Early detection and supportive referral of vulnerable, distressed, or unwell learners",
+              "Integration of core CBC values (integrity, patriotism, love, peace, respect)",
+              "Active supervision during school break times, laboratory sessions, and games"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality in class reporting, morning assemblies, and scheduled teacher-on-duty rosters",
+              "Timely assessment marking, constructive feedback, and submission of student marks",
+              "Professional communication and collaborative partnership with parents and guardians",
+              "Compliance with Teachers Service Commission (TSC) Code of Regulation and Ethics"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          }
+        ],
+        "lessonObservations": [],
+        "tpdGapIdentified": "",
+        "targetInterventions": "",
+        "appraiserName": "Mr. Patrick Kamau",
+        "appraiserRole": "admin",
+        "overallPercentage": 0,
+        "performanceGrade": "Needs Improvement (0-39%)",
+        "createdAt": "2026-10-23T01:18:50.593Z",
+        "countersigningOfficerName": "Mr. Patrick Kamau (Head Teacher / Executive Leadership)",
+        "countersigningRemarks": "Appraisal ratings certified and officially endorsed for Teachers Service Commission (TSC) records.",
+        "countersignedAt": "2026-10-23T01:31:13.414Z",
+        "updatedAt": "2026-10-23T01:31:13.414Z"
+      },
+      {
+        "id": "appraisal-teacher-1792719123703",
+        "teacherId": "teacher-1792719123703",
+        "teacherName": "Daniel Otieno Kariuki",
+        "tscNumber": "TSC/880011/KE",
+        "designation": "Subject Teacher",
+        "department": "Sports Science",
+        "subjectsTaught": [
+          "Mathematics"
+        ],
+        "term": 2,
+        "academicYear": 2026,
+        "status": "draft",
+        "standards": [
+          {
+            "standardId": "tpad-std-1",
+            "standardNumber": 1,
+            "standardTitle": "Professional Knowledge & Application",
+            "subStandards": [
+              "Comprehensive preparation and updating of Schemes of Work from KICD curriculum designs",
+              "Development of competency-focused Lesson Plans with clear specific learning outcomes",
+              "Integration of teaching-learning resources including digital tools and concrete apparatus",
+              "Adherence to lesson timetables, work entry records, and continuous syllabus pacing"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-2",
+            "standardNumber": 2,
+            "standardTitle": "Comprehensive Learning Environment",
+            "subStandards": [
+              "Safe, orderly, and learner-centered classroom physical/virtual environment",
+              "Effective classroom management, gender equity, and pastoral inclusion",
+              "Display of dynamic curriculum talking walls, charts, and learner exhibits",
+              "Clear learner conduct standards and positive behavioral reinforcement"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-3",
+            "standardNumber": 3,
+            "standardTitle": "Teacher Professional Development (TPD)",
+            "subStandards": [
+              "Identification of personal pedagogical gaps and participation in TPD modules",
+              "Attendance at school-based subject department panels, workshops, and KICD seminars",
+              "Continuous ICT capacity building and incorporation of educational technology",
+              "Mentorship of student teachers, novice faculty, and peer lesson co-planning"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-4",
+            "standardNumber": 4,
+            "standardTitle": "Learner Protection, Safety, Well-Being & Values",
+            "subStandards": [
+              "Adherence to Children Act 2022, child safeguarding, and zero corporal punishment",
+              "Early detection and supportive referral of vulnerable, distressed, or unwell learners",
+              "Integration of core CBC values (integrity, patriotism, love, peace, respect)",
+              "Active supervision during school break times, laboratory sessions, and games"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          },
+          {
+            "standardId": "tpad-std-5",
+            "standardNumber": 5,
+            "standardTitle": "Teacher Professional Conduct & Performance",
+            "subStandards": [
+              "Punctuality in class reporting, morning assemblies, and scheduled teacher-on-duty rosters",
+              "Timely assessment marking, constructive feedback, and submission of student marks",
+              "Professional communication and collaborative partnership with parents and guardians",
+              "Compliance with Teachers Service Commission (TSC) Code of Regulation and Ethics"
+            ],
+            "selfScore": 0,
+            "appraiserScore": 0,
+            "agreedScore": 0,
+            "evidenceDescription": ""
+          }
+        ],
+        "lessonObservations": [],
+        "tpdGapIdentified": "",
+        "targetInterventions": "",
+        "appraiserName": "Mr. Patrick Kamau",
+        "appraiserRole": "admin",
+        "overallPercentage": 0,
+        "performanceGrade": "Needs Improvement (0-39%)",
+        "createdAt": "2026-10-23T01:32:03.703Z",
+        "updatedAt": "2026-10-23T01:37:19.220Z"
       }
     ]
   },
   "metadata": {
     "initializedAt": "2026-10-22T07:32:06.346Z",
-    "lastUpdatedAt": "2026-10-22T07:32:06.346Z",
-    "totalWrites": 1
+    "lastUpdatedAt": "2026-10-23T03:07:05.629Z",
+    "totalWrites": 45
   }
 }

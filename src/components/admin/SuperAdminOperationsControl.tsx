@@ -32,12 +32,12 @@ import {
 } from 'lucide-react';
 import { usePlatformCustomization } from '../../context/PlatformCustomizationContext';
 import { useTenant } from '../../context/TenantContext';
-import { STARTER_PACKAGE_DOCS } from '../../data/starterPackageDocs';
+import { listStarterDocs } from '../../utils/starterDocs';
 import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 import { User } from '../../types';
 
 interface SuperAdminOperationsControlProps {
-  onEnterSchoolPortal: (schoolId: string) => void;
+  onEnterSchoolPortal?: (schoolId: string) => void;
   currentUser: User;
 }
 
@@ -56,6 +56,16 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
 
   const [activeSection, setActiveSection] = useState<'matrix' | 'policy' | 'starter_package'>('matrix');
   const [selectedDocId, setSelectedDocId] = useState<string>('schema');
+  const starterDocs = listStarterDocs();
+  const selectedDoc = starterDocs[selectedDocId] || {
+    id: selectedDocId,
+    name: '',
+    title: 'Starter document',
+    language: 'markdown' as const,
+    badge: '',
+    description: '',
+    content: '',
+  };
   const [copiedDoc, setCopiedDoc] = useState<boolean>(false);
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -475,7 +485,7 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
                             <button
                               onClick={() => {
                                 switchTenant(tenant.id);
-                                onEnterSchoolPortal(tenant.id);
+                                onEnterSchoolPortal?.(tenant.id);
                               }}
                               className="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer shadow-xs"
                               title="Switch into this school campus LMS"
@@ -715,25 +725,25 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => handleCopyDoc(STARTER_PACKAGE_DOCS[selectedDocId].content)}
+                onClick={() => handleCopyDoc(selectedDoc.content)}
                 className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 cursor-pointer transition-all"
               >
                 {copiedDoc ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedDoc ? 'Copied' : 'Copy File'}</span>
               </button>
               <button
-                onClick={() => handleDownloadDoc(STARTER_PACKAGE_DOCS[selectedDocId].name, STARTER_PACKAGE_DOCS[selectedDocId].content)}
+                onClick={() => handleDownloadDoc(selectedDoc.name, selectedDoc.content)}
                 className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Download {STARTER_PACKAGE_DOCS[selectedDocId].name}</span>
+                <span>Download {selectedDoc.name}</span>
               </button>
             </div>
           </div>
 
           {/* Doc Tabs */}
           <div className="flex flex-wrap gap-2">
-            {Object.values(STARTER_PACKAGE_DOCS).map((doc) => (
+            {Object.values(starterDocs).map((doc) => (
               <button
                 key={doc.id}
                 onClick={() => setSelectedDocId(doc.id)}
@@ -755,18 +765,18 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
           {/* File Meta Info Banner */}
           <div className="p-4 bg-slate-950 rounded-xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div>
-              <div className="font-bold text-white text-sm">{STARTER_PACKAGE_DOCS[selectedDocId].title}</div>
-              <div className="text-slate-400 text-xs">{STARTER_PACKAGE_DOCS[selectedDocId].description}</div>
+              <div className="font-bold text-white text-sm">{selectedDoc.title}</div>
+              <div className="text-slate-400 text-xs">{selectedDoc.description}</div>
             </div>
             <div className="text-amber-300 font-mono text-[11px] shrink-0">
-              Format: {STARTER_PACKAGE_DOCS[selectedDocId].language.toUpperCase()} &bull; Read-Only Starter Contract
+              Format: {selectedDoc.language.toUpperCase()} &bull; Read-Only Starter Contract
             </div>
           </div>
 
           {/* Code Viewer Container */}
           <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4 overflow-x-auto max-h-[500px] shadow-inner font-mono text-xs leading-relaxed text-slate-200">
             <pre>
-              <code>{STARTER_PACKAGE_DOCS[selectedDocId].content}</code>
+              <code>{selectedDoc.content}</code>
             </pre>
           </div>
         </div>
@@ -796,16 +806,18 @@ export const SuperAdminOperationsControl: React.FC<SuperAdminOperationsControlPr
               </div>
 
               <div className="flex items-center gap-2">
+                {onEnterSchoolPortal && (
                 <button
                   onClick={() => {
                     switchTenant(inspectingTenant.id);
-                    onEnterSchoolPortal(inspectingTenant.id);
+                    onEnterSchoolPortal?.(inspectingTenant.id);
                   }}
                   className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <span>Switch Full Tenant Session</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </button>
+                )}
                 <button
                   onClick={() => setInspectingTenantId(null)}
                   className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"

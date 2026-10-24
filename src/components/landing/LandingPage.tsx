@@ -150,6 +150,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   };
 
   const handleProcessLmsAccess = (appKey: string) => {
+    if (appKey === 'virtuallab') {
+      setIsVirtualLabSubscriptionOpen(true);
+      return;
+    }
     const app = PORTAL_APPS_CONFIG[appKey];
     if (!app) return;
     setProcessingPortalAppKey(appKey);
@@ -1654,7 +1658,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     Virtual Science Lab & Scratch Computer Coding Studio
                   </h3>
                   <p className="text-xs text-emerald-100/80 mt-1 max-w-3xl leading-relaxed">
-                    Visiting learners, parents, and non-members can access CBC chemistry titrations, physics circuits, biology microscopy, and Scratch block coding simulations. Subscribe for an instant digital pass or launch demonstration.
+                    Public access to CBC chemistry titrations, physics circuits, biology microscopy, and Scratch block coding simulations is strictly restricted upon active subscription. Free demo access is disabled.
                   </p>
                 </div>
               </div>
@@ -1662,28 +1666,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="flex flex-wrap items-center gap-2.5 shrink-0 relative z-10">
                 <button
                   type="button"
-                  onClick={() => handleProcessLmsAccess('virtuallab')}
-                  className="px-4 py-2.5 bg-white text-slate-950 hover:bg-emerald-50 font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-98"
+                  onClick={() => setIsVirtualLabSubscriptionOpen(true)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-1.5 cursor-pointer transition-all transform hover:scale-[1.02]"
                 >
-                  <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                  <span>Process Demo Pass</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleOpenPortalApp('virtuallab')}
-                  className="px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
-                  title="Open Dedicated Lab App Info"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-300" />
-                  <span>App Info</span>
+                  <Lock className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Subscribe for Lab Pass (Required) →</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsVirtualLabSubscriptionOpen(true)}
-                  className="px-4 py-2.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center gap-1.5 cursor-pointer transition-all transform hover:scale-[1.02]"
+                  className="px-3.5 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Redeem an existing paid ticket"
                 >
-                  <Ticket className="w-3.5 h-3.5" />
-                  <span>Subscribe via Ticketing Portal →</span>
+                  <KeyRound className="w-3.5 h-3.5 text-blue-300" />
+                  <span>Redeem Paid Ticket</span>
                 </button>
                 <button
                   type="button"

@@ -268,10 +268,10 @@ export const PORTAL_APPS_CONFIG: Record<string, PortalAppConfig> = {
     icon: '🔬',
     gradientClass: 'from-emerald-900 via-teal-900 to-slate-950',
     badgeBg: 'bg-emerald-500/20 text-emerald-200 border-emerald-400/30',
-    defaultEmail: 'mr.kiprono@edusmart.ac.ke',
-    defaultPassword: 'teach2026',
-    demoSubtitle: 'CBC Science Demonstrations & Scratch Simulator',
-    targetRoleLabel: 'Teachers, Students & Public Subscribers',
+    defaultEmail: '',
+    defaultPassword: '',
+    demoSubtitle: 'Strict Subscription Required · Free Demo Access Disabled',
+    targetRoleLabel: 'Paid Subscribers & Enrolled Member Schools',
     coreModules: [
       '75 Junior Secondary Science Interactive Apparatus',
       'Chemistry Titrations & Acid-Base Ph Indicators',
@@ -279,7 +279,7 @@ export const PORTAL_APPS_CONFIG: Record<string, PortalAppConfig> = {
       'Biology Compound Optical Microscope Simulator',
       'Scratch 3.0 Block Coding Studio & CBC Practical Tasks'
     ],
-    description: 'Specialized interactive laboratory and computing studio app allowing educators to conduct demonstrations and public visitors to subscribe for practical access.'
+    description: 'Specialized interactive laboratory and computing studio app. Access is strictly granted to active paid subscribers or enrolled member schools.'
   }
 };
 
@@ -466,29 +466,57 @@ export const PortalAccessAppModal: React.FC<PortalAccessAppModalProps> = ({
                 </div>
               )}
 
-              {/* 1-Click Fast Demo Launch Banner */}
-              <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-2xs">
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/60 px-2 py-0.5 rounded-full">
-                    1-Click Instant App Launch
-                  </span>
-                  <div className="font-extrabold text-xs text-slate-900 mt-1">
-                    {app.demoSubtitle}
+              {/* 1-Click Fast Demo Launch Banner (Disabled for Virtual Lab) */}
+              {app.id === 'virtuallab' ? (
+                <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl space-y-3 text-left">
+                  <div className="flex items-start gap-2.5">
+                    <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-900 border border-amber-400/30 shrink-0 mt-0.5">
+                      <Lock className="w-4 h-4 text-amber-700" />
+                    </span>
+                    <div>
+                      <span className="text-[11px] font-black uppercase tracking-wider text-amber-950 block">
+                        Strict Subscription Required · Free Demo Access Disabled
+                      </span>
+                      <p className="text-xs text-amber-900/90 leading-relaxed mt-0.5">
+                        Free demo access to the Virtual Science Lab &amp; Scratch Studio workspace is completely disabled. Public access requires an active paid subscription pass (from KES 150). Enrolled member school students/teachers sign in with their school credentials below.
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500 font-mono">
-                    {app.defaultEmail}
+                  <div className="pt-1">
+                    <a
+                      href="#virtuallab-section"
+                      onClick={() => onClose()}
+                      className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all text-center cursor-pointer"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Subscribe for Lab Pass (KES 150+) →</span>
+                    </a>
                   </div>
                 </div>
+              ) : (
+                <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-2xs">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/60 px-2 py-0.5 rounded-full">
+                      1-Click Instant App Launch
+                    </span>
+                    <div className="font-extrabold text-xs text-slate-900 mt-1">
+                      {app.demoSubtitle}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      {app.defaultEmail}
+                    </div>
+                  </div>
 
-                <button
-                  type="button"
-                  onClick={handleQuickDemoSubmit}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                >
-                  <span>Launch Now</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={handleQuickDemoSubmit}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                  >
+                    <span>Launch Now</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
+                  </button>
+                </div>
+              )}
 
               {/* Standard Credentials Fields */}
               <div className="space-y-3 pt-1">

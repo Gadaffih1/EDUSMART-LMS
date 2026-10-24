@@ -234,16 +234,21 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const [virtualLabInitialStep, setVirtualLabInitialStep] = useState<'select' | 'checkout' | 'ticket' | 'launch_lab' | 'enter_ticket'>('select');
   const [virtualLabTicketCode, setVirtualLabTicketCode] = useState<string>('');
 
-  // Active Public Subscription status tracking
+  // Active Public Subscription status tracking - strictly requires verified paid pass
   const [activePublicTicket, setActivePublicTicket] = useState<string>(() => {
     try {
-      const active = localStorage.getItem('edusmart_public_active_ticket');
-      if (active) return active;
+      const active = (localStorage.getItem('edusmart_public_active_ticket') || '').trim();
       const raw = localStorage.getItem('edusmart_vlab_ticket_passes');
-      if (raw) {
+      if (raw && active && !active.toUpperCase().includes('DEMO')) {
         const passes = JSON.parse(raw);
-        if (Array.isArray(passes) && passes.length > 0) {
-          return passes[0].ticketId || '';
+        if (Array.isArray(passes)) {
+          const match = passes.find((p: any) => 
+            p.ticketId && 
+            p.ticketId.toUpperCase() === active.toUpperCase() && 
+            p.status === 'active' &&
+            !p.ticketId.toUpperCase().includes('DEMO')
+          );
+          if (match) return match.ticketId;
         }
       }
       return '';
@@ -260,13 +265,19 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     ticketCode: string = ''
   ) => {
     setVirtualLabInitialTier(tier);
-    setVirtualLabInitialStep(step);
-    setVirtualLabTicketCode(ticketCode);
+    // If launch_lab was requested without a verified active ticket, force subscription selection
+    if (step === 'launch_lab' && (!activePublicTicket || activePublicTicket.toUpperCase().includes('DEMO'))) {
+      setVirtualLabInitialStep('select');
+      setVirtualLabTicketCode('');
+    } else {
+      setVirtualLabInitialStep(step);
+      setVirtualLabTicketCode(ticketCode);
+    }
     setShowVirtualLabModal(true);
   };
 
   const handleAccessSmartClassroom = () => {
-    if (hasActivePublicSubscription && activePublicTicket) {
+    if (hasActivePublicSubscription && activePublicTicket && !activePublicTicket.toUpperCase().includes('DEMO')) {
       handleOpenVirtualLabTicket('term', 'launch_lab', activePublicTicket);
     } else {
       handleOpenVirtualLabTicket('term', 'select');

@@ -121,11 +121,29 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
 
   useEffect(() => {
     if (initialTier) setSelectedTier(initialTier);
-    if (initialStep) {
+    if (initialStep === 'launch_lab') {
+      const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
+      const targetCode = (initialTicketCode || '').trim().toUpperCase();
+      const found = stored.find((t: any) => 
+        t.ticketId && 
+        t.ticketId.toUpperCase() === targetCode && 
+        t.status === 'active' && 
+        !t.ticketId.toUpperCase().includes('DEMO')
+      );
+      if (found) {
+        setStep('launch_lab');
+        setTicketNumber(found.ticketId);
+        if (found.holderName) setFullName(found.holderName);
+      } else {
+        setStep('select');
+        setActiveTab('buy');
+        setTicketValidationNotice('Free access is disabled. Public access to the virtual lab workspace strictly requires an active paid subscription pass.');
+      }
+    } else if (initialStep) {
       setStep(initialStep);
       if (initialStep === 'enter_ticket') setActiveTab('redeem');
     }
-    if (initialTicketCode) {
+    if (initialTicketCode && !initialTicketCode.toUpperCase().includes('DEMO')) {
       setTicketNumber(initialTicketCode);
       setExistingTicketInput(initialTicketCode);
     }
@@ -182,12 +200,22 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
   const handleValidateTicket = (codeToTest?: string) => {
     const raw = (codeToTest || existingTicketInput).trim().toUpperCase();
     if (!raw) {
-      setTicketValidationNotice('Please enter your subscription pass or ticket ID (e.g. VLAB-TICKET-829104).');
+      setTicketValidationNotice('Please enter your paid subscription pass or ticket ID (e.g. VLAB-TICKET-829104).');
+      return;
+    }
+
+    if (raw.includes('DEMO')) {
+      setTicketValidationNotice('Free demo access has been disabled. Public access to the laboratory workspace strictly requires an active paid subscription pass. Please select a pass below to subscribe.');
       return;
     }
 
     const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-    const found = stored.find((t: any) => t.ticketId && t.ticketId.toUpperCase() === raw);
+    const found = stored.find((t: any) => 
+      t.ticketId && 
+      t.ticketId.toUpperCase() === raw && 
+      t.status === 'active' && 
+      !t.ticketId.toUpperCase().includes('DEMO')
+    );
 
     if (found) {
       const activeCode = found.ticketId;
@@ -203,13 +231,13 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
       setStep('launch_lab');
       setTicketValidationNotice(null);
     } else {
-      setTicketValidationNotice(`No active subscription found for "${raw}". Public access to the interactive classroom and laboratory via the landing page is restricted to subscribers only. Please purchase a pass.`);
+      setTicketValidationNotice(`No active paid subscription found for "${raw}". Public access to the virtual lab workspace is strictly restricted to paid subscribers. Please select a pass below.`);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      {step === 'launch_lab' ? (
+      {step === 'launch_lab' && ticketNumber && !ticketNumber.toUpperCase().includes('DEMO') ? (
         /* Full-Screen Lab Explorer for Subscribed Non-Member */
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
           <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
@@ -378,7 +406,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                         setExistingTicketInput(e.target.value);
                         if (ticketValidationNotice) setTicketValidationNotice(null);
                       }}
-                      placeholder="e.g. VLAB-TICKET-829104 or VLAB-DEMO-2026"
+                      placeholder="e.g. VLAB-TICKET-829104"
                       className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
                     />
                   </div>
@@ -394,18 +422,10 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                     <button
                       type="button"
                       onClick={() => handleValidateTicket()}
-                      className="w-full sm:flex-1 py-3 bg-blue-700 hover:bg-blue-800 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                      className="w-full py-3 bg-blue-700 hover:bg-blue-800 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-colors"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Verify Ticket & Launch Virtual Lab</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleValidateTicket('VLAB-DEMO-2026')}
-                      className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
-                    >
-                      Use Demo Code
+                      <span>Verify Paid Pass & Launch Workspace</span>
                     </button>
                   </div>
                 </div>

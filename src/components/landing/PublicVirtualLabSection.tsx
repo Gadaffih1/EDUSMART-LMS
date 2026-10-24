@@ -42,18 +42,28 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
     e.preventDefault();
     const code = ticketInputCode.trim().toUpperCase();
     if (!code) {
-      setQuickNotice('Please enter your purchased subscription ticket code (e.g. VLAB-TICKET-829104).');
+      setQuickNotice('Please enter your paid subscription ticket code (e.g. VLAB-TICKET-829104).');
+      return;
+    }
+
+    if (code.includes('DEMO')) {
+      setQuickNotice('Free demo access has been disabled. Public access to the virtual lab workspace strictly requires an active paid subscription pass. Please select a pass below.');
       return;
     }
 
     try {
       const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-      const found = stored.find((t: any) => t.ticketId && t.ticketId.toUpperCase() === code);
+      const found = stored.find((t: any) => 
+        t.ticketId && 
+        t.ticketId.toUpperCase() === code && 
+        t.status === 'active' && 
+        !t.ticketId.toUpperCase().includes('DEMO')
+      );
       if (found) {
         onOpenTicketModal('term', 'launch_lab', found.ticketId);
         setQuickNotice(null);
       } else {
-        setQuickNotice(`No active subscription found for "${code}". Public access to the laboratory is restricted to subscribers only. Please purchase a pass below.`);
+        setQuickNotice(`No active paid subscription found for "${code}". Public access to the laboratory workspace is strictly restricted to paid subscribers. Please select a pass below.`);
       }
     } catch {
       onOpenTicketModal('term', 'select');

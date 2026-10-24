@@ -602,8 +602,41 @@ export const BulkUserImportModule: React.FC<BulkUserImportModuleProps> = ({
           ? (r.grade ? `GR${r.grade}@2026` : 'student2026') 
           : 'staff2026';
 
+        const studentUserId = r.id.startsWith('stage-') ? `usr-${r.role}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` : r.id;
+
+        let linkedParentId: string | undefined = undefined;
+        let parentCleanEmail: string | undefined = undefined;
+
+        // Auto create or match parent user if enabled and details exist
+        if (autoCreateParents && r.role === 'student' && r.parentName && (r.parentPhone || r.parentEmail)) {
+          parentCleanEmail = r.parentEmail 
+            ? r.parentEmail.toLowerCase().trim() 
+            : `parent.${r.parentName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
+
+          const existingParent = allUsers.find(u => u.email.toLowerCase() === parentCleanEmail) ||
+            newParentUsers.find(u => u.email.toLowerCase() === parentCleanEmail);
+
+          if (existingParent) {
+            linkedParentId = existingParent.id;
+            existingParent.childrenIds = Array.from(new Set([...(existingParent.childrenIds || []), studentUserId]));
+          } else {
+            const newParentId = `usr-parent-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            linkedParentId = newParentId;
+            newParentUsers.push({
+              id: newParentId,
+              name: r.parentName.trim(),
+              email: parentCleanEmail,
+              password: 'parent2026',
+              role: 'parent',
+              phone: r.parentPhone?.trim(),
+              childrenIds: [studentUserId],
+              designation: `Parent / Guardian to ${r.name.trim()}`
+            });
+          }
+        }
+
         const newUser: User = {
-          id: r.id.startsWith('stage-') ? `usr-${r.role}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` : r.id,
+          id: studentUserId,
           name: r.name.trim(),
           email: r.email.trim().toLowerCase(),
           password: defaultPassword,
@@ -612,39 +645,17 @@ export const BulkUserImportModule: React.FC<BulkUserImportModuleProps> = ({
           stream: r.stream,
           admissionNumber: r.admissionNumber?.trim(),
           phone: r.phone?.trim() || r.parentPhone?.trim(),
+          parentId: linkedParentId,
           parentName: r.parentName?.trim(),
           parentPhone: r.parentPhone?.trim(),
+          parentEmail: parentCleanEmail || r.parentEmail?.trim(),
+          parentRelationship: 'Parent',
           tscNumber: r.tscNumber?.trim(),
           designation: r.designation?.trim() || (r.role === 'student' ? `Learner Grade ${r.grade} ${r.stream}` : undefined),
           department: r.department?.trim()
         };
 
         usersToCreate.push(newUser);
-
-        // Auto create parent user if enabled and details exist
-        if (autoCreateParents && r.role === 'student' && r.parentName && (r.parentPhone || r.parentEmail)) {
-          const parentCleanEmail = r.parentEmail 
-            ? r.parentEmail.toLowerCase().trim() 
-            : `parent.${r.parentName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
-
-          const existingParent = allUsers.find(u => u.email.toLowerCase() === parentCleanEmail) ||
-            newParentUsers.find(u => u.email.toLowerCase() === parentCleanEmail);
-
-          if (existingParent) {
-            existingParent.childrenIds = Array.from(new Set([...(existingParent.childrenIds || []), newUser.id]));
-          } else {
-            newParentUsers.push({
-              id: `usr-parent-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-              name: r.parentName.trim(),
-              email: parentCleanEmail,
-              password: 'parent2026',
-              role: 'parent',
-              phone: r.parentPhone?.trim(),
-              childrenIds: [newUser.id],
-              designation: `Parent / Guardian to ${newUser.name}`
-            });
-          }
-        }
       });
 
       // Commit to Storage

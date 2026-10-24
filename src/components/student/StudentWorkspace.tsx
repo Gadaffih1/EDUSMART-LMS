@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SyncEngine } from '../../utils/syncEngine';
 import { 
   User, 
@@ -74,10 +74,14 @@ import {
   Flame,
   Printer,
   Laptop,
-  Atom
+  Atom,
+  Eye,
+  Download
 } from 'lucide-react';
 import { PrintReportModal } from '../common/PrintReportModal';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
+import { SubjectTeacherChatModal } from '../chat/SubjectTeacherChatModal';
+import { TeacherLessonFile } from '../../types';
 
 interface StudentWorkspaceProps {
   currentUser: User;
@@ -138,7 +142,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   // Resources state
   const availableSubjects = getSubjectsForGrade(studentGrade);
   const [selectedSubject, setSelectedSubject] = useState<SubjectName>(availableSubjects[0]);
-  const [resourceViewMode, setResourceViewMode] = useState<'topics' | 'elinks'>('topics');
+  const [resourceViewMode, setResourceViewMode] = useState<'topics' | 'lesson_files' | 'elinks'>('topics');
 
   // Viewer and Quiz Runner modals
   const [activeNote, setActiveNote] = useState<LessonNote | null>(null);
@@ -171,9 +175,29 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
     setActiveImage(img);
   };
 
-  // Chat state
+  // Chat and modal states
   const [chatInput, setChatInput] = useState('');
   const [chatType, setChatType] = useState<'stream' | 'teacher'>('stream');
+  const [showSubjectTeacherChat, setShowSubjectTeacherChat] = useState(false);
+  const [chatInitialSubject, setChatInitialSubject] = useState<SubjectName | undefined>(undefined);
+  const [resourceSubCategory, setResourceSubCategory] = useState<'topics' | 'lesson_files' | 'elinks'>('topics');
+  const [previewLessonFile, setPreviewLessonFile] = useState<TeacherLessonFile | null>(null);
+
+  // Live event listeners for synchronized updates
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const handleUpdate = () => setRevision(r => r + 1);
+    window.addEventListener('users-updated', handleUpdate);
+    window.addEventListener('subject-teacher-chats-updated', handleUpdate);
+    window.addEventListener('teacher-lesson-files-updated', handleUpdate);
+    window.addEventListener('announcements-updated', handleUpdate);
+    return () => {
+      window.removeEventListener('users-updated', handleUpdate);
+      window.removeEventListener('subject-teacher-chats-updated', handleUpdate);
+      window.removeEventListener('teacher-lesson-files-updated', handleUpdate);
+      window.removeEventListener('announcements-updated', handleUpdate);
+    };
+  }, []);
 
   // Assignment submission modal
   const [submittingAssignment, setSubmittingAssignment] = useState<Assignment | null>(null);
@@ -186,20 +210,28 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   // CBC Science Explorer Modal state (in E-Resources)
   const [showScienceModal, setShowScienceModal] = useState(false);
 
-  // Fetch strictly grade-filtered data (NO cross-grade data allowed)
+  // Fetch strictly grade & stream filtered data (learner only sees content for their stream)
   const gradeTopics = Storage.getTopics(studentGrade).filter(t => t.subject === selectedSubject);
   const gradeNotes = Storage.getNotes(studentGrade);
   const gradeVideos = Storage.getVideos(studentGrade);
   const gradeAudios = Storage.getAudios(studentGrade);
   const gradeImages = Storage.getLessonImages(studentGrade);
   const gradeQuizzes = Storage.getQuizzes(studentGrade);
-  const gradeAnnouncements = Storage.getAnnouncements(studentGrade);
+  // Strictly stream-filtered announcements
+  const gradeAnnouncements = Storage.getAnnouncements(studentGrade, studentStream);
   const studentAttempts = Storage.getQuizAttempts(currentUser.id);
   const gradeVirtualClasses = Storage.getVirtualClasses(studentGrade);
   const studentReportCards = Storage.getReportCards(currentUser.id);
   const streamTimetable = Storage.getTimetable(studentGrade, studentStream);
-  const gradeAssignments = Storage.getAssignments(studentGrade);
+  // Strictly stream-filtered assignments
+  const gradeAssignments = Storage.getAssignments(studentGrade, studentStream);
   const chatMessages = Storage.getChatMessages(studentGrade, studentStream);
+  // Strictly stream-filtered teacher lesson files & handouts
+  const streamLessonFiles = Storage.getTeacherLessonFiles({
+    grade: studentGrade,
+    stream: studentStream,
+    isVisibleToStudents: true
+  });
 
   // Send a chat message
   const handleSendMessage = (e: React.FormEvent) => {
@@ -337,6 +369,20 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             <Flame className="w-3.5 h-3.5 text-orange-400 fill-orange-400 shrink-0 animate-pulse" />
             <span className="hidden sm:inline">Streak ·</span>
             <span>{learnerTotalXP} BP</span>
+          </button>
+
+          {/* Direct Subject Teacher Chat Action */}
+          <button
+            onClick={() => {
+              setChatInitialSubject(selectedSubject);
+              setShowSubjectTeacherChat(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105 active:scale-95"
+            title="Chat directly with your CBC subject teacher"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Chat Subject Teacher</span>
+            <span className="sm:hidden">Chat Teacher</span>
           </button>
         </div>
       </header>
@@ -549,6 +595,18 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </button>
                 <button
                   type="button"
+                  onClick={() => setResourceViewMode('lesson_files')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    resourceViewMode === 'lesson_files'
+                      ? 'bg-teal-700 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FolderGit2 className="w-3.5 h-3.5" />
+                  <span>CBC Handouts ({streamLessonFiles.filter(f => f.subject === selectedSubject).length})</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setResourceViewMode('elinks')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     resourceViewMode === 'elinks'
@@ -583,21 +641,50 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             />
           ) : (
             <>
-              {/* Subject Pills / Tabs */}
-              <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200">
-                {availableSubjects.map((subj) => (
-                  <button
-                    key={subj}
-                    onClick={() => setSelectedSubject(subj)}
-                    className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
-                      selectedSubject === subj
-                        ? 'bg-white text-emerald-800 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                    }`}
-                  >
-                    {subj}
-                  </button>
-                ))}
+              {/* Subject Pills & Chat Subject Teacher Button */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-slate-100 rounded-2xl border border-slate-200">
+                <div className="flex flex-wrap gap-1.5">
+                  {availableSubjects.map((subj) => (
+                    <button
+                      key={subj}
+                      onClick={() => setSelectedSubject(subj)}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                        selectedSubject === subj
+                          ? 'bg-white text-emerald-800 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      {subj}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Direct Chat Subject Teacher Action */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatInitialSubject(selectedSubject);
+                    setShowSubjectTeacherChat(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-black text-xs rounded-xl shadow-xs transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
+                  title={`Chat directly with your ${selectedSubject} teacher`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Chat {selectedSubject} Teacher</span>
+                </button>
+              </div>
+
+              {/* Stream Exclusive Visibility Banner */}
+              <div className="px-4 py-2.5 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-center justify-between text-xs text-blue-900 font-medium">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                  <span>
+                    Viewing resources strictly personalized for <strong>Grade {studentGrade} · {studentStream} Stream</strong>
+                  </span>
+                </div>
+                <span className="text-[10px] bg-blue-200/80 text-blue-900 font-mono font-bold px-2 py-0.5 rounded-full uppercase">
+                  CBC Stream Protected
+                </span>
               </div>
 
               {/* CBC Science Explorer Spotlight Card inside E-Resources */}
@@ -630,8 +717,111 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
               )}
 
-              {/* Topics and Resources Breakdown for Selected Subject */}
-              <div className="space-y-6">
+              {/* VIEW 1: CBC LESSON FILES & HANDOUTS UPLOADED BY TEACHERS */}
+              {resourceViewMode === 'lesson_files' ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <FolderGit2 className="w-4 h-4 text-teal-600" />
+                      <span>{selectedSubject} Teacher Handouts & CBC Worksheets</span>
+                    </h3>
+                    <span className="text-xs font-mono text-slate-500">
+                      {streamLessonFiles.filter(f => f.subject === selectedSubject).length} resources available
+                    </span>
+                  </div>
+
+                  {streamLessonFiles.filter(f => f.subject === selectedSubject).length === 0 ? (
+                    <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 space-y-2">
+                      <FileText className="w-10 h-10 text-slate-300 mx-auto" />
+                      <div className="font-bold text-slate-700 text-sm">No handouts uploaded for {selectedSubject} yet</div>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                        Your subject teacher has not published handouts for {selectedSubject} in {studentStream} Stream yet. You can click "Chat Subject Teacher" above to request lesson materials.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {streamLessonFiles
+                        .filter(f => f.subject === selectedSubject)
+                        .map((file) => (
+                          <div 
+                            key={file.id}
+                            className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                                    file.fileType === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'
+                                  }`}>
+                                    {file.fileType === 'pdf' ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] font-mono text-slate-400 font-bold block uppercase">
+                                      {file.fileType.toUpperCase()} · {file.fileSize}
+                                    </span>
+                                    <h4 className="font-bold text-xs text-slate-900 leading-snug line-clamp-1">
+                                      {file.title}
+                                    </h4>
+                                  </div>
+                                </div>
+
+                                <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded-full shrink-0">
+                                  {file.stream ? `${file.stream} Stream` : 'All Streams'}
+                                </span>
+                              </div>
+
+                              {file.description && (
+                                <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                                  {file.description}
+                                </p>
+                              )}
+
+                              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1 text-[11px]">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 font-bold">CBC Strand:</span>
+                                  <span className="font-extrabold text-blue-900">{file.strand}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-500 font-bold">Sub-strand:</span>
+                                  <span className="text-slate-800 font-medium">{file.subStrand}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-slate-400">
+                                By {file.teacherName}
+                              </span>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewLessonFile(file)}
+                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>Preview</span>
+                                </button>
+                                <a
+                                  href={file.fileUrl}
+                                  download={file.fileName}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Download</span>
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* VIEW 2: TOPICS AND SYLLABUS BREAKDOWN */
+                <div className="space-y-6">
                 {gradeTopics.length === 0 ? (
                   <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
                     <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -842,6 +1032,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   })
                 )}
               </div>
+              )}
             </>
           )}
         </section>
@@ -1386,27 +1577,41 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 Ask questions to your subject teacher or collaborate with fellow stream classmates.
               </p>
             </div>
-            <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
-                onClick={() => setChatType('stream')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  chatType === 'stream'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                type="button"
+                onClick={() => {
+                  setChatInitialSubject(selectedSubject);
+                  setShowSubjectTeacherChat(true);
+                }}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-xs transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
               >
-                Stream Discussion
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Chat Subject Teacher</span>
               </button>
-              <button
-                onClick={() => setChatType('teacher')}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  chatType === 'teacher'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Ask Subject Teacher
-              </button>
+
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+                <button
+                  onClick={() => setChatType('stream')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    chatType === 'stream'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Stream Discussion
+                </button>
+                <button
+                  onClick={() => setChatType('teacher')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                    chatType === 'teacher'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Class Teacher Desk
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1933,6 +2138,85 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
         isOpen={showScienceModal}
         onClose={() => setShowScienceModal(false)}
       />
+
+      {/* Direct Subject Teacher Chat Modal */}
+      <SubjectTeacherChatModal
+        isOpen={showSubjectTeacherChat}
+        onClose={() => setShowSubjectTeacherChat(false)}
+        currentUser={currentUser}
+        initialSubject={chatInitialSubject}
+      />
+
+      {/* Teacher Lesson File Preview Modal */}
+      {previewLessonFile && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                  {previewLessonFile.fileType === 'pdf' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">{previewLessonFile.title}</h4>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Grade {previewLessonFile.grade} · {previewLessonFile.subject} · {previewLessonFile.strand}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewLessonFile(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="h-80 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
+              {previewLessonFile.fileType === 'image' ? (
+                <img
+                  src={previewLessonFile.fileUrl}
+                  alt={previewLessonFile.title}
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="text-center text-white space-y-2 p-6">
+                  <FileText className="w-12 h-12 text-blue-400 mx-auto" />
+                  <div className="font-bold text-sm">{previewLessonFile.fileName}</div>
+                  <p className="text-xs text-slate-300">
+                    KICD CBC educational handout ({previewLessonFile.fileSize})
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-slate-500">
+                Teacher: <strong>{previewLessonFile.teacherName}</strong>
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewLessonFile.fileUrl}
+                  download={previewLessonFile.fileName}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Resource</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewLessonFile(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
         </main>
       </div>
     </div>

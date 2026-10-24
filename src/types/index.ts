@@ -145,10 +145,12 @@ export interface User {
   phone?: string;
   avatarUrl?: string;
   admissionNumber?: string;
-  upiNumber?: string;
+  upiNumber?: string; // NEMIS / UPI registration number for student
+  parentId?: string; // Linked parent User ID
   parentName?: string;
   parentPhone?: string;
   parentEmail?: string;
+  parentRelationship?: string; // Father, Mother, Guardian, etc.
   tscNumber?: string; // Teachers Service Commission ID
   staffNumber?: string; // Generated staff number, editable. Format STF/YEAR/sequence
   designation?: string;
@@ -1917,4 +1919,53 @@ export interface OnboardingBatchRecord {
     stream?: StreamName;
     admissionNumber?: string;
   }[];
+}
+
+// -------------------------------------------------------------
+// CBC SUBJECT TEACHER DIRECT CHAT & INQUIRIES
+// -------------------------------------------------------------
+export interface SubjectTeacherChatMessage {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentGrade: GradeLevel;
+  studentStream: StreamName;
+  teacherId: string;
+  teacherName: string;
+  subject: SubjectName;
+  message: string;
+  senderId: string;
+  senderName: string;
+  senderRole: 'student' | 'teacher';
+  timestamp: string;
+  createdAt: string;
+  isReadByTeacher?: boolean;
+  isReadByStudent?: boolean;
+}
+
+// -------------------------------------------------------------
+// CBC LESSON FILE MANAGEMENT & CURRICULUM TAGGING
+// -------------------------------------------------------------
+export interface TeacherLessonFile {
+  id: string;
+  teacherId: string;
+  teacherName: string;
+  title: string;
+  description?: string;
+  fileName: string;
+  fileType: 'pdf' | 'image' | 'doc' | 'slides';
+  fileSize: string;
+  fileUrl: string;
+  subject: SubjectName;
+  grade: GradeLevel;
+  stream?: StreamName; // Specific stream or undefined for all streams
+  term?: 1 | 2 | 3;
+  strand: string; // e.g. "Numbers", "Living Things", "Digital Skills"
+  subStrand: string; // e.g. "Fractions", "Animal Nutrition"
+  coreCompetency: string; // e.g. "Critical Thinking & Problem Solving"
+  values: string; // e.g. "Integrity, Responsibility"
+  tags: string[];
+  isVisibleToStudents: boolean;
+  downloadsCount: number;
+  uploadedAt: string;
 }

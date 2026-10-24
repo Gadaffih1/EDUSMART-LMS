@@ -170,9 +170,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   // Success / Alert message toast
   const [actionMessage, setActionMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success', persistLonger?: boolean) => {
     setActionMessage({ text, type });
-    setTimeout(() => setActionMessage(null), 4000);
+    setTimeout(() => setActionMessage(null), persistLonger ? 8000 : 4000);
   };
 
   // ========================================================

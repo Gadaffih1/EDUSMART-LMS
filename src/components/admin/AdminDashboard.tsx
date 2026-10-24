@@ -168,6 +168,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [newIdNumber, setNewIdNumber] = useState('');
   const [newDepartment, setNewDepartment] = useState('Sciences & Mathematics');
   const [newSelectedChildId, setNewSelectedChildId] = useState('usr-stu-brian');
+  const [newStudentParentName, setNewStudentParentName] = useState('');
+  const [newStudentParentPhone, setNewStudentParentPhone] = useState('');
+  const [newStudentParentEmail, setNewStudentParentEmail] = useState('');
+  const [newStudentParentRel, setNewStudentParentRel] = useState('Parent');
   const [createUserSuccess, setCreateUserSuccess] = useState(false);
   const [createUserError, setCreateUserError] = useState('');
 
@@ -319,14 +323,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       assignedSubjects: newRole === 'teacher' ? ['Mathematics', 'Integrated Science'] : undefined
     };
 
+    // If creating a student and parent details are entered, interlink them
+    if (newRole === 'student' && newStudentParentName.trim()) {
+      const pName = newStudentParentName.trim();
+      const pPhone = newStudentParentPhone.trim();
+      const pRel = newStudentParentRel.trim() || 'Parent';
+      const cleanEmail = newStudentParentEmail.trim().toLowerCase() || `parent.${pName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
+
+      const allExisting = Storage.getUsers();
+      const existingParent = allExisting.find(u => 
+        u.role === 'parent' && (
+          (cleanEmail && u.email.toLowerCase() === cleanEmail) ||
+          (pPhone && u.phone && u.phone.replace(/\D/g, '') === pPhone.replace(/\D/g, ''))
+        )
+      );
+
+      if (existingParent) {
+        newUser.parentId = existingParent.id;
+        newUser.parentName = existingParent.name;
+        newUser.parentPhone = existingParent.phone;
+        newUser.parentEmail = existingParent.email;
+        newUser.parentRelationship = pRel;
+        const currentChildren = new Set(existingParent.childrenIds || []);
+        currentChildren.add(newUser.id);
+        existingParent.childrenIds = Array.from(currentChildren);
+        Storage.addUser(existingParent);
+        saveProvisionedAccount(existingParent);
+      } else {
+        const newParentUser: User = {
+          id: `usr-parent-${Date.now()}`,
+          name: pName,
+          email: cleanEmail,
+          password: 'parent2026',
+          role: 'parent',
+          schoolId: currentTenant?.id || 'tenant-riara',
+          isActive: true,
+          phone: pPhone || undefined,
+          childrenIds: [newUser.id],
+          designation: `${pRel} / Guardian`,
+        };
+        newUser.parentId = newParentUser.id;
+        newUser.parentName = newParentUser.name;
+        newUser.parentPhone = newParentUser.phone;
+        newUser.parentEmail = newParentUser.email;
+        newUser.parentRelationship = pRel;
+        Storage.addUser(newParentUser);
+        saveProvisionedAccount(newParentUser);
+      }
+    }
+
+    // If creating a parent, bidirectional link to selected child
+    if (newRole === 'parent' && newSelectedChildId) {
+      const allExisting = Storage.getUsers();
+      const childStudent = allExisting.find(u => u.id === newSelectedChildId);
+      if (childStudent) {
+        childStudent.parentId = newUser.id;
+        childStudent.parentName = newUser.name;
+        childStudent.parentPhone = newUser.phone;
+        childStudent.parentEmail = newUser.email;
+        childStudent.parentRelationship = 'Parent';
+        Storage.addUser(childStudent);
+        saveProvisionedAccount(childStudent);
+      }
+    }
+
     Storage.addUser(newUser);
     saveProvisionedAccount(newUser);
+    setAllUsers(Storage.getUsers());
     setCreateUserSuccess(true);
     setNewName('');
     setNewEmail('');
     setNewPassword('');
     setNewRole('');
     setNewIdNumber('');
+    setNewStudentParentName('');
+    setNewStudentParentPhone('');
+    setNewStudentParentEmail('');
+    setNewStudentParentRel('Parent');
     setTimeout(() => setCreateUserSuccess(false), 3000);
   };
 
@@ -868,6 +941,64 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                       <option key={s} value={s}>{s} Stream</option>
                     ))}
                   </select>
+                </div>
+              </div>
+            )}
+
+            {/* If Student: Parent / Guardian Details for automatic profile interlink */}
+            {newRole === 'student' && (
+              <div className="p-4 bg-indigo-50/60 rounded-xl border border-indigo-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider">Parent / Guardian Information (Auto-Interlinked)</h4>
+                    <p className="text-[11px] text-indigo-700">Enter parent contact to automatically provision and interlink their parent portal account.</p>
+                  </div>
+                  <span className="text-[10px] bg-indigo-200 text-indigo-900 font-bold px-2 py-0.5 rounded-full">Automatic Link</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Parent Full Name</label>
+                    <input
+                      type="text"
+                      value={newStudentParentName}
+                      onChange={(e) => setNewStudentParentName(e.target.value)}
+                      placeholder="e.g. Mary Wanjiku"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Parent Phone Number</label>
+                    <input
+                      type="text"
+                      value={newStudentParentPhone}
+                      onChange={(e) => setNewStudentParentPhone(e.target.value)}
+                      placeholder="+254 712 345 678"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Parent Email (Optional)</label>
+                    <input
+                      type="email"
+                      value={newStudentParentEmail}
+                      onChange={(e) => setNewStudentParentEmail(e.target.value)}
+                      placeholder="parent@example.com (or auto-assigned)"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Relationship to Learner</label>
+                    <select
+                      value={newStudentParentRel}
+                      onChange={(e) => setNewStudentParentRel(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white font-semibold"
+                    >
+                      <option value="Parent">Parent</option>
+                      <option value="Mother">Mother</option>
+                      <option value="Father">Father</option>
+                      <option value="Guardian">Legal Guardian</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )}

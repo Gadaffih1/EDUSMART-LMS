@@ -79,6 +79,10 @@ export const GradeClassPages: React.FC<GradeClassPagesProps> = ({ schoolId, doma
   const [admissionEdited, setAdmissionEdited] = useState(false);
   const [parentName, setParentName] = useState('');
   const [parentPhone, setParentPhone] = useState('');
+  const [newParentName, setNewParentName] = useState('');
+  const [newParentPhone, setNewParentPhone] = useState('');
+  const [newParentEmail, setNewParentEmail] = useState('');
+  const [newParentRel, setNewParentRel] = useState('Parent');
   const [error, setError] = useState('');
   const [showStudentForm, setShowStudentForm] = useState(false);
   const [editingId, setEditingId] = useState('');
@@ -192,10 +196,65 @@ export const GradeClassPages: React.FC<GradeClassPagesProps> = ({ schoolId, doma
       admissionNumber: record.admissionNumber,
       designation: 'Student / Learner',
     };
+
+    // If parent information is filled, automatically provision parent account and interlink profiles
+    if (newParentName.trim()) {
+      const pName = newParentName.trim();
+      const pEmail = newParentEmail.trim().toLowerCase() || uniqueUsername(buildUsername(pName, domain), takenEmails());
+      const pPassword = rolePassword('pa');
+      const pPhone = newParentPhone.trim();
+      const pRel = newParentRel.trim() || 'Parent';
+
+      const parentDirRec = saveStudentParent({
+        id: `parent-${record.id}-${Date.now()}`,
+        schoolId,
+        studentId: record.id,
+        name: pName,
+        email: pEmail,
+        password: pPassword,
+        phone: pPhone,
+        relationship: pRel,
+        createdAt: new Date().toISOString(),
+      });
+
+      const parentAccount: User = {
+        id: parentDirRec.id,
+        name: parentDirRec.name,
+        email: parentDirRec.email,
+        password: parentDirRec.password,
+        role: 'parent',
+        schoolId,
+        isActive: true,
+        phone: parentDirRec.phone || undefined,
+        childrenIds: [record.id],
+        designation: `${pRel} / Guardian`,
+      };
+
+      Storage.addUser(parentAccount);
+      saveProvisionedAccount(parentAccount);
+
+      // Link both student record and user account to parent
+      record.parentId = parentDirRec.id;
+      record.parentName = parentDirRec.name;
+      record.parentPhone = parentDirRec.phone;
+      record.parentEmail = parentDirRec.email;
+      record.parentRelationship = pRel;
+
+      account.parentId = parentDirRec.id;
+      account.parentName = parentDirRec.name;
+      account.parentPhone = parentDirRec.phone;
+      account.parentEmail = parentDirRec.email;
+      account.parentRelationship = pRel;
+    }
+
     saveStudentRecord(record);
     setStudentName('');
     setAdmissionNumber('');
     setAdmissionEdited(false);
+    setNewParentName('');
+    setNewParentPhone('');
+    setNewParentEmail('');
+    setNewParentRel('Parent');
     setShowStudentForm(false);
     refresh();
     openPage({ name: 'student', gradeId: grade.id, streamId: stream.id, studentId: record.id });
@@ -563,25 +622,96 @@ export const GradeClassPages: React.FC<GradeClassPagesProps> = ({ schoolId, doma
             </button>
           </div>
           {showStudentForm && (
-          <form onSubmit={onCreateStudent} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
-            <label htmlFor="student-name" className="block text-xs font-bold text-slate-700">Full legal name</label>
-            <input id="student-name" value={studentName} onChange={(event) => { setStudentName(event.target.value); setAdmissionEdited(false); }} placeholder="Mary Wanjiku Kamau" required className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-            <label htmlFor="student-username" className="block text-xs font-bold text-slate-700">Username</label>
-            <input id="student-username" value={studentUsername} readOnly placeholder="Username appears here as you type the full name" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-            <label htmlFor="student-role" className="block text-xs font-bold text-slate-700">Account role</label>
-            <input id="student-role" value={studentUsername ? 'Student / Learner' : ''} readOnly placeholder="Student role appears with the name" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-            <label htmlFor="student-password" className="block text-xs font-bold text-slate-700">Password</label>
-            <input id="student-password" value={studentPassword} readOnly placeholder="Password appears after the name" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-            <label htmlFor="student-admission" className="block text-xs font-bold text-slate-700">Admission number</label>
-            <input
-              id="student-admission"
-              value={admissionPreview}
-              onChange={(event) => { setAdmissionEdited(true); setAdmissionNumber(event.target.value); }}
-              placeholder="Admission number appears after the name"
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm"
-            />
-            <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">
-              <UserPlus className="h-4 w-4" /> Save student
+          <form onSubmit={onCreateStudent} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Student Enrolment Details</h3>
+              <p className="text-xs text-slate-500">Provide legal learner name to auto-provision credentials.</p>
+            </div>
+            <div>
+              <label htmlFor="student-name" className="block text-xs font-bold text-slate-700 mb-1">Full legal name</label>
+              <input id="student-name" value={studentName} onChange={(event) => { setStudentName(event.target.value); setAdmissionEdited(false); }} placeholder="Mary Wanjiku Kamau" required className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="student-username" className="block text-xs font-bold text-slate-700 mb-1">Generated Username</label>
+                <input id="student-username" value={studentUsername} readOnly placeholder="Username appears here" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label htmlFor="student-password" className="block text-xs font-bold text-slate-700 mb-1">Initial Password</label>
+                <input id="student-password" value={studentPassword} readOnly placeholder="Password appears here" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="student-admission" className="block text-xs font-bold text-slate-700 mb-1">Admission number</label>
+              <input
+                id="student-admission"
+                value={admissionPreview}
+                onChange={(event) => { setAdmissionEdited(true); setAdmissionNumber(event.target.value); }}
+                placeholder="Admission number appears after the name"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-sm"
+              />
+            </div>
+
+            {/* Parent / Guardian Interlink Section */}
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider">Parent / Guardian Profile (Auto-Interlinked)</h4>
+                  <p className="text-[11px] text-indigo-700">Entering parent details automatically provisions their portal access and links their children.</p>
+                </div>
+                <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Interlinked</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="new-parent-name" className="block text-xs font-bold text-slate-700 mb-1">Parent / Guardian Full Name</label>
+                  <input
+                    id="new-parent-name"
+                    value={newParentName}
+                    onChange={(e) => setNewParentName(e.target.value)}
+                    placeholder="e.g. Grace Wanjiku"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-parent-phone" className="block text-xs font-bold text-slate-700 mb-1">Parent Phone (+254...)</label>
+                  <input
+                    id="new-parent-phone"
+                    value={newParentPhone}
+                    onChange={(e) => setNewParentPhone(e.target.value)}
+                    placeholder="+254 712 345 678"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-parent-email" className="block text-xs font-bold text-slate-700 mb-1">Parent Email (Optional)</label>
+                  <input
+                    id="new-parent-email"
+                    type="email"
+                    value={newParentEmail}
+                    onChange={(e) => setNewParentEmail(e.target.value)}
+                    placeholder="parent@example.com (or auto-assigned)"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-parent-rel" className="block text-xs font-bold text-slate-700 mb-1">Relationship</label>
+                  <select
+                    id="new-parent-rel"
+                    value={newParentRel}
+                    onChange={(e) => setNewParentRel(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
+                  >
+                    <option value="Parent">Parent</option>
+                    <option value="Mother">Mother</option>
+                    <option value="Father">Father</option>
+                    <option value="Guardian">Legal Guardian</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 px-5 py-2.5 text-sm font-bold text-white transition-colors">
+              <UserPlus className="h-4 w-4" /> Save Student & Link Parent
             </button>
           </form>
           )}
@@ -666,6 +796,9 @@ export const GradeClassPages: React.FC<GradeClassPagesProps> = ({ schoolId, doma
                 ['Grade', student.gradeLabel],
                 ['Stream', student.streamLabel],
                 ['Class', student.className],
+                ['Linked Parent / Guardian', student.parentName ? `${student.parentName} (${student.parentRelationship || 'Parent'})` : ''],
+                ['Parent Phone', student.parentPhone],
+                ['Parent Email', student.parentEmail],
                 ['Status', student.isActive ? 'Active' : 'Inactive'],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl bg-slate-50 px-3 py-2">

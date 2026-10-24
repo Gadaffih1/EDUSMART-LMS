@@ -336,7 +336,22 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
           {/* Body Content */}
           <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-slate-50 space-y-6">
             
-            {/* TAB: ENTER EXISTING TICKET CODE */}
+            {/* School Bundled vs Public Subscription Notice */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/10 via-emerald-900/5 to-teal-950/10 border border-emerald-300/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-extrabold text-emerald-950 block">Subscribed Partner Schools Notice</span>
+                  <span className="text-emerald-800 text-[11px] leading-relaxed">
+                    Virtual Science Lab &amp; Scratch Studio access is <strong>100% FREE and bundled</strong> for all students, teachers, and staff of subscribed member schools as part of the institutional package. Public visitors and non-enrolled learners access strictly via the subscription passes below.
+                  </span>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 bg-emerald-700 text-white font-bold text-[10px] rounded-lg shrink-0 whitespace-nowrap">
+                Free for Member Schools
+              </span>
+            </div>
+
             {activeTab === 'redeem' && (
               <div className="max-w-xl mx-auto space-y-5 py-4">
                 <div className="text-center space-y-1">

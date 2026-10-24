@@ -969,6 +969,8 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     floatingCardBadgeColor={hero.floatingCardBadgeColor || 'emerald'}
                     showFloatingCard={hero.showFloatingCard}
                     isSuperAdminEditMode={isSuperAdminEditMode}
+                    isSubscribed={hasActivePublicSubscription}
+                    onAccessClick={handleAccessSmartClassroom}
                     onEditClick={() => requestSuperAdminAccess('hero_edit')}
                     onImageChange={(newUrl) => {
                       if (!isSuperAdminVerified) {
@@ -1163,6 +1165,8 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         <PublicVirtualLabSection 
           onOpenTicketModal={handleOpenVirtualLabTicket}
           isSuperAdminEditMode={isSuperAdminEditMode}
+          hasActiveSubscription={hasActivePublicSubscription}
+          activeTicketCode={activePublicTicket}
         />
       )}
 
@@ -3492,6 +3496,14 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         initialTier={virtualLabInitialTier}
         initialStep={virtualLabInitialStep}
         initialTicketCode={virtualLabTicketCode}
+        onSubscriptionSuccess={(newTicketId) => {
+          setActivePublicTicket(newTicketId);
+          try {
+            localStorage.setItem('edusmart_public_active_ticket', newTicketId);
+          } catch {}
+          setToastMessage(`🎉 Active subscription verified! Pass ${newTicketId} is connected.`);
+          setTimeout(() => setToastMessage(null), 4000);
+        }}
       />
 
     </div>

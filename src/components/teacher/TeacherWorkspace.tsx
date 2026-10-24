@@ -36,6 +36,9 @@ import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { ComputerLabModule } from './ComputerLabModule';
 import { OwnStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
+import { StudentStreamManager } from './StudentStreamManager';
+import { TeacherLessonFileManager } from './TeacherLessonFileManager';
+import { TeacherSubjectChatInbox } from './TeacherSubjectChatInbox';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -73,7 +76,8 @@ import {
   DoorOpen,
   FlaskConical,
   Laptop,
-  Atom
+  Atom,
+  MessageSquare
 } from 'lucide-react';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 
@@ -87,11 +91,14 @@ type TeacherTab =
   | 'work_entry' 
   | 'gate_exit' 
   | 'class_register'
+  | 'stream_management'
   | 'lunch_register'
   | 'assignments' 
   | 'computer_lab'
   | 'virtual_lab'
   | 'resources' 
+  | 'lesson_files'
+  | 'subject_chats'
   | 'quizzes'
   | 'virtual_class'
   | 'timetable'
@@ -480,30 +487,33 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       items: [
         { id: 'work_entry', label: '1. Lesson Work Entry', icon: Briefcase },
         { id: 'class_register', label: '2. Class Roll Call Register', icon: UserCheck, badge: isClassTeacher ? `${currentUser.stream || 'Stream'}` : undefined },
-        ...(isClassTeacher ? [{ id: 'lunch_register' as TeacherTab, label: '3. Learner Lunch Register', icon: Utensils, badge: 'Class Teacher' }] : []),
-        { id: 'cbc_results', label: isClassTeacher ? '4. CBC Assessment Results' : '3. CBC Assessment Results', icon: Award, badge: 'Marks / Entry', badgeColor: 'bg-emerald-600' }
+        { id: 'stream_management' as TeacherTab, label: '3. Student Stream Allocations', icon: Users, badge: 'CBC Streams', badgeColor: 'bg-blue-600' },
+        ...(isClassTeacher ? [{ id: 'lunch_register' as TeacherTab, label: '4. Learner Lunch Register', icon: Utensils, badge: 'Class Teacher' }] : []),
+        { id: 'cbc_results', label: '5. CBC Assessment Results', icon: Award, badge: 'Marks / Entry', badgeColor: 'bg-emerald-600' }
       ]
     },
     {
       title: 'LEARNING & TASKS',
       items: [
-        { id: 'assignments', label: '4. Homework Assignments', icon: BookOpen },
-        { id: 'computer_lab', label: '4b. CS Computer Lab & Scratch', icon: Laptop, badge: 'Projector & Challenges', badgeColor: 'bg-indigo-600' },
-        { id: 'virtual_lab', label: '4c. Science Virtual Lab', icon: FlaskConical, badge: 'Demonstrations', badgeColor: 'bg-emerald-600' },
-        { id: 'quizzes', label: '5. CBC Topical Quizzes', icon: CheckSquare },
-        { id: 'resources', label: '6. Curriculum Resources & Links', icon: FolderTree },
-        { id: 'virtual_class', label: '7. Virtual Class (Meet)', icon: Video }
+        { id: 'assignments', label: '6. Homework Assignments', icon: BookOpen },
+        { id: 'lesson_files' as TeacherTab, label: '6b. CBC Lesson File Manager', icon: FolderTree, badge: 'PDFs & Images', badgeColor: 'bg-teal-600' },
+        { id: 'subject_chats' as TeacherTab, label: '6c. Student Subject Inquiries', icon: MessageSquare, badge: 'Live Q&A', badgeColor: 'bg-indigo-600' },
+        { id: 'computer_lab', label: '7. CS Computer Lab & Scratch', icon: Laptop, badge: 'Projector & Challenges', badgeColor: 'bg-indigo-600' },
+        { id: 'virtual_lab', label: '7b. Science Virtual Lab', icon: FlaskConical, badge: 'Demonstrations', badgeColor: 'bg-emerald-600' },
+        { id: 'quizzes', label: '8. CBC Topical Quizzes', icon: CheckSquare },
+        { id: 'resources', label: '9. Curriculum Resources & Links', icon: FolderTree },
+        { id: 'virtual_class', label: '10. Virtual Class (Meet)', icon: Video }
       ]
     },
     {
       title: 'TIMETABLE & GOVERNANCE',
       items: [
-        { id: 'staff_appraisal', label: '8. My Appraisal (TSC TPAD)', icon: Award, badge: 'TPAD' },
-        { id: 'timetable', label: '9. Teaching Timetable', icon: Calendar },
-        { id: 'library_booking', label: '9b. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
-        { id: 'gate_exit', label: '10. Student Gate Exit Passes', icon: LogOut },
-        { id: 'reporting_hub', label: '11. Academic Reporting Hub', icon: FileSpreadsheet },
-        { id: 'reminders', label: '12. Lesson Reminders', icon: Bell }
+        { id: 'staff_appraisal', label: '11. My Appraisal (TSC TPAD)', icon: Award, badge: 'TPAD' },
+        { id: 'timetable', label: '12. Teaching Timetable', icon: Calendar },
+        { id: 'library_booking', label: '12b. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
+        { id: 'gate_exit', label: '13. Student Gate Exit Passes', icon: LogOut },
+        { id: 'reporting_hub', label: '14. Academic Reporting Hub', icon: FileSpreadsheet },
+        { id: 'reminders', label: '15. Lesson Reminders', icon: Bell }
       ]
     }
   ];
@@ -618,6 +628,27 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
           ======================================================== */}
       {isClassTeacher && activeTab === 'class_register' && (
         <ClassTeacherModule currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          STUDENT STREAM MANAGEMENT (DOVE..SWAN / ATHI..TURKWEL)
+          ======================================================== */}
+      {activeTab === 'stream_management' && (
+        <StudentStreamManager currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          CBC LESSON FILE MANAGEMENT & CURRICULUM TAGGING
+          ======================================================== */}
+      {activeTab === 'lesson_files' && (
+        <TeacherLessonFileManager currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          STUDENT SUBJECT CHATS & INQUIRIES INBOX
+          ======================================================== */}
+      {activeTab === 'subject_chats' && (
+        <TeacherSubjectChatInbox currentUser={currentUser} />
       )}
 
       {/* ========================================================

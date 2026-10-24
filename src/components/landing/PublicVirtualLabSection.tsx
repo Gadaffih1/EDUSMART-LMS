@@ -121,8 +121,27 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
           </h2>
 
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl mx-auto">
-            Hands-on Kenyan CBC junior secondary & primary STEM experiments, PhET interactive physics apparatus (<span className="text-cyan-300 font-bold">Wave on a String</span>, <span className="text-amber-300 font-bold">Circuit Construction</span>, <span className="text-emerald-300 font-bold">Titration</span>), and Scratch coding. Accessible to homeschoolers, students, and the public through flexible ticketing passes.
+            Hands-on Kenyan CBC junior secondary &amp; primary STEM experiments, PhET interactive physics apparatus (<span className="text-cyan-300 font-bold">Wave on a String</span>, <span className="text-amber-300 font-bold">Circuit Construction</span>, <span className="text-emerald-300 font-bold">Titration</span>), and Scratch coding. Accessible to homeschoolers, students, and the public through flexible ticketing passes.
           </p>
+
+          {/* Subscribed Schools Free Bundled vs Public Subscription Notice */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-blue-950/60 border border-emerald-500/40 text-left max-w-2xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 text-xs text-slate-300">
+                <span className="font-extrabold text-white text-xs block">
+                  Institutional Package: 100% Free &amp; Bundled for Subscribed Schools
+                </span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Enrolled students, teachers, and school administrators access all 75 CBC apparatus simulations with zero extra fees. Public visitors and non-enrolled learners access strictly upon purchasing an active subscription pass below.
+                </p>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-bold text-[10px] rounded-lg shrink-0">
+              Free to Subscribed Schools
+            </span>
+          </div>
+
 
           {hasActiveSubscription && (
             <div className="p-3 bg-emerald-950/80 border border-emerald-500/60 rounded-2xl max-w-xl mx-auto flex items-center justify-between gap-3 text-xs text-emerald-200 shadow-xl">

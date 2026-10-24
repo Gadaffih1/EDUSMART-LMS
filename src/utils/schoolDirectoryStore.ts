@@ -76,6 +76,11 @@ export interface StudentRecord {
   isActive: boolean;
   createdAt: string;
   rights: RoleAccessRights;
+  parentId?: string;
+  parentName?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  parentRelationship?: string;
 }
 
 export interface StudentParentRecord {
@@ -239,6 +244,11 @@ export function studentRecordToUser(student: StudentRecord): User {
     stream: knownStream(student.streamLabel),
     className: student.className,
     isActive: student.isActive,
+    parentId: student.parentId,
+    parentName: student.parentName,
+    parentPhone: student.parentPhone,
+    parentEmail: student.parentEmail,
+    parentRelationship: student.parentRelationship,
   };
 }
 

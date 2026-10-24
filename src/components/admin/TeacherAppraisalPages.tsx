@@ -687,7 +687,7 @@ export const TeacherAppraisalPages: React.FC<TeacherAppraisalPagesProps> = ({
           </div>
           {surface !== 'staff' && (
           <nav aria-label="Staff appraisal steps" className="grid gap-2 sm:grid-cols-4">
-            {STEPS.filter((item) => surface !== 'staff' && item.id !== 'account').map((item) => {
+            {STEPS.filter((item) => item.id !== 'account').map((item) => {
               const index = stepIndex(item.id);
               const locked = index > openLimit;
               const current = item.id === step;

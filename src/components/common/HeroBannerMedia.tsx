@@ -18,7 +18,8 @@ import {
   Camera,
   Layers,
   ShieldCheck,
-  Lock
+  Lock,
+  CheckCircle2
 } from 'lucide-react';
 import { HeroMediaType } from '../../types/customization';
 
@@ -284,33 +285,8 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
             </div>
           </div>
 
-          {/* Right: Subscription Access Status & Live Sync Badge */}
+          {/* Right: Live Sync Badge */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Public Access Subscription Trigger Button */}
-            <button
-              type="button"
-              onClick={onAccessClick}
-              className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95 ${
-                isSubscribed
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white border border-emerald-300'
-                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 border border-amber-300'
-              }`}
-              title={isSubscribed ? "Active Subscription Pass: Click to enter interactive smart classroom" : "Public access via landing page is only available after subscription. Click to subscribe."}
-            >
-              {isSubscribed ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                  <span>Enter Smart Classroom</span>
-                  <span className="text-[9px] bg-white/20 text-white font-mono px-1.5 py-0.5 rounded-full">Pass Active</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-slate-950" />
-                  <span>Subscribe to Access</span>
-                  <span className="text-[9px] bg-slate-950/20 text-slate-950 font-bold px-1.5 py-0.5 rounded-full uppercase">Pass</span>
-                </>
-              )}
-            </button>
 
             <span className={`inline-flex items-center gap-1.5 text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2 sm:px-2.5 py-1 rounded-full shadow-xs border ${
               floatingCardBadgeColor === 'blue'
@@ -449,33 +425,6 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
 
           {/* Subtle bottom vignette to ensure contrast */}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-slate-950/20" />
-
-          {/* Public Access Subscription Status & Launch Pill */}
-          <div className="absolute bottom-3 left-3 z-20">
-            <button
-              type="button"
-              onClick={onAccessClick}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold backdrop-blur-md shadow-xl flex items-center gap-2 transition-all cursor-pointer hover:scale-105 active:scale-95 ${
-                isSubscribed
-                  ? 'bg-slate-950/90 hover:bg-slate-900 border border-emerald-400 text-white'
-                  : 'bg-slate-950/90 hover:bg-slate-900 border border-amber-400 text-white'
-              }`}
-            >
-              {isSubscribed ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span className="font-extrabold text-emerald-300">Smart Classroom Connected</span>
-                  <span className="text-[10px] bg-emerald-500/30 text-emerald-200 px-2 py-0.5 rounded-full font-mono">Launch →</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="text-slate-200">Public Access: <strong className="text-amber-300 font-black">Subscription Required</strong></span>
-                  <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Subscribe</span>
-                </>
-              )}
-            </button>
-          </div>
 
           {/* Floating Hover Trigger for Instant Image Change - Strictly Super Admin Only */}
           {isSuperAdminEditMode && (

@@ -92,12 +92,14 @@ import {
   CoordinatorCBAModeration,
   TeacherAbsenceReport,
   AffectedLessonSlot,
-  OnboardingBatchRecord
+  OnboardingBatchRecord,
+  SubjectTeacherChatMessage,
+  TeacherLessonFile
 } from '../types';
-import { SyncEngine } from './syncEngine';
-import { getStudentRecord, studentRecordToUser } from './schoolDirectoryStore';
+import { getStudentRecord, studentRecordToUser, listSchoolParents, saveStudentRecord, saveStudentParent, StudentRecord } from './schoolDirectoryStore';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { isRemoteDataActive } from './supabaseHydrate';
+import { SyncEngine } from './syncEngine';
 
 const KEYS = {
   USERS: 'edusmart_users_v1',
@@ -184,6 +186,8 @@ const KEYS = {
   COORDINATOR_CBA_MODERATIONS: 'edusmart_coordinator_cba_moderations_v1',
   TEACHER_ABSENCE_REPORTS: 'edusmart_teacher_absence_reports_v1',
   ONBOARDING_BATCHES: 'edusmart_onboarding_batches_v1',
+  SUBJECT_TEACHER_CHATS: 'edusmart_subject_teacher_chats_v1',
+  TEACHER_LESSON_FILES: 'edusmart_teacher_lesson_files_v1',
 };
 
 // Every core LMS collection participates in Supabase synchronisation.
@@ -1220,12 +1224,13 @@ export const Storage = {
   },
 
   // Assignments
-  getAssignments(grade?: GradeLevel): Assignment[] {
+  getAssignments(grade?: GradeLevel, stream?: StreamName): Assignment[] {
     const assignments = getFromStorage<Assignment[]>(KEYS.ASSIGNMENTS, []);
-    if (grade) {
-      return assignments.filter(a => a.grade === grade);
-    }
-    return assignments;
+    return assignments.filter(a => {
+      if (grade && a.grade !== grade) return false;
+      if (stream && a.stream && a.stream !== stream) return false;
+      return true;
+    });
   },
   addAssignment(assignment: Assignment): void {
     const assignments = this.getAssignments();
@@ -1234,18 +1239,268 @@ export const Storage = {
   },
 
   // Announcements
-  getAnnouncements(grade?: GradeLevel): Announcement[] {
+  getAnnouncements(grade?: GradeLevel, stream?: StreamName): Announcement[] {
     const list = getFromStorage<Announcement[]>(KEYS.ANNOUNCEMENTS, []);
-    if (grade) {
-      // announcements for this grade or for entire school (no targetGrade)
-      return list.filter(a => !a.targetGrade || a.targetGrade === grade);
-    }
-    return list;
+    return list.filter(a => {
+      if (grade && a.targetGrade && a.targetGrade !== grade) return false;
+      if (stream && a.targetStream && a.targetStream !== stream) return false;
+      return true;
+    });
   },
   addAnnouncement(announcement: Announcement): void {
     const list = this.getAnnouncements();
     list.unshift(announcement);
     setToStorage(KEYS.ANNOUNCEMENTS, list);
+  },
+
+  // ========================================================
+  // 💬 CBC SUBJECT TEACHER DIRECT CHAT & INQUIRIES
+  // ========================================================
+  getSubjectTeacherChats(filter?: {
+    studentId?: string;
+    teacherId?: string;
+    subject?: SubjectName;
+    grade?: GradeLevel;
+    stream?: StreamName;
+  }): SubjectTeacherChatMessage[] {
+    let messages = getFromStorage<SubjectTeacherChatMessage[]>(KEYS.SUBJECT_TEACHER_CHATS, [
+      {
+        id: 'stchat-seed-1',
+        studentId: 'usr-student-1',
+        studentName: 'Faith Wanjiku',
+        studentGrade: 4,
+        studentStream: 'Dove',
+        teacherId: 'usr-classteach-gr4-tenant-riara',
+        teacherName: 'Mr. David Kiprono',
+        subject: 'Mathematics',
+        message: 'Good afternoon Mr. Kiprono, could you please clarify question 4 on equivalent fractions from today’s homework?',
+        senderId: 'usr-student-1',
+        senderName: 'Faith Wanjiku',
+        senderRole: 'student',
+        timestamp: '14:20',
+        createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+        isReadByTeacher: false,
+        isReadByStudent: true,
+      },
+      {
+        id: 'stchat-seed-2',
+        studentId: 'usr-student-1',
+        studentName: 'Faith Wanjiku',
+        studentGrade: 4,
+        studentStream: 'Dove',
+        teacherId: 'usr-classteach-gr4-tenant-riara',
+        teacherName: 'Mr. David Kiprono',
+        subject: 'Mathematics',
+        message: 'Hello Faith! Remember to find a common denominator first, or multiply both numerator and denominator by 2. Let me know if you need another worked example.',
+        senderId: 'usr-classteach-gr4-tenant-riara',
+        senderName: 'Mr. David Kiprono',
+        senderRole: 'teacher',
+        timestamp: '14:35',
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+        isReadByTeacher: true,
+        isReadByStudent: true,
+      },
+      {
+        id: 'stchat-seed-3',
+        studentId: 'usr-student-2',
+        studentName: 'Brian Kipchumba',
+        studentGrade: 4,
+        studentStream: 'Dove',
+        teacherId: 'usr-classteach-gr4-tenant-riara',
+        teacherName: 'Mr. David Kiprono',
+        subject: 'Integrated Science',
+        message: 'Teacher, what safety gear should our Dove stream group bring for tomorrow’s filtration experiment?',
+        senderId: 'usr-student-2',
+        senderName: 'Brian Kipchumba',
+        senderRole: 'student',
+        timestamp: '15:10',
+        createdAt: new Date(Date.now() - 1800000).toISOString(),
+        isReadByTeacher: false,
+        isReadByStudent: true,
+      }
+    ]);
+
+    if (!filter) return messages;
+
+    return messages.filter(m => {
+      if (filter.studentId && m.studentId !== filter.studentId) return false;
+      if (filter.teacherId && m.teacherId !== filter.teacherId) return false;
+      if (filter.subject && m.subject !== filter.subject) return false;
+      if (filter.grade && m.studentGrade !== filter.grade) return false;
+      if (filter.stream && m.studentStream !== filter.stream) return false;
+      return true;
+    });
+  },
+
+  sendSubjectTeacherChatMessage(message: SubjectTeacherChatMessage): void {
+    const list = this.getSubjectTeacherChats();
+    const updated = [...list, message];
+    setToStorage(KEYS.SUBJECT_TEACHER_CHATS, updated);
+    window.dispatchEvent(new CustomEvent('subject-teacher-chats-updated', { detail: message }));
+  },
+
+  markSubjectTeacherChatRead(
+    threadFilter: { studentId: string; subject: SubjectName; teacherId?: string },
+    readerRole: 'student' | 'teacher'
+  ): void {
+    const list = this.getSubjectTeacherChats();
+    let hasChanges = false;
+    const updated = list.map(m => {
+      if (m.studentId === threadFilter.studentId && m.subject === threadFilter.subject) {
+        if (readerRole === 'teacher' && !m.isReadByTeacher) {
+          hasChanges = true;
+          return { ...m, isReadByTeacher: true };
+        }
+        if (readerRole === 'student' && !m.isReadByStudent) {
+          hasChanges = true;
+          return { ...m, isReadByStudent: true };
+        }
+      }
+      return m;
+    });
+
+    if (hasChanges) {
+      setToStorage(KEYS.SUBJECT_TEACHER_CHATS, updated);
+      window.dispatchEvent(new CustomEvent('subject-teacher-chats-updated'));
+    }
+  },
+
+  // ========================================================
+  // 📁 CBC TEACHER LESSON FILE MANAGEMENT
+  // ========================================================
+  getTeacherLessonFiles(filter?: {
+    grade?: GradeLevel;
+    stream?: StreamName;
+    subject?: SubjectName;
+    isVisibleToStudents?: boolean;
+    teacherId?: string;
+  }): TeacherLessonFile[] {
+    let files = getFromStorage<TeacherLessonFile[]>(KEYS.TEACHER_LESSON_FILES, [
+      {
+        id: 'file-cbc-1',
+        teacherId: 'usr-classteach-gr4-tenant-riara',
+        teacherName: 'Mr. David Kiprono',
+        title: 'Grade 4 Mathematics CBC Fractions & Decimals Visual Guide',
+        description: 'Comprehensive KICD-aligned visual worksheet covering proper fractions, shaded models, and decimal notation.',
+        fileName: 'Grade4_Math_Fractions_CBC_Guide.pdf',
+        fileType: 'pdf',
+        fileSize: '2.4 MB',
+        fileUrl: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1200&auto=format&fit=crop&q=80',
+        subject: 'Mathematics',
+        grade: 4,
+        stream: undefined, // All streams in Grade 4
+        term: 1,
+        strand: 'Numbers & Operations',
+        subStrand: 'Fractions and Decimals',
+        coreCompetency: 'Critical Thinking & Problem Solving',
+        values: 'Integrity, Responsibility',
+        tags: ['Fractions', 'Decimals', 'KICD', 'CBC Grade 4', 'Term 1'],
+        isVisibleToStudents: true,
+        downloadsCount: 38,
+        uploadedAt: '2026-09-15'
+      },
+      {
+        id: 'file-cbc-2',
+        teacherId: 'usr-classteach-gr4-tenant-riara',
+        teacherName: 'Mr. David Kiprono',
+        title: 'Grade 4 Integrated Science Living Things & Animal Habitats',
+        description: 'High-resolution diagrammatic charts detailing Kenyan wildlife vertebrate classifications and habitats.',
+        fileName: 'Grade4_Science_LivingThings_Habitats.png',
+        fileType: 'image',
+        fileSize: '3.8 MB',
+        fileUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&auto=format&fit=crop&q=80',
+        subject: 'Integrated Science',
+        grade: 4,
+        stream: 'Dove', // Stream-specific for Dove stream
+        term: 1,
+        strand: 'Living Things and Environment',
+        subStrand: 'Classification of Vertebrates',
+        coreCompetency: 'Communication & Collaboration',
+        values: 'Respect, Environmental Stewardship',
+        tags: ['Science', 'Living Things', 'Dove Stream', 'CBC Grade 4'],
+        isVisibleToStudents: true,
+        downloadsCount: 24,
+        uploadedAt: '2026-09-18'
+      },
+      {
+        id: 'file-cbc-3',
+        teacherId: 'usr-classteach-gr8-tenant-riara',
+        teacherName: 'Mrs. Florence Akinyi',
+        title: 'Grade 8 Junior Secondary Pre-Technical Studies Technical Drawing',
+        description: 'Step-by-step drafting rules, isometric views, and workshop safety guidelines for Junior School learners.',
+        fileName: 'Grade8_PreTech_Orthographic_Drawings.pdf',
+        fileType: 'pdf',
+        fileSize: '4.1 MB',
+        fileUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80',
+        subject: 'Pretechnical Education',
+        grade: 8,
+        stream: 'Mara',
+        term: 2,
+        strand: 'Technical & Engineering Design',
+        subStrand: 'Orthographic Projections & Measurements',
+        coreCompetency: 'Digital Literacy & Creativity',
+        values: 'Integrity, Diligence, Precision',
+        tags: ['Pretechnical', 'JSS Grade 8', 'Mara Stream', 'Drafting'],
+        isVisibleToStudents: true,
+        downloadsCount: 19,
+        uploadedAt: '2026-09-22'
+      },
+      {
+        id: 'file-cbc-4',
+        teacherId: 'usr-hod-tenant-riara',
+        teacherName: 'Dr. Mercy Mwangi',
+        title: 'Grade 7 Social Studies Physical Geography & Great Rift Valley',
+        description: 'Interactive geological satellite map study of the Great Rift Valley, faulting processes, and volcanic lakes.',
+        fileName: 'Grade7_SocialStudies_RiftValley_Topography.jpg',
+        fileType: 'image',
+        fileSize: '5.2 MB',
+        fileUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80',
+        subject: 'Social Studies',
+        grade: 7,
+        stream: undefined,
+        term: 1,
+        strand: 'People and Their Environment',
+        subStrand: 'Physical Landscapes & Geological Formations',
+        coreCompetency: 'Citizenship & Critical Thinking',
+        values: 'Patriotism, Unity, Environmental Care',
+        tags: ['Social Studies', 'Geography', 'Rift Valley', 'JSS Grade 7'],
+        isVisibleToStudents: true,
+        downloadsCount: 42,
+        uploadedAt: '2026-09-25'
+      }
+    ]);
+
+    if (!filter) return files;
+
+    return files.filter(f => {
+      if (filter.grade && f.grade !== filter.grade) return false;
+      if (filter.stream && f.stream && f.stream !== filter.stream) return false;
+      if (filter.subject && f.subject !== filter.subject) return false;
+      if (filter.isVisibleToStudents !== undefined && f.isVisibleToStudents !== filter.isVisibleToStudents) return false;
+      if (filter.teacherId && f.teacherId !== filter.teacherId) return false;
+      return true;
+    });
+  },
+
+  addTeacherLessonFile(file: TeacherLessonFile): void {
+    const files = this.getTeacherLessonFiles();
+    const updated = [file, ...files];
+    setToStorage(KEYS.TEACHER_LESSON_FILES, updated);
+    window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated', { detail: file }));
+  },
+
+  updateTeacherLessonFile(id: string, updates: Partial<TeacherLessonFile>): void {
+    const files = this.getTeacherLessonFiles();
+    const updated = files.map(f => f.id === id ? { ...f, ...updates } : f);
+    setToStorage(KEYS.TEACHER_LESSON_FILES, updated);
+    window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated'));
+  },
+
+  deleteTeacherLessonFile(id: string): void {
+    const files = this.getTeacherLessonFiles();
+    const updated = files.filter(f => f.id !== id);
+    setToStorage(KEYS.TEACHER_LESSON_FILES, updated);
+    window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated'));
   },
 
   // Virtual Classes
@@ -1828,17 +2083,95 @@ export const Storage = {
   // Parent Helpers
   getParentChildren(parentUser: User): User[] {
     const all = this.getUsers();
-    if (parentUser.childrenIds && parentUser.childrenIds.length > 0) {
-      const fromUsers = all.filter(u => parentUser.childrenIds?.includes(u.id));
-      const missing = parentUser.childrenIds.filter((id) => !fromUsers.some((user) => user.id === id));
-      const fromDirectory = missing
-        .map((id) => getStudentRecord(id))
-        .filter((row): row is NonNullable<ReturnType<typeof getStudentRecord>> => Boolean(row))
-        .map((row) => studentRecordToUser(row));
-      return [...fromUsers, ...fromDirectory];
+    const studentUsers = all.filter(u => u.role === 'student');
+    const linkedIds = new Set<string>(parentUser.childrenIds || []);
+
+    const normPhone = (p?: string) => (p || '').replace(/\D/g, '');
+    const parentPhoneDigits = normPhone(parentUser.phone);
+
+    studentUsers.forEach(s => {
+      if (s.parentId && s.parentId === parentUser.id) {
+        linkedIds.add(s.id);
+      }
+      if (parentUser.email && s.parentEmail && s.parentEmail.trim().toLowerCase() === parentUser.email.trim().toLowerCase()) {
+        linkedIds.add(s.id);
+      }
+      if (parentPhoneDigits && s.parentPhone && normPhone(s.parentPhone) === parentPhoneDigits) {
+        linkedIds.add(s.id);
+      }
+      if (parentUser.name && s.parentName && s.parentName.trim().toLowerCase() === parentUser.name.trim().toLowerCase()) {
+        linkedIds.add(s.id);
+      }
+    });
+
+    try {
+      const schoolId = parentUser.schoolId || 'tenant-riara';
+      const dirParents = listSchoolParents(schoolId);
+      dirParents.forEach(p => {
+        const idMatches = p.id === parentUser.id;
+        const emailMatches = Boolean(parentUser.email && p.email && p.email.trim().toLowerCase() === parentUser.email.trim().toLowerCase());
+        const phoneMatches = Boolean(parentPhoneDigits && p.phone && normPhone(p.phone) === parentPhoneDigits);
+        const nameMatches = Boolean(parentUser.name && p.name && p.name.trim().toLowerCase() === parentUser.name.trim().toLowerCase());
+        if ((idMatches || emailMatches || phoneMatches || nameMatches) && p.studentId) {
+          linkedIds.add(p.studentId);
+        }
+      });
+    } catch {
+      // ignore directory list failures
     }
+
+    const results: User[] = [];
+    const seenIds = new Set<string>();
+
+    linkedIds.forEach(id => {
+      const userMatch = all.find(u => u.id === id);
+      if (userMatch && !seenIds.has(userMatch.id)) {
+        seenIds.add(userMatch.id);
+        results.push(userMatch);
+      } else {
+        const studentRec = getStudentRecord(id);
+        if (studentRec && !seenIds.has(studentRec.id)) {
+          seenIds.add(studentRec.id);
+          results.push(studentRecordToUser(studentRec));
+        }
+      }
+    });
+
+    if (results.length > 0) return results;
     return all.filter(u => u.id === 'usr-stu-brian');
   },
+
+  linkStudentToParent(studentId: string, parentData: { id?: string; name?: string; phone?: string; email?: string; relationship?: string }): void {
+    const all = this.getUsers();
+    let updated = false;
+
+    // 1. Update the student user
+    const student = all.find(u => u.id === studentId);
+    if (student) {
+      if (parentData.id) student.parentId = parentData.id;
+      if (parentData.name) student.parentName = parentData.name;
+      if (parentData.phone) student.parentPhone = parentData.phone;
+      if (parentData.email) student.parentEmail = parentData.email;
+      if (parentData.relationship) student.parentRelationship = parentData.relationship;
+      updated = true;
+    }
+
+    // 2. Update the parent user if exists
+    if (parentData.id) {
+      const parentUser = all.find(u => u.id === parentData.id && u.role === 'parent');
+      if (parentUser) {
+        const children = new Set(parentUser.childrenIds || []);
+        children.add(studentId);
+        parentUser.childrenIds = Array.from(children);
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      setToStorage(KEYS.USERS, all);
+    }
+  },
+
 
   // Centralized Notifications
   getNotifications(user?: User | null): AppNotification[] {

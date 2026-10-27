@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import { networkInterfaces } from 'os';
 import { fileURLToPath } from 'url';
+import { registerOperationsRoutes } from './src/server/operationsRoutes';
 
 dotenv.config();
 
@@ -715,6 +716,9 @@ Core rules:
       });
     }
   });
+
+  // Register Integrated Operations (Finance, Procurement, Stores, HR & Payroll) REST routes
+  registerOperationsRoutes(app, { readServerDb, writeServerDb });
 
   const distPath = path.resolve(rootDir, 'dist');
   const indexHtmlPath = path.resolve(distPath, 'index.html');

@@ -492,82 +492,22 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         </button>
 
         {isControlPanelOpen && (
-          <div id="landing-control-panel" className="absolute right-0 top-full mt-3 w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-slate-950 p-4 text-slate-100 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  <span className={`h-2 w-2 rounded-full ${isSuperAdminEditMode ? 'bg-amber-400' : 'bg-slate-500'}`} />
-                  Landing page tools
-                </div>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  {isSuperAdminEditMode ? 'Live editing is active.' : 'Manage the landing page or open the admin console.'}
-                </p>
+          <div id="landing-control-panel" className="absolute right-0 top-full mt-3 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-slate-700 bg-slate-950 p-4 text-slate-100 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                Landing page tools
               </div>
               <button
                 type="button"
                 onClick={() => setIsControlPanelOpen(false)}
                 aria-label="Close platform tools"
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-            
-            {/* Toggle Live Edit Mode - Super Admin Access Required */}
-            <div className="space-y-1.5">
-              <button
-                onClick={() => requestSuperAdminAccess('toggle_edit')}
-                className={`w-full justify-center px-3 py-2.5 rounded-xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                  isSuperAdminEditMode
-                    ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-300'
-                    : 'bg-slate-800 text-amber-300 hover:bg-slate-700 border border-slate-700'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isSuperAdminEditMode ? 'Super Admin Edit: ON' : 'Super Admin Live Edit'}</span>
-              </button>
-              {isSuperAdminVerified && (
-                <button
-                  type="button"
-                  onClick={handleLockSuperAdmin}
-                  className="w-full text-center text-[10px] text-slate-400 hover:text-red-400 cursor-pointer pt-0.5"
-                >
-                  Lock Super Admin Session
-                </button>
-              )}
-            </div>
-
-            {/* Quick Section Selector Drawer */}
-            <select
-              value={activeEditorSection || ''}
-              onChange={(e) => {
-                const target = e.target.value || null;
-                if (target === 'hero' && !isSuperAdminVerified) {
-                  requestSuperAdminAccess('hero_edit');
-                } else {
-                  setActiveEditorSection(target);
-                }
-              }}
-              className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-            >
-              <option value="">Quick Customize Section...</option>
-              <option value="header">Header & Navbar</option>
-              <option value="hero">Hero Section</option>
-              <option value="stats">Impact & Metrics</option>
-              <option value="features">Core Features</option>
-              <option value="virtuallab">Virtual Lab Portal</option>
-              <option value="about">About & Mission</option>
-              <option value="testimonials">Testimonials & Reviews</option>
-              <option value="pricing">Pricing Tiers</option>
-              <option value="faqs">FAQ Accordion</option>
-              <option value="contact">Contact & Support</option>
-              <option value="footer">Footer & Copyright</option>
-              <option value="visibility">Section Visibility Manager</option>
-            </select>
-
-            {/* Platform Admin Console Link */}
             <div className="flex items-center gap-2">
               <button
                 onClick={onNavigateToPlatformAdmin}
@@ -619,11 +559,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 </div>
               )}
             </div>
-              </div>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
+      )}
+    </div>
 
       {/* Persistent Toast Feedback Banner */}
       {toastMessage && (

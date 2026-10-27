@@ -19,6 +19,7 @@ import {
   OperationsGovernancePolicy
 } from '../types/customization';
 import { SyncEngine } from '../utils/syncEngine';
+import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 
 const STORAGE_KEY = 'edusmart_platform_customization_v6';
 const PACK_KEY = 'edusmart_platform_customization_pack_v1';
@@ -26,30 +27,47 @@ const PACK_KEY = 'edusmart_platform_customization_pack_v1';
 function customizationDefaults(): PlatformCustomizationState {
   try {
     const raw = localStorage.getItem(PACK_KEY);
-    if (raw) return JSON.parse(raw) as PlatformCustomizationState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<PlatformCustomizationState>;
+      if (parsed && parsed.landingPage && Object.keys(parsed.landingPage).length > 0) {
+        return {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION,
+          ...parsed,
+          landingPage: {
+            ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage,
+            ...parsed.landingPage,
+            visibility: {
+              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.visibility,
+              ...(parsed.landingPage.visibility || {})
+            },
+            header: {
+              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.header,
+              ...(parsed.landingPage.header || {})
+            },
+            hero: {
+              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.hero,
+              ...(parsed.landingPage.hero || {})
+            },
+            about: {
+              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.about,
+              ...(parsed.landingPage.about || {})
+            },
+            contact: {
+              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.contact,
+              ...(parsed.landingPage.contact || {})
+            },
+            footer: {
+              ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.footer,
+              ...(parsed.landingPage.footer || {})
+            }
+          }
+        };
+      }
+    }
   } catch {
     // The pack is loaded from Supabase before the app renders.
   }
-  return {
-    landingPage: {
-      visibility: {} as LandingSectionsVisibility,
-      header: {} as LandingHeaderConfig,
-      hero: {} as LandingHeroConfig,
-      stats: [],
-      features: [],
-      about: {} as LandingAboutConfig,
-      testimonials: [],
-      pricing: [],
-      faqs: [],
-      contact: {} as LandingContactConfig,
-      footer: {} as LandingFooterConfig,
-    },
-    workspaces: [],
-    globalSettings: {} as GlobalPlatformSettings,
-    classTeacherPolicy: {} as ClassTeacherModulePolicy,
-    operationsPolicy: {} as OperationsGovernancePolicy,
-    schoolOverrides: {},
-  };
+  return DEFAULT_PLATFORM_CUSTOMIZATION;
 }
 
 interface PlatformCustomizationContextType {
@@ -103,27 +121,28 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
+        const def = customizationDefaults();
         return {
-          ...customizationDefaults(),
+          ...def,
           ...parsed,
           landingPage: {
-            ...customizationDefaults().landingPage,
+            ...def.landingPage,
             ...(parsed.landingPage || {}),
             visibility: {
-              ...customizationDefaults().landingPage.visibility,
+              ...def.landingPage.visibility,
               ...(parsed.landingPage?.visibility || {})
             },
             header: {
-              ...customizationDefaults().landingPage.header,
+              ...def.landingPage.header,
               ...(parsed.landingPage?.header || {}),
               loginButtonLabel: parsed.landingPage?.header?.loginButtonLabel && parsed.landingPage.header.loginButtonLabel !== 'School Login'
                 ? parsed.landingPage.header.loginButtonLabel
                 : 'Login',
             },
             hero: {
-              ...customizationDefaults().landingPage.hero,
+              ...def.landingPage.hero,
               ...(parsed.landingPage?.hero || {}),
-              mediaType: parsed.landingPage?.hero?.mediaType === 'video' ? 'image' : (parsed.landingPage?.hero?.mediaType || 'image'),
+              mediaType: parsed.landingPage?.hero?.mediaType === 'video' ? 'video' : 'image',
               primaryCta: parsed.landingPage?.hero?.primaryCta && parsed.landingPage.hero.primaryCta !== 'School Login'
                 ? parsed.landingPage.hero.primaryCta
                 : 'Login',
@@ -134,16 +153,31 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
                 ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
                 : parsed.landingPage.hero.heroVideoPoster
             },
+            stats: (Array.isArray(parsed.landingPage?.stats) && parsed.landingPage.stats.length > 0)
+              ? parsed.landingPage.stats
+              : def.landingPage.stats,
+            features: (Array.isArray(parsed.landingPage?.features) && parsed.landingPage.features.length > 0)
+              ? parsed.landingPage.features
+              : def.landingPage.features,
+            testimonials: (Array.isArray(parsed.landingPage?.testimonials) && parsed.landingPage.testimonials.length > 0)
+              ? parsed.landingPage.testimonials
+              : def.landingPage.testimonials,
+            pricing: (Array.isArray(parsed.landingPage?.pricing) && parsed.landingPage.pricing.length > 0)
+              ? parsed.landingPage.pricing
+              : def.landingPage.pricing,
+            faqs: (Array.isArray(parsed.landingPage?.faqs) && parsed.landingPage.faqs.length > 0)
+              ? parsed.landingPage.faqs
+              : def.landingPage.faqs,
             about: {
-              ...customizationDefaults().landingPage.about,
+              ...def.landingPage.about,
               ...(parsed.landingPage?.about || {})
             },
             contact: {
-              ...customizationDefaults().landingPage.contact,
+              ...def.landingPage.contact,
               ...(parsed.landingPage?.contact || {})
             },
             footer: {
-              ...customizationDefaults().landingPage.footer,
+              ...def.landingPage.footer,
               ...(parsed.landingPage?.footer || {})
             }
           },
@@ -568,9 +602,10 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
   };
 
   const resetToDefaults = () => {
-    setCustomization(customizationDefaults());
+    setCustomization(DEFAULT_PLATFORM_CUSTOMIZATION);
     try {
       localStorage.removeItem(STORAGE_KEY);
+      SyncEngine.persistItem(STORAGE_KEY, JSON.stringify(DEFAULT_PLATFORM_CUSTOMIZATION));
     } catch (e) {
       console.error(e);
     }

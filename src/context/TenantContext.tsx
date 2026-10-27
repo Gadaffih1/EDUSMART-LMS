@@ -7,6 +7,8 @@ import { isRemoteDataActive } from '../utils/supabaseHydrate';
 const TENANT_STORAGE_KEY = 'edusmart_active_tenant_id';
 const ALL_TENANTS_STORAGE_KEY = 'edusmart_all_tenants_registry';
 
+import { INITIAL_TENANTS } from '../data/tenantsData';
+
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -17,13 +19,13 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
           if (isRemoteDataActive()) return parsed;
-          return parsed as Tenant[];
+          return mergeDurableSchools(parsed as Tenant[]);
         }
       }
     } catch {
       // Fallback
     }
-    return mergeDurableSchools([]);
+    return mergeDurableSchools(INITIAL_TENANTS);
   });
 
   const [currentTenantId, setCurrentTenantId] = useState<string>(() => {

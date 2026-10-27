@@ -208,7 +208,15 @@ export async function hydrateFromSupabase(): Promise<boolean> {
 
   const packRows = await fetchTable('platform_customization');
   if (packRows && packRows[0]) {
-    const { id: _id, ...pack } = packRows[0];
+    const row = packRows[0];
+    const pack = {
+      landingPage: row.landingPage || row.landing_page,
+      workspaces: row.workspaces,
+      globalSettings: row.globalSettings || row.global_settings,
+      classTeacherPolicy: row.classTeacherPolicy || row.class_teacher_policy,
+      operationsPolicy: row.operationsPolicy || row.operations_policy,
+      schoolOverrides: row.schoolOverrides || row.school_overrides,
+    };
     localStorage.setItem('edusmart_platform_customization_pack_v1', JSON.stringify(pack));
   }
 

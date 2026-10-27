@@ -3086,6 +3086,11 @@
         "heroSubtitle": "\"Inspiring Excellence, Fostering Innovation\" — A modern STEM & CBC portal connecting students, staff and guardians.",
         "curriculumBadgeText": "CBC INTEGRATED STEM TRACK · GRADES 1 TO 9",
         "portalCardBadge": "Greenwood Digital Campus",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
         "printHeaderTheme": "modern",
         "printFooterNotes": "Greenwood Academy Official Record. Certified under Ministry of Education Guidelines. Fostering Innovation.",
         "printWatermarkText": "GREENWOOD ACADEMY · OFFICIAL RECORD",
@@ -3129,6 +3134,11 @@
         "heroSubtitle": "\"Knowledge is Power, Integrity is Strength\" — Institutional portal for secondary pathways and university readiness.",
         "curriculumBadgeText": "CBC JUNIOR & SENIOR SECONDARY PATHWAYS · GRADES 7 TO 10",
         "portalCardBadge": "Hillcrest Executive Portal",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
         "printHeaderTheme": "executive",
         "printFooterNotes": "Hillcrest High Official Academic Transcript. Registered MOE/SEC/NBI/1965/0024. Integrity is Strength.",
         "printWatermarkText": "HILLCREST HIGH · OFFICIAL TRANSCRIPT",
@@ -3172,6 +3182,11 @@
         "heroSubtitle": "\"Shining Bright in Foundational CBC Learning\" — Early Childhood & Primary Education Digital Gateway.",
         "curriculumBadgeText": "CBC EARLY YEARS & PRIMARY FOUNDATION · PP1 TO GRADE 6",
         "portalCardBadge": "Sunrise Portal",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
         "printHeaderTheme": "classic",
         "printFooterNotes": "Sunrise Primary School Official Documentation. Early Childhood & Primary Education Ministry Approved.",
         "printWatermarkText": "SUNRISE PRIMARY · OFFICIAL TRANSCRIPT",
@@ -3215,6 +3230,11 @@
         "heroSubtitle": "\"Excellence in Academic and Creative Pursuit\" — Dedicated Arts, Sports, Sciences & CBC Streams.",
         "curriculumBadgeText": "KENYAN CBC CURRICULUM & TALENT PATHWAY · GRADES 1 TO 9",
         "portalCardBadge": "Westlands Campus",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
         "printHeaderTheme": "modern",
         "printFooterNotes": "Westlands School Official Transcript. Certified under Ministry of Education Kenya. Creative Pursuit.",
         "printWatermarkText": "WESTLANDS SCHOOL · OFFICIAL RECORD",
@@ -3258,46 +3278,16 @@
         "heroSubtitle": "\"Excellence in Character, Scholarship and Service\" — Connecting learners, teachers, parents and school leadership.",
         "curriculumBadgeText": "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9",
         "portalCardBadge": "St. Austin’s Portal",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
         "printHeaderTheme": "formal",
         "printFooterNotes": "St. Austin’s Academy Official Academic Record. Authorized by Ministry of Education & KICD. Excellence in Character.",
         "printWatermarkText": "ST. AUSTIN’S ACADEMY · OFFICIAL TRANSCRIPT",
         "primaryColorHex": "#064e3b",
         "accentColorHex": "#fbbf24"
-      },
-      {
-        "id": "tenant-brooksideacadem-1792715226502",
-        "name": "Brookside Academy",
-        "shortName": "Brookside",
-        "motto": "Excellence in Scholarship & Character",
-        "code": "SCH-974",
-        "registrationNumber": "MOE/PRI-JSS/2026/6636",
-        "curriculum": "Kenyan CBC Curriculum (Grades 1-9)",
-        "domain": "brookside.ac.ke",
-        "address": "School Road",
-        "city": "Nairobi",
-        "county": "Nairobi County",
-        "phone": "+254 700 000 000",
-        "email": "brookside@brookside.ac.ke",
-        "principalName": "Dr. Jane Mwangi, PhD",
-        "principalTitle": "Head of Institution & Principal",
-        "establishedYear": 2026,
-        "gradeLevels": "Grade 1 through Grade 9 CBC",
-        "term": "Term 1, 2026",
-        "academicYear": "2026 Academic Year",
-        "totalStudents": 350,
-        "totalFaculty": 25,
-        "crestIcon": "graduation-cap",
-        "themeColor": "emerald",
-        "backgroundColor": "#f8fafc",
-        "headerBgClass": "from-emerald-900 via-slate-900 to-emerald-950",
-        "badgeColorClass": "bg-emerald-100 text-emerald-800 border-emerald-300",
-        "status": "active",
-        "categories": [
-          "Science & STEM",
-          "Creative Arts",
-          "Sports & Athletics"
-        ],
-        "registeredAt": "2026-10-23T00:27:06.502Z"
       }
     ],
     "edusmart_staff_appraisals_v1": [
@@ -4216,6 +4206,1802 @@
         "performanceGrade": "Needs Improvement (0-39%)",
         "createdAt": "2026-10-23T01:32:03.703Z",
         "updatedAt": "2026-10-23T01:37:19.220Z"
+      }
+    ],
+    "platform_customization": [
+      {
+        "id": "default",
+        "landingPage": {
+          "visibility": {
+            "header": true,
+            "broadcast": true,
+            "hero": true,
+            "stats": true,
+            "features": true,
+            "virtuallab": true,
+            "showcase": true,
+            "about": true,
+            "testimonials": true,
+            "pricing": true,
+            "faq": true,
+            "contact": true,
+            "footer": true
+          },
+          "header": {
+            "brandName": "Edu-Smart PORTAL",
+            "brandSubtitle": "By Gadsa Systems · Multi-Tenant Platform",
+            "showLoginButton": true,
+            "loginButtonLabel": "Login",
+            "showRegisterButton": true,
+            "registerButtonLabel": "Register a School",
+            "navLinks": [
+              {
+                "id": "nav-virtuallab",
+                "label": "Virtual Lab",
+                "sectionId": "virtuallab-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-features",
+                "label": "Features",
+                "sectionId": "features-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-stats",
+                "label": "Impact & Stats",
+                "sectionId": "stats-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-about",
+                "label": "About",
+                "sectionId": "about-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-reviews",
+                "label": "Reviews",
+                "sectionId": "testimonials-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-pricing",
+                "label": "Pricing",
+                "sectionId": "pricing-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-faq",
+                "label": "FAQ",
+                "sectionId": "faq-section",
+                "enabled": true
+              },
+              {
+                "id": "nav-contact",
+                "label": "Contact",
+                "sectionId": "contact-section",
+                "enabled": true
+              }
+            ]
+          },
+          "hero": {
+            "pillTag": "ONE PLATFORM. EVERY SCHOOL.",
+            "headlineStart": "Smarter School",
+            "headlineMid": "Management.",
+            "headlineHighlight": "Better Learning.",
+            "subtitle": "A complete digital platform for school administration, teaching, assessment and communication. Built specifically for Kenyan CBC and modern global curricula.",
+            "primaryCta": "Login",
+            "primaryCtaAction": "login",
+            "primaryCtaUrl": "",
+            "secondaryCta": "Register a School",
+            "secondaryCtaAction": "register",
+            "secondaryCtaUrl": "",
+            "mediaType": "image",
+            "heroImageUrl": "/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg",
+            "heroVideoUrl": "",
+            "heroVideoPoster": "/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg",
+            "videoAutoplay": false,
+            "videoMuted": true,
+            "videoLoop": false,
+            "videoShowControls": false,
+            "videoMaxDuration": 30,
+            "videoBadgeLabel": "Interactive Smart Classroom",
+            "bannerAspect": "cinematic",
+            "floatingCardTitle": "Interactive Smart Classroom",
+            "floatingCardSubtitle": "Mr. Gadaffih & CBC learners connected in real time",
+            "floatingCardBadgeText": "LIVE SYNC",
+            "floatingCardBadgeColor": "emerald",
+            "showFloatingCard": true,
+            "trustBadges": [
+              "Ministry of Education Compliant",
+              "Kenyan CBC Automated Rubrics",
+              "Isolated Multi-Tenant Security"
+            ]
+          },
+          "stats": [
+            {
+              "id": "stat-schools",
+              "label": "Partner Schools",
+              "value": "52+",
+              "subtext": "Across Nairobi, Kiambu, Mombasa & Eldoret",
+              "icon": "School"
+            },
+            {
+              "id": "stat-students",
+              "label": "Active Learners",
+              "value": "248,000+",
+              "subtext": "Primary & Junior Secondary students enrolled",
+              "icon": "GraduationCap"
+            },
+            {
+              "id": "stat-uptime",
+              "label": "Platform Reliability",
+              "value": "99.98%",
+              "subtext": "High-availability cloud infrastructure with offline sync",
+              "icon": "ShieldCheck"
+            },
+            {
+              "id": "stat-assessments",
+              "label": "CBC Assessments Logged",
+              "value": "1.4M+",
+              "subtext": "Formative & summative KNEC CBA rubrics recorded",
+              "icon": "BarChart3"
+            }
+          ],
+          "features": [
+            {
+              "id": "feat-attendance",
+              "title": "Smart Attendance & Gate Exit",
+              "description": "Biometric and digital roll-call with automated SMS alerts to parents when learners tap in or depart school premises.",
+              "tag": "Safety & Tracking",
+              "icon": "Calendar",
+              "category": "Operations",
+              "enabled": true
+            },
+            {
+              "id": "feat-cbc",
+              "title": "Kenyan CBC Assessment Suite",
+              "description": "Comprehensive Competency Based Curriculum tracking with formative rubrics, KNEC CBA scores, strand ratings and automated report cards.",
+              "tag": "Academics",
+              "icon": "BookOpen",
+              "category": "Academics",
+              "enabled": true
+            },
+            {
+              "id": "feat-finance",
+              "title": "Fee Billing & M-Pesa Integration",
+              "description": "Automated term invoicing, real-time M-Pesa Paybill reconciliations, fee statements, and instant receipt generation.",
+              "tag": "Financials",
+              "icon": "BarChart3",
+              "category": "Finance",
+              "enabled": true
+            },
+            {
+              "id": "feat-portal",
+              "title": "Multi-Role Portals & Workspaces",
+              "description": "Tailored workspaces for Students, Parents, Teachers, HODs, Deans, Nurses, Librarians, Transport and School Executives.",
+              "tag": "Role-Based Access",
+              "icon": "Users",
+              "category": "Governance",
+              "enabled": true
+            },
+            {
+              "id": "feat-multicampus",
+              "title": "Multi-Tenancy & Campus Switcher",
+              "description": "Platform owners seamlessly manage multi-campus chains, regional branches, and independent school institutions with complete isolation.",
+              "tag": "Multi-Tenancy",
+              "icon": "School",
+              "category": "Administration",
+              "enabled": true
+            },
+            {
+              "id": "feat-offline",
+              "title": "Offline Sync & Real-Time Cache",
+              "description": "Works seamlessly during erratic campus network connections with background synchronization as soon as connectivity resumes.",
+              "tag": "Resilience",
+              "icon": "Laptop",
+              "category": "Technology",
+              "enabled": true
+            }
+          ],
+          "about": {
+            "title": "Built For The Modern Educational Landscape",
+            "subtitle": "EduSmart LMS bridges school administrators, teachers, learners and parents through an intuitive, reliable multi-tenant architecture.",
+            "badge": "ABOUT EDUSMART",
+            "paragraphs": [
+              "EduSmart is engineered from the ground up to address the unique operational and academic challenges of primary and secondary education across East Africa.",
+              "With native alignment to the Competency Based Curriculum (CBC) guidelines and Ministry of Education standards, our platform streamlines grading, discipline, transport, boarding, and institutional governance into one cohesive cloud operating system."
+            ],
+            "points": [
+              "Fully compliant with Kenyan CBC reporting structures and KNEC CBA portfolios.",
+              "Strict role-based isolation guaranteeing school tenant privacy and data security.",
+              "Integrated M-Pesa Paybill and instant parent SMS notification pipelines.",
+              "Super Administrator console providing multi-campus orchestration and licensing."
+            ],
+            "milestone1Value": "100%",
+            "milestone1Title": "CBC & CBA Compliance",
+            "milestone1Subtext": "Strands, sub-strands, and formative rubrics",
+            "milestone2Value": "99.9%",
+            "milestone2Title": "Uptime & Offline Sync",
+            "milestone2Subtext": "Local caching with automatic sync when connected"
+          },
+          "testimonials": [
+            {
+              "id": "test-1",
+              "quote": "EduSmart transformed our CBC report cards and continuous assessment recording. What used to take our teachers two weeks now takes an afternoon.",
+              "author": "Mr. Patrick Kamau",
+              "role": "School Administrator",
+              "school": "Riara School Nairobi",
+              "rating": 5
+            },
+            {
+              "id": "test-2",
+              "quote": "The multi-campus governance allows our board of governors to monitor attendance, fee collections, and curriculum progress across all branches from one screen.",
+              "author": "Dr. Beatrice Ochieng",
+              "role": "Executive Academic Director",
+              "school": "Greenwood Educational Trust",
+              "rating": 5
+            },
+            {
+              "id": "test-3",
+              "quote": "Instant SMS notifications when my children board the school bus and enter the school gate give me absolute peace of mind during work hours.",
+              "author": "Faith Mutua",
+              "role": "Parent Representative",
+              "school": "Hillcrest High Nairobi",
+              "rating": 5
+            }
+          ],
+          "pricing": [
+            {
+              "id": "plan-starter",
+              "name": "STARTER",
+              "capacity": "Up to 300 Students",
+              "price": "KSh 75,000",
+              "period": "per year",
+              "perStudent": "≈ KSh 250 per student",
+              "description": "Ideal for small schools and new institutions.",
+              "color": "#059669",
+              "accentClass": "emerald",
+              "features": [
+                "Up to 300 Enrolled Students",
+                "Full CBC Academic Engine & Continuous Assessment",
+                "Attendance Roll Call & Gate Registers",
+                "Parent Portal & Termly Report Cards",
+                "Standard Cloud Setup & Email Support"
+              ],
+              "popular": false,
+              "buttonLabel": "Select Starter Plan"
+            },
+            {
+              "id": "plan-standard",
+              "name": "STANDARD",
+              "capacity": "Up to 600 Students",
+              "price": "KSh 120,000",
+              "period": "per year",
+              "perStudent": "≈ KSh 200 per student",
+              "description": "Great for growing schools and institutions.",
+              "color": "#2563eb",
+              "accentClass": "blue",
+              "features": [
+                "Up to 600 Enrolled Students",
+                "Full CBC Assessment & Auto Report Cards",
+                "M-Pesa Paybill Automated Reconciliation",
+                "Digital Library Integration & E-Resources",
+                "Timetable Scheduling & Teacher Workload"
+              ],
+              "popular": false,
+              "buttonLabel": "Select Standard Plan"
+            },
+            {
+              "id": "plan-professional",
+              "name": "PROFESSIONAL",
+              "capacity": "Up to 1,200 Students",
+              "price": "KSh 210,000",
+              "period": "per year",
+              "perStudent": "≈ KSh 175 per student",
+              "description": "Perfect for medium and large schools.",
+              "color": "#7c3aed",
+              "accentClass": "purple",
+              "badge": "MOST POPULAR",
+              "popular": true,
+              "features": [
+                "Up to 1,200 Enrolled Students",
+                "Virtual Classrooms & Virtual Laboratory",
+                "Live Transport & Fleet Tracking Integration",
+                "Sanatorium Clinic & Student Health Records",
+                "Multi-Stream CBC Grade Management (Grades 1–9)"
+              ],
+              "buttonLabel": "Select Professional Plan"
+            },
+            {
+              "id": "plan-premium",
+              "name": "PREMIUM",
+              "capacity": "Up to 2,000 Students",
+              "price": "KSh 320,000",
+              "period": "per year",
+              "perStudent": "≈ KSh 160 per student",
+              "description": "Designed for large schools and multi-stream institutions.",
+              "color": "#ea580c",
+              "accentClass": "orange",
+              "features": [
+                "Up to 2,000 Enrolled Students",
+                "Co-Curricular Command Centre & Sports Portals",
+                "Event Ticketing & Public Event Management",
+                "Executive Leadership Strategic Dashboards",
+                "Priority 24/7 Dedicated Support & Quick SLA"
+              ],
+              "popular": false,
+              "buttonLabel": "Select Premium Plan"
+            },
+            {
+              "id": "plan-enterprise",
+              "name": "ENTERPRISE",
+              "capacity": "Up to 3,000 Students",
+              "price": "KSh 450,000",
+              "period": "per year",
+              "perStudent": "≈ KSh 150 per student",
+              "description": "For large schools, groups and institutions.",
+              "color": "#1e3a8a",
+              "accentClass": "indigo",
+              "features": [
+                "Up to 3,000 Enrolled Students",
+                "Deep Analytics Windows & Finance Trends",
+                "Lunch Service & Nutrition Records Tracking",
+                "Custom Tenant Workspaces & Departmental RBAC",
+                "Dedicated Account Director & On-Site Orientation"
+              ],
+              "popular": false,
+              "buttonLabel": "Select Enterprise Plan"
+            },
+            {
+              "id": "plan-enterprise-plus",
+              "name": "ENTERPRISE PLUS",
+              "capacity": "3,001 – 5,000 Students",
+              "price": "KSh 600,000",
+              "period": "per year",
+              "perStudent": "From KSh 120 per student",
+              "description": "For very large schools, groups and multi-campus institutions.",
+              "color": "#0f766e",
+              "accentClass": "teal",
+              "badge": "MULTI-CAMPUS",
+              "popular": false,
+              "features": [
+                "3,001 to 5,000+ Enrolled Students",
+                "Multi-Campus Orchestration & Central Hub",
+                "Super Admin Campus Switcher Integration",
+                "Centralized Digital Resource Centre",
+                "Tailored API Integrations & Executive SLA"
+              ],
+              "buttonLabel": "Select Enterprise Plus"
+            }
+          ],
+          "faqs": [
+            {
+              "id": "faq-1",
+              "question": "How does multi-tenancy protect school data isolation?",
+              "answer": "Every school campus operates within its own encrypted database partition. Student grades, staff registers, and financials are strictly separated. School administrators only access their campus, while the platform owner exercises high-level governance.",
+              "category": "Security"
+            },
+            {
+              "id": "faq-2",
+              "question": "Is EduSmart compliant with Ministry of Education CBC guidelines?",
+              "answer": "Yes! EduSmart natively supports Kenyan CBC strands, sub-strands, formative rubrics, and KNEC CBA termly scoring rubrics for Grades 1 to 9, outputting compliant report cards automatically.",
+              "category": "Curriculum"
+            },
+            {
+              "id": "faq-3",
+              "question": "Does the system work during power or internet outages?",
+              "answer": "Yes. EduSmart has an integrated offline sync engine with IndexedDB persistence. Roll-call attendance and lesson marks can be entered without internet and will automatically sync once connection is restored.",
+              "category": "Technology"
+            },
+            {
+              "id": "faq-4",
+              "question": "How do M-Pesa fee payments get reconciled?",
+              "answer": "We connect directly to your school M-Pesa Paybill or Till number. When parents pay using the student admission number as account reference, the platform reconciles the balance and sends an automated SMS receipt within seconds.",
+              "category": "Finance"
+            }
+          ],
+          "contact": {
+            "sectionBadge": "GET IN TOUCH",
+            "sectionTitle": "Contact Administration & Support",
+            "sectionSubtitle": "Schedule an institutional walkthrough or request a tailored pilot deployment for your school campus.",
+            "phone": "0729620384",
+            "email": "support@edusmart.ac.ke",
+            "address": "EduSmart Towers, 5th Floor, Kilimani Business District, Nairobi, Kenya",
+            "supportHours": "Monday – Friday: 7:00 AM – 6:00 PM EAT · Saturday: 8:00 AM – 1:00 PM EAT"
+          },
+          "footer": {
+            "brandName": "Edu-Smart PORTAL",
+            "tagline": "By Gadsa Systems · Smart Learning, Better Management",
+            "copyrightText": "© 2026 EduSmart Systems Ltd. All rights reserved. Registered under Kenya Data Protection Act.",
+            "developerCredit": "Designed & Engineered for African Academic Institutions"
+          }
+        },
+        "workspaces": [
+          {
+            "id": "student",
+            "name": "Student Workspace (Learner Portal)",
+            "shortName": "Learner Portal",
+            "description": "Learners access their assignments, term grades, virtual labs, timetable, and study resources.",
+            "category": "Learner",
+            "icon": "GraduationCap",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#3b82f6",
+            "customNotice": "Term 2 CBC Assessment schedules and homework submissions are open.",
+            "allowedRoles": [
+              "student"
+            ]
+          },
+          {
+            "id": "parent",
+            "name": "Parent & Guardian Portal",
+            "shortName": "Parent Portal",
+            "description": "Parents monitor their children academic progress, fee balances, fee statements, attendance and teacher communications.",
+            "category": "Learner",
+            "icon": "Users",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#10b981",
+            "customNotice": "Mid-term fee balance reconciliations and parent-teacher meeting bookings are now live.",
+            "allowedRoles": [
+              "parent"
+            ]
+          },
+          {
+            "id": "teacher",
+            "name": "Teacher & Subject Faculty Workspace",
+            "shortName": "Teacher Workspace",
+            "description": "Subject teachers record lesson plans, schemes of work, assignments, pedagogical work entries, and classroom assessments.",
+            "category": "Academics",
+            "icon": "BookOpen",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#059669",
+            "customNotice": "Remember to finalize Strand & Sub-strand formative rubrics before week 9.",
+            "allowedRoles": [
+              "teacher"
+            ]
+          },
+          {
+            "id": "class_teacher",
+            "name": "Class Teacher Command Centre",
+            "shortName": "Class Teacher Portal",
+            "description": "Designated Class Teachers oversee morning & afternoon roll-call registers, termly CBC assessment remarks, parent comms, pupil discipline records, and learner lunch dining registers.",
+            "category": "Academics",
+            "icon": "UserCheck",
+            "enabled": true,
+            "badgeText": "Official",
+            "accentColor": "#059669",
+            "customNotice": "Ensure daily morning attendance roll-call and termly CBC report card remarks are recorded on time.",
+            "allowedRoles": [
+              "class_teacher",
+              "admin"
+            ]
+          },
+          {
+            "id": "hod",
+            "name": "Head of Department (HOD) Workspace",
+            "shortName": "HOD Workspace",
+            "description": "Departmental curriculum coverage oversight, teacher allocation, scheme of work approvals and subject moderation.",
+            "category": "Academics",
+            "icon": "Layers",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#6366f1",
+            "customNotice": "Review department schemes of work and midterm assessment moderation rubrics.",
+            "allowedRoles": [
+              "hod"
+            ]
+          },
+          {
+            "id": "senior_teacher",
+            "name": "Senior Teacher Academic Supervision",
+            "shortName": "Senior Teacher",
+            "description": "Learner mentorship, teacher supervision, daily routine compliance and instructional leadership.",
+            "category": "Academics",
+            "icon": "ShieldCheck",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#0284c7",
+            "customNotice": "Check the weekly teacher roll-call compliance and learner discipline logs.",
+            "allowedRoles": [
+              "senior_teacher"
+            ]
+          },
+          {
+            "id": "deputy_head",
+            "name": "Deputy Head Operations & Discipline",
+            "shortName": "Deputy Head",
+            "description": "Operational logistics, discipline records, staff attendance, substitute teacher arrangements and duty roster.",
+            "category": "Leadership",
+            "icon": "Sliders",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#d97706",
+            "customNotice": "Staff duty roster for next week has been generated and dispatched.",
+            "allowedRoles": [
+              "deputy_head"
+            ]
+          },
+          {
+            "id": "dean_of_studies",
+            "name": "Dean of Studies Academic Hub",
+            "shortName": "Dean of Studies",
+            "description": "Termly examination schedules, CBC report card publishing, KNEC CBA registrations and academic performance trends.",
+            "category": "Academics",
+            "icon": "Award",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#8b5cf6",
+            "customNotice": "Term 2 examination timetables and CBA assessment portfolios are ready for sign-off.",
+            "allowedRoles": [
+              "dean_of_studies"
+            ]
+          },
+          {
+            "id": "curriculum_coordinator",
+            "name": "Curriculum Coordinator Workspace",
+            "shortName": "Curriculum Coordinator",
+            "description": "CBC syllabus alignment, teaching resources repository, continuous assessment auditing and teacher pedagogical training.",
+            "category": "Leadership",
+            "icon": "FolderPlus",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#4f46e5",
+            "customNotice": "New KICD CBC syllabus curriculum guidelines updated for Junior Secondary grades 7-9.",
+            "allowedRoles": [
+              "curriculum_coordinator"
+            ]
+          },
+          {
+            "id": "head_teacher",
+            "name": "Head Teacher Executive Workspace",
+            "shortName": "Head Teacher",
+            "description": "School-wide holistic analytics, board reports, stakeholder communications and executive approvals.",
+            "category": "Leadership",
+            "icon": "Building2",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#0f766e",
+            "customNotice": "Board of Management quarterly review report generated and archived.",
+            "allowedRoles": [
+              "head_teacher"
+            ]
+          },
+          {
+            "id": "librarian",
+            "name": "Librarian & Resource Center",
+            "shortName": "Library Hub",
+            "description": "Cataloging physical and digital books, managing student borrowings, overdue fines, and e-learning resources.",
+            "category": "Specialized Operations",
+            "icon": "BookOpen",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#0891b2",
+            "customNotice": "Stock audit for science laboratory manuals and literature set books completed.",
+            "allowedRoles": [
+              "librarian"
+            ]
+          },
+          {
+            "id": "nurse",
+            "name": "Sanatorium & Clinic Workspace",
+            "shortName": "Clinic & Health",
+            "description": "Confidential student health records, clinic visits, medication dispensation, chronic condition logs and emergency contacts.",
+            "category": "Specialized Operations",
+            "icon": "Shield",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#e11d48",
+            "customNotice": "Restricted clinic portal: strictly authorized health personnel only.",
+            "allowedRoles": [
+              "nurse"
+            ]
+          },
+          {
+            "id": "school_admin_staff",
+            "name": "School Admin Staff & Secretarial Hub",
+            "shortName": "Secretarial Hub",
+            "description": "Gate exit passes, visitor logs, document requests, student registration files and general administrative support.",
+            "category": "Specialized Operations",
+            "icon": "Calendar",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#ca8a04",
+            "customNotice": "Visitor passes and gate exit registers active for day and boarding learners.",
+            "allowedRoles": [
+              "school_admin_staff"
+            ]
+          },
+          {
+            "id": "transport_team",
+            "name": "Transport & Fleet Logistics Workspace",
+            "shortName": "Transport & Fleet",
+            "description": "School bus fleet management, morning/evening routes, driver allocations, student pick-up/drop-off tracking and vehicle maintenance.",
+            "category": "Specialized Operations",
+            "icon": "Globe",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#2563eb",
+            "customNotice": "Route 4 bus maintenance service scheduled for Friday 4:00 PM.",
+            "allowedRoles": [
+              "transport_team"
+            ]
+          },
+          {
+            "id": "cocurricular_team",
+            "name": "Co-Curricular, Sports & Clubs Hub",
+            "shortName": "Sports & Clubs",
+            "description": "Athletics, football, swimming, music festivals, drama, robotics club, scouting and weekend inter-school fixtures.",
+            "category": "Specialized Operations",
+            "icon": "Sparkles",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#16a34a",
+            "customNotice": "Sub-County music and drama festival registration submissions due this Friday.",
+            "allowedRoles": [
+              "cocurricular_team"
+            ]
+          },
+          {
+            "id": "admin",
+            "name": "School Principal & Campus Administrator",
+            "shortName": "School Administrator",
+            "description": "Full management of this specific school campus: staff management, fee structures, classes, timetables and student profiles.",
+            "category": "Administration",
+            "icon": "School",
+            "enabled": true,
+            "badgeText": "Active",
+            "accentColor": "#1e293b",
+            "customNotice": "Campus operational status normal. Multi-tenancy isolation active.",
+            "allowedRoles": [
+              "admin"
+            ]
+          },
+          {
+            "id": "finance_officer",
+            "name": "Finance & Bursary Management Portal",
+            "shortName": "Finance & Bursary",
+            "description": "Tuition and activity fee billing, automated M-Pesa reconciliation, General Ledger accounts, trial balance, and departmental budgets.",
+            "category": "Finance & Operations",
+            "icon": "Wallet",
+            "enabled": true,
+            "badgeText": "Official",
+            "accentColor": "#059669",
+            "customNotice": "Term 1 fee collection and digital M-Pesa receipts active. Real-time ledger synchronization enabled.",
+            "allowedRoles": [
+              "finance_officer",
+              "admin",
+              "head_teacher"
+            ]
+          },
+          {
+            "id": "procurement_officer",
+            "name": "Procurement & Purchasing Portal",
+            "shortName": "Procurement Hub",
+            "description": "Departmental purchase requisitions, multi-stage approval workflow, registered supplier database, quotations, and Local Purchase Orders (LPO).",
+            "category": "Finance & Operations",
+            "icon": "ShoppingCart",
+            "enabled": true,
+            "badgeText": "Official",
+            "accentColor": "#2563eb",
+            "customNotice": "Departmental purchase requisitions and 3-way matching authorization gateway online.",
+            "allowedRoles": [
+              "procurement_officer",
+              "admin",
+              "head_teacher"
+            ]
+          },
+          {
+            "id": "storekeeper",
+            "name": "Central Stores & Inventory Hub",
+            "shortName": "Central Stores",
+            "description": "Campus warehouse catalog, stock replenishment tracking, Goods Received Notes (GRN), Store Issue Vouchers (SIV), and stocktake audits.",
+            "category": "Finance & Operations",
+            "icon": "Package",
+            "enabled": true,
+            "badgeText": "Official",
+            "accentColor": "#d97706",
+            "customNotice": "Central warehouse inventory catalog and digital Store Issue Vouchers (SIV) active.",
+            "allowedRoles": [
+              "storekeeper",
+              "admin",
+              "head_teacher"
+            ]
+          },
+          {
+            "id": "hr_manager",
+            "name": "HR & Kenyan CBC Payroll Engine",
+            "shortName": "HR & Payroll",
+            "description": "Teacher and staff master dossiers, statutory deductions (PAYE, NSSF Tier I & II, NHIF/SHIF, Housing Levy 1.5%), monthly payroll runs, and digital payslips.",
+            "category": "Finance & Operations",
+            "icon": "Users",
+            "enabled": true,
+            "badgeText": "Official",
+            "accentColor": "#9333ea",
+            "customNotice": "Kenyan CBC statutory payroll engine active: PAYE, NSSF, SHIF, and Housing Levy calculations automated.",
+            "allowedRoles": [
+              "hr_manager",
+              "admin",
+              "head_teacher"
+            ]
+          }
+        ],
+        "globalSettings": {
+          "platformName": "EduSmart LMS",
+          "platformTagline": "Multi-Tenant School Operating System",
+          "broadcastNotice": {
+            "active": false,
+            "message": "Notice: Platform maintenance scheduled for Sunday at 02:00 AM EAT. No data disruption expected.",
+            "type": "info",
+            "targetAudience": "all"
+          },
+          "maintenanceMode": false,
+          "allowPublicRegistration": true,
+          "primaryBrandColor": "#2563eb"
+        },
+        "classTeacherPolicy": {
+          "allowRemarksEditing": true,
+          "allowGatePassAuth": true,
+          "allowLunchRegister": true,
+          "allowParentBroadcast": true,
+          "morningRollCallDeadline": "08:30 AM",
+          "isRegisterLocked": false
+        },
+        "operationsPolicy": {
+          "enableMpesaAutoReconciliation": true,
+          "procurementApprovalThreshold": 50000,
+          "strictBudgetEnforcement": true,
+          "requireThreeWayMatchingForPayment": true,
+          "lockDisbursedPayrollRuns": true,
+          "autoReorderAlertsEnabled": true,
+          "allowDepartmentalRequisitions": true
+        },
+        "schoolOverrides": {}
+      }
+    ],
+    "edusmart_platform_customization_v6": {
+      "id": "default",
+      "landingPage": {
+        "visibility": {
+          "header": true,
+          "broadcast": true,
+          "hero": true,
+          "stats": true,
+          "features": true,
+          "virtuallab": true,
+          "showcase": true,
+          "about": true,
+          "testimonials": true,
+          "pricing": true,
+          "faq": true,
+          "contact": true,
+          "footer": true
+        },
+        "header": {
+          "brandName": "Edu-Smart PORTAL",
+          "brandSubtitle": "By Gadsa Systems · Multi-Tenant Platform",
+          "showLoginButton": true,
+          "loginButtonLabel": "Login",
+          "showRegisterButton": true,
+          "registerButtonLabel": "Register a School",
+          "navLinks": [
+            {
+              "id": "nav-virtuallab",
+              "label": "Virtual Lab",
+              "sectionId": "virtuallab-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-features",
+              "label": "Features",
+              "sectionId": "features-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-stats",
+              "label": "Impact & Stats",
+              "sectionId": "stats-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-about",
+              "label": "About",
+              "sectionId": "about-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-reviews",
+              "label": "Reviews",
+              "sectionId": "testimonials-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-pricing",
+              "label": "Pricing",
+              "sectionId": "pricing-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-faq",
+              "label": "FAQ",
+              "sectionId": "faq-section",
+              "enabled": true
+            },
+            {
+              "id": "nav-contact",
+              "label": "Contact",
+              "sectionId": "contact-section",
+              "enabled": true
+            }
+          ]
+        },
+        "hero": {
+          "pillTag": "ONE PLATFORM. EVERY SCHOOL.",
+          "headlineStart": "Smarter School",
+          "headlineMid": "Management.",
+          "headlineHighlight": "Better Learning.",
+          "subtitle": "A complete digital platform for school administration, teaching, assessment and communication. Built specifically for Kenyan CBC and modern global curricula.",
+          "primaryCta": "Login",
+          "primaryCtaAction": "login",
+          "primaryCtaUrl": "",
+          "secondaryCta": "Register a School",
+          "secondaryCtaAction": "register",
+          "secondaryCtaUrl": "",
+          "mediaType": "image",
+          "heroImageUrl": "/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg",
+          "heroVideoUrl": "",
+          "heroVideoPoster": "/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg",
+          "videoAutoplay": false,
+          "videoMuted": true,
+          "videoLoop": false,
+          "videoShowControls": false,
+          "videoMaxDuration": 30,
+          "videoBadgeLabel": "Interactive Smart Classroom",
+          "bannerAspect": "cinematic",
+          "floatingCardTitle": "Interactive Smart Classroom",
+          "floatingCardSubtitle": "Mr. Gadaffih & CBC learners connected in real time",
+          "floatingCardBadgeText": "LIVE SYNC",
+          "floatingCardBadgeColor": "emerald",
+          "showFloatingCard": true,
+          "trustBadges": [
+            "Ministry of Education Compliant",
+            "Kenyan CBC Automated Rubrics",
+            "Isolated Multi-Tenant Security"
+          ]
+        },
+        "stats": [
+          {
+            "id": "stat-schools",
+            "label": "Partner Schools",
+            "value": "52+",
+            "subtext": "Across Nairobi, Kiambu, Mombasa & Eldoret",
+            "icon": "School"
+          },
+          {
+            "id": "stat-students",
+            "label": "Active Learners",
+            "value": "248,000+",
+            "subtext": "Primary & Junior Secondary students enrolled",
+            "icon": "GraduationCap"
+          },
+          {
+            "id": "stat-uptime",
+            "label": "Platform Reliability",
+            "value": "99.98%",
+            "subtext": "High-availability cloud infrastructure with offline sync",
+            "icon": "ShieldCheck"
+          },
+          {
+            "id": "stat-assessments",
+            "label": "CBC Assessments Logged",
+            "value": "1.4M+",
+            "subtext": "Formative & summative KNEC CBA rubrics recorded",
+            "icon": "BarChart3"
+          }
+        ],
+        "features": [
+          {
+            "id": "feat-attendance",
+            "title": "Smart Attendance & Gate Exit",
+            "description": "Biometric and digital roll-call with automated SMS alerts to parents when learners tap in or depart school premises.",
+            "tag": "Safety & Tracking",
+            "icon": "Calendar",
+            "category": "Operations",
+            "enabled": true
+          },
+          {
+            "id": "feat-cbc",
+            "title": "Kenyan CBC Assessment Suite",
+            "description": "Comprehensive Competency Based Curriculum tracking with formative rubrics, KNEC CBA scores, strand ratings and automated report cards.",
+            "tag": "Academics",
+            "icon": "BookOpen",
+            "category": "Academics",
+            "enabled": true
+          },
+          {
+            "id": "feat-finance",
+            "title": "Fee Billing & M-Pesa Integration",
+            "description": "Automated term invoicing, real-time M-Pesa Paybill reconciliations, fee statements, and instant receipt generation.",
+            "tag": "Financials",
+            "icon": "BarChart3",
+            "category": "Finance",
+            "enabled": true
+          },
+          {
+            "id": "feat-portal",
+            "title": "Multi-Role Portals & Workspaces",
+            "description": "Tailored workspaces for Students, Parents, Teachers, HODs, Deans, Nurses, Librarians, Transport and School Executives.",
+            "tag": "Role-Based Access",
+            "icon": "Users",
+            "category": "Governance",
+            "enabled": true
+          },
+          {
+            "id": "feat-multicampus",
+            "title": "Multi-Tenancy & Campus Switcher",
+            "description": "Platform owners seamlessly manage multi-campus chains, regional branches, and independent school institutions with complete isolation.",
+            "tag": "Multi-Tenancy",
+            "icon": "School",
+            "category": "Administration",
+            "enabled": true
+          },
+          {
+            "id": "feat-offline",
+            "title": "Offline Sync & Real-Time Cache",
+            "description": "Works seamlessly during erratic campus network connections with background synchronization as soon as connectivity resumes.",
+            "tag": "Resilience",
+            "icon": "Laptop",
+            "category": "Technology",
+            "enabled": true
+          }
+        ],
+        "about": {
+          "title": "Built For The Modern Educational Landscape",
+          "subtitle": "EduSmart LMS bridges school administrators, teachers, learners and parents through an intuitive, reliable multi-tenant architecture.",
+          "badge": "ABOUT EDUSMART",
+          "paragraphs": [
+            "EduSmart is engineered from the ground up to address the unique operational and academic challenges of primary and secondary education across East Africa.",
+            "With native alignment to the Competency Based Curriculum (CBC) guidelines and Ministry of Education standards, our platform streamlines grading, discipline, transport, boarding, and institutional governance into one cohesive cloud operating system."
+          ],
+          "points": [
+            "Fully compliant with Kenyan CBC reporting structures and KNEC CBA portfolios.",
+            "Strict role-based isolation guaranteeing school tenant privacy and data security.",
+            "Integrated M-Pesa Paybill and instant parent SMS notification pipelines.",
+            "Super Administrator console providing multi-campus orchestration and licensing."
+          ],
+          "milestone1Value": "100%",
+          "milestone1Title": "CBC & CBA Compliance",
+          "milestone1Subtext": "Strands, sub-strands, and formative rubrics",
+          "milestone2Value": "99.9%",
+          "milestone2Title": "Uptime & Offline Sync",
+          "milestone2Subtext": "Local caching with automatic sync when connected"
+        },
+        "testimonials": [
+          {
+            "id": "test-1",
+            "quote": "EduSmart transformed our CBC report cards and continuous assessment recording. What used to take our teachers two weeks now takes an afternoon.",
+            "author": "Mr. Patrick Kamau",
+            "role": "School Administrator",
+            "school": "Riara School Nairobi",
+            "rating": 5
+          },
+          {
+            "id": "test-2",
+            "quote": "The multi-campus governance allows our board of governors to monitor attendance, fee collections, and curriculum progress across all branches from one screen.",
+            "author": "Dr. Beatrice Ochieng",
+            "role": "Executive Academic Director",
+            "school": "Greenwood Educational Trust",
+            "rating": 5
+          },
+          {
+            "id": "test-3",
+            "quote": "Instant SMS notifications when my children board the school bus and enter the school gate give me absolute peace of mind during work hours.",
+            "author": "Faith Mutua",
+            "role": "Parent Representative",
+            "school": "Hillcrest High Nairobi",
+            "rating": 5
+          }
+        ],
+        "pricing": [
+          {
+            "id": "plan-starter",
+            "name": "STARTER",
+            "capacity": "Up to 300 Students",
+            "price": "KSh 75,000",
+            "period": "per year",
+            "perStudent": "≈ KSh 250 per student",
+            "description": "Ideal for small schools and new institutions.",
+            "color": "#059669",
+            "accentClass": "emerald",
+            "features": [
+              "Up to 300 Enrolled Students",
+              "Full CBC Academic Engine & Continuous Assessment",
+              "Attendance Roll Call & Gate Registers",
+              "Parent Portal & Termly Report Cards",
+              "Standard Cloud Setup & Email Support"
+            ],
+            "popular": false,
+            "buttonLabel": "Select Starter Plan"
+          },
+          {
+            "id": "plan-standard",
+            "name": "STANDARD",
+            "capacity": "Up to 600 Students",
+            "price": "KSh 120,000",
+            "period": "per year",
+            "perStudent": "≈ KSh 200 per student",
+            "description": "Great for growing schools and institutions.",
+            "color": "#2563eb",
+            "accentClass": "blue",
+            "features": [
+              "Up to 600 Enrolled Students",
+              "Full CBC Assessment & Auto Report Cards",
+              "M-Pesa Paybill Automated Reconciliation",
+              "Digital Library Integration & E-Resources",
+              "Timetable Scheduling & Teacher Workload"
+            ],
+            "popular": false,
+            "buttonLabel": "Select Standard Plan"
+          },
+          {
+            "id": "plan-professional",
+            "name": "PROFESSIONAL",
+            "capacity": "Up to 1,200 Students",
+            "price": "KSh 210,000",
+            "period": "per year",
+            "perStudent": "≈ KSh 175 per student",
+            "description": "Perfect for medium and large schools.",
+            "color": "#7c3aed",
+            "accentClass": "purple",
+            "badge": "MOST POPULAR",
+            "popular": true,
+            "features": [
+              "Up to 1,200 Enrolled Students",
+              "Virtual Classrooms & Virtual Laboratory",
+              "Live Transport & Fleet Tracking Integration",
+              "Sanatorium Clinic & Student Health Records",
+              "Multi-Stream CBC Grade Management (Grades 1–9)"
+            ],
+            "buttonLabel": "Select Professional Plan"
+          },
+          {
+            "id": "plan-premium",
+            "name": "PREMIUM",
+            "capacity": "Up to 2,000 Students",
+            "price": "KSh 320,000",
+            "period": "per year",
+            "perStudent": "≈ KSh 160 per student",
+            "description": "Designed for large schools and multi-stream institutions.",
+            "color": "#ea580c",
+            "accentClass": "orange",
+            "features": [
+              "Up to 2,000 Enrolled Students",
+              "Co-Curricular Command Centre & Sports Portals",
+              "Event Ticketing & Public Event Management",
+              "Executive Leadership Strategic Dashboards",
+              "Priority 24/7 Dedicated Support & Quick SLA"
+            ],
+            "popular": false,
+            "buttonLabel": "Select Premium Plan"
+          },
+          {
+            "id": "plan-enterprise",
+            "name": "ENTERPRISE",
+            "capacity": "Up to 3,000 Students",
+            "price": "KSh 450,000",
+            "period": "per year",
+            "perStudent": "≈ KSh 150 per student",
+            "description": "For large schools, groups and institutions.",
+            "color": "#1e3a8a",
+            "accentClass": "indigo",
+            "features": [
+              "Up to 3,000 Enrolled Students",
+              "Deep Analytics Windows & Finance Trends",
+              "Lunch Service & Nutrition Records Tracking",
+              "Custom Tenant Workspaces & Departmental RBAC",
+              "Dedicated Account Director & On-Site Orientation"
+            ],
+            "popular": false,
+            "buttonLabel": "Select Enterprise Plan"
+          },
+          {
+            "id": "plan-enterprise-plus",
+            "name": "ENTERPRISE PLUS",
+            "capacity": "3,001 – 5,000 Students",
+            "price": "KSh 600,000",
+            "period": "per year",
+            "perStudent": "From KSh 120 per student",
+            "description": "For very large schools, groups and multi-campus institutions.",
+            "color": "#0f766e",
+            "accentClass": "teal",
+            "badge": "MULTI-CAMPUS",
+            "popular": false,
+            "features": [
+              "3,001 to 5,000+ Enrolled Students",
+              "Multi-Campus Orchestration & Central Hub",
+              "Super Admin Campus Switcher Integration",
+              "Centralized Digital Resource Centre",
+              "Tailored API Integrations & Executive SLA"
+            ],
+            "buttonLabel": "Select Enterprise Plus"
+          }
+        ],
+        "faqs": [
+          {
+            "id": "faq-1",
+            "question": "How does multi-tenancy protect school data isolation?",
+            "answer": "Every school campus operates within its own encrypted database partition. Student grades, staff registers, and financials are strictly separated. School administrators only access their campus, while the platform owner exercises high-level governance.",
+            "category": "Security"
+          },
+          {
+            "id": "faq-2",
+            "question": "Is EduSmart compliant with Ministry of Education CBC guidelines?",
+            "answer": "Yes! EduSmart natively supports Kenyan CBC strands, sub-strands, formative rubrics, and KNEC CBA termly scoring rubrics for Grades 1 to 9, outputting compliant report cards automatically.",
+            "category": "Curriculum"
+          },
+          {
+            "id": "faq-3",
+            "question": "Does the system work during power or internet outages?",
+            "answer": "Yes. EduSmart has an integrated offline sync engine with IndexedDB persistence. Roll-call attendance and lesson marks can be entered without internet and will automatically sync once connection is restored.",
+            "category": "Technology"
+          },
+          {
+            "id": "faq-4",
+            "question": "How do M-Pesa fee payments get reconciled?",
+            "answer": "We connect directly to your school M-Pesa Paybill or Till number. When parents pay using the student admission number as account reference, the platform reconciles the balance and sends an automated SMS receipt within seconds.",
+            "category": "Finance"
+          }
+        ],
+        "contact": {
+          "sectionBadge": "GET IN TOUCH",
+          "sectionTitle": "Contact Administration & Support",
+          "sectionSubtitle": "Schedule an institutional walkthrough or request a tailored pilot deployment for your school campus.",
+          "phone": "0729620384",
+          "email": "support@edusmart.ac.ke",
+          "address": "EduSmart Towers, 5th Floor, Kilimani Business District, Nairobi, Kenya",
+          "supportHours": "Monday – Friday: 7:00 AM – 6:00 PM EAT · Saturday: 8:00 AM – 1:00 PM EAT"
+        },
+        "footer": {
+          "brandName": "Edu-Smart PORTAL",
+          "tagline": "By Gadsa Systems · Smart Learning, Better Management",
+          "copyrightText": "© 2026 EduSmart Systems Ltd. All rights reserved. Registered under Kenya Data Protection Act.",
+          "developerCredit": "Designed & Engineered for African Academic Institutions"
+        }
+      },
+      "workspaces": [
+        {
+          "id": "student",
+          "name": "Student Workspace (Learner Portal)",
+          "shortName": "Learner Portal",
+          "description": "Learners access their assignments, term grades, virtual labs, timetable, and study resources.",
+          "category": "Learner",
+          "icon": "GraduationCap",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#3b82f6",
+          "customNotice": "Term 2 CBC Assessment schedules and homework submissions are open.",
+          "allowedRoles": [
+            "student"
+          ]
+        },
+        {
+          "id": "parent",
+          "name": "Parent & Guardian Portal",
+          "shortName": "Parent Portal",
+          "description": "Parents monitor their children academic progress, fee balances, fee statements, attendance and teacher communications.",
+          "category": "Learner",
+          "icon": "Users",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#10b981",
+          "customNotice": "Mid-term fee balance reconciliations and parent-teacher meeting bookings are now live.",
+          "allowedRoles": [
+            "parent"
+          ]
+        },
+        {
+          "id": "teacher",
+          "name": "Teacher & Subject Faculty Workspace",
+          "shortName": "Teacher Workspace",
+          "description": "Subject teachers record lesson plans, schemes of work, assignments, pedagogical work entries, and classroom assessments.",
+          "category": "Academics",
+          "icon": "BookOpen",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#059669",
+          "customNotice": "Remember to finalize Strand & Sub-strand formative rubrics before week 9.",
+          "allowedRoles": [
+            "teacher"
+          ]
+        },
+        {
+          "id": "class_teacher",
+          "name": "Class Teacher Command Centre",
+          "shortName": "Class Teacher Portal",
+          "description": "Designated Class Teachers oversee morning & afternoon roll-call registers, termly CBC assessment remarks, parent comms, pupil discipline records, and learner lunch dining registers.",
+          "category": "Academics",
+          "icon": "UserCheck",
+          "enabled": true,
+          "badgeText": "Official",
+          "accentColor": "#059669",
+          "customNotice": "Ensure daily morning attendance roll-call and termly CBC report card remarks are recorded on time.",
+          "allowedRoles": [
+            "class_teacher",
+            "admin"
+          ]
+        },
+        {
+          "id": "hod",
+          "name": "Head of Department (HOD) Workspace",
+          "shortName": "HOD Workspace",
+          "description": "Departmental curriculum coverage oversight, teacher allocation, scheme of work approvals and subject moderation.",
+          "category": "Academics",
+          "icon": "Layers",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#6366f1",
+          "customNotice": "Review department schemes of work and midterm assessment moderation rubrics.",
+          "allowedRoles": [
+            "hod"
+          ]
+        },
+        {
+          "id": "senior_teacher",
+          "name": "Senior Teacher Academic Supervision",
+          "shortName": "Senior Teacher",
+          "description": "Learner mentorship, teacher supervision, daily routine compliance and instructional leadership.",
+          "category": "Academics",
+          "icon": "ShieldCheck",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#0284c7",
+          "customNotice": "Check the weekly teacher roll-call compliance and learner discipline logs.",
+          "allowedRoles": [
+            "senior_teacher"
+          ]
+        },
+        {
+          "id": "deputy_head",
+          "name": "Deputy Head Operations & Discipline",
+          "shortName": "Deputy Head",
+          "description": "Operational logistics, discipline records, staff attendance, substitute teacher arrangements and duty roster.",
+          "category": "Leadership",
+          "icon": "Sliders",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#d97706",
+          "customNotice": "Staff duty roster for next week has been generated and dispatched.",
+          "allowedRoles": [
+            "deputy_head"
+          ]
+        },
+        {
+          "id": "dean_of_studies",
+          "name": "Dean of Studies Academic Hub",
+          "shortName": "Dean of Studies",
+          "description": "Termly examination schedules, CBC report card publishing, KNEC CBA registrations and academic performance trends.",
+          "category": "Academics",
+          "icon": "Award",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#8b5cf6",
+          "customNotice": "Term 2 examination timetables and CBA assessment portfolios are ready for sign-off.",
+          "allowedRoles": [
+            "dean_of_studies"
+          ]
+        },
+        {
+          "id": "curriculum_coordinator",
+          "name": "Curriculum Coordinator Workspace",
+          "shortName": "Curriculum Coordinator",
+          "description": "CBC syllabus alignment, teaching resources repository, continuous assessment auditing and teacher pedagogical training.",
+          "category": "Leadership",
+          "icon": "FolderPlus",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#4f46e5",
+          "customNotice": "New KICD CBC syllabus curriculum guidelines updated for Junior Secondary grades 7-9.",
+          "allowedRoles": [
+            "curriculum_coordinator"
+          ]
+        },
+        {
+          "id": "head_teacher",
+          "name": "Head Teacher Executive Workspace",
+          "shortName": "Head Teacher",
+          "description": "School-wide holistic analytics, board reports, stakeholder communications and executive approvals.",
+          "category": "Leadership",
+          "icon": "Building2",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#0f766e",
+          "customNotice": "Board of Management quarterly review report generated and archived.",
+          "allowedRoles": [
+            "head_teacher"
+          ]
+        },
+        {
+          "id": "librarian",
+          "name": "Librarian & Resource Center",
+          "shortName": "Library Hub",
+          "description": "Cataloging physical and digital books, managing student borrowings, overdue fines, and e-learning resources.",
+          "category": "Specialized Operations",
+          "icon": "BookOpen",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#0891b2",
+          "customNotice": "Stock audit for science laboratory manuals and literature set books completed.",
+          "allowedRoles": [
+            "librarian"
+          ]
+        },
+        {
+          "id": "nurse",
+          "name": "Sanatorium & Clinic Workspace",
+          "shortName": "Clinic & Health",
+          "description": "Confidential student health records, clinic visits, medication dispensation, chronic condition logs and emergency contacts.",
+          "category": "Specialized Operations",
+          "icon": "Shield",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#e11d48",
+          "customNotice": "Restricted clinic portal: strictly authorized health personnel only.",
+          "allowedRoles": [
+            "nurse"
+          ]
+        },
+        {
+          "id": "school_admin_staff",
+          "name": "School Admin Staff & Secretarial Hub",
+          "shortName": "Secretarial Hub",
+          "description": "Gate exit passes, visitor logs, document requests, student registration files and general administrative support.",
+          "category": "Specialized Operations",
+          "icon": "Calendar",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#ca8a04",
+          "customNotice": "Visitor passes and gate exit registers active for day and boarding learners.",
+          "allowedRoles": [
+            "school_admin_staff"
+          ]
+        },
+        {
+          "id": "transport_team",
+          "name": "Transport & Fleet Logistics Workspace",
+          "shortName": "Transport & Fleet",
+          "description": "School bus fleet management, morning/evening routes, driver allocations, student pick-up/drop-off tracking and vehicle maintenance.",
+          "category": "Specialized Operations",
+          "icon": "Globe",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#2563eb",
+          "customNotice": "Route 4 bus maintenance service scheduled for Friday 4:00 PM.",
+          "allowedRoles": [
+            "transport_team"
+          ]
+        },
+        {
+          "id": "cocurricular_team",
+          "name": "Co-Curricular, Sports & Clubs Hub",
+          "shortName": "Sports & Clubs",
+          "description": "Athletics, football, swimming, music festivals, drama, robotics club, scouting and weekend inter-school fixtures.",
+          "category": "Specialized Operations",
+          "icon": "Sparkles",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#16a34a",
+          "customNotice": "Sub-County music and drama festival registration submissions due this Friday.",
+          "allowedRoles": [
+            "cocurricular_team"
+          ]
+        },
+        {
+          "id": "admin",
+          "name": "School Principal & Campus Administrator",
+          "shortName": "School Administrator",
+          "description": "Full management of this specific school campus: staff management, fee structures, classes, timetables and student profiles.",
+          "category": "Administration",
+          "icon": "School",
+          "enabled": true,
+          "badgeText": "Active",
+          "accentColor": "#1e293b",
+          "customNotice": "Campus operational status normal. Multi-tenancy isolation active.",
+          "allowedRoles": [
+            "admin"
+          ]
+        },
+        {
+          "id": "finance_officer",
+          "name": "Finance & Bursary Management Portal",
+          "shortName": "Finance & Bursary",
+          "description": "Tuition and activity fee billing, automated M-Pesa reconciliation, General Ledger accounts, trial balance, and departmental budgets.",
+          "category": "Finance & Operations",
+          "icon": "Wallet",
+          "enabled": true,
+          "badgeText": "Official",
+          "accentColor": "#059669",
+          "customNotice": "Term 1 fee collection and digital M-Pesa receipts active. Real-time ledger synchronization enabled.",
+          "allowedRoles": [
+            "finance_officer",
+            "admin",
+            "head_teacher"
+          ]
+        },
+        {
+          "id": "procurement_officer",
+          "name": "Procurement & Purchasing Portal",
+          "shortName": "Procurement Hub",
+          "description": "Departmental purchase requisitions, multi-stage approval workflow, registered supplier database, quotations, and Local Purchase Orders (LPO).",
+          "category": "Finance & Operations",
+          "icon": "ShoppingCart",
+          "enabled": true,
+          "badgeText": "Official",
+          "accentColor": "#2563eb",
+          "customNotice": "Departmental purchase requisitions and 3-way matching authorization gateway online.",
+          "allowedRoles": [
+            "procurement_officer",
+            "admin",
+            "head_teacher"
+          ]
+        },
+        {
+          "id": "storekeeper",
+          "name": "Central Stores & Inventory Hub",
+          "shortName": "Central Stores",
+          "description": "Campus warehouse catalog, stock replenishment tracking, Goods Received Notes (GRN), Store Issue Vouchers (SIV), and stocktake audits.",
+          "category": "Finance & Operations",
+          "icon": "Package",
+          "enabled": true,
+          "badgeText": "Official",
+          "accentColor": "#d97706",
+          "customNotice": "Central warehouse inventory catalog and digital Store Issue Vouchers (SIV) active.",
+          "allowedRoles": [
+            "storekeeper",
+            "admin",
+            "head_teacher"
+          ]
+        },
+        {
+          "id": "hr_manager",
+          "name": "HR & Kenyan CBC Payroll Engine",
+          "shortName": "HR & Payroll",
+          "description": "Teacher and staff master dossiers, statutory deductions (PAYE, NSSF Tier I & II, NHIF/SHIF, Housing Levy 1.5%), monthly payroll runs, and digital payslips.",
+          "category": "Finance & Operations",
+          "icon": "Users",
+          "enabled": true,
+          "badgeText": "Official",
+          "accentColor": "#9333ea",
+          "customNotice": "Kenyan CBC statutory payroll engine active: PAYE, NSSF, SHIF, and Housing Levy calculations automated.",
+          "allowedRoles": [
+            "hr_manager",
+            "admin",
+            "head_teacher"
+          ]
+        }
+      ],
+      "globalSettings": {
+        "platformName": "EduSmart LMS",
+        "platformTagline": "Multi-Tenant School Operating System",
+        "broadcastNotice": {
+          "active": false,
+          "message": "Notice: Platform maintenance scheduled for Sunday at 02:00 AM EAT. No data disruption expected.",
+          "type": "info",
+          "targetAudience": "all"
+        },
+        "maintenanceMode": false,
+        "allowPublicRegistration": true,
+        "primaryBrandColor": "#2563eb"
+      },
+      "classTeacherPolicy": {
+        "allowRemarksEditing": true,
+        "allowGatePassAuth": true,
+        "allowLunchRegister": true,
+        "allowParentBroadcast": true,
+        "morningRollCallDeadline": "08:30 AM",
+        "isRegisterLocked": false
+      },
+      "operationsPolicy": {
+        "enableMpesaAutoReconciliation": true,
+        "procurementApprovalThreshold": 50000,
+        "strictBudgetEnforcement": true,
+        "requireThreeWayMatchingForPayment": true,
+        "lockDisbursedPayrollRuns": true,
+        "autoReorderAlertsEnabled": true,
+        "allowDepartmentalRequisitions": true
+      },
+      "schoolOverrides": {}
+    },
+    "tenants": [
+      {
+        "id": "tenant-riara",
+        "name": "Riara School",
+        "shortName": "Riara School",
+        "motto": "Learn · Grow · Succeed",
+        "code": "RS-NBI-001",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-rs\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%231e3a8a\"/><stop offset=\"100%\" stop-color=\"%23172554\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-rs)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%233b82f6\" stroke-width=\"2.5\"/><polygon points=\"50,18 78,32 50,46 22,32\" fill=\"%2360a5fa\"/><polygon points=\"50,46 72,35 72,58 50,68 28,58 28,35\" fill=\"%232563eb\" opacity=\"0.9\"/><circle cx=\"50\" cy=\"30\" r=\"5\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">RIARA</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%2393c5fd\" text-anchor=\"middle\">EST. 1974</text></svg>",
+        "crestIcon": "school",
+        "themeColor": "blue",
+        "badgeColorClass": "bg-blue-100 text-blue-800 border-blue-300",
+        "headerBgClass": "from-blue-900 via-slate-900 to-indigo-950",
+        "domain": "riara.edusmart.ac.ke",
+        "address": "Riara Road, Kilimani",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 703 038 100 / +254 703 038 200",
+        "email": "admin@riaraschools.ac.ke",
+        "principalName": "Mr. Patrick Kamau",
+        "principalTitle": "School Administrator & Principal",
+        "registrationNumber": "MOE/PRI-JSS/NBI/1974/0112",
+        "curriculum": "Kenyan CBC Curriculum (Grades 1-9)",
+        "establishedYear": 1974,
+        "gradeLevels": "PP1 through Grade 9 (Junior School)",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 1248,
+        "totalFaculty": 86,
+        "totalClasses": 42,
+        "attendanceToday": 96,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "12 Apr 2026",
+        "taglineNotes": "Academic Discipline · Holistic CBC Development · Moral Integrity",
+        "heroTitle": "WELCOME TO RIARA SCHOOL PORTAL",
+        "heroSubtitle": "\"Learn · Grow · Succeed\" — A secure digital platform connecting learners, teachers, parents and school leadership.",
+        "curriculumBadgeText": "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9",
+        "portalCardBadge": "Official Campus Portal",
+        "heroMediaType": "image",
+        "heroImageUrl": "/gad@edusmart.jpeg",
+        "heroVideoUrl": "https://assets.mixkit.co/videos/preview/mixkit-students-in-a-classroom-with-their-teacher-41147-large.mp4",
+        "heroVideoPoster": "/gad@edusmart.jpeg",
+        "heroVideoBadge": "30s Campus Tour",
+        "printHeaderTheme": "formal",
+        "printFooterNotes": "Official Riara School Document. Authorized by Ministry of Education NEMIS & School Board of Management. Learn · Grow · Succeed.",
+        "printWatermarkText": "RIARA SCHOOL · OFFICIAL ACADEMIC DOCUMENT",
+        "primaryColorHex": "#1e3a8a",
+        "accentColorHex": "#fbbf24"
+      },
+      {
+        "id": "tenant-greenwood",
+        "name": "Greenwood Academy",
+        "shortName": "Greenwood",
+        "motto": "Inspiring Excellence, Fostering Innovation",
+        "code": "GW-NBI-002",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-gw\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23064e3b\"/><stop offset=\"100%\" stop-color=\"%23022c22\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-gw)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%2334d399\" stroke-width=\"2.5\"/><polygon points=\"50,22 66,48 34,48\" fill=\"%23fbbf24\"/><polygon points=\"34,48 50,68 18,68\" fill=\"%2310b981\" opacity=\"0.9\"/><polygon points=\"66,48 82,68 50,68\" fill=\"%2310b981\" opacity=\"0.9\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">GWA</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23a7f3d0\" text-anchor=\"middle\">EST. 2008</text></svg>",
+        "crestIcon": "graduation-cap",
+        "themeColor": "emerald",
+        "badgeColorClass": "bg-emerald-100 text-emerald-800 border-emerald-300",
+        "headerBgClass": "from-emerald-900 via-slate-900 to-emerald-950",
+        "domain": "greenwood.edusmart.ac.ke",
+        "address": "Parklands Avenue, Highridge",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 374 9900 / +254 722 441 552",
+        "email": "info@greenwood.edusmart.ac.ke",
+        "principalName": "Dr. Jane Muthoni Wanjiru",
+        "principalTitle": "Head of Institution",
+        "registrationNumber": "MOE/PRI-JSS/NBI/2008/0441",
+        "curriculum": "CBC Integrated STEM Track",
+        "establishedYear": 2008,
+        "gradeLevels": "Grade 1 through Grade 9 CBC",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 890,
+        "totalFaculty": 64,
+        "totalClasses": 32,
+        "attendanceToday": 94,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "20 Jun 2026",
+        "taglineNotes": "Inspiring Excellence · Fostering Innovation · Sustainable Leadership",
+        "heroTitle": "WELCOME TO GREENWOOD ACADEMY PORTAL",
+        "heroSubtitle": "\"Inspiring Excellence, Fostering Innovation\" — A modern STEM & CBC portal connecting students, staff and guardians.",
+        "curriculumBadgeText": "CBC INTEGRATED STEM TRACK · GRADES 1 TO 9",
+        "portalCardBadge": "Greenwood Digital Campus",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
+        "printHeaderTheme": "modern",
+        "printFooterNotes": "Greenwood Academy Official Record. Certified under Ministry of Education Guidelines. Fostering Innovation.",
+        "printWatermarkText": "GREENWOOD ACADEMY · OFFICIAL RECORD",
+        "primaryColorHex": "#064e3b",
+        "accentColorHex": "#10b981"
+      },
+      {
+        "id": "tenant-hillcrest",
+        "name": "Hillcrest High",
+        "shortName": "Hillcrest",
+        "motto": "Knowledge is Power, Integrity is Strength",
+        "code": "HH-NBI-003",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-hh\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23312e81\"/><stop offset=\"100%\" stop-color=\"%231e1b4b\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-hh)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%23818cf8\" stroke-width=\"2.5\"/><polygon points=\"50,22 66,48 34,48\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">HILLCREST</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23c7d2fe\" text-anchor=\"middle\">EST. 1965</text></svg>",
+        "crestIcon": "book-open",
+        "themeColor": "indigo",
+        "badgeColorClass": "bg-indigo-100 text-indigo-800 border-indigo-300",
+        "headerBgClass": "from-indigo-900 via-slate-900 to-purple-950",
+        "domain": "hillcrest.edusmart.ac.ke",
+        "address": "Langata Road, Karen",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 889 1234 / +254 733 998 877",
+        "email": "admissions@hillcrest.edusmart.ac.ke",
+        "principalName": "Mr. David Kiprop Korir",
+        "principalTitle": "Principal",
+        "registrationNumber": "MOE/SEC/NBI/1965/0024",
+        "curriculum": "CBC Junior & Senior Secondary Pathway",
+        "establishedYear": 1965,
+        "gradeLevels": "Grade 7 to Grade 10",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 760,
+        "totalFaculty": 52,
+        "totalClasses": 28,
+        "attendanceToday": 95,
+        "status": "active",
+        "plan": "Standard",
+        "expiryDate": "05 Aug 2026",
+        "taglineNotes": "Knowledge is Power · Integrity is Strength · Global Academic Leadership",
+        "heroTitle": "WELCOME TO HILLCREST HIGH PORTAL",
+        "heroSubtitle": "\"Knowledge is Power, Integrity is Strength\" — Institutional portal for secondary pathways and university readiness.",
+        "curriculumBadgeText": "CBC JUNIOR & SENIOR SECONDARY PATHWAYS · GRADES 7 TO 10",
+        "portalCardBadge": "Hillcrest Executive Portal",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
+        "printHeaderTheme": "executive",
+        "printFooterNotes": "Hillcrest High Official Academic Transcript. Registered MOE/SEC/NBI/1965/0024. Integrity is Strength.",
+        "printWatermarkText": "HILLCREST HIGH · OFFICIAL TRANSCRIPT",
+        "primaryColorHex": "#312e81",
+        "accentColorHex": "#818cf8"
+      },
+      {
+        "id": "tenant-sunrise",
+        "name": "Sunrise Primary",
+        "shortName": "Sunrise",
+        "motto": "Shining Bright in Foundational CBC Learning",
+        "code": "SP-NBI-004",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-sp\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23ea580c\"/><stop offset=\"100%\" stop-color=\"%239a3412\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-sp)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%23fdba74\" stroke-width=\"2.5\"/><circle cx=\"50\" cy=\"40\" r=\"14\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">SUNRISE</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23fed7aa\" text-anchor=\"middle\">EST. 2017</text></svg>",
+        "crestIcon": "school",
+        "themeColor": "amber",
+        "badgeColorClass": "bg-amber-100 text-amber-900 border-amber-300",
+        "headerBgClass": "from-amber-900 via-slate-900 to-orange-950",
+        "domain": "sunrise.edusmart.ac.ke",
+        "address": "Eastern Bypass, Utawala",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 711 234 567",
+        "email": "info@sunrise.edusmart.ac.ke",
+        "principalName": "Mrs. Grace Wambui Kariuki",
+        "principalTitle": "Head Teacher",
+        "registrationNumber": "MOE/PRI/NBI/2017/0932",
+        "curriculum": "CBC Early Years & Primary",
+        "establishedYear": 2017,
+        "gradeLevels": "PP1 to Grade 6",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 430,
+        "totalFaculty": 28,
+        "totalClasses": 18,
+        "attendanceToday": 92,
+        "status": "pending",
+        "plan": "Basic",
+        "expiryDate": "Pending Review",
+        "taglineNotes": "Nurturing Potential · Foundational Literacy · Joyful CBC Discovery",
+        "heroTitle": "WELCOME TO SUNRISE PRIMARY PORTAL",
+        "heroSubtitle": "\"Shining Bright in Foundational CBC Learning\" — Early Childhood & Primary Education Digital Gateway.",
+        "curriculumBadgeText": "CBC EARLY YEARS & PRIMARY FOUNDATION · PP1 TO GRADE 6",
+        "portalCardBadge": "Sunrise Portal",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
+        "printHeaderTheme": "classic",
+        "printFooterNotes": "Sunrise Primary School Official Documentation. Early Childhood & Primary Education Ministry Approved.",
+        "printWatermarkText": "SUNRISE PRIMARY · OFFICIAL TRANSCRIPT",
+        "primaryColorHex": "#ea580c",
+        "accentColorHex": "#f59e0b"
+      },
+      {
+        "id": "tenant-westlands",
+        "name": "Westlands School",
+        "shortName": "Westlands",
+        "motto": "Excellence in Academic and Creative Pursuit",
+        "code": "WS-NBI-005",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g-ws\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%230f766e\"/><stop offset=\"100%\" stop-color=\"%23115e59\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g-ws)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%232dd4bf\" stroke-width=\"2.5\"/><polygon points=\"50,20 75,34 50,48 25,34\" fill=\"%235eead4\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">WESTLANDS</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%2399f6e4\" text-anchor=\"middle\">EST. 1992</text></svg>",
+        "crestIcon": "shield",
+        "themeColor": "teal",
+        "badgeColorClass": "bg-teal-100 text-teal-800 border-teal-300",
+        "headerBgClass": "from-teal-900 via-slate-900 to-teal-950",
+        "domain": "westlands.edusmart.ac.ke",
+        "address": "Waiyaki Way, Westlands",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 444 8811 / +254 721 889 001",
+        "email": "admin@westlands.edusmart.ac.ke",
+        "principalName": "Dr. Samuel Mwangi Njoroge",
+        "principalTitle": "Executive Director",
+        "registrationNumber": "MOE/PRI-JSS/NBI/1992/0178",
+        "curriculum": "Kenyan CBC Curriculum & Creative Arts",
+        "establishedYear": 1992,
+        "gradeLevels": "Grade 1 through Grade 9 CBC",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 1120,
+        "totalFaculty": 78,
+        "totalClasses": 38,
+        "attendanceToday": 97,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "14 Sep 2026",
+        "taglineNotes": "Excellence in Academic and Creative Pursuit · CBC Talent Academy",
+        "heroTitle": "WELCOME TO WESTLANDS SCHOOL PORTAL",
+        "heroSubtitle": "\"Excellence in Academic and Creative Pursuit\" — Dedicated Arts, Sports, Sciences & CBC Streams.",
+        "curriculumBadgeText": "KENYAN CBC CURRICULUM & TALENT PATHWAY · GRADES 1 TO 9",
+        "portalCardBadge": "Westlands Campus",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
+        "printHeaderTheme": "modern",
+        "printFooterNotes": "Westlands School Official Transcript. Certified under Ministry of Education Kenya. Creative Pursuit.",
+        "printWatermarkText": "WESTLANDS SCHOOL · OFFICIAL RECORD",
+        "primaryColorHex": "#0f766e",
+        "accentColorHex": "#2dd4bf"
+      },
+      {
+        "id": "tenant-staustins",
+        "name": "St. Austin's Academy",
+        "shortName": "St. Austin’s",
+        "motto": "Excellence in Character, Scholarship and Service",
+        "code": "SAA-NBI-006",
+        "logoUrl": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><linearGradient id=\"g1\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"%23064e3b\"/><stop offset=\"100%\" stop-color=\"%23022c22\"/></linearGradient></defs><rect width=\"100\" height=\"100\" rx=\"20\" fill=\"url(%23g1)\"/><circle cx=\"50\" cy=\"50\" r=\"42\" fill=\"none\" stroke=\"%23fbbf24\" stroke-width=\"2.5\"/><polygon points=\"50,18 78,32 50,46 22,32\" fill=\"%23fbbf24\"/><text x=\"50\" y=\"82\" font-family=\"sans-serif\" font-size=\"11\" font-weight=\"900\" fill=\"%23ffffff\" text-anchor=\"middle\" letter-spacing=\"1\">SAA</text><text x=\"50\" y=\"92\" font-family=\"sans-serif\" font-size=\"6\" font-weight=\"600\" fill=\"%23a7f3d0\" text-anchor=\"middle\">EST. 1982</text></svg>",
+        "crestIcon": "graduation-cap",
+        "themeColor": "emerald",
+        "badgeColorClass": "bg-emerald-100 text-emerald-800 border-emerald-300",
+        "headerBgClass": "from-emerald-900 via-slate-900 to-emerald-950",
+        "domain": "staustins.edusmart.ac.ke",
+        "address": "James Gichuru Road, Lavington",
+        "city": "Nairobi",
+        "county": "Nairobi County",
+        "phone": "+254 20 387 2345 / +254 712 345 678",
+        "email": "info@staustins.edusmart.ac.ke",
+        "principalName": "Dr. Elizabeth Mutua, PhD",
+        "principalTitle": "Head of Institution & Principal",
+        "registrationNumber": "MOE/PRI-JSS/NBI/2014/0842",
+        "curriculum": "Kenyan CBC Curriculum (Grades 1-9)",
+        "establishedYear": 1982,
+        "gradeLevels": "Grade 1 through Grade 9 (Junior School)",
+        "term": "Term 1, 2026",
+        "academicYear": "2026 Academic Year",
+        "totalStudents": 740,
+        "totalFaculty": 48,
+        "totalClasses": 26,
+        "attendanceToday": 95,
+        "status": "active",
+        "plan": "Pro",
+        "expiryDate": "31 Dec 2026",
+        "taglineNotes": "Excellence in Character · Scholarship and Service · Holistic Leadership",
+        "heroTitle": "WELCOME TO ST. AUSTIN’S ACADEMY PORTAL",
+        "heroSubtitle": "\"Excellence in Character, Scholarship and Service\" — Connecting learners, teachers, parents and school leadership.",
+        "curriculumBadgeText": "COMPETENCY-BASED CURRICULUM (CBC) · GRADES 1 TO 9",
+        "portalCardBadge": "St. Austin’s Portal",
+        "heroMediaType": null,
+        "heroImageUrl": null,
+        "heroVideoUrl": null,
+        "heroVideoPoster": null,
+        "heroVideoBadge": null,
+        "printHeaderTheme": "formal",
+        "printFooterNotes": "St. Austin’s Academy Official Academic Record. Authorized by Ministry of Education & KICD. Excellence in Character.",
+        "printWatermarkText": "ST. AUSTIN’S ACADEMY · OFFICIAL TRANSCRIPT",
+        "primaryColorHex": "#064e3b",
+        "accentColorHex": "#fbbf24"
       }
     ]
   },

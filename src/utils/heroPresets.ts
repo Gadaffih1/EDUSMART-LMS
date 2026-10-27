@@ -26,10 +26,14 @@ function readList<T>(key: string): T[] {
   }
 }
 
+import { DEFAULT_HERO_VIDEO_PRESETS, DEFAULT_HERO_IMAGE_PRESETS } from '../data/heroMediaPresets';
+
 export function listHeroVideoPresets(): HeroVideoPreset[] {
-  return readList<HeroVideoPreset>('edusmart_hero_video_presets_v1');
+  const list = readList<HeroVideoPreset>('edusmart_hero_video_presets_v1');
+  return list.length > 0 ? list : DEFAULT_HERO_VIDEO_PRESETS;
 }
 
 export function listHeroImagePresets(): HeroImagePreset[] {
-  return readList<HeroImagePreset>('edusmart_hero_image_presets_v1');
+  const list = readList<HeroImagePreset>('edusmart_hero_image_presets_v1');
+  return list.length > 0 ? list : DEFAULT_HERO_IMAGE_PRESETS;
 }

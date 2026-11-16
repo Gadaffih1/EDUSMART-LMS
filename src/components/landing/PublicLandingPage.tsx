@@ -1113,7 +1113,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
           )}
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div className="max-w-4xl mx-auto">
               
               <div className="space-y-4 text-left">
                 <span className="text-xs font-black tracking-widest text-blue-700 uppercase bg-blue-100/70 px-3 py-1 rounded-full border border-blue-200">
@@ -1142,7 +1142,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 </div>
 
                 {/* Milestones */}
-                <div className="grid grid-cols-2 gap-4 pt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
                   <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
                     <div className="text-2xl font-black text-blue-700 font-serif">{about.milestone1Value}</div>
                     <div className="text-xs font-bold text-slate-900 mt-0.5">{about.milestone1Title}</div>
@@ -1153,48 +1153,6 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     <div className="text-xs font-bold text-slate-900 mt-0.5">{about.milestone2Title}</div>
                     <div className="text-[11px] text-slate-500 mt-1">{about.milestone2Subtext}</div>
                   </div>
-                </div>
-              </div>
-
-              {/* School Campus Trust Showcase */}
-              <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-5 text-left">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 font-serif">
-                      Registered Institutional Network
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Schools currently operating on EduSmart LMS multi-tenant infrastructure:
-                    </p>
-                  </div>
-                  <span className="text-xs font-mono font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200">
-                    {allTenants.length} Campuses Active
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {allTenants.slice(0, 5).map((school) => (
-                    <div key={school.id} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-8 h-8 rounded-lg shrink-0 border border-slate-300 flex items-center justify-center p-0.5 bg-white"
-                        >
-                          {school.logoUrl ? (
-                            <img src={school.logoUrl} alt={school.name} className="w-full h-full object-contain" />
-                          ) : (
-                            <School className="w-4 h-4 text-slate-600" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-bold text-xs text-slate-900">{school.name}</div>
-                          <div className="text-[10px] text-slate-500">{school.city} · {school.motto || 'Excellence in Learning'}</div>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                        {school.code}
-                      </span>
-                    </div>
-                  ))}
                 </div>
               </div>
 

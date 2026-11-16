@@ -163,7 +163,9 @@ function AppContent({
       return;
     }
     if (currentUser && isPlatformSuperAdmin(currentUser)) {
-      if (portalView !== 'super_admin' && portalView !== 'public_landing') navigateToPortal('super_admin');
+      if (portalView !== 'super_admin' && portalView !== 'public_landing' && portalView !== 'school_lms') {
+        navigateToPortal('super_admin');
+      }
       return;
     }
     if (currentUser && portalView !== 'super_admin' && portalView !== 'school_lms') {
@@ -236,9 +238,14 @@ function AppContent({
     );
   }
 
-  if (currentUser && platformAdminSession) {
+  if (currentUser && platformAdminSession && portalView !== 'school_lms') {
     return (
       <SuperAdminPortalView
+        onEnterSchool={async (schoolId: string) => {
+          setIsPlatformAdminSession(true);
+          await switchTenant(schoolId);
+          navigateToPortal('school_lms', schoolId);
+        }}
         onBackToLanding={() => {
           navigateToPortal('public_landing');
         }}
@@ -249,6 +256,8 @@ function AppContent({
       />
     );
   }
+
+  const effectivePlatformAdminSession = isPlatformAdminSession || platformAdminSession;
 
   // 2. Unified Login Page (Screen 2 in diagram): Select school, enter username/password
   if (!currentUser && (portalView === 'unified_login' || portalView === 'school_lms')) {
@@ -279,10 +288,12 @@ function AppContent({
           navigateToPortal('public_landing');
         }}
         onSwitchUser={onSwitchUser}
-        isPlatformAdminSession={isPlatformAdminSession || (currentUser?.role === 'admin' && isPlatformAdminSession)}
+        isPlatformAdminSession={effectivePlatformAdminSession}
         onReturnToSuperAdmin={() => {
           setIsPlatformAdminSession(true);
-          onLogout();
+          if (!platformAdminSession) {
+            onLogout();
+          }
           navigateToPortal('super_admin');
         }}
         onNavigateHome={() => {
@@ -358,7 +369,7 @@ function AppContent({
             {!currentUser ? (
               <LandingPage 
                 onLoginSuccess={onLoginSuccess} 
-                onReturnToSuperAdmin={isPlatformAdminSession ? () => navigateToPortal('super_admin') : undefined}
+                onReturnToSuperAdmin={effectivePlatformAdminSession ? () => navigateToPortal('super_admin') : undefined}
               />
             ) : !isWorkspaceEnabled(currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
               /* Informative notice if Super Admin deactivated this workspace for this tenant */
@@ -370,7 +381,7 @@ function AppContent({
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
                   This workspace module has been selectively deactivated for <strong className="text-slate-900">{currentTenant.name}</strong> by the Super Administrator via the Platform Studio Customizer.
                 </p>
-                {isPlatformAdminSession && (
+                {effectivePlatformAdminSession && (
                   <button
                     onClick={() => navigateToPortal('super_admin')}
                     className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
@@ -640,7 +651,7 @@ function AppContent({
       )}
 
       {/* Platform Owner Floating Quick Return to Super Admin Hub & Customizer */}
-      {isPlatformAdminSession && (
+      {effectivePlatformAdminSession && (
         <div className="fixed bottom-6 left-6 z-40">
           <button
             onClick={() => navigateToPortal('super_admin')}

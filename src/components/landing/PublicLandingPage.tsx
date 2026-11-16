@@ -319,7 +319,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
   const handleOpenVirtualLabTicket = (
     tier: SubscriptionTier = 'term', 
-    step: 'select' | 'checkout' | 'enter_ticket' | 'launch_lab' = 'select', 
+    step: 'select' | 'checkout' | 'ticket' | 'enter_ticket' | 'launch_lab' = 'select', 
     ticketCode: string = ''
   ) => {
     setVirtualLabInitialTier(tier);

@@ -72,7 +72,7 @@ export interface Tenant {
 export interface TenantContextType {
   currentTenant: Tenant;
   allTenants: Tenant[];
-  switchTenant: (tenantId: string) => void;
+  switchTenant: (tenantId: string) => void | Promise<void>;
   updateTenantBranding: (updates: Partial<Tenant>, tenantId?: string) => void;
   registerTenant: (newTenant: Tenant) => void;
   updateTenant: (tenantId: string, updates: Partial<Tenant>) => void;

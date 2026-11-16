@@ -128,11 +128,16 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
   const [ticketValidationNotice, setTicketValidationNotice] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [confirmEmailInput, setConfirmEmailInput] = useState('');
+  const [isConfirmingEmail, setIsConfirmingEmail] = useState(false);
+  const [emailConfirmNotice, setEmailConfirmNotice] = useState<{ type: 'warning' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     if (initialTier) setSelectedTier(initialTier);
     setCheckoutError(null);
+    setEmailConfirmNotice(null);
+    setTicketValidationNotice(null);
 
     if (initialStep === 'launch_lab') {
       const serverSessionPass = ClientDataStore.getActiveVlabPass();
@@ -155,6 +160,10 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
         setVerifiedPass(serverSessionPass);
         setTicketNumber(serverSessionPass.ticketId);
         if (serverSessionPass.holderName) setFullName(serverSessionPass.holderName);
+        if (serverSessionPass.email) setEmail(serverSessionPass.email);
+        if (serverSessionPass.tier === 'day' || serverSessionPass.tier === 'term' || serverSessionPass.tier === 'annual') {
+          setSelectedTier(serverSessionPass.tier);
+        }
         setStep('launch_lab');
         setTicketValidationNotice(null);
         return;
@@ -174,6 +183,10 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
             ClientDataStore.setActiveVlabPass(data.pass);
             setTicketNumber(data.pass.ticketId);
             if (data.pass.holderName) setFullName(data.pass.holderName);
+            if (data.pass.email) setEmail(data.pass.email);
+            if (data.pass.tier === 'day' || data.pass.tier === 'term' || data.pass.tier === 'annual') {
+              setSelectedTier(data.pass.tier);
+            }
             setStep('launch_lab');
             setTicketValidationNotice(null);
           } else {
@@ -189,6 +202,57 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
           setActiveTab('buy');
           setTicketValidationNotice('Could not verify active paid subscription pass with server.');
         });
+    } else if (initialStep === 'ticket') {
+      setActiveTab('buy');
+      setStep('ticket');
+      const serverSessionPass = ClientDataStore.getActiveVlabPass();
+      const targetCode = (initialTicketCode || serverSessionPass?.ticketId || '').trim().toUpperCase();
+      if (
+        serverSessionPass &&
+        (!targetCode || String(serverSessionPass.ticketId || '').toUpperCase() === targetCode) &&
+        serverSessionPass.status === 'active' &&
+        serverSessionPass.subscriptionVerified !== false
+      ) {
+        setVerifiedPass(serverSessionPass);
+        setPendingPass(null);
+        setTicketNumber(serverSessionPass.ticketId);
+        if (serverSessionPass.holderName) setFullName(serverSessionPass.holderName);
+        if (serverSessionPass.email) {
+          setEmail(serverSessionPass.email);
+          setConfirmEmailInput(serverSessionPass.email);
+        }
+        if (serverSessionPass.tier === 'day' || serverSessionPass.tier === 'term' || serverSessionPass.tier === 'annual') {
+          setSelectedTier(serverSessionPass.tier);
+        }
+        if (serverSessionPass.issuedAt) setTicketDate(serverSessionPass.issuedAt);
+      } else if (targetCode && !targetCode.includes('DEMO')) {
+        void fetch(`/api/vlab/tickets/${encodeURIComponent(targetCode)}`, { credentials: 'include' })
+          .then(async (r) => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+          .then(({ ok, data }) => {
+            if (ok && data?.valid && data?.pass && data.pass.status === 'active' && data.pass.subscriptionVerified !== false) {
+              setVerifiedPass(data.pass);
+              setPendingPass(null);
+              ClientDataStore.setActiveVlabPass(data.pass);
+              setTicketNumber(data.pass.ticketId);
+              if (data.pass.holderName) setFullName(data.pass.holderName);
+              if (data.pass.email) {
+                setEmail(data.pass.email);
+                setConfirmEmailInput(data.pass.email);
+              }
+              if (data.pass.tier === 'day' || data.pass.tier === 'term' || data.pass.tier === 'annual') {
+                setSelectedTier(data.pass.tier);
+              }
+              if (data.pass.issuedAt) setTicketDate(data.pass.issuedAt);
+            } else if (data?.pass) {
+              setVerifiedPass(null);
+              setPendingPass(data.pass);
+              setTicketNumber(data.pass.ticketId || targetCode);
+              if (data.pass.holderName) setFullName(data.pass.holderName);
+              if (data.pass.email) setEmail(data.pass.email);
+            }
+          })
+          .catch(() => {});
+      }
     } else if (initialStep) {
       setStep(initialStep);
       if (initialStep === 'enter_ticket') {
@@ -196,9 +260,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
         setPendingPass(null);
       } else {
         setActiveTab('buy');
-        if (initialStep !== 'ticket') {
-          setPendingPass(null);
-        }
+        setPendingPass(null);
       }
     }
 
@@ -255,9 +317,82 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
     return () => clearInterval(timer);
   }, [isOpen, step, verifiedPass?.status, pendingPass?.ticketId, pendingPass?.status]);
 
+  const handleConfirmApprovalByEmail = async (e?: React.FormEvent, explicitEmail?: string) => {
+    if (e) e.preventDefault();
+    const targetEmail = (explicitEmail ?? confirmEmailInput).trim().toLowerCase();
+    if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setEmailConfirmNotice({
+        type: 'error',
+        message: 'Please enter the valid email address used when submitting your Paybill 400200 payment.',
+      });
+      return;
+    }
+
+    setIsConfirmingEmail(true);
+    setEmailConfirmNotice(null);
+    try {
+      const res = await fetch('/api/vlab/tickets/check-email', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (
+        res.ok &&
+        data?.approved &&
+        data?.pass &&
+        data.pass.status === 'active' &&
+        data.pass.subscriptionVerified !== false
+      ) {
+        const found = data.pass;
+        setVerifiedPass(found);
+        setPendingPass(null);
+        ClientDataStore.setActiveVlabPass(found);
+        setTicketNumber(found.ticketId);
+        if (found.holderName) setFullName(found.holderName);
+        if (found.email) setEmail(found.email);
+        if (found.tier === 'day' || found.tier === 'term' || found.tier === 'annual') {
+          setSelectedTier(found.tier);
+        }
+        setTicketDate(found.issuedAt || new Date().toLocaleString());
+        if (onSubscriptionSuccess) {
+          onSubscriptionSuccess(found.ticketId);
+        }
+        setActiveTab('buy');
+        setStep('ticket');
+        setEmailConfirmNotice(null);
+      } else if (data?.status === 'pending_approval' && data?.pass) {
+        setVerifiedPass(null);
+        setPendingPass(data.pass);
+        setEmailConfirmNotice({
+          type: 'warning',
+          message:
+            data?.error ||
+            `Ticket ${data.pass.ticketId} is currently awaiting Super Admin approval for Paybill 400200 Account 1164798.`,
+        });
+      } else {
+        setEmailConfirmNotice({
+          type: 'error',
+          message:
+            data?.error ||
+            `No approved Virtual Lab subscription found for "${targetEmail}".`,
+        });
+      }
+    } catch {
+      setEmailConfirmNotice({
+        type: 'error',
+        message: 'Could not reach server to confirm approval right now. Please try again.',
+      });
+    } finally {
+      setIsConfirmingEmail(false);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const selectedPass = PASS_OPTIONS.find(p => p.id === selectedTier) || PASS_OPTIONS[1];
+  const activeDisplayTier = (verifiedPass?.tier || pendingPass?.tier || selectedTier) as SubscriptionTier;
+  const selectedPass = PASS_OPTIONS.find(p => p.id === activeDisplayTier) || PASS_OPTIONS.find(p => p.id === selectedTier) || PASS_OPTIONS[1];
 
   const handleProceedToCheckout = () => {
     setStep('checkout');
@@ -519,8 +654,8 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <KeyRound className="w-3.5 h-3.5 text-blue-600" />
-              <span>Enter Existing Ticket Code</span>
+              <Mail className="w-3.5 h-3.5 text-blue-600" />
+              <span>Confirm Approval / Redeem Ticket</span>
             </button>
 
             <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 border border-amber-400/40 text-amber-800 rounded-lg text-[11px] font-extrabold">
@@ -549,20 +684,91 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
             </div>
 
             {activeTab === 'redeem' && (
-              <div className="max-w-xl mx-auto space-y-5 py-4">
-                <div className="text-center space-y-1">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 mx-auto flex items-center justify-center mb-2">
-                    <KeyRound className="w-6 h-6" />
+              <div className="max-w-xl mx-auto space-y-6 py-2">
+                {/* Confirm Super Admin Approval by Email (Auto-pops Ticket once approved) */}
+                <form
+                  onSubmit={(e) => void handleConfirmApprovalByEmail(e)}
+                  className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-5 rounded-2xl border-2 border-emerald-300 shadow-sm space-y-3.5"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-slate-900">
+                        Confirm Virtual Lab Approval by Email
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Insert the email address used during your Paybill 400200 payment. Once approved by Super Admin, your Official Ticket Pass pops open immediately.
+                      </p>
+                    </div>
                   </div>
-                  <h4 className="text-lg font-black text-slate-900">
-                    Redeem Your Lab Admission Ticket
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    Enter the ticket number or pass code sent via SMS or printed on your receipt.
-                  </p>
-                </div>
 
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Subscriber Email Address
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <input
+                        type="email"
+                        required
+                        value={confirmEmailInput}
+                        onChange={(e) => {
+                          setConfirmEmailInput(e.target.value);
+                          if (emailConfirmNotice) setEmailConfirmNotice(null);
+                        }}
+                        placeholder="e.g. joy.parent@gmail.com"
+                        className="flex-1 px-4 py-2.5 border border-slate-300 bg-white rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isConfirmingEmail}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-60 shrink-0"
+                      >
+                        {isConfirmingEmail ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Ticket className="w-4 h-4" />
+                        )}
+                        <span>{isConfirmingEmail ? 'Checking...' : 'Confirm Approval & Pop Ticket'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {emailConfirmNotice && (
+                    <div
+                      className={`p-3 rounded-xl text-xs flex items-start gap-2 border ${
+                        emailConfirmNotice.type === 'warning'
+                          ? 'bg-amber-50 border-amber-300 text-amber-900'
+                          : 'bg-red-50 border-red-200 text-red-700'
+                      }`}
+                    >
+                      {emailConfirmNotice.type === 'warning' ? (
+                        <Clock className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
+                      )}
+                      <span>{emailConfirmNotice.message}</span>
+                    </div>
+                  )}
+                </form>
+
+                {/* Redeem Existing Ticket Code */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                      <KeyRound className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">
+                        Or Enter Existing Ticket / M-Pesa Code
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Already have your VLAB-TICKET code? Enter it directly below.
+                      </p>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Ticket Code / Pass Identifier
@@ -586,7 +792,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                     </div>
                   )}
 
-                  <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                  <div className="pt-1 flex flex-col sm:flex-row items-center gap-3">
                     <button
                       type="button"
                       onClick={() => handleValidateTicket()}
@@ -1030,10 +1236,21 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
 
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
                       <div className="text-xs text-slate-600">
-                        Keep your ticket ID <strong className="font-mono">{ticketNumber}</strong>. This screen refreshes automatically every few seconds once Super Admin approves access.
+                        Keep your ticket ID <strong className="font-mono">{ticketNumber}</strong>. Once Super Admin approves access, your official Ticket pops open automatically or via email confirmation below.
                       </div>
 
-                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                        {(pendingPass?.email || email) && (
+                          <button
+                            type="button"
+                            onClick={() => void handleConfirmApprovalByEmail(undefined, pendingPass?.email || email)}
+                            disabled={isConfirmingEmail}
+                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-60"
+                          >
+                            <Mail className="w-4 h-4" />
+                            <span>{isConfirmingEmail ? 'Confirming...' : 'Confirm Approval by Email'}</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => void checkPendingApprovalStatus()}

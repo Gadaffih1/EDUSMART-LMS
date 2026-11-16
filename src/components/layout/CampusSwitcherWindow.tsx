@@ -24,11 +24,13 @@ import { Tenant } from '../../types/tenant';
 interface CampusSwitcherWindowProps {
   isOpen: boolean;
   onClose: () => void;
+  onEnterCampus?: (tenantId: string) => void;
 }
 
 export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
   isOpen,
-  onClose
+  onClose,
+  onEnterCampus
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,14 +81,14 @@ export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSelectCampus = (tenant: Tenant) => {
-    if (tenant.id === currentTenant.id) return;
-    switchTenant(tenant.id);
+  const handleSelectCampus = async (tenant: Tenant) => {
+    await switchTenant(tenant.id);
     setSwitchFeedback(`Switched active multi-tenancy session to ${tenant.name}`);
     setTimeout(() => {
       setSwitchFeedback(null);
       onClose();
-    }, 700);
+      onEnterCampus?.(tenant.id);
+    }, 350);
   };
 
   const modalContent = (

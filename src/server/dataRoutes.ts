@@ -141,6 +141,25 @@ function findActiveVlabPassByCode(code: string): any | null {
   return found ? stripSecrets(found) : null;
 }
 
+function findVlabPassesByEmail(email: string): any[] {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail) return [];
+  const passes = readCollectionForTenant('edusmart_vlab_ticket_passes', 'global', true) || [];
+  if (!Array.isArray(passes)) return [];
+  return passes
+    .filter((p: any) => {
+      const pEmail = String(p?.email || '').trim().toLowerCase();
+      const tid = String(p?.ticketId || '').trim().toUpperCase();
+      return pEmail === cleanEmail && tid && !tid.includes('DEMO');
+    })
+    .sort((a: any, b: any) => {
+      const aTime = Date.parse(String(a?.approvedAt || a?.createdAt || a?.issuedAt || 0)) || 0;
+      const bTime = Date.parse(String(b?.approvedAt || b?.createdAt || b?.issuedAt || 0)) || 0;
+      return bTime - aTime;
+    })
+    .map((p: any) => stripSecrets(p));
+}
+
 function verifyVlabPassCookie(req: Request): any | null {
   const cookies = parseCookies(req);
   const raw = cookies[VLAB_PASS_COOKIE_NAME];
@@ -607,6 +626,73 @@ export function registerDataRoutes(app: Express): void {
     } catch (err: any) {
       console.error('Error in /api/sync/push:', err);
       return res.status(500).json({ error: 'Failed to persist collection', message: err?.message });
+    }
+  });
+
+  // Confirm Virtual Lab Super Admin approval status by subscriber email
+  app.post('/api/vlab/tickets/check-email', (req: Request, res: Response) => {
+    try {
+      const cleanEmail = String(req.body?.email || '').trim().toLowerCase();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({
+          valid: false,
+          approved: false,
+          status: 'invalid_email',
+          error: 'Please enter a valid subscriber email address.',
+        });
+      }
+
+      const matches = findVlabPassesByEmail(cleanEmail);
+      if (matches.length === 0) {
+        return res.status(404).json({
+          valid: false,
+          approved: false,
+          status: 'not_found',
+          error: `No Virtual Lab subscription request was found for "${cleanEmail}". Please subscribe and pay via Paybill 400200 Account 1164798 first.`,
+        });
+      }
+
+      const activePass = matches.find((p: any) => isPassActiveAndValid(p));
+      if (activePass) {
+        setVlabPassCookie(req, res, String(activePass.ticketId).toUpperCase());
+        return res.json({
+          valid: true,
+          approved: true,
+          status: 'active',
+          pass: activePass,
+        });
+      }
+
+      const latest = matches[0];
+      if (latest.status === 'pending_approval') {
+        return res.status(423).json({
+          valid: false,
+          approved: false,
+          status: 'pending_approval',
+          pass: latest,
+          error: `Ticket ${latest.ticketId} (${latest.email}) is submitted for Paybill 400200 Account 1164798 and is still waiting for Super Admin approval.`,
+        });
+      }
+
+      if (latest.status === 'rejected') {
+        return res.status(402).json({
+          valid: false,
+          approved: false,
+          status: 'rejected',
+          pass: latest,
+          error: latest.rejectionReason || 'Payment verification was declined by Super Admin.',
+        });
+      }
+
+      return res.status(404).json({
+        valid: false,
+        approved: false,
+        status: 'expired',
+        pass: latest,
+        error: 'Your Virtual Lab ticket pass is expired or inactive. Please purchase a new pass.',
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed checking email approval status', message: err?.message });
     }
   });
 

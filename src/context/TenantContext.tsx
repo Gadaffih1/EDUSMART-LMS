@@ -37,7 +37,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const syncTenants = () => {
       const next = loadTenantsFromStore();
       setAllTenants(next);
-      const activeId = ClientDataStore.getSessionUser()?.schoolId || ClientDataStore.getActiveTenantId();
+      const activeId = ClientDataStore.getActiveTenantId() || ClientDataStore.getSessionUser()?.schoolId;
       if (activeId && next.some((t) => t.id === activeId)) {
         setCurrentTenantId(activeId);
       }
@@ -84,26 +84,34 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     totalFaculty: 0,
   };
 
-  const switchTenant = (tenantId: string) => {
+  const switchTenant = async (tenantId: string): Promise<void> => {
     const target = allTenants.find((t) => t.id === tenantId);
     if (!target) return;
 
     setCurrentTenantId(tenantId);
     ClientDataStore.setActiveTenantId(tenantId);
 
-    // If super admin session is active, persist active tenant context server-side
-    if (ClientDataStore.isSuperAdmin()) {
-      void fetch('/api/auth/switch-tenant', {
-        method: 'POST',
-        credentials: 'include',
-        headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ schoolId: tenantId, tenantId }),
-      })
-        .then(() => ClientDataStore.hydrateFromBackend(true))
-        .catch(() => {});
+    const existingUser = ClientDataStore.getSessionUser();
+    if (existingUser && ClientDataStore.isSuperAdmin()) {
+      ClientDataStore.setSessionUser({ ...existingUser, schoolId: tenantId });
     }
 
     window.dispatchEvent(new CustomEvent('tenant-changed', { detail: target }));
+
+    // If super admin session is active, persist active tenant context server-side
+    if (ClientDataStore.isSuperAdmin()) {
+      try {
+        await fetch('/api/auth/switch-tenant', {
+          method: 'POST',
+          credentials: 'include',
+          headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ schoolId: tenantId, tenantId }),
+        });
+        await ClientDataStore.hydrateFromBackend(true);
+      } catch {
+        // Ignore network errors while switching tenant view
+      }
+    }
   };
 
   const updateTenantBranding = (updates: Partial<Tenant>, tenantId?: string) => {

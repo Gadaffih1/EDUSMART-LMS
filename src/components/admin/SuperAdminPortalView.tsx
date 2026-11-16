@@ -55,8 +55,9 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   onBackToLanding,
   onSignOut
 }) => {
-  const { currentTenant, allTenants, switchTenant } = useTenant();
+  const { currentTenant, allTenants, switchTenant, updateTenant } = useTenant();
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
+  const [enteringSchoolId, setEnteringSchoolId] = useState<string | null>(null);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
@@ -435,10 +436,18 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 
                           <td className="py-3.5 px-3">
                             {isPending ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateTenant(school.id, { status: 'active', expiryDate: '31 Dec 2026' });
+                                  triggerToast(`${school.name} approved and activated.`);
+                                }}
+                                title="Click to approve and activate this school"
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-emerald-50 text-amber-800 hover:text-emerald-800 border border-amber-200 hover:border-emerald-300 transition-colors cursor-pointer"
+                              >
                                 <Clock className="w-3 h-3" />
-                                <span>Pending</span>
-                              </span>
+                                <span>Pending · Approve</span>
+                              </button>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                                 <CheckCircle2 className="w-3 h-3" />
@@ -465,14 +474,21 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 
                           <td className="py-3.5 px-4 text-right">
                             <button
-                              onClick={() => {
-                                switchTenant(school.id);
-                                onEnterSchool?.(school.id);
+                              type="button"
+                              disabled={enteringSchoolId === school.id}
+                              onClick={async () => {
+                                setEnteringSchoolId(school.id);
+                                try {
+                                  await switchTenant(school.id);
+                                  onEnterSchool?.(school.id);
+                                } finally {
+                                  setEnteringSchoolId(null);
+                                }
                               }}
-                              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 ml-auto cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 ml-auto cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                               title={`Enter ${school.name} Workspace as Platform Owner`}
                             >
-                              <span>Enter School</span>
+                              <span>{enteringSchoolId === school.id ? 'Entering...' : 'Enter School'}</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </td>
@@ -564,7 +580,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 
                   {/* Action 2: Manage Subscriptions */}
                   <button
-                    onClick={() => alert("Subscription Management: View institutional contracts, M-Pesa billing, and invoice dispatch.")}
+                    onClick={() => openConsoleTab('operations')}
                     className="w-full p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
                   >
                     <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
@@ -685,6 +701,10 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       <CampusSwitcherWindow
         isOpen={showCampusSwitcher}
         onClose={() => setShowCampusSwitcher(false)}
+        onEnterCampus={(schoolId) => {
+          setShowCampusSwitcher(false);
+          onEnterSchool?.(schoolId);
+        }}
       />
 
     </div>

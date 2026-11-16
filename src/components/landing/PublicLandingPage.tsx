@@ -71,6 +71,7 @@ import { HeroBannerMedia } from '../common/HeroBannerMedia';
 import { PublicVirtualLabSection } from './PublicVirtualLabSection';
 import { VirtualLabSubscriptionModal, SubscriptionTier } from '../virtuallab/VirtualLabSubscriptionModal';
 import { ClientDataStore } from '../../utils/clientDataStore';
+import { PWAInstallButton } from '../pwa/PWAInstallExperience';
 
 interface PublicLandingPageProps {
   onNavigateToLogin: () => void;
@@ -644,8 +645,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
               ))}
             </nav>
 
-            {/* Header Action Button: [ Virtual Lab Pass | School Login ] */}
-            <div className="hidden xl:flex items-center gap-3">
+            {/* Header Action Button: [ Install App | Virtual Lab Pass | School Login ] */}
+            <div className="hidden xl:flex items-center gap-2.5">
+              <PWAInstallButton variant="header" label="Install App" />
+
               <button
                 onClick={() => handleOpenVirtualLabTicket('term', 'select')}
                 className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl shadow-md shadow-emerald-900/10 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
@@ -744,6 +747,12 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                     {header.registerButtonLabel}
                   </button>
                 )}
+                <PWAInstallButton
+                  variant="compact"
+                  label="INSTALL EDUSMART APP"
+                  className="w-full justify-center py-2.5"
+                  onAfterAction={() => setMobileMenuOpen(false)}
+                />
               </div>
             </div>
           )}

@@ -42,6 +42,7 @@ import { findSystemRole } from './utils/systemRoles';
 import { ClientDataStore } from './utils/clientDataStore';
 import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
 import { fromAppPath, toAppPath } from './utils/appPath';
+import { PWAInstallInvitation, PWAUpdateAndOfflineBanner } from './components/pwa/PWAInstallExperience';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
 const schoolRouteMap = new Map<string, string>();
@@ -80,13 +81,15 @@ function AppContent({
   onLoginSuccess,
   onLogout,
   onSwitchUser,
-  onNavigateHome
+  onNavigateHome,
+  onLoginVisibilityChange
 }: {
   currentUser: User | null;
   onLoginSuccess: (user: User) => void;
   onLogout: () => void;
   onSwitchUser: (user: User) => void;
   onNavigateHome: () => void;
+  onLoginVisibilityChange: (isLoginVisible: boolean) => void;
 }) {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const { isNotificationOpen, closeNotifications } = useNotificationLayout();
@@ -172,6 +175,13 @@ function AppContent({
       navigateToPortal('school_lms', currentTenant.id, true);
     }
   }, [currentUser, currentTenant.id, portalView]);
+
+  React.useEffect(() => {
+    const isShowingLogin =
+      !currentUser &&
+      (portalView === 'unified_login' || portalView === 'super_admin' || portalView === 'school_lms');
+    onLoginVisibilityChange(isShowingLogin);
+  }, [currentUser, portalView, onLoginVisibilityChange]);
 
   React.useEffect(() => {
     const handleOpenOps = () => setViewingOperationsHub(true);
@@ -669,6 +679,7 @@ function AppContent({
 
 export default function App({ initialUser = null }: { initialUser?: User | null }) {
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser);
+  const [isLoginVisible, setIsLoginVisible] = useState<boolean>(false);
 
   React.useEffect(() => {
     const handlePlatformAdminSession = (event: Event) => {
@@ -751,13 +762,16 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
           <AccessibilityProvider>
             <MobileLayoutProvider>
               <NotificationLayoutProvider currentUser={currentUser}>
+                <PWAUpdateAndOfflineBanner />
                 <AppContent
                   currentUser={currentUser}
                   onLoginSuccess={handleLoginSuccess}
                   onLogout={handleLogout}
                   onSwitchUser={handleSwitchUser}
                   onNavigateHome={handleNavigateHome}
+                  onLoginVisibilityChange={setIsLoginVisible}
                 />
+                <PWAInstallInvitation suppressAutoShow={isLoginVisible} />
               </NotificationLayoutProvider>
             </MobileLayoutProvider>
           </AccessibilityProvider>

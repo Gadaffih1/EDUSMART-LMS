@@ -10,6 +10,7 @@ import {
   Palette,
   School,
   Settings,
+  Smartphone,
   Sparkles,
   SpellCheck,
   Users,
@@ -29,6 +30,7 @@ export type SuperAdminTab =
   | 'notify'
   | 'doc_requests'
   | 'vlab_approvals'
+  | 'pwa_analytics'
   | 'settings';
 
 interface ActionItem {
@@ -84,6 +86,7 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
       title: 'Operations',
       items: [
         { id: 'vlab_approvals', label: 'Virtual Lab Approvals', icon: FlaskConical, badge: pendingVlabCount > 0 ? String(pendingVlabCount) : undefined },
+        { id: 'pwa_analytics', label: 'PWA App & Installs', icon: Smartphone },
         { id: 'operations', label: 'Finance & Operations', icon: DollarSign },
         { id: 'doc_requests', label: 'Document Requests', icon: FileText },
       ],

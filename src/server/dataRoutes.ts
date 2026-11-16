@@ -1497,6 +1497,184 @@ export function registerDataRoutes(app: Express): void {
       return res.status(500).json({ error: 'Failed generating MySQL dump', message: err?.message });
     }
   });
+
+  // -------------------------------------------------------------------------
+  // 8. PWA Installation Detection & Privacy-Preserving Aggregate Analytics
+  // -------------------------------------------------------------------------
+  const ALLOWED_PWA_EVENTS = new Set([
+    'installed',
+    'standalone_launch',
+    'prompt_shown',
+    'prompt_accepted',
+    'prompt_dismissed',
+    'ios_guide_opened',
+  ]);
+  const ALLOWED_PWA_DEVICES = new Set([
+    'android_phone',
+    'iphone',
+    'android_tablet',
+    'ipad',
+    'desktop',
+    'other',
+  ]);
+  const ALLOWED_PWA_BROWSERS = new Set([
+    'chrome',
+    'samsung_internet',
+    'safari',
+    'edge',
+    'firefox',
+    'other',
+  ]);
+
+  app.post('/api/pwa/telemetry', (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const eventType = String(body.eventType || '').trim().toLowerCase();
+      if (!ALLOWED_PWA_EVENTS.has(eventType)) {
+        return res.status(400).json({ error: 'Unsupported PWA event type.' });
+      }
+
+      const rawDevice = String(body.deviceCategory || 'other').trim().toLowerCase();
+      const deviceCategory = ALLOWED_PWA_DEVICES.has(rawDevice) ? rawDevice : 'other';
+
+      const rawBrowser = String(body.browserFamily || 'other').trim().toLowerCase();
+      const browserFamily = ALLOWED_PWA_BROWSERS.has(rawBrowser) ? rawBrowser : 'other';
+
+      const displayMode = body.displayMode === 'standalone' ? 'standalone' : 'browser';
+      const appVersion = String(body.appVersion || '2.0.0').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 32) || '2.0.0';
+      const installId = body.installId
+        ? String(body.installId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64)
+        : null;
+
+      // Associate school_id only from verified session if signed in (strict tenant boundary), never trust arbitrary body schoolId
+      const schoolId = req.authSession?.schoolId && !req.authSession.isSuperAdmin
+        ? req.authSession.schoolId
+        : 'global';
+
+      const db = getDb();
+
+      // Deduplicate 'installed' event per anonymous installId
+      if (eventType === 'installed' && installId) {
+        const existing = db
+          .prepare(`SELECT id FROM pwa_install_events WHERE install_id = ? AND event_type = 'installed' LIMIT 1`)
+          .get(installId) as { id: string } | undefined;
+        if (existing) {
+          return res.json({ success: true, deduplicated: true });
+        }
+      }
+
+      const eventId = `pwa-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+      const now = new Date().toISOString();
+
+      db.prepare(
+        `INSERT INTO pwa_install_events (id, event_type, device_category, browser_family, display_mode, app_version, install_id, school_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(eventId, eventType, deviceCategory, browserFamily, displayMode, appVersion, installId, schoolId, now);
+
+      notifyMySqlTablesChanged(['pwa_install_events']);
+      return res.status(201).json({ success: true, id: eventId, createdAt: now });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed recording PWA analytics', message: err?.message });
+    }
+  });
+
+  app.get('/api/pwa/analytics', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      const allowedRoles = new Set(['admin', 'head_teacher', 'deputy_head']);
+      if (!session.isSuperAdmin && !allowedRoles.has(session.role)) {
+        return res.status(403).json({ error: 'Administrator privileges required to view PWA statistics.' });
+      }
+
+      const db = getDb();
+      const scopeWhere = session.isSuperAdmin ? '' : 'WHERE school_id = ?';
+      const scopeParams = session.isSuperAdmin ? [] : [session.schoolId];
+
+      const eventRows = db
+        .prepare(
+          `SELECT event_type, device_category, browser_family, display_mode, app_version, created_at
+           FROM pwa_install_events ${scopeWhere}
+           ORDER BY created_at DESC`
+        )
+        .all(...scopeParams) as Array<{
+          event_type: string;
+          device_category: string;
+          browser_family: string;
+          display_mode: string;
+          app_version: string;
+          created_at: string;
+        }>;
+
+      let totalInstalls = 0;
+      let standaloneLaunches = 0;
+      let promptShown = 0;
+      let promptAccepted = 0;
+      let promptDismissed = 0;
+      let iosGuideViews = 0;
+
+      const byDeviceCategory: Record<string, { installs: number; launches: number }> = {};
+      const byBrowserFamily: Record<string, { installs: number; launches: number }> = {};
+      const byVersion: Record<string, number> = {};
+
+      for (const row of eventRows) {
+        if (!byDeviceCategory[row.device_category]) {
+          byDeviceCategory[row.device_category] = { installs: 0, launches: 0 };
+        }
+        if (!byBrowserFamily[row.browser_family]) {
+          byBrowserFamily[row.browser_family] = { installs: 0, launches: 0 };
+        }
+
+        if (row.event_type === 'installed') {
+          totalInstalls++;
+          byDeviceCategory[row.device_category].installs++;
+          byBrowserFamily[row.browser_family].installs++;
+          byVersion[row.app_version] = (byVersion[row.app_version] || 0) + 1;
+        } else if (row.event_type === 'standalone_launch') {
+          standaloneLaunches++;
+          byDeviceCategory[row.device_category].launches++;
+          byBrowserFamily[row.browser_family].launches++;
+        } else if (row.event_type === 'prompt_shown') {
+          promptShown++;
+        } else if (row.event_type === 'prompt_accepted') {
+          promptAccepted++;
+        } else if (row.event_type === 'prompt_dismissed') {
+          promptDismissed++;
+        } else if (row.event_type === 'ios_guide_opened') {
+          iosGuideViews++;
+        }
+      }
+
+      const recentEvents = eventRows.slice(0, 15).map((r) => ({
+        eventType: r.event_type,
+        deviceCategory: r.device_category,
+        browserFamily: r.browser_family,
+        displayMode: r.display_mode,
+        appVersion: r.app_version,
+        createdAt: r.created_at,
+      }));
+
+      return res.json({
+        success: true,
+        scope: session.isSuperAdmin ? 'platform_global' : session.schoolId,
+        summary: {
+          totalInstalls,
+          standaloneLaunches,
+          promptShown,
+          promptAccepted,
+          promptDismissed,
+          iosGuideViews,
+          promptConversionRate: promptShown > 0 ? Math.round((promptAccepted / promptShown) * 100) : 0,
+        },
+        byDeviceCategory,
+        byBrowserFamily,
+        byVersion,
+        recentEvents,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed computing PWA analytics', message: err?.message });
+    }
+  });
 }
 
 // Export helper for operationsRoutes.ts

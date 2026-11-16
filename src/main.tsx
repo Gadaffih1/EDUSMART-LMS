@@ -1,15 +1,15 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { OfflineCacheManager } from './utils/offlineCacheManager';
+import { initPwaLifecycle } from './utils/pwaManager';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { SetPasswordPage } from './components/auth/SetPasswordPage';
 import { ClientDataStore } from './utils/clientDataStore';
 import type { User } from './types';
 import { toAppPath } from './utils/appPath';
 
-// Register PWA Service Worker for static asset caching
-OfflineCacheManager.registerServiceWorker();
+// Capture beforeinstallprompt & register PWA Service Worker immediately before hydration
+initPwaLifecycle();
 
 /** Lightweight boot placeholder — replaced by React on first render. */
 function showBootSplash() {

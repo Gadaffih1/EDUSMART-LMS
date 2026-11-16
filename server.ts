@@ -540,7 +540,22 @@ Core rules:
   const isProd = process.env.NODE_ENV === 'production';
 
   if (isProd) {
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        setHeaders: (res, filePath) => {
+          const base = path.basename(filePath);
+          if (base === 'sw.js' || base.startsWith('workbox-')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Service-Worker-Allowed', '/');
+          } else if (base === 'manifest.webmanifest') {
+            res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+          } else if (base === 'index.html' || base === 'offline.html') {
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+          }
+        },
+      })
+    );
 
     // Helper to find active compiled bundle assets
     const getBundledAssets = () => {

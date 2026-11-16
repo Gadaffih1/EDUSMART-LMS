@@ -43,6 +43,7 @@ import { SuperAdminOperationsControl } from './SuperAdminOperationsControl';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { PlatformAdminSettings } from './PlatformAdminSettings';
 import { VirtualLabApprovalsPanel } from './VirtualLabApprovalsPanel';
+import { PWAAnalyticsPanel } from './PWAAnalyticsPanel';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool?: (schoolId: string) => void;
@@ -62,7 +63,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
     const stored = ClientDataStore.getPreference<string>('edusmart_super_admin_tab', 'overview');
-    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'settings'];
+    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'pwa_analytics', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
@@ -298,6 +299,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                   {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
                   {activeConsoleTab === 'doc_requests' && 'Document Requests'}
                   {activeConsoleTab === 'vlab_approvals' && 'Virtual Lab Approvals'}
+                  {activeConsoleTab === 'pwa_analytics' && 'PWA App & Installs'}
                   {activeConsoleTab === 'settings' && 'Account Settings'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600">
@@ -663,6 +665,10 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       ) : activeConsoleTab === 'vlab_approvals' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           <VirtualLabApprovalsPanel />
+        </main>
+      ) : activeConsoleTab === 'pwa_analytics' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <PWAAnalyticsPanel />
         </main>
       ) : activeConsoleTab === 'settings' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">

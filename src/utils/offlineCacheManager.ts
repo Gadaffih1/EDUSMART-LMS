@@ -49,6 +49,7 @@ export interface OfflineCacheStatus {
 }
 
 import { ClientDataStore } from './clientDataStore';
+import { initPwaLifecycle } from './pwaManager';
 
 const STORAGE_KEY = 'edusmart_cbc_offline_cache_v2';
 const LAST_SYNC_KEY = 'edusmart_cbc_last_sync_timestamp';
@@ -620,20 +621,9 @@ export const OfflineCacheManager = {
   },
 
   /**
-   * Registers Service Worker in supported browsers
+   * Registers PWA Service Worker via centralized pwaManager lifecycle
    */
   registerServiceWorker(): void {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then((registration) => {
-            console.log('EduSmart CBC Service Worker registered successfully:', registration.scope);
-          })
-          .catch((error) => {
-            console.warn('EduSmart Service Worker registration note:', error);
-          });
-      });
-    }
+    initPwaLifecycle();
   }
 };

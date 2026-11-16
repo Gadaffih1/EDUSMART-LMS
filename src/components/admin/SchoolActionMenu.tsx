@@ -17,6 +17,7 @@ import {
   Shield,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
   Trophy,
   UserPlus,
   Users,
@@ -51,6 +52,7 @@ export type AdminActionTab =
   | 'cocurricular'
   | 'oversight'
   | 'reports'
+  | 'pwa_analytics'
   | 'operations';
 
 interface ActionItem {
@@ -134,6 +136,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       items: [
         { id: 'oversight', label: 'Executive Oversight & Logs', icon: BarChart3 },
         { id: 'reports', label: 'Reports & Dossiers', icon: FileSpreadsheet },
+        { id: 'pwa_analytics', label: 'Mobile PWA & App Installs', icon: Smartphone },
         { id: 'operations', label: 'Finance, Procurement, Stores & HR', icon: Building2 },
       ],
     },

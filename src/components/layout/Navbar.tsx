@@ -40,6 +40,7 @@ import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { AccessibilityModal } from '../common/AccessibilityModal';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
+import { PWAInstallButton } from '../pwa/PWAInstallExperience';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -306,6 +307,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: Actions & Quick Switcher */}
         <div className="hidden xl:flex items-center gap-1 sm:gap-2">
+          <PWAInstallButton variant="header" label="Install App" />
+
           {/* Gemini AI Multi-Turn Chatbot Trigger */}
           <button
             onClick={() => setShowGeminiModal(true)}
@@ -514,6 +517,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 </>
               )}
+              <PWAInstallButton
+                variant="menu-item"
+                onAfterAction={() => setIsMobileActionsOpen(false)}
+              />
               <button
                 type="button"
                 onClick={() => { setShowGeminiModal(true); setIsMobileActionsOpen(false); }}

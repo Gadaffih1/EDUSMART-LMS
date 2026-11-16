@@ -26,6 +26,7 @@ import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { SchoolStaffAppraisal, TeacherAppraisalPages } from './TeacherAppraisalPages';
 import { BulkUserImportModule } from './BulkUserImportModule';
 import { SchoolKpiAnalyticsCharts } from '../analytics/SchoolKpiAnalyticsCharts';
+import { PWAAnalyticsPanel } from './PWAAnalyticsPanel';
 import { 
   Users, 
   Award,
@@ -124,7 +125,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['overview', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
+        if (['overview', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
           openTab(tab as AdminActionTab);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
@@ -766,6 +767,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             title={`${currentTenant.name} Comprehensive KPI Surveillance Console`}
             subtitle="Real-time Recharts analytics tracking daily roll call presence rates, subject performance aggregates, and MoE CBC competency rubrics."
           />
+        </section>
+      )}
+
+      {activeTab === 'pwa_analytics' && (
+        <section className="space-y-6">
+          <PWAAnalyticsPanel />
         </section>
       )}
 

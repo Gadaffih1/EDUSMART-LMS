@@ -19,6 +19,7 @@ import { useTenant } from '../../context/TenantContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { ClientDataStore } from '../../utils/clientDataStore';
 import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
+import { PWAInstallButton } from '../pwa/PWAInstallExperience';
 
 interface UnifiedLoginPageProps {
   onLoginSuccess: (user: User) => void;
@@ -214,7 +215,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-sky-50/30 to-slate-100 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
       
       {/* Top Header Navigation */}
-      <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
         <button
           onClick={onBackToLanding}
           className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-blue-700 bg-white/80 hover:bg-white px-3.5 py-2 rounded-xl border border-slate-200 transition-all shadow-2xs cursor-pointer"
@@ -223,11 +224,14 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
           <span>Back to Public Website</span>
         </button>
 
-        <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 bg-white/80 px-3 py-1.5 rounded-xl border border-slate-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <Database className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="hidden sm:inline">Database Sync:</span>
-          <span className="text-emerald-700 font-bold">Active & Retained</span>
+        <div className="flex items-center gap-2">
+          <PWAInstallButton variant="compact" label="Install App" />
+          <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 bg-white/80 px-3 py-1.5 rounded-xl border border-slate-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Database Sync:</span>
+            <span className="text-emerald-700 font-bold">Active & Retained</span>
+          </div>
         </div>
       </header>
 

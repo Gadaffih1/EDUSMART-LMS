@@ -286,6 +286,21 @@ export function initDatabase(rootDir: string = process.cwd()): DbContext {
       value TEXT NOT NULL,
       applied_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS pwa_install_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      device_category TEXT NOT NULL,
+      browser_family TEXT NOT NULL,
+      display_mode TEXT NOT NULL,
+      app_version TEXT NOT NULL,
+      install_id TEXT,
+      school_id TEXT NOT NULL DEFAULT 'global',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pwa_events_type ON pwa_install_events(event_type, created_at);
+    CREATE INDEX IF NOT EXISTS idx_pwa_events_device ON pwa_install_events(device_category);
+    CREATE INDEX IF NOT EXISTS idx_pwa_events_install ON pwa_install_events(install_id, event_type);
   `);
 
   cachedContext = { db, dbPath, uploadsDir };

@@ -43,7 +43,7 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
     e.preventDefault();
     const code = ticketInputCode.trim().toUpperCase();
     if (!code) {
-      setQuickNotice('Please enter your paid subscription ticket code (e.g. VLAB-TICKET-829104).');
+      setQuickNotice('Please enter your paid subscription ticket code (e.g. VLAB-TICKET-XXXXXX).');
       return;
     }
 
@@ -53,25 +53,23 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
     }
 
     try {
-      const stored = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
-      let found = stored.find((t: any) =>
-        t.ticketId &&
-        t.ticketId.toUpperCase() === code &&
-        t.status === 'active' &&
-        !t.ticketId.toUpperCase().includes('DEMO')
-      );
-      if (!found) {
-        const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(code)}`, { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.valid && data?.pass) found = data.pass;
-        }
-      }
-      if (found) {
-        onOpenTicketModal('term', 'launch_lab', found.ticketId);
+      const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(code)}`, { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (
+        res.ok &&
+        data?.valid &&
+        data?.pass &&
+        data.pass.status === 'active' &&
+        data.pass.subscriptionVerified !== false &&
+        !String(data.pass.ticketId || '').toUpperCase().includes('DEMO')
+      ) {
+        ClientDataStore.setActiveVlabPass(data.pass);
+        onOpenTicketModal('term', 'launch_lab', data.pass.ticketId);
         setQuickNotice(null);
       } else {
-        setQuickNotice(`No active paid subscription found for "${code}". Public access to the laboratory workspace is strictly restricted to paid subscribers. Please select a pass below.`);
+        setQuickNotice(
+          data?.error || `No active paid subscription found for "${code}". Public access to the laboratory workspace is strictly restricted to paid subscribers. Please select a pass below.`
+        );
       }
     } catch {
       onOpenTicketModal('term', 'select');
@@ -131,7 +129,7 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
         <div className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-black uppercase tracking-widest shadow-lg">
             <FlaskConical className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span>Open to the Public · Digital Lab Ticketing</span>
+            <span>Subscription Required for Public Access · Lab Ticketing</span>
           </div>
 
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
@@ -189,7 +187,7 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
                     setTicketInputCode(e.target.value);
                     if (quickNotice) setQuickNotice(null);
                   }}
-                  placeholder="Enter Ticket Code (e.g. VLAB-TICKET-829104)"
+                  placeholder="Enter Ticket Code (e.g. VLAB-TICKET-XXXXXX)"
                   className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono font-bold text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 uppercase"
                 />
               </div>

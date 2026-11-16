@@ -113,54 +113,82 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
   const [gradeLevel, setGradeLevel] = useState('Grade 7 (JSS)');
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Generated Ticket Info
-  const [ticketNumber, setTicketNumber] = useState(initialTicketCode || 'VLAB-TICKET-829104');
+  // Generated Ticket Info & Server Verification State
+  const [ticketNumber, setTicketNumber] = useState(
+    initialTicketCode && !initialTicketCode.toUpperCase().includes('DEMO') ? initialTicketCode : ''
+  );
+  const [verifiedPass, setVerifiedPass] = useState<any | null>(null);
   const [ticketDate, setTicketDate] = useState('');
   const [existingTicketInput, setExistingTicketInput] = useState(initialTicketCode || '');
   const [ticketValidationNotice, setTicketValidationNotice] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     if (initialTier) setSelectedTier(initialTier);
+    setCheckoutError(null);
+
     if (initialStep === 'launch_lab') {
-      const stored = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
-      const targetCode = (initialTicketCode || '').trim().toUpperCase();
-      const found = stored.find((t: any) =>
-        t.ticketId &&
-        t.ticketId.toUpperCase() === targetCode &&
-        t.status === 'active' &&
-        !t.ticketId.toUpperCase().includes('DEMO')
-      );
-      if (found) {
-        setStep('launch_lab');
-        setTicketNumber(found.ticketId);
-        if (found.holderName) setFullName(found.holderName);
-      } else if (targetCode && !targetCode.includes('DEMO')) {
-        void fetch(`/api/vlab/tickets/${encodeURIComponent(targetCode)}`, { credentials: 'include' })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => {
-            if (data?.valid && data?.pass) {
-              setStep('launch_lab');
-              setTicketNumber(data.pass.ticketId);
-              if (data.pass.holderName) setFullName(data.pass.holderName);
-            } else {
-              setStep('select');
-              setActiveTab('buy');
-              setTicketValidationNotice('Free access is disabled. Public access to the virtual lab workspace strictly requires an active paid subscription pass.');
-            }
-          })
-          .catch(() => {
-            setStep('select');
-            setActiveTab('buy');
-          });
-      } else {
+      const serverSessionPass = ClientDataStore.getActiveVlabPass();
+      const targetCode = (initialTicketCode || serverSessionPass?.ticketId || '').trim().toUpperCase();
+
+      if (!targetCode || targetCode.includes('DEMO')) {
+        setVerifiedPass(null);
         setStep('select');
         setActiveTab('buy');
         setTicketValidationNotice('Free access is disabled. Public access to the virtual lab workspace strictly requires an active paid subscription pass.');
+        return;
       }
+
+      if (
+        serverSessionPass &&
+        String(serverSessionPass.ticketId || '').toUpperCase() === targetCode &&
+        serverSessionPass.status === 'active' &&
+        serverSessionPass.subscriptionVerified !== false
+      ) {
+        setVerifiedPass(serverSessionPass);
+        setTicketNumber(serverSessionPass.ticketId);
+        if (serverSessionPass.holderName) setFullName(serverSessionPass.holderName);
+        setStep('launch_lab');
+        setTicketValidationNotice(null);
+        return;
+      }
+
+      void fetch(`/api/vlab/tickets/${encodeURIComponent(targetCode)}`, { credentials: 'include' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (
+            data?.valid &&
+            data?.pass &&
+            data.pass.status === 'active' &&
+            data.pass.subscriptionVerified !== false &&
+            !String(data.pass.ticketId || '').toUpperCase().includes('DEMO')
+          ) {
+            setVerifiedPass(data.pass);
+            ClientDataStore.setActiveVlabPass(data.pass);
+            setTicketNumber(data.pass.ticketId);
+            if (data.pass.holderName) setFullName(data.pass.holderName);
+            setStep('launch_lab');
+            setTicketValidationNotice(null);
+          } else {
+            setVerifiedPass(null);
+            setStep('select');
+            setActiveTab('buy');
+            setTicketValidationNotice('Free access is disabled. Public access to the virtual lab workspace strictly requires an active paid subscription pass.');
+          }
+        })
+        .catch(() => {
+          setVerifiedPass(null);
+          setStep('select');
+          setActiveTab('buy');
+          setTicketValidationNotice('Could not verify active paid subscription pass with server.');
+        });
     } else if (initialStep) {
       setStep(initialStep);
       if (initialStep === 'enter_ticket') setActiveTab('redeem');
+      else setActiveTab('buy');
     }
+
     if (initialTicketCode && !initialTicketCode.toUpperCase().includes('DEMO')) {
       setTicketNumber(initialTicketCode);
       setExistingTicketInput(initialTicketCode);
@@ -177,17 +205,18 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
 
   const handleCompleteSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !phone) return;
+    if (!fullName || !email || !phone) {
+      setCheckoutError('Please enter subscriber name, email address, and M-Pesa phone number.');
+      return;
+    }
 
     setIsProcessing(true);
-    const generatedTicketId = `VLAB-TICKET-${Date.now().toString().slice(-6)}`;
+    setCheckoutError(null);
     const nowStr = new Date().toLocaleString('en-US', {
       dateStyle: 'medium',
       timeStyle: 'short'
     });
     const newPass = {
-      id: generatedTicketId,
-      ticketId: generatedTicketId,
       tier: selectedTier,
       priceKes: selectedPass.priceKes,
       holderName: fullName,
@@ -196,38 +225,46 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
       schoolName,
       gradeLevel,
       issuedAt: nowStr,
-      status: 'active'
     };
 
     try {
-      await fetch('/api/vlab/tickets', {
+      const res = await fetch('/api/vlab/tickets', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pass: newPass }),
       });
-    } catch (err) {
-      console.warn('[vlab] Failed persisting ticket to server:', err);
-    }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success || !data?.pass || data.pass.status !== 'active') {
+        setCheckoutError(data?.error || 'Subscription payment verification failed. Please check your details and try again.');
+        setIsProcessing(false);
+        return;
+      }
 
-    const existing = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
-    ClientDataStore.setCollection('edusmart_vlab_ticket_passes', [newPass, ...existing], { persist: false });
-    ClientDataStore.setPreference('edusmart_public_active_ticket', generatedTicketId);
+      const issuedPass = data.pass;
+      setVerifiedPass(issuedPass);
+      ClientDataStore.setActiveVlabPass(issuedPass);
+      const existing = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+      ClientDataStore.setCollection('edusmart_vlab_ticket_passes', [issuedPass, ...existing], { persist: false });
 
-    setTicketNumber(generatedTicketId);
-    setTicketDate(nowStr);
-    setIsProcessing(false);
-    setStep('ticket');
+      setTicketNumber(issuedPass.ticketId);
+      setTicketDate(issuedPass.issuedAt || nowStr);
+      setIsProcessing(false);
+      setStep('ticket');
 
-    if (onSubscriptionSuccess) {
-      onSubscriptionSuccess(generatedTicketId);
+      if (onSubscriptionSuccess) {
+        onSubscriptionSuccess(issuedPass.ticketId);
+      }
+    } catch {
+      setCheckoutError('Network error communicating with ticketing server. Please try again.');
+      setIsProcessing(false);
     }
   };
 
   const handleValidateTicket = async (codeToTest?: string) => {
     const raw = (codeToTest || existingTicketInput).trim().toUpperCase();
     if (!raw) {
-      setTicketValidationNotice('Please enter your paid subscription pass or ticket ID (e.g. VLAB-TICKET-829104).');
+      setTicketValidationNotice('Please enter your paid subscription pass or ticket ID (e.g. VLAB-TICKET-XXXXXX).');
       return;
     }
 
@@ -236,45 +273,53 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
       return;
     }
 
-    const stored = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
-    let found = stored.find((t: any) =>
-      t.ticketId &&
-      t.ticketId.toUpperCase() === raw &&
-      t.status === 'active' &&
-      !t.ticketId.toUpperCase().includes('DEMO')
-    );
-
-    if (!found) {
-      try {
-        const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(raw)}`, { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.valid && data?.pass) found = data.pass;
+    try {
+      const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(raw)}`, { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (
+        res.ok &&
+        data?.valid &&
+        data?.pass &&
+        data.pass.status === 'active' &&
+        data.pass.subscriptionVerified !== false &&
+        !String(data.pass.ticketId || '').toUpperCase().includes('DEMO')
+      ) {
+        const found = data.pass;
+        const activeCode = found.ticketId;
+        setVerifiedPass(found);
+        ClientDataStore.setActiveVlabPass(found);
+        setTicketNumber(activeCode);
+        if (found.holderName) setFullName(found.holderName);
+        setTicketDate(found.issuedAt || new Date().toLocaleString());
+        if (onSubscriptionSuccess) {
+          onSubscriptionSuccess(activeCode);
         }
-      } catch {
-        // ignore
+        setStep('launch_lab');
+        setTicketValidationNotice(null);
+      } else {
+        setVerifiedPass(null);
+        setTicketValidationNotice(
+          data?.error || `No active paid subscription found for "${raw}". Public access to the virtual lab workspace is strictly restricted to paid subscribers. Please select a pass below.`
+        );
       }
-    }
-
-    if (found) {
-      const activeCode = found.ticketId;
-      setTicketNumber(activeCode);
-      if (found.holderName) setFullName(found.holderName);
-      setTicketDate(found.issuedAt || new Date().toLocaleString());
-      ClientDataStore.setPreference('edusmart_public_active_ticket', activeCode);
-      if (onSubscriptionSuccess) {
-        onSubscriptionSuccess(activeCode);
-      }
-      setStep('launch_lab');
-      setTicketValidationNotice(null);
-    } else {
-      setTicketValidationNotice(`No active paid subscription found for "${raw}". Public access to the virtual lab workspace is strictly restricted to paid subscribers. Please select a pass below.`);
+    } catch {
+      setVerifiedPass(null);
+      setTicketValidationNotice('Could not verify pass with the server right now. Please try again.');
     }
   };
 
+  const hasVerifiedActiveWorkspacePass = Boolean(
+    step === 'launch_lab' &&
+      verifiedPass &&
+      verifiedPass.status === 'active' &&
+      verifiedPass.subscriptionVerified !== false &&
+      ticketNumber &&
+      !ticketNumber.toUpperCase().includes('DEMO')
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      {step === 'launch_lab' && ticketNumber && !ticketNumber.toUpperCase().includes('DEMO') ? (
+      {hasVerifiedActiveWorkspacePass ? (
         /* Full-Screen Lab Explorer for Subscribed Non-Member */
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
           <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
@@ -443,7 +488,7 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                         setExistingTicketInput(e.target.value);
                         if (ticketValidationNotice) setTicketValidationNotice(null);
                       }}
-                      placeholder="e.g. VLAB-TICKET-829104"
+                      placeholder="e.g. VLAB-TICKET-XXXXXX"
                       className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
                     />
                   </div>
@@ -673,6 +718,13 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-emerald-500 outline-none"
                   />
                 </div>
+
+                {checkoutError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span>{checkoutError}</span>
+                  </div>
+                )}
 
                 <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between">
                   <div>

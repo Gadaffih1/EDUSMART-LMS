@@ -11,10 +11,125 @@ import {
 } from './migrate';
 import { broadcastChange, getRealtimeClientCount, registerSseClient } from './realtimeBus';
 import {
+  parseCookies,
   requireAuth,
   requireSuperAdmin,
   resolveAuthorizedTenantId,
 } from './authRoutes';
+
+const VLAB_PASS_COOKIE_NAME = 'edusmart_vlab_pass';
+const VLAB_COOKIE_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (bound by ticket expiresAt)
+const VLAB_TIER_PRICES_KES: Record<string, { priceKes: number; days: number }> = {
+  day: { priceKes: 150, days: 1 },
+  term: { priceKes: 1200, days: 90 },
+  annual: { priceKes: 3500, days: 365 },
+};
+
+let cachedVlabCookieSecret: string | null = null;
+
+function getVlabCookieSecret(): string {
+  if (cachedVlabCookieSecret) return cachedVlabCookieSecret;
+  if (process.env.VLAB_COOKIE_SECRET) {
+    cachedVlabCookieSecret = process.env.VLAB_COOKIE_SECRET;
+    return cachedVlabCookieSecret;
+  }
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT value FROM migration_meta WHERE key = 'vlab_cookie_secret_v1'`)
+    .get() as { value: string } | undefined;
+  if (row?.value) {
+    cachedVlabCookieSecret = row.value;
+    return cachedVlabCookieSecret;
+  }
+  const generated = crypto.randomBytes(32).toString('hex');
+  db.prepare(
+    `INSERT OR IGNORE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+  ).run('vlab_cookie_secret_v1', generated, new Date().toISOString());
+  const stored = db
+    .prepare(`SELECT value FROM migration_meta WHERE key = 'vlab_cookie_secret_v1'`)
+    .get() as { value: string } | undefined;
+  cachedVlabCookieSecret = stored?.value || generated;
+  return cachedVlabCookieSecret;
+}
+
+function signVlabTicketToken(ticketId: string): string {
+  const sig = crypto
+    .createHmac('sha256', getVlabCookieSecret())
+    .update(ticketId)
+    .digest('hex');
+  return `${ticketId}.${sig}`;
+}
+
+function setVlabPassCookie(req: Request, res: Response, ticketId: string): void {
+  const token = signVlabTicketToken(ticketId);
+  const isHttps =
+    req.secure ||
+    String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
+  const parts = [
+    `${VLAB_PASS_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${VLAB_COOKIE_TTL_SEC}`,
+  ];
+  if (isHttps) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
+
+function clearVlabPassCookie(res: Response): void {
+  res.setHeader(
+    'Set-Cookie',
+    `${VLAB_PASS_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+  );
+}
+
+function isPassActiveAndValid(pass: any): boolean {
+  if (!pass || typeof pass !== 'object') return false;
+  const tid = String(pass.ticketId || '').trim().toUpperCase();
+  if (!tid || tid.includes('DEMO')) return false;
+  if (pass.status !== 'active') return false;
+  if (pass.subscriptionVerified === false) return false;
+  if (pass.expiresAt) {
+    const expMs = Date.parse(String(pass.expiresAt));
+    if (!Number.isNaN(expMs) && expMs <= Date.now()) return false;
+  }
+  return true;
+}
+
+function findActiveVlabPassByCode(code: string): any | null {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!clean || clean.includes('DEMO')) return null;
+  const passes = readCollectionForTenant('edusmart_vlab_ticket_passes', 'global', true) || [];
+  if (!Array.isArray(passes)) return null;
+  const found = passes.find(
+    (p: any) => String(p?.ticketId || '').trim().toUpperCase() === clean && isPassActiveAndValid(p)
+  );
+  return found ? stripSecrets(found) : null;
+}
+
+function verifyVlabPassCookie(req: Request): any | null {
+  const cookies = parseCookies(req);
+  const raw = cookies[VLAB_PASS_COOKIE_NAME];
+  if (!raw) return null;
+  const dotIdx = raw.lastIndexOf('.');
+  if (dotIdx <= 0) return null;
+  const ticketId = raw.slice(0, dotIdx).trim().toUpperCase();
+  const sig = raw.slice(dotIdx + 1).trim();
+  if (!ticketId || !sig || ticketId.includes('DEMO')) return null;
+
+  const expectedSig = crypto
+    .createHmac('sha256', getVlabCookieSecret())
+    .update(ticketId)
+    .digest('hex');
+
+  const sigBuf = Buffer.from(sig, 'utf8');
+  const expectedBuf = Buffer.from(expectedSig, 'utf8');
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+    return null;
+  }
+
+  return findActiveVlabPassByCode(ticketId);
+}
 
 // Collections safe to serve to unauthenticated visitors for public landing page & reference catalogs
 const PUBLIC_SAFE_COLLECTIONS = new Set([
@@ -216,6 +331,7 @@ export function registerDataRoutes(app: Express): void {
           const val = readCollectionForTenant(key, 'global', true);
           if (val !== undefined) collections[key] = val;
         }
+        const activeVlabPass = verifyVlabPassCookie(req);
         return res.json({
           success: true,
           authenticated: false,
@@ -223,6 +339,7 @@ export function registerDataRoutes(app: Express): void {
           activeTenantId: collections.edusmart_all_tenants_registry?.[0]?.id || 'tenant-riara',
           collections,
           preferences: {},
+          activeVlabPass,
           timestamp: new Date().toISOString(),
         });
       }
@@ -284,6 +401,7 @@ export function registerDataRoutes(app: Express): void {
         }
       }
 
+      const activeVlabPass = verifyVlabPassCookie(req);
       return res.json({
         success: true,
         authenticated: true,
@@ -294,6 +412,7 @@ export function registerDataRoutes(app: Express): void {
         totalCollections: Object.keys(collections).length,
         preferences,
         schoolSettings,
+        activeVlabPass,
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
@@ -461,12 +580,18 @@ export function registerDataRoutes(app: Express): void {
   app.get('/api/vlab/tickets/:code', (req: Request, res: Response) => {
     try {
       const code = String(req.params.code || '').trim().toUpperCase();
-      if (!code) return res.status(400).json({ error: 'Ticket code is required' });
-      const passes = readCollectionForTenant('edusmart_vlab_ticket_passes', 'global', true) || [];
-      const found = Array.isArray(passes)
-        ? passes.find((p: any) => String(p.ticketId || '').toUpperCase() === code && p.status === 'active')
-        : null;
-      if (!found) return res.status(404).json({ valid: false, error: 'Ticket not found or inactive' });
+      if (!code) return res.status(400).json({ valid: false, error: 'Ticket code is required' });
+      if (code.includes('DEMO')) {
+        return res.status(403).json({
+          valid: false,
+          error: 'Free demo access is disabled. An active paid subscription ticket is strictly required.',
+        });
+      }
+      const found = findActiveVlabPassByCode(code);
+      if (!found) {
+        return res.status(404).json({ valid: false, error: 'Active paid subscription ticket not found or expired' });
+      }
+      setVlabPassCookie(req, res, String(found.ticketId).toUpperCase());
       return res.json({ valid: true, pass: found });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed verifying ticket', message: err?.message });
@@ -475,23 +600,76 @@ export function registerDataRoutes(app: Express): void {
 
   app.post('/api/vlab/tickets', (req: Request, res: Response) => {
     try {
-      const pass = req.body?.pass || req.body;
-      if (!pass || !pass.ticketId) {
-        return res.status(400).json({ error: 'Ticket pass details required' });
+      const input = req.body?.pass || req.body || {};
+      const holderName = String(input.holderName || '').trim();
+      const email = String(input.email || '').trim();
+      const phone = String(input.phone || '').trim();
+      const tier = String(input.tier || 'term').trim().toLowerCase();
+
+      if (!holderName || holderName.length < 2) {
+        return res.status(400).json({ error: 'Subscriber full name is required.' });
       }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'A valid email address is required.' });
+      }
+      if (!phone || phone.replace(/\D/g, '').length < 9) {
+        return res.status(400).json({ error: 'A valid M-Pesa phone number is required.' });
+      }
+      const tierConfig = VLAB_TIER_PRICES_KES[tier];
+      if (!tierConfig) {
+        return res.status(400).json({ error: 'Invalid subscription tier selected.' });
+      }
+
+      const rawTicket = String(input.ticketId || '').trim().toUpperCase();
+      if (rawTicket.includes('DEMO')) {
+        return res.status(403).json({
+          error: 'Demo ticket codes are prohibited. Public Virtual Lab requires a paid subscription.',
+        });
+      }
+
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + tierConfig.days * 86_400_000).toISOString();
+      const canonicalTicketId =
+        /^VLAB-TICKET-[A-Z0-9]{4,16}$/.test(rawTicket)
+          ? rawTicket
+          : `VLAB-TICKET-${crypto.randomInt(100000, 999999)}`;
+
+      const authoritativePass = {
+        id: canonicalTicketId,
+        ticketId: canonicalTicketId,
+        tier,
+        priceKes: tierConfig.priceKes,
+        holderName,
+        email,
+        phone,
+        schoolName: String(input.schoolName || 'Public STEM Learner / Homeschool').trim(),
+        gradeLevel: String(input.gradeLevel || 'Grade 7 (JSS)').trim(),
+        issuedAt: now.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+        createdAt: now.toISOString(),
+        expiresAt,
+        status: 'active',
+        subscriptionVerified: true,
+      };
+
       const db = getDb();
-      ingestCollectionData(db, 'edusmart_vlab_ticket_passes', [pass], false);
+      ingestCollectionData(db, 'edusmart_vlab_ticket_passes', [authoritativePass], false);
+      setVlabPassCookie(req, res, canonicalTicketId);
       broadcastChange({
         type: 'record:created',
         collection: 'edusmart_vlab_ticket_passes',
         tenantId: 'global',
-        recordId: String(pass.id || pass.ticketId),
-        timestamp: new Date().toISOString(),
+        recordId: canonicalTicketId,
+        timestamp: now.toISOString(),
       });
-      return res.status(201).json({ success: true, pass });
+      return res.status(201).json({ success: true, pass: authoritativePass });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed saving ticket pass', message: err?.message });
     }
+  });
+
+  app.post('/api/vlab/tickets/clear', (_req: Request, res: Response) => {
+    clearVlabPassCookie(res);
+    return res.json({ success: true });
   });
 
   // -------------------------------------------------------------------------
@@ -718,6 +896,12 @@ export function registerDataRoutes(app: Express): void {
             const current = JSON.parse(row.payload_json);
             const merged = { ...current, ...tenantUpdates, id: tenantId };
             ingestCollectionData(db, 'edusmart_all_tenants_registry', [merged], false);
+            db.prepare(
+              `INSERT INTO school_settings (school_id, setting_key, payload_json, updated_at)
+               VALUES (?, 'profile_and_branding', ?, ?)
+               ON CONFLICT(school_id, setting_key)
+               DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`
+            ).run(tenantId, JSON.stringify(merged), now);
           }
         }
         db.exec('COMMIT');

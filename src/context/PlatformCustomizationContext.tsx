@@ -158,6 +158,14 @@ function hydrateCustomizationState(): PlatformCustomizationState {
     globalSettings: {
       ...def.globalSettings,
       ...(parsed.globalSettings || {}),
+      virtualLabPolicy: {
+        publicAccessMode: 'subscription_required',
+        requirePaidSubscriptionOnPublicPage: true,
+        allowFreePublicDemo: false,
+        freeForMemberSchools: true,
+        ...(def.globalSettings?.virtualLabPolicy || {}),
+        ...(parsed.globalSettings?.virtualLabPolicy || {}),
+      },
     },
     classTeacherPolicy: {
       ...(DEFAULT_PLATFORM_CUSTOMIZATION.classTeacherPolicy as ClassTeacherModulePolicy),

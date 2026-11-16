@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDb, getDbPaths, hashPassword, isHashedPassword } from './db';
+import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 
 /** Map from SQL table name in supabase/fresh/*.sql -> frontend collection key */
 export const SQL_TABLE_TO_COLLECTION: Record<string, string> = {
@@ -754,6 +755,9 @@ export function runDatabaseMigrations(rootDir: string = process.cwd()): void {
         );
       }
 
+      // 4. Strictly seed platform & per-school settings while retaining all existing settings
+      seedAndRetainSettings(db);
+
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
@@ -762,4 +766,181 @@ export function runDatabaseMigrations(rootDir: string = process.cwd()): void {
   };
 
   tx();
+}
+
+function deepMergeRetainingExisting<T extends Record<string, any>>(defaultsObj: T, existingObj: any): T {
+  if (!existingObj || typeof existingObj !== 'object' || Array.isArray(existingObj)) {
+    return JSON.parse(JSON.stringify(defaultsObj));
+  }
+  const result: Record<string, any> = { ...defaultsObj };
+  for (const [key, val] of Object.entries(existingObj)) {
+    if (val === undefined || val === null) continue;
+    const defVal = result[key];
+    if (
+      defVal &&
+      typeof defVal === 'object' &&
+      !Array.isArray(defVal) &&
+      typeof val === 'object' &&
+      !Array.isArray(val)
+    ) {
+      result[key] = deepMergeRetainingExisting(defVal, val);
+    } else if (Array.isArray(val) && val.length === 0 && Array.isArray(defVal) && defVal.length > 0) {
+      result[key] = defVal;
+    } else {
+      result[key] = val;
+    }
+  }
+  return result as T;
+}
+
+/**
+ * Retains 100% of current platform customization & tenant branding settings while
+ * strictly seeding missing default policy keys (including virtualLabPolicy) and
+ * populating per-school institutional settings rows in `school_settings`.
+ */
+export function seedAndRetainSettings(db: DatabaseSync): void {
+  const now = new Date().toISOString();
+
+  // A. Read existing platform customization pack (checking v6 first, then pack_v1)
+  const v6Row = db
+    .prepare(
+      `SELECT payload_json FROM collections_store
+       WHERE collection_key = 'edusmart_platform_customization_v6' AND deleted_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`
+    )
+    .get() as { payload_json: string } | undefined;
+
+  const packRow = db
+    .prepare(
+      `SELECT payload_json FROM collections_store
+       WHERE collection_key = 'edusmart_platform_customization_pack_v1' AND deleted_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`
+    )
+    .get() as { payload_json: string } | undefined;
+
+  let existingPack: any = null;
+  for (const candidate of [v6Row, packRow]) {
+    if (candidate?.payload_json) {
+      try {
+        const parsed = JSON.parse(candidate.payload_json);
+        if (parsed && typeof parsed === 'object') {
+          existingPack = parsed;
+          break;
+        }
+      } catch {
+        // ignore malformed row
+      }
+    }
+  }
+
+  const mergedPlatform = deepMergeRetainingExisting(DEFAULT_PLATFORM_CUSTOMIZATION as any, existingPack);
+  // Strictly enforce subscription-required Virtual Lab policy on public page
+  mergedPlatform.globalSettings = {
+    ...(mergedPlatform.globalSettings || {}),
+    virtualLabPolicy: {
+      publicAccessMode: 'subscription_required',
+      requirePaidSubscriptionOnPublicPage: true,
+      allowFreePublicDemo: false,
+      freeForMemberSchools: true,
+    },
+  };
+  // Keep packages hidden from public portal view while retaining all other landing customization
+  if (mergedPlatform.landingPage) {
+    mergedPlatform.landingPage.visibility = {
+      ...(mergedPlatform.landingPage.visibility || {}),
+      pricing: false,
+    };
+    if (Array.isArray(mergedPlatform.landingPage.header?.navLinks)) {
+      mergedPlatform.landingPage.header.navLinks = mergedPlatform.landingPage.header.navLinks.map(
+        (link: any) =>
+          link?.id === 'nav-pricing' || link?.sectionId === 'pricing-section'
+            ? { ...link, enabled: false }
+            : link
+      );
+    }
+  }
+
+  upsertCollectionRecord(db, 'edusmart_platform_customization_v6', 'singleton', 'global', mergedPlatform, false);
+  upsertCollectionRecord(db, 'edusmart_platform_customization_pack_v1', 'singleton', 'global', mergedPlatform, false);
+
+  // B. Seed per-school settings rows in `school_settings` for every tenant (INSERT OR IGNORE)
+  const tenants = db
+    .prepare(`SELECT id, name, code, payload_json FROM tenants`)
+    .all() as Array<{ id: string; name: string; code: string; payload_json: string }>;
+
+  const insertSettingStmt = db.prepare(
+    `INSERT OR IGNORE INTO school_settings (school_id, setting_key, payload_json, updated_at)
+     VALUES (?, ?, ?, ?)`
+  );
+
+  let seededCount = 0;
+  for (const tenant of tenants) {
+    let parsedTenant: Record<string, any> = {};
+    try {
+      parsedTenant = tenant.payload_json ? JSON.parse(tenant.payload_json) : {};
+    } catch {
+      parsedTenant = {};
+    }
+
+    const schoolDefaults: Array<[string, Record<string, any>]> = [
+      [
+        'profile_and_branding',
+        {
+          id: tenant.id,
+          name: parsedTenant.name || tenant.name,
+          shortName: parsedTenant.shortName || parsedTenant.name || tenant.name,
+          code: parsedTenant.code || tenant.code,
+          motto: parsedTenant.motto || 'Excellence & Integrity',
+          location: parsedTenant.location || 'Kenya',
+          primaryColor: parsedTenant.primaryColor || '#2563eb',
+          logoUrl: parsedTenant.logoUrl || '',
+        },
+      ],
+      [
+        'academic_calendar',
+        {
+          currentYear: '2026',
+          currentTerm: 1,
+          termLabel: 'Term 1, 2026',
+          curriculum: parsedTenant.curriculum || 'Kenyan CBC & JSS',
+          gradingScale: 'CBC 4-Level (EE, ME, AE, BE)',
+        },
+      ],
+      [
+        'portal_and_virtual_lab',
+        {
+          virtualLabBundledForSchool: true,
+          publicVirtualLabRequiresSubscription: true,
+          allowParentPortal: true,
+          allowStudentPortal: true,
+        },
+      ],
+      [
+        'operations_and_finance',
+        {
+          currency: 'KES',
+          mpesaIntegrated: true,
+          strictBudgetEnforcement: true,
+          approvalThresholdKes: 50000,
+        },
+      ],
+      [
+        'notifications_and_attendance',
+        {
+          smsGateExitAlerts: true,
+          morningRollCallDeadline: '08:30 AM',
+          emailDigestEnabled: true,
+        },
+      ],
+    ];
+
+    for (const [settingKey, payload] of schoolDefaults) {
+      const info = insertSettingStmt.run(tenant.id, settingKey, JSON.stringify(payload), now);
+      if (info.changes > 0) seededCount++;
+    }
+  }
+
+  db.prepare(
+    `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+  ).run('settings_seeded_v1', `${tenants.length} tenants:${seededCount} inserted`, now);
 }

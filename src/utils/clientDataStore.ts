@@ -20,6 +20,7 @@ const listeners = new Set<ChangeListener>();
 let sessionUser: User | null = null;
 let activeTenantId: string = 'tenant-riara';
 let isSuperAdminSession = false;
+let activeVlabPass: any | null = null;
 let hydrated = false;
 let hydratingPromise: Promise<void> | null = null;
 let sseSource: EventSource | null = null;
@@ -172,6 +173,7 @@ export const ClientDataStore = {
 
         sessionUser = body.user || null;
         isSuperAdminSession = Boolean(body.isSuperAdmin);
+        activeVlabPass = body.activeVlabPass || null;
         if (body.activeTenantId) {
           activeTenantId = String(body.activeTenantId);
         } else if (sessionUser?.schoolId) {
@@ -218,6 +220,28 @@ export const ClientDataStore = {
 
   isSuperAdmin(): boolean {
     return isSuperAdminSession;
+  },
+
+  getActiveVlabPass(): any | null {
+    return activeVlabPass;
+  },
+
+  setActiveVlabPass(pass: any | null): void {
+    activeVlabPass = pass;
+    emitWindowEvents('vlab_pass');
+  },
+
+  async clearActiveVlabPass(): Promise<void> {
+    activeVlabPass = null;
+    emitWindowEvents('vlab_pass');
+    try {
+      await fetch('/api/vlab/tickets/clear', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // ignore network errors during clear
+    }
   },
 
   hasCollection(key: string): boolean {

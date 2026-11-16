@@ -12,7 +12,7 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       "showcase": true,
       "about": true,
       "testimonials": true,
-      "pricing": true,
+      "pricing": false,
       "faq": true,
       "contact": true,
       "footer": true
@@ -59,7 +59,7 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
           "id": "nav-pricing",
           "label": "Pricing",
           "sectionId": "pricing-section",
-          "enabled": true
+          "enabled": false
         },
         {
           "id": "nav-faq",
@@ -730,7 +730,13 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
     },
     "maintenanceMode": false,
     "allowPublicRegistration": true,
-    "primaryBrandColor": "#2563eb"
+    "primaryBrandColor": "#2563eb",
+    "virtualLabPolicy": {
+      "publicAccessMode": "subscription_required",
+      "requirePaidSubscriptionOnPublicPage": true,
+      "allowFreePublicDemo": false,
+      "freeForMemberSchools": true
+    }
   },
   "classTeacherPolicy": {
     "allowRemarksEditing": true,

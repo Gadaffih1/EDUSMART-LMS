@@ -1,4 +1,5 @@
 import { STARTER_DOCS_DATA } from '../data/starterDocsData';
+import { ClientDataStore } from './clientDataStore';
 
 export interface StarterDocFile {
   id: string;
@@ -12,9 +13,10 @@ export interface StarterDocFile {
 
 export function listStarterDocs(): Record<string, StarterDocFile> {
   try {
-    const raw = localStorage.getItem('edusmart_starter_package_docs_v1');
-    if (!raw) return STARTER_DOCS_DATA;
-    const parsed = JSON.parse(raw);
+    const parsed = ClientDataStore.getCollection<Record<string, StarterDocFile> | StarterDocFile[]>(
+      'edusmart_starter_package_docs_v1',
+      STARTER_DOCS_DATA
+    );
     const rows = Array.isArray(parsed) ? parsed : Object.values(parsed || {});
     if (!rows || rows.length === 0) return STARTER_DOCS_DATA;
     const record: Record<string, StarterDocFile> = {};
@@ -26,4 +28,3 @@ export function listStarterDocs(): Record<string, StarterDocFile> {
     return STARTER_DOCS_DATA;
   }
 }
-

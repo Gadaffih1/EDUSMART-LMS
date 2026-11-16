@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { ClientDataStore } from '../utils/clientDataStore';
 
 interface MobileLayoutContextType {
   isMobileOverlapProtectionEnabled: boolean;
@@ -16,26 +17,13 @@ const STORAGE_KEY_DOCKED = 'edusmart_quickactions_docked_mobile_v1';
 const MobileLayoutContext = createContext<MobileLayoutContextType | undefined>(undefined);
 
 export const MobileLayoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Overlap protection is enabled by default to prevent screen collisions on mobile phones
-  const [isMobileOverlapProtectionEnabled, setIsMobileOverlapProtectionEnabled] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_OVERLAP);
-      if (stored !== null) return stored === 'true';
-    } catch {
-      // Fallback
-    }
-    return true; // Enabled by default
-  });
+  const [isMobileOverlapProtectionEnabled, setIsMobileOverlapProtectionEnabled] = useState<boolean>(() =>
+    ClientDataStore.getPreference<boolean>(STORAGE_KEY_OVERLAP, true)
+  );
 
-  const [isQuickActionsDocked, setIsQuickActionsDocked] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_DOCKED);
-      if (stored !== null) return stored === 'true';
-    } catch {
-      // Fallback
-    }
-    return false;
-  });
+  const [isQuickActionsDocked, setIsQuickActionsDockedState] = useState<boolean>(() =>
+    ClientDataStore.getPreference<boolean>(STORAGE_KEY_DOCKED, false)
+  );
 
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -48,34 +36,37 @@ export const MobileLayoutProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const handleResize = () => {
       setIsMobileViewport(window.innerWidth < 768);
     };
-
+    const handlePrefSync = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'user_preferences') {
+        setIsMobileOverlapProtectionEnabled(ClientDataStore.getPreference<boolean>(STORAGE_KEY_OVERLAP, true));
+        setIsQuickActionsDockedState(ClientDataStore.getPreference<boolean>(STORAGE_KEY_DOCKED, false));
+      }
+    };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('edusmart:data-changed', handlePrefSync);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('edusmart:data-changed', handlePrefSync);
+    };
   }, []);
 
   const setMobileOverlapProtection = (enabled: boolean) => {
     setIsMobileOverlapProtectionEnabled(enabled);
-    try {
-      localStorage.setItem(STORAGE_KEY_OVERLAP, String(enabled));
-    } catch {
-      // Ignore
-    }
+    ClientDataStore.setPreference(STORAGE_KEY_OVERLAP, enabled);
   };
 
   const toggleMobileOverlapProtection = () => {
     setMobileOverlapProtection(!isMobileOverlapProtectionEnabled);
   };
 
+  const setIsQuickActionsDocked = (docked: boolean) => {
+    setIsQuickActionsDockedState(docked);
+    ClientDataStore.setPreference(STORAGE_KEY_DOCKED, docked);
+  };
+
   const toggleQuickActionsDocked = () => {
-    setIsQuickActionsDocked(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_KEY_DOCKED, String(next));
-      } catch {
-        // Ignore
-      }
-      return next;
-    });
+    setIsQuickActionsDocked(!isQuickActionsDocked);
   };
 
   return (

@@ -1,3 +1,6 @@
+import { ClientDataStore } from './clientDataStore';
+import { DEFAULT_HERO_VIDEO_PRESETS, DEFAULT_HERO_IMAGE_PRESETS } from '../data/heroMediaPresets';
+
 export interface HeroVideoPreset {
   id: string;
   label: string;
@@ -17,16 +20,9 @@ export interface HeroImagePreset {
 }
 
 function readList<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<T[]>(key, []);
+  return Array.isArray(data) ? data : [];
 }
-
-import { DEFAULT_HERO_VIDEO_PRESETS, DEFAULT_HERO_IMAGE_PRESETS } from '../data/heroMediaPresets';
 
 export function listHeroVideoPresets(): HeroVideoPreset[] {
   const list = readList<HeroVideoPreset>('edusmart_hero_video_presets_v1');

@@ -11,6 +11,7 @@ import {
   getSubjectsForGrade 
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   FolderPlus, 
   Upload, 
@@ -189,7 +190,7 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
   }, [uploadSubject, uploadGrade, uploadTerm]);
 
   // Handle local file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -207,11 +208,13 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
       setUploadTitle(cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1));
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setUploadFileUrl(event.target?.result as string || '');
-    };
-    reader.readAsDataURL(file);
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'lesson-resource');
+      setUploadFileUrl(uploaded.url);
+    } catch (err: any) {
+      setToastMessage(err?.message || 'Failed to upload lesson file to server.');
+      setTimeout(() => setToastMessage(null), 3500);
+    }
   };
 
   // Add custom tag
@@ -233,7 +236,8 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
     e.preventDefault();
 
     if (!uploadTitle.trim()) {
-      alert('Please enter a lesson resource title');
+      setToastMessage('Please enter a lesson resource title');
+      setTimeout(() => setToastMessage(null), 3000);
       return;
     }
 

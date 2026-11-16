@@ -22,6 +22,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { HeroMediaType } from '../../types/customization';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 export interface HeroBannerMediaProps {
   mediaType?: HeroMediaType;
@@ -119,6 +120,7 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
   const [customUrlInput, setCustomUrlInput] = useState<string>('');
   const [currentImage, setCurrentImage] = useState<string>(imageUrl || '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg');
   const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
 
   // Keep internal image synchronized with prop
   useEffect(() => {
@@ -218,8 +220,9 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
 
   // Image customization handlers - Restricted to Super Admin
   const handleApplyNewImage = (newUrl: string) => {
+    setUploadErrorMessage(null);
     if (!isSuperAdminEditMode) {
-      alert('Access restricted: Only Platform Super Administrators can customize the hero banner.');
+      setUploadErrorMessage('Access restricted: Only Platform Super Administrators can customize the hero banner.');
       return;
     }
     if (!newUrl.trim()) return;
@@ -234,27 +237,26 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
     }, 900);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadErrorMessage(null);
     if (!isSuperAdminEditMode) {
-      alert('Access restricted: Only Platform Super Administrators can customize the hero banner.');
+      setUploadErrorMessage('Access restricted: Only Platform Super Administrators can customize the hero banner.');
       return;
     }
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (PNG, JPG, WebP, etc.).');
+      setUploadErrorMessage('Please select an image file (PNG, JPG, WebP, etc.).');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        handleApplyNewImage(dataUrl);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'hero-banner');
+      handleApplyNewImage(uploaded.url);
+    } catch (err: any) {
+      setUploadErrorMessage(err?.message || 'Failed to upload image file.');
+    }
   };
 
   return (
@@ -495,6 +497,12 @@ export const HeroBannerMedia: React.FC<HeroBannerMediaProps> = ({
               <div className="mb-3 p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs font-bold flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>{uploadSuccessMessage}</span>
+              </div>
+            )}
+            {uploadErrorMessage && (
+              <div className="mb-3 p-2.5 rounded-xl bg-red-950/90 border border-red-500 text-red-300 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{uploadErrorMessage}</span>
               </div>
             )}
 

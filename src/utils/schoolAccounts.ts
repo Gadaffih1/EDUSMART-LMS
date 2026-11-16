@@ -1,4 +1,5 @@
 import { generateSchoolPassword } from './accountCredentials';
+import { ClientDataStore } from './clientDataStore';
 
 export interface SchoolAccount {
   id: string;
@@ -12,18 +13,12 @@ export interface SchoolAccount {
 const STORAGE_KEY = 'edusmart_school_accounts_v1';
 
 function readAll(): SchoolAccount[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const rows = ClientDataStore.getCollection<SchoolAccount[]>(STORAGE_KEY, []);
+  return Array.isArray(rows) ? rows : [];
 }
 
 function writeAll(accounts: SchoolAccount[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+  ClientDataStore.setCollection(STORAGE_KEY, accounts);
 }
 
 export function listSchoolAccounts(): SchoolAccount[] {

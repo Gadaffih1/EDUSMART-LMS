@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SyncEngine } from '../../utils/syncEngine';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   VirtualExperiment, 
   CBC_VIRTUAL_EXPERIMENTS, 
@@ -90,9 +90,8 @@ export const LearnerExperimentWorkbench: React.FC<LearnerExperimentWorkbenchProp
     };
 
     try {
-      const existing = JSON.parse(localStorage.getItem('edusmart_virtual_lab_reports') || '[]');
-      existing.unshift(reportData);
-      SyncEngine.persistItem('edusmart_virtual_lab_reports', JSON.stringify(existing));
+      const existing = ClientDataStore.getCollection<any[]>('edusmart_virtual_lab_reports', []);
+      ClientDataStore.setCollection('edusmart_virtual_lab_reports', [reportData, ...existing]);
     } catch (e) {
       console.error(e);
     }

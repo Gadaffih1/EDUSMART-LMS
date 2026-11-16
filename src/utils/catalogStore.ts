@@ -1,5 +1,5 @@
 import { SubjectName } from '../types';
-import { isRemoteDataActive } from './supabaseHydrate';
+import { ClientDataStore } from './clientDataStore';
 
 export interface CatalogSubject {
   id: string;
@@ -15,24 +15,14 @@ const SUBJECTS_KEY = 'edusmart_subjects_v1';
 const ACTIVITIES_KEY = 'edusmart_activities_v1';
 
 function read<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<T[]>(key, []);
+  return Array.isArray(data) ? data : [];
 }
 
 export function listSubjects(): CatalogSubject[] {
-  const rows = read<CatalogSubject>(SUBJECTS_KEY);
-  if (rows.length > 0 || isRemoteDataActive()) return rows;
-  return rows;
+  return read<CatalogSubject>(SUBJECTS_KEY);
 }
 
 export function listActivities(): CatalogActivity[] {
-  const rows = read<CatalogActivity>(ACTIVITIES_KEY);
-  if (rows.length > 0 || isRemoteDataActive()) return rows;
-  return rows;
+  return read<CatalogActivity>(ACTIVITIES_KEY);
 }

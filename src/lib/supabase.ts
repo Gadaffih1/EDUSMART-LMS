@@ -27,7 +27,5 @@ export const supabase = isSupabaseConfigured
   : null;
 
 if (!isSupabaseConfigured) {
-  console.warn(
-    '[supabase] VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing — running in localStorage-only mode.'
-  );
+  // Application uses central SQLite backend API as the authoritative database
 }

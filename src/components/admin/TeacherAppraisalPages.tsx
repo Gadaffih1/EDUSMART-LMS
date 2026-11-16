@@ -12,6 +12,7 @@ import {
   User,
 } from '../../types';
 import { loadTpadStandards } from '../../utils/tpadStandards';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import {
   buildUsername,
   nextRegistryNumber,
@@ -104,16 +105,11 @@ export const TeacherAppraisalPages: React.FC<TeacherAppraisalPagesProps> = ({
 }) => {
   const pageKey = `edusmart_${surface}_page:${schoolId}:${currentUser.id}`;
   const [page, setPage] = useState<Page>(() => {
-    try {
-      const stored = sessionStorage.getItem(pageKey);
-      if (stored) return JSON.parse(stored) as Page;
-    } catch {
-      // Start on the teacher list.
-    }
-    return { name: 'list' };
+    const stored = ClientDataStore.getPreference<Page | null>(pageKey, null);
+    return stored || { name: 'list' };
   });
   const openPage = (next: Page) => {
-    sessionStorage.setItem(pageKey, JSON.stringify(next));
+    ClientDataStore.setPreference(pageKey, next);
     setPage(next);
   };
 

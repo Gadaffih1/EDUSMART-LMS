@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SyncEngine } from '../../utils/syncEngine';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   X, 
   FlaskConical, 
@@ -122,18 +122,36 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
   useEffect(() => {
     if (initialTier) setSelectedTier(initialTier);
     if (initialStep === 'launch_lab') {
-      const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
+      const stored = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
       const targetCode = (initialTicketCode || '').trim().toUpperCase();
-      const found = stored.find((t: any) => 
-        t.ticketId && 
-        t.ticketId.toUpperCase() === targetCode && 
-        t.status === 'active' && 
+      const found = stored.find((t: any) =>
+        t.ticketId &&
+        t.ticketId.toUpperCase() === targetCode &&
+        t.status === 'active' &&
         !t.ticketId.toUpperCase().includes('DEMO')
       );
       if (found) {
         setStep('launch_lab');
         setTicketNumber(found.ticketId);
         if (found.holderName) setFullName(found.holderName);
+      } else if (targetCode && !targetCode.includes('DEMO')) {
+        void fetch(`/api/vlab/tickets/${encodeURIComponent(targetCode)}`, { credentials: 'include' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.valid && data?.pass) {
+              setStep('launch_lab');
+              setTicketNumber(data.pass.ticketId);
+              if (data.pass.holderName) setFullName(data.pass.holderName);
+            } else {
+              setStep('select');
+              setActiveTab('buy');
+              setTicketValidationNotice('Free access is disabled. Public access to the virtual lab workspace strictly requires an active paid subscription pass.');
+            }
+          })
+          .catch(() => {
+            setStep('select');
+            setActiveTab('buy');
+          });
       } else {
         setStep('select');
         setActiveTab('buy');
@@ -157,47 +175,56 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
     setStep('checkout');
   };
 
-  const handleCompleteSubscription = (e: React.FormEvent) => {
+  const handleCompleteSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !phone) return;
 
     setIsProcessing(true);
-    setTimeout(() => {
-      const generatedTicketId = `VLAB-TICKET-${Date.now().toString().slice(-6)}`;
-      const nowStr = new Date().toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short'
-      });
-      setTicketNumber(generatedTicketId);
-      setTicketDate(nowStr);
-      setIsProcessing(false);
-      setStep('ticket');
+    const generatedTicketId = `VLAB-TICKET-${Date.now().toString().slice(-6)}`;
+    const nowStr = new Date().toLocaleString('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+    const newPass = {
+      id: generatedTicketId,
+      ticketId: generatedTicketId,
+      tier: selectedTier,
+      priceKes: selectedPass.priceKes,
+      holderName: fullName,
+      email,
+      phone,
+      schoolName,
+      gradeLevel,
+      issuedAt: nowStr,
+      status: 'active'
+    };
 
-      // Record ticket pass in localStorage for school audit & ticketing system
-      const existing = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-      existing.unshift({
-        ticketId: generatedTicketId,
-        tier: selectedTier,
-        priceKes: selectedPass.priceKes,
-        holderName: fullName,
-        email,
-        phone,
-        schoolName,
-        gradeLevel,
-        issuedAt: nowStr,
-        status: 'active'
+    try {
+      await fetch('/api/vlab/tickets', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pass: newPass }),
       });
-      SyncEngine.persistItem('edusmart_vlab_ticket_passes', JSON.stringify(existing));
-      try {
-        localStorage.setItem('edusmart_public_active_ticket', generatedTicketId);
-      } catch {}
-      if (onSubscriptionSuccess) {
-        onSubscriptionSuccess(generatedTicketId);
-      }
-    }, 1200);
+    } catch (err) {
+      console.warn('[vlab] Failed persisting ticket to server:', err);
+    }
+
+    const existing = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+    ClientDataStore.setCollection('edusmart_vlab_ticket_passes', [newPass, ...existing], { persist: false });
+    ClientDataStore.setPreference('edusmart_public_active_ticket', generatedTicketId);
+
+    setTicketNumber(generatedTicketId);
+    setTicketDate(nowStr);
+    setIsProcessing(false);
+    setStep('ticket');
+
+    if (onSubscriptionSuccess) {
+      onSubscriptionSuccess(generatedTicketId);
+    }
   };
 
-  const handleValidateTicket = (codeToTest?: string) => {
+  const handleValidateTicket = async (codeToTest?: string) => {
     const raw = (codeToTest || existingTicketInput).trim().toUpperCase();
     if (!raw) {
       setTicketValidationNotice('Please enter your paid subscription pass or ticket ID (e.g. VLAB-TICKET-829104).');
@@ -209,22 +236,32 @@ export const VirtualLabSubscriptionModal: React.FC<VirtualLabSubscriptionModalPr
       return;
     }
 
-    const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-    const found = stored.find((t: any) => 
-      t.ticketId && 
-      t.ticketId.toUpperCase() === raw && 
-      t.status === 'active' && 
+    const stored = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+    let found = stored.find((t: any) =>
+      t.ticketId &&
+      t.ticketId.toUpperCase() === raw &&
+      t.status === 'active' &&
       !t.ticketId.toUpperCase().includes('DEMO')
     );
+
+    if (!found) {
+      try {
+        const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(raw)}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.valid && data?.pass) found = data.pass;
+        }
+      } catch {
+        // ignore
+      }
+    }
 
     if (found) {
       const activeCode = found.ticketId;
       setTicketNumber(activeCode);
       if (found.holderName) setFullName(found.holderName);
       setTicketDate(found.issuedAt || new Date().toLocaleString());
-      try {
-        localStorage.setItem('edusmart_public_active_ticket', activeCode);
-      } catch {}
+      ClientDataStore.setPreference('edusmart_public_active_ticket', activeCode);
       if (onSubscriptionSuccess) {
         onSubscriptionSuccess(activeCode);
       }

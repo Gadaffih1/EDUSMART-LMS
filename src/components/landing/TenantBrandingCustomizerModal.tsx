@@ -27,6 +27,7 @@ import { TenantPrintHeader, TenantPrintFooter } from '../common/TenantPrintHeade
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 
 interface TenantBrandingCustomizerModalProps {
@@ -98,6 +99,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
   });
 
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isVideoUploading, setIsVideoUploading] = useState<boolean>(false);
 
   const handleHeroVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,6 +107,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     if (!file) return;
 
     setVideoUploadError(null);
+    setUploadError(null);
     setIsVideoUploading(true);
 
     const objectUrl = URL.createObjectURL(file);
@@ -112,7 +115,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     tempVideo.preload = 'metadata';
     tempVideo.src = objectUrl;
 
-    tempVideo.onloadedmetadata = () => {
+    tempVideo.onloadedmetadata = async () => {
       URL.revokeObjectURL(objectUrl);
       const videoDuration = tempVideo.duration;
 
@@ -124,22 +127,19 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (loadEvt) => {
-        const base64 = loadEvt.target?.result as string;
+      try {
+        const uploaded = await ClientDataStore.uploadFile(file, 'tenant-hero-video');
         setFormData(prev => ({
           ...prev,
           heroMediaType: 'video',
-          heroVideoUrl: base64,
+          heroVideoUrl: uploaded.url,
           heroVideoBadge: '30s Campus Tour'
         }));
         setIsVideoUploading(false);
-      };
-      reader.onerror = () => {
-        setVideoUploadError('Failed to read video file.');
+      } catch (err: any) {
+        setVideoUploadError(err?.message || 'Failed to upload video file.');
         setIsVideoUploading(false);
-      };
-      reader.readAsDataURL(file);
+      }
     };
 
     tempVideo.onerror = () => {
@@ -149,48 +149,50 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     };
   };
 
-  const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Please upload an image smaller than 5MB.");
+      setUploadError('Please upload a hero image smaller than 5MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const base64 = loadEvt.target?.result as string;
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'tenant-hero-image');
       setFormData(prev => ({
         ...prev,
         heroMediaType: 'image',
-        heroImageUrl: base64
+        heroImageUrl: uploaded.url
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to upload hero image.');
+    }
   };
 
   if (!isOpen) return null;
 
   // Handle Logo File Upload (PNG, JPG, SVG)
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("Please upload an image smaller than 2MB.");
+      setUploadError('Please upload a logo image smaller than 2MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const base64 = uploadEvent.target?.result as string;
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'school-logo');
       setFormData(prev => ({
         ...prev,
-        customLogoBase64: base64
+        customLogoBase64: uploaded.url
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to upload school logo.');
+    }
   };
 
   // Reset to Gadsa / EduSmart Default Emblem
@@ -317,6 +319,12 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
           {/* TAB 1: FORM EDITOR */}
           {activeTab === 'editor' && (
             <form onSubmit={handleSave} className="space-y-6 text-left max-w-4xl mx-auto">
+              {uploadError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
               
               {/* SECTION A: SCHOOL LOGO & CREST EMBLEM */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">

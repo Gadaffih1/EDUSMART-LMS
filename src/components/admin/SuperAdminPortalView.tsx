@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { listPlatformAdmins } from '../../utils/platformAdminAuth';
 import { User, GradeLevel, StreamName, PRIMARY_STREAMS, getStreamsForGrade } from '../../types';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
@@ -56,12 +57,12 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
-    const stored = sessionStorage.getItem('edusmart_super_admin_tab');
+    const stored = ClientDataStore.getPreference<string>('edusmart_super_admin_tab', 'overview');
     const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
-    sessionStorage.setItem('edusmart_super_admin_tab', tab);
+    ClientDataStore.setPreference('edusmart_super_admin_tab', tab);
     setActiveConsoleTab(tab);
   };
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');

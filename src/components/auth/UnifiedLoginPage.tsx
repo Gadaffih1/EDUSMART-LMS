@@ -17,11 +17,8 @@ import { User } from '../../types';
 import { Storage } from '../../utils/storage';
 import { useTenant } from '../../context/TenantContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
-import { isSupabaseConfigured, supabase } from '../../lib/supabase';
-import { signInToEduSmart } from '../../utils/supabaseAuth';
-import { SyncEngine } from '../../utils/syncEngine';
-import { resolveSchoolUserAndTenant } from '../../utils/schoolAuthResolver';
-import { authenticatePlatformAdmin, findActivePlatformAdmin, toPlatformAdminSession } from '../../utils/platformAdminAuth';
+import { ClientDataStore } from '../../utils/clientDataStore';
+import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
 
 interface UnifiedLoginPageProps {
   onLoginSuccess: (user: User) => void;
@@ -36,7 +33,7 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
   onOpenRegisterSchool,
   adminOnly = false
 }) => {
-  const { allTenants, currentTenant, switchTenant } = useTenant();
+  const { currentTenant, switchTenant } = useTenant();
   
   // Auth Modes: 'signin' | 'register'
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
@@ -65,92 +62,51 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
       setErrorMessage('Enter your school account email address first.');
       return;
     }
-    if (!isSupabaseConfigured || !supabase) {
-      setErrorMessage('Password recovery requires configured Supabase Auth. Contact your School Administrator.');
-      return;
-    }
-
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/setup-password`,
-    });
-    if (error) {
-      setErrorMessage(`Unable to request a password reset: ${error.message}`);
-      return;
-    }
-    setInfoMessage('If this email belongs to an account, password reset instructions have been dispatched.');
+    setInfoMessage('Password resets are managed securely by your School Administrator or Registrar. Contact your school ICT office to issue a new password.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+    setInfoMessage('');
     setIsSubmitting(true);
 
     const cleanIdent = identifier.trim().toLowerCase();
 
-    if (adminOnly) {
-      const platformAdmin = authenticatePlatformAdmin(cleanIdent, password);
-      if (!platformAdmin) {
-        setErrorMessage('The Admin Console only accepts the platform administrator account.');
+    try {
+      const endpoint = adminOnly ? '/api/auth/admin-login' : '/api/auth/login';
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: cleanIdent, email: cleanIdent, password }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.user) {
+        setErrorMessage(body?.error || 'Incorrect credentials. Please verify your email and password.');
         setIsSubmitting(false);
         return;
       }
-      const sessionUser = toPlatformAdminSession(platformAdmin);
-      Storage.setCurrentUser(sessionUser);
-      onLoginSuccess(sessionUser);
-      setIsSubmitting(false);
-      return;
-    }
 
-    if (findActivePlatformAdmin(cleanIdent)) {
-      setErrorMessage('This account can only open the Super Admin console.');
-      setIsSubmitting(false);
-      return;
-    }
+      await ClientDataStore.hydrateFromBackend(true);
+      const authedUser: User = ClientDataStore.getSessionUser() || body.user;
 
-    // 1. Resolve user and specific tenant school from the provided email/credentials
-    const resolved = resolveSchoolUserAndTenant(identifier, allTenants, currentTenant);
-
-    if (!resolved) {
-      setErrorMessage(
-        'This account was not found. Use the email and password for your role.'
-      );
-      setIsSubmitting(false);
-      return;
-    }
-
-    const { user, expectedPassword, tenant } = resolved;
-
-    // 2. Verify password for this school account
-    if (expectedPassword && password !== expectedPassword) {
-      setErrorMessage('Incorrect password. Please verify your credentials and try again.');
-      setIsSubmitting(false);
-      return;
-    }
-
-    // 4. Optional Supabase Auth attempt
-    if (isSupabaseConfigured && cleanIdent.includes('@')) {
-      try {
-        await signInToEduSmart(cleanIdent, password);
-      } catch (err) {
-        if (expectedPassword && password !== expectedPassword) {
-          setErrorMessage(err instanceof Error ? err.message : 'Invalid credentials.');
-          setIsSubmitting(false);
-          return;
-        }
+      if (!adminOnly && authedUser.schoolId) {
+        switchTenant(authedUser.schoolId);
       }
-    }
 
-    // 5. Strict School Identification & Isolation:
-    const targetSchoolId = tenant.id;
-    SyncEngine.activateIdentity(user.id, targetSchoolId);
-    switchTenant(targetSchoolId);
-    Storage.setCurrentUser({ ...user, schoolId: targetSchoolId });
-    onLoginSuccess({ ...user, schoolId: targetSchoolId });
-    setIsSubmitting(false);
+      Storage.setCurrentUser(authedUser);
+      onLoginSuccess(authedUser);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Unable to connect to authentication server.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Handle User Account Creation (Self-Service or Invited Registration)
-  const handleRegisterAccount = (e: React.FormEvent) => {
+  // Handle User Account Creation (Self-Service Registration via Central Backend API)
+  const handleRegisterAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -176,44 +132,49 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
     }
 
     const cleanEmail = regEmail.trim().toLowerCase();
-    const existing = Storage.findUserByEmail(cleanEmail);
-    if (existing) {
-      setErrorMessage('An account with this email address already exists. Please sign in instead.');
-      return;
-    }
-
     const targetTenant = currentTenant;
+    setIsSubmitting(true);
 
-    const newUser: User = {
-      id: `usr-student-${Date.now()}`,
-      name: regName.trim(),
-      email: cleanEmail,
-      password: regPassword,
-      role: 'student',
-      schoolId: targetTenant.id,
-      admissionNumber: regIdNumber.trim() || `${targetTenant.code}/2026/${String(Math.floor(100 + Math.random() * 900)).padStart(3, '0')}`,
-      isActive: true,
-      lastActive: new Date().toISOString()
-    };
+    try {
+      const payload = {
+        name: regName.trim(),
+        email: cleanEmail,
+        password: regPassword,
+        role: 'student',
+        schoolId: targetTenant.id,
+        admissionNumber:
+          regIdNumber.trim() ||
+          `${targetTenant.code}/2026/${String(Math.floor(100 + Math.random() * 900)).padStart(3, '0')}`,
+      };
 
-    // 1. Add to Storage & persistent cache
-    Storage.addUser(newUser);
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: payload, autoLogin: true }),
+      });
 
-    // 2. Activate SyncEngine identity
-    SyncEngine.activateIdentity(newUser.id, targetTenant.id);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.user) {
+        setErrorMessage(body?.error || 'Could not register account. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
 
-    // 3. Switch tenant partition
-    switchTenant(targetTenant.id);
+      await ClientDataStore.hydrateFromBackend(true);
+      const createdUser: User = ClientDataStore.getSessionUser() || body.user;
+      switchTenant(createdUser.schoolId || targetTenant.id);
+      Storage.setCurrentUser(createdUser);
+      setRegSuccessUser(createdUser);
 
-    // 4. Set current user
-    Storage.setCurrentUser(newUser);
-
-    setRegSuccessUser(newUser);
-
-    // Transition to workspace after short visual confirmation
-    setTimeout(() => {
-      onLoginSuccess(newUser);
-    }, 1200);
+      setTimeout(() => {
+        onLoginSuccess(createdUser);
+      }, 900);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Unable to register account with central server.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

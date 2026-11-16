@@ -1,5 +1,6 @@
 import { GradeLevel, JUNIOR_STREAMS, PRIMARY_STREAMS, RoleAccessRights, StreamName, User } from '../types';
 import { nameToken } from './accountCredentials';
+import { ClientDataStore } from './clientDataStore';
 
 export const STUDENT_RIGHTS: RoleAccessRights = {
   canAccessSanatorium: false,
@@ -120,30 +121,26 @@ const KEYS = {
   parents: 'edusmart_student_parents_v1',
 };
 
+const REMOVED_KEY = 'edusmart_directory_removed_v1';
+
 function read<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const rows = ClientDataStore.getCollection<T[]>(key, []);
+  return Array.isArray(rows) ? rows : [];
 }
 
 function write<T>(key: string, rows: T[]): void {
-  localStorage.setItem(key, JSON.stringify(rows));
+  ClientDataStore.setCollection(key, rows);
 }
 
-function mergeById<T extends { id: string }>(key: string, incoming: T[]): T[] {
-  const removed = removedDirectoryIds();
-  const current = read<T>(key).filter((row) => !removed.has(row.id));
-  const ids = new Set(current.map((row) => row.id));
-  const added = incoming.filter((row) => !ids.has(row.id) && !removed.has(row.id));
-  if (added.length === 0 && current.length === read<T>(key).length) return current;
-  const next = current.concat(added);
-  write(key, next);
-  return next;
+function removedDirectoryIds(): Set<string> {
+  const parsed = ClientDataStore.getCollection<string[]>(REMOVED_KEY, []);
+  return new Set(Array.isArray(parsed) ? parsed : []);
+}
+
+function rememberRemoved(ids: string[]): void {
+  const current = removedDirectoryIds();
+  ids.forEach((id) => current.add(id));
+  ClientDataStore.setCollection(REMOVED_KEY, [...current]);
 }
 
 export function ensureSchoolDirectory(schoolId: string): SchoolDirectory {
@@ -174,7 +171,6 @@ export function listStudents(streamId: string): StudentRecord[] {
 }
 
 export function listSchoolStudents(schoolId: string): StudentRecord[] {
-  ensureSchoolDirectory(schoolId);
   return read<StudentRecord>(KEYS.students)
     .filter((row) => row.schoolId === schoolId)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -187,7 +183,6 @@ export function listStudentParents(studentId: string): StudentParentRecord[] {
 }
 
 export function listSchoolParents(schoolId: string): StudentParentRecord[] {
-  ensureSchoolDirectory(schoolId);
   return read<StudentParentRecord>(KEYS.parents)
     .filter((row) => row.schoolId === schoolId)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -234,7 +229,7 @@ export function studentRecordToUser(student: StudentRecord): User {
     id: student.id,
     name: student.name,
     email: student.email,
-    password: student.password,
+    password: student.password || '',
     role: 'student',
     schoolId: student.schoolId,
     admissionNumber: student.admissionNumber,
@@ -252,7 +247,6 @@ export function studentRecordToUser(student: StudentRecord): User {
   };
 }
 
-/** Students and parents live in the school directory and sign in through Login. */
 export function findDirectoryLogin(rawIdent: string): { user: User; password: string } | null {
   const ident = rawIdent.trim().toLowerCase();
   if (!ident) return null;
@@ -261,19 +255,19 @@ export function findDirectoryLogin(rawIdent: string): { user: User; password: st
     row.isActive && (sameText(row.email, ident) || sameText(row.admissionNumber, ident) || sameText(row.name, ident))
   ));
   if (student) {
-    return { user: studentRecordToUser(student), password: student.password };
+    return { user: studentRecordToUser(student), password: student.password || '' };
   }
   const parent = read<StudentParentRecord>(KEYS.parents).find((row) => (
     sameText(row.email, ident) || sameText(row.name, ident) || sameText(row.phone, ident)
   ));
   if (!parent) return null;
   return {
-    password: parent.password,
+    password: parent.password || '',
     user: {
       id: parent.id,
       name: parent.name,
       email: parent.email,
-      password: parent.password,
+      password: parent.password || '',
       role: 'parent',
       schoolId: parent.schoolId,
       phone: parent.phone,
@@ -336,23 +330,6 @@ export function saveStudentParent(parent: StudentParentRecord): StudentParentRec
   else all.push(parent);
   write(KEYS.parents, all);
   return parent;
-}
-
-const REMOVED_KEY = 'edusmart_directory_removed_v1';
-
-function removedDirectoryIds(): Set<string> {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]');
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function rememberRemoved(ids: string[]): void {
-  const current = removedDirectoryIds();
-  ids.forEach((id) => current.add(id));
-  localStorage.setItem(REMOVED_KEY, JSON.stringify([...current]));
 }
 
 export function updateGrade(id: string, rawName: string): SchoolGrade {

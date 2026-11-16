@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { GradeLevel, StreamName, User, JUNIOR_STREAMS, PRIMARY_STREAMS } from '../../types';
 import { STUDENT_RIGHTS, STUDENT_RIGHT_LABELS, StudentRecord, joinGradeStream } from '../../utils/schoolDirectoryStore';
 import {
@@ -59,16 +60,11 @@ function knownStream(name: string): StreamName | undefined {
 export const GradeClassPages: React.FC<GradeClassPagesProps> = ({ schoolId, domain }) => {
   const pageKey = `edusmart_grade_page:${schoolId}`;
   const [page, setPage] = useState<Page>(() => {
-    try {
-      const stored = sessionStorage.getItem(pageKey);
-      if (stored) return JSON.parse(stored) as Page;
-    } catch {
-      // Start on the grades list.
-    }
-    return { name: 'grades' };
+    const stored = ClientDataStore.getPreference<Page | null>(pageKey, null);
+    return stored || { name: 'grades' };
   });
   const openPage = (next: Page) => {
-    sessionStorage.setItem(pageKey, JSON.stringify(next));
+    ClientDataStore.setPreference(pageKey, next);
     setPage(next);
   };
   const [revision, setRevision] = useState(0);

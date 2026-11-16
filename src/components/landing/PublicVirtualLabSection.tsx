@@ -21,6 +21,7 @@ import {
   Lock
 } from 'lucide-react';
 import { SubscriptionTier, PASS_OPTIONS } from '../virtuallab/VirtualLabSubscriptionModal';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 interface PublicVirtualLabSectionProps {
   onOpenTicketModal: (tier?: SubscriptionTier, step?: 'select' | 'checkout' | 'enter_ticket' | 'launch_lab', ticketCode?: string) => void;
@@ -38,7 +39,7 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
   const [ticketInputCode, setTicketInputCode] = useState('');
   const [quickNotice, setQuickNotice] = useState<string | null>(null);
 
-  const handleVerifyDirectTicket = (e: React.FormEvent) => {
+  const handleVerifyDirectTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = ticketInputCode.trim().toUpperCase();
     if (!code) {
@@ -52,13 +53,20 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
     }
 
     try {
-      const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-      const found = stored.find((t: any) => 
-        t.ticketId && 
-        t.ticketId.toUpperCase() === code && 
-        t.status === 'active' && 
+      const stored = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+      let found = stored.find((t: any) =>
+        t.ticketId &&
+        t.ticketId.toUpperCase() === code &&
+        t.status === 'active' &&
         !t.ticketId.toUpperCase().includes('DEMO')
       );
+      if (!found) {
+        const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(code)}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.valid && data?.pass) found = data.pass;
+        }
+      }
       if (found) {
         onOpenTicketModal('term', 'launch_lab', found.ticketId);
         setQuickNotice(null);

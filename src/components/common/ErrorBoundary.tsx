@@ -29,8 +29,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
   handleHardReset = () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
       if ('caches' in window) {
         caches.keys().then(names => {
           names.forEach(name => caches.delete(name));

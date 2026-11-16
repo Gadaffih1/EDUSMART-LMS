@@ -66,6 +66,7 @@ import {
 import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
 import { saveProvisionedAccount } from '../../utils/provisionedAccounts';
 import { ensureDepartments } from '../../utils/departmentStore';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 interface SuperAdminDashboardProps {
   currentUser: User;
@@ -411,21 +412,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setSelectedCrest(targetSchool.crestIcon || 'graduation-cap');
   }, [targetSchool]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
         showToast('Logo file size exceeds 2MB limit. Please upload a smaller SVG or PNG.', 'error');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setCustomLogoUrl(event.target.result as string);
-          showToast('School logo image loaded. Click "Save Branding" to apply.');
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const uploaded = await ClientDataStore.uploadFile(file, 'school-logo');
+        setCustomLogoUrl(uploaded.url);
+        showToast('School logo image uploaded. Click "Save Branding" to apply.');
+      } catch (err: any) {
+        showToast(err?.message || 'Failed to upload school logo.', 'error');
+      }
     }
   };
 

@@ -11,6 +11,7 @@ import {
   GradePassword
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
@@ -92,11 +93,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   // Sub-tabs: Default to overview (Panel 3 School Dashboard)
   const defaultTab = 'overview';
   const [activeTab, setActiveTab] = useState<AdminActionTab>(() => {
-    const stored = sessionStorage.getItem('edusmart_school_admin_tab');
+    const stored = ClientDataStore.getPreference<string>('edusmart_school_admin_tab', defaultTab);
     return (stored as AdminActionTab) || defaultTab;
   });
   const openTab = (tab: AdminActionTab) => {
-    sessionStorage.setItem('edusmart_school_admin_tab', tab);
+    ClientDataStore.setPreference('edusmart_school_admin_tab', tab);
     setActiveTab(tab);
   };
   const [menuCollapsed, setMenuCollapsed] = useState(false);
@@ -274,7 +275,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
   // Reset all role permissions to factory defaults
   const handleResetAllRolePermissions = () => {
-    localStorage.removeItem('edusmart_role_permissions_v1');
+    Storage.resetRolePermissions();
     setRolePermissions(Storage.getRolePermissions());
     showToast('All role access permissions have been reset to factory defaults.', 'info');
   };

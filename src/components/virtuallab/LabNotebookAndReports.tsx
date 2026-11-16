@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SyncEngine } from '../../utils/syncEngine';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   FileText, 
   Award, 
@@ -31,7 +31,9 @@ export const LabNotebookAndReports: React.FC<LabNotebookAndReportsProps> = ({
   useEffect(() => {
     try {
       const reportsKey = `edusmart_tenant_${currentUser?.schoolId || 'tenant-riara'}_virtual_lab_reports`;
-      const stored = JSON.parse(localStorage.getItem(reportsKey) || '[]');
+      const tenantReports = ClientDataStore.getCollection<any[]>(reportsKey, []);
+      const sharedReports = ClientDataStore.getCollection<any[]>('edusmart_virtual_lab_reports', []);
+      const stored = tenantReports.length > 0 ? tenantReports : sharedReports;
       if (stored.length > 0) {
         setReports(stored);
         setSelectedReport(stored[0]);
@@ -77,7 +79,9 @@ export const LabNotebookAndReports: React.FC<LabNotebookAndReportsProps> = ({
         ];
         setReports(initialReports);
         setSelectedReport(initialReports[0]);
-        SyncEngine.persistItem('edusmart_virtual_lab_reports', JSON.stringify(initialReports));
+        if (ClientDataStore.getSessionUser()) {
+          ClientDataStore.setCollection(reportsKey, initialReports);
+        }
       }
     } catch (e) {
       console.error(e);

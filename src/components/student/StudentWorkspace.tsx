@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SyncEngine } from '../../utils/syncEngine';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   User, 
   Topic, 
@@ -2068,21 +2069,23 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 onClose={() => setActiveAssignedLab(null)}
                 onAssignmentComplete={(rep) => {
                   const submissionText = `[Digital CBC Practical Report]\nExperiment: ${activeAssignedLab.labTitle || activeAssignedLab.title}\nObservations recorded: ${rep?.observations || 'Completed practical inquiry in Virtual Lab'}\nHypothesis: ${rep?.hypothesis || 'Verified'}\nFindings & Conclusion: ${rep?.conclusion || 'Completed according to standard lab procedures.'}`;
-                  const existingSubs = JSON.parse(localStorage.getItem('edusmart_assignment_submissions') || '[]');
-                  existingSubs.push({
-                    id: `sub-${Date.now()}`,
-                    assignmentId: activeAssignedLab.id,
-                    studentId: currentUser.id,
-                    studentName: currentUser.name,
-                    grade: currentUser.grade || 4,
-                    stream: (currentUser.stream as any) || 'Dove',
-                    submissionText,
-                    submittedAt: new Date().toISOString().split('T')[0],
-                    status: 'submitted'
-                  });
-                  SyncEngine.persistItem('edusmart_assignment_submissions', JSON.stringify(existingSubs));
+                  const existingSubs = ClientDataStore.getCollection<any[]>('edusmart_assignment_submissions', []);
+                  const updatedSubs = [
+                    ...existingSubs,
+                    {
+                      id: `sub-${Date.now()}`,
+                      assignmentId: activeAssignedLab.id,
+                      studentId: currentUser.id,
+                      studentName: currentUser.name,
+                      grade: currentUser.grade || 4,
+                      stream: (currentUser.stream as any) || 'Dove',
+                      submissionText,
+                      submittedAt: new Date().toISOString().split('T')[0],
+                      status: 'submitted'
+                    }
+                  ];
+                  ClientDataStore.setCollection('edusmart_assignment_submissions', updatedSubs);
                   setActiveAssignedLab(null);
-                  alert('Assigned Practical Completed & Submitted to Teacher Successfully!');
                 }}
               />
             </div>

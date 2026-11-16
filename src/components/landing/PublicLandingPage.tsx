@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   School, 
   GraduationCap, 
@@ -70,6 +70,7 @@ import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPres
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
 import { PublicVirtualLabSection } from './PublicVirtualLabSection';
 import { VirtualLabSubscriptionModal, SubscriptionTier } from '../virtuallab/VirtualLabSubscriptionModal';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 interface PublicLandingPageProps {
   onNavigateToLogin: () => void;
@@ -161,19 +162,25 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
   // Visual Editor State
   const [isSuperAdminEditMode, setIsSuperAdminEditMode] = useState<boolean>(false);
-  const [isSuperAdminVerified, setIsSuperAdminVerified] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('edusmart_super_admin_verified') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isSuperAdminVerified, setIsSuperAdminVerified] = useState<boolean>(() => ClientDataStore.isSuperAdmin());
   const [showSuperAdminAuthModal, setShowSuperAdminAuthModal] = useState<boolean>(false);
   const [adminPasscode, setAdminPasscode] = useState<string>('');
   const [showPasscodeText, setShowPasscodeText] = useState<boolean>(false);
-  const [adminEmailInput, setAdminEmailInput] = useState<string>('admin@edusmart.ac.ke');
+  const [adminEmailInput, setAdminEmailInput] = useState<string>('admin@edutech.ac.ke');
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
   const [pendingActionAfterAuth, setPendingActionAfterAuth] = useState<'toggle_edit' | 'hero_edit' | null>(null);
+
+  useEffect(() => {
+    const syncSuperAdmin = () => {
+      const verified = ClientDataStore.isSuperAdmin();
+      setIsSuperAdminVerified(verified);
+      if (!verified) {
+        setIsSuperAdminEditMode(false);
+      }
+    };
+    window.addEventListener('edusmart:session-updated', syncSuperAdmin);
+    return () => window.removeEventListener('edusmart:session-updated', syncSuperAdmin);
+  }, []);
 
   const requestSuperAdminAccess = (action: 'toggle_edit' | 'hero_edit' = 'toggle_edit') => {
     if (isSuperAdminVerified) {
@@ -191,16 +198,32 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     }
   };
 
-  const handleVerifySuperAdmin = (e?: React.FormEvent) => {
+  const handleVerifySuperAdmin = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setAdminAuthError(null);
     const code = adminPasscode.trim();
+    const email = adminEmailInput.trim();
+    if (!email || !code) {
+      setAdminAuthError('Please enter your Super Admin email and password.');
+      return;
+    }
 
-    // Accepted Super Admin passcodes: 'admin2026', 'superadmin2026', 'gadsa2026'
-    if (code === 'admin2026' || code === 'superadmin2026' || code === 'gadsa2026') {
-      try {
-        sessionStorage.setItem('edusmart_super_admin_verified', 'true');
-      } catch {}
+    try {
+      const res = await fetch('/api/auth/admin-login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: code }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAdminAuthError(
+          body?.error || 'Invalid credentials. Customization of the hero banner can only be done by Super Admin.'
+        );
+        return;
+      }
+
+      await ClientDataStore.hydrateFromBackend(true);
       setIsSuperAdminVerified(true);
       setIsSuperAdminEditMode(true);
       setShowSuperAdminAuthModal(false);
@@ -212,14 +235,15 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
       setToastMessage('🛡️ Super Admin verified! Hero banner customization is now active.');
       setTimeout(() => setToastMessage(null), 3500);
-    } else {
-      setAdminAuthError('Invalid passcode. Customization of the hero banner can only be done by Super Admin.');
+    } catch {
+      setAdminAuthError('Could not connect to server to verify Super Admin credentials.');
     }
   };
 
-  const handleLockSuperAdmin = () => {
+  const handleLockSuperAdmin = async () => {
     try {
-      sessionStorage.removeItem('edusmart_super_admin_verified');
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await ClientDataStore.hydrateFromBackend(true);
     } catch {}
     setIsSuperAdminVerified(false);
     setIsSuperAdminEditMode(false);
@@ -237,19 +261,16 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   // Active Public Subscription status tracking - strictly requires verified paid pass
   const [activePublicTicket, setActivePublicTicket] = useState<string>(() => {
     try {
-      const active = (localStorage.getItem('edusmart_public_active_ticket') || '').trim();
-      const raw = localStorage.getItem('edusmart_vlab_ticket_passes');
-      if (raw && active && !active.toUpperCase().includes('DEMO')) {
-        const passes = JSON.parse(raw);
-        if (Array.isArray(passes)) {
-          const match = passes.find((p: any) => 
-            p.ticketId && 
-            p.ticketId.toUpperCase() === active.toUpperCase() && 
-            p.status === 'active' &&
-            !p.ticketId.toUpperCase().includes('DEMO')
-          );
-          if (match) return match.ticketId;
-        }
+      const active = (ClientDataStore.getPreference<string>('edusmart_public_active_ticket', '') || '').trim();
+      const passes = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+      if (Array.isArray(passes) && active && !active.toUpperCase().includes('DEMO')) {
+        const match = passes.find((p: any) =>
+          p.ticketId &&
+          p.ticketId.toUpperCase() === active.toUpperCase() &&
+          p.status === 'active' &&
+          !p.ticketId.toUpperCase().includes('DEMO')
+        );
+        if (match) return match.ticketId;
       }
       return '';
     } catch {
@@ -326,7 +347,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     tempVideo.preload = 'metadata';
     tempVideo.src = objectUrl;
 
-    tempVideo.onloadedmetadata = () => {
+    tempVideo.onloadedmetadata = async () => {
       URL.revokeObjectURL(objectUrl);
       const videoDuration = tempVideo.duration;
 
@@ -338,24 +359,21 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (loadEvt) => {
-        const base64 = loadEvt.target?.result as string;
+      try {
+        const uploaded = await ClientDataStore.uploadFile(file, 'landing-hero');
         updateLandingHero({
           mediaType: 'video',
-          heroVideoUrl: base64,
+          heroVideoUrl: uploaded.url,
           videoMaxDuration: Math.min(30, Math.ceil(videoDuration)),
           videoBadgeLabel: '30s Custom Showcase'
         });
         setIsVideoUploading(false);
         setToastMessage(`30s Hero video uploaded successfully by Super Admin (${Math.round(videoDuration)}s)`);
         setTimeout(() => setToastMessage(null), 3500);
-      };
-      reader.onerror = () => {
-        setVideoUploadError('Failed to read video file.');
+      } catch (err: any) {
+        setVideoUploadError(err?.message || 'Failed to upload video file to server.');
         setIsVideoUploading(false);
-      };
-      reader.readAsDataURL(file);
+      }
     };
 
     tempVideo.onerror = () => {
@@ -365,7 +383,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
     };
   };
 
-  const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isSuperAdminVerified) {
       requestSuperAdminAccess('hero_edit');
       return;
@@ -379,17 +397,18 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const base64 = loadEvt.target?.result as string;
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'landing-hero');
       updateLandingHero({
         mediaType: 'image',
-        heroImageUrl: base64
+        heroImageUrl: uploaded.url
       });
       setToastMessage('Hero banner image updated successfully by Super Admin!');
       setTimeout(() => setToastMessage(null), 3000);
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      setToastMessage(err?.message || 'Failed to upload hero image to server.');
+      setTimeout(() => setToastMessage(null), 3000);
+    }
   };
 
   // Quick Inline Add Modals
@@ -3374,7 +3393,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   value={adminEmailInput}
                   onChange={(e) => setAdminEmailInput(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-400"
-                  placeholder="admin@edusmart.ac.ke"
+                  placeholder="admin@edutech.ac.ke"
                 />
               </div>
 
@@ -3392,7 +3411,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                       setAdminPasscode(e.target.value);
                       if (adminAuthError) setAdminAuthError(null);
                     }}
-                    placeholder="Enter Super Admin Passcode (e.g. admin2026)"
+                    placeholder="Enter Super Admin password"
                     className="w-full px-3.5 py-2.5 pr-10 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-amber-400"
                   />
                   <button
@@ -3405,7 +3424,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1">
                   <span>Authorized for platform governance</span>
-                  <span className="font-mono text-amber-400/80">Default: admin2026</span>
+                  <span className="font-mono text-amber-400/80">Server-verified session</span>
                 </div>
               </div>
 
@@ -3448,9 +3467,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         initialTicketCode={virtualLabTicketCode}
         onSubscriptionSuccess={(newTicketId) => {
           setActivePublicTicket(newTicketId);
-          try {
-            localStorage.setItem('edusmart_public_active_ticket', newTicketId);
-          } catch {}
+          ClientDataStore.setPreference('edusmart_public_active_ticket', newTicketId);
           setToastMessage(`🎉 Active subscription verified! Pass ${newTicketId} is connected.`);
           setTimeout(() => setToastMessage(null), 4000);
         }}

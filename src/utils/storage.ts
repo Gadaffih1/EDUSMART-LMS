@@ -97,8 +97,7 @@ import {
   TeacherLessonFile
 } from '../types';
 import { getStudentRecord, studentRecordToUser, listSchoolParents, saveStudentRecord, saveStudentParent, StudentRecord } from './schoolDirectoryStore';
-import { isSupabaseConfigured } from '../lib/supabase';
-import { isRemoteDataActive } from './supabaseHydrate';
+import { ClientDataStore } from './clientDataStore';
 import { SyncEngine } from './syncEngine';
 
 const KEYS = {
@@ -193,50 +192,24 @@ const KEYS = {
 // Every core LMS collection participates in Supabase synchronisation.
 SyncEngine.register(Object.values(KEYS));
 
-/** localStorage write that also queues a Supabase push. Drop-in for setItem. */
 function persistItem(key: string, serialized: string): void {
-  localStorage.setItem(key, serialized);
-  SyncEngine.markDirty(key);
+  try {
+    ClientDataStore.setCollection(key, JSON.parse(serialized));
+  } catch {
+    ClientDataStore.setCollection(key, serialized);
+  }
 }
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
-  try {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return defaultValue;
-    }
-    const item = localStorage.getItem(key);
-    if (!item || item === 'undefined' || item === 'null') {
-      if (isRemoteDataActive()) {
-        return Array.isArray(defaultValue) ? [] as T : defaultValue;
-      }
-      if (!isSupabaseConfigured) {
-        // Factory seed: written locally only — uploaded on first sync if the
-        // cloud copy of this collection is empty (never overwrites cloud data).
-        SyncEngine.persistSeed(key, JSON.stringify(defaultValue));
-      }
-      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
-    }
-    const parsed = JSON.parse(item);
-    if (parsed === null && defaultValue !== null) {
-      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
-    }
-    if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
-      return isSupabaseConfigured ? [] as T : defaultValue;
-    }
-    return parsed as T;
-  } catch (err) {
-    console.error(`Error reading ${key} from localStorage`, err);
-    return defaultValue;
+  const value = ClientDataStore.getCollection<T>(key, defaultValue);
+  if (Array.isArray(defaultValue) && !Array.isArray(value)) {
+    return [] as unknown as T;
   }
+  return value;
 }
 
 function setToStorage<T>(key: string, value: T): void {
-  try {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-    persistItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.error(`Error writing ${key} to localStorage`, err);
-  }
+  ClientDataStore.setCollection(key, value);
 }
 
 const buildFullPermissions = (role: UserRole, perms: any): RoleAccessRights => ({
@@ -645,12 +618,8 @@ export const INITIAL_ONBOARDING_BATCHES: OnboardingBatchRecord[] = [
 const REMOVED_ACCOUNTS_KEY = 'edusmart_removed_accounts_v1';
 
 function removedAccountIds(): Set<string> {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(REMOVED_ACCOUNTS_KEY) || '[]');
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set();
-  }
+  const data = ClientDataStore.getCollection<string[]>(REMOVED_ACCOUNTS_KEY, []);
+  return new Set(Array.isArray(data) ? data : []);
 }
 
 export const Storage = {
@@ -738,12 +707,10 @@ export const Storage = {
     };
   },
 
-  // Reset all data to factory demo defaults
+  // Reset all data disabled in central-database mode to protect institutional records
   resetAllData(): void {
-    if (isSupabaseConfigured) {
-      console.error('[storage] Demo data reset is disabled when Supabase is configured.');
-      return;
-    }
+    console.warn('[storage] Destructive client reset is disabled in database-centric mode.');
+    return;
     persistItem(KEYS.USERS, JSON.stringify([]));
     persistItem(KEYS.GRADE_PASSWORDS, JSON.stringify([]));
     persistItem(KEYS.TOPICS, JSON.stringify([]));
@@ -809,6 +776,11 @@ export const Storage = {
     current[role] = { ...current[role], ...permissions };
     setToStorage(KEYS.ROLE_PERMISSIONS, current);
     window.dispatchEvent(new CustomEvent('role-permissions-updated', { detail: { role, permissions: current[role] } }));
+  },
+
+  resetRolePermissions(): void {
+    setToStorage(KEYS.ROLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS);
+    window.dispatchEvent(new CustomEvent('role-permissions-updated'));
   },
 
   getUserEffectivePermissions(user: User): RoleAccessRights {
@@ -879,28 +851,17 @@ export const Storage = {
     return users[idx];
   },
 
-  // Auth & Session
+  // Auth & Session (backed by HTTP-only server session cookie hydrated into ClientDataStore)
   getCurrentUser(): User | null {
-    return getFromStorage<User | null>(KEYS.CURRENT_USER, null);
+    return ClientDataStore.getSessionUser();
   },
   setCurrentUser(user: User | null): void {
-    setToStorage(KEYS.CURRENT_USER, user);
+    ClientDataStore.setSessionUser(user);
   },
 
   // Users
   getUsers(tenantId?: string): User[] {
-    const stored = getFromStorage<User[]>(KEYS.USERS, isRemoteDataActive() ? [] : []);
-    if (isRemoteDataActive()) {
-      return tenantId
-        ? stored.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
-        : stored;
-    }
-    if (isSupabaseConfigured) {
-      return tenantId
-        ? stored.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
-        : stored;
-    }
-
+    const stored = getFromStorage<User[]>(KEYS.USERS, []);
     const removed = removedAccountIds();
     const visible = removed.size > 0 ? stored.filter((user) => !removed.has(user.id)) : stored;
 
@@ -920,7 +881,7 @@ export const Storage = {
     const completeUser: User = {
       ...user,
       email: cleanEmail,
-      schoolId: user.schoolId || 'tenant-riara',
+      schoolId: user.schoolId || ClientDataStore.getActiveTenantId() || 'tenant-riara',
       isActive: user.isActive !== false
     };
 
@@ -931,20 +892,6 @@ export const Storage = {
     }
 
     setToStorage(KEYS.USERS, users);
-
-    // Synchronize newly created user account directly to server database
-    try {
-      fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: completeUser })
-      }).catch(err => {
-        console.warn('[storage] Background server database user register notice:', err);
-      });
-    } catch {
-      // Browser offline or non-blocking
-    }
-
     window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
   },
 
@@ -975,7 +922,7 @@ export const Storage = {
   deleteUser(id: string): void {
     const removed = removedAccountIds();
     removed.add(id);
-    localStorage.setItem(REMOVED_ACCOUNTS_KEY, JSON.stringify([...removed]));
+    ClientDataStore.setCollection(REMOVED_ACCOUNTS_KEY, [...removed]);
     const users = this.getUsers().filter(u => u.id !== id);
     setToStorage(KEYS.USERS, users);
     window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
@@ -4403,7 +4350,7 @@ export const Storage = {
   }
 };
 
-export const []: TeacherAbsenceReport[] = [
+export const INITIAL_TEACHER_ABSENCE_REPORTS: TeacherAbsenceReport[] = [
   {
     id: 'abs-rep-01',
     teacherId: 'usr-tea-01',

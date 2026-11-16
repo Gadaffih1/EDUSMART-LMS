@@ -10,6 +10,7 @@ import {
   updateDepartment,
 } from '../../utils/departmentStore';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { ChevronLeft, Pencil, Trash2 } from 'lucide-react';
 
 interface DepartmentPagesProps {
@@ -31,18 +32,14 @@ export const DepartmentPages: React.FC<DepartmentPagesProps> = ({ schoolId }) =>
   const [draftActivities, setDraftActivities] = useState<string[]>([]);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(pageKey);
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored) as Page;
-      if (parsed?.name === 'list' || parsed?.name === 'open') setPage(parsed);
-    } catch {
-      sessionStorage.removeItem(pageKey);
+    const stored = ClientDataStore.getPreference<Page | null>(pageKey, null);
+    if (stored && (stored.name === 'list' || stored.name === 'open')) {
+      setPage(stored);
     }
   }, [pageKey]);
 
   const openPage = (next: Page) => {
-    sessionStorage.setItem(pageKey, JSON.stringify(next));
+    ClientDataStore.setPreference(pageKey, next);
     setPage(next);
   };
 

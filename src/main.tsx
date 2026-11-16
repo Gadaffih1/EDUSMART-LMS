@@ -4,15 +4,11 @@ import './index.css';
 import { OfflineCacheManager } from './utils/offlineCacheManager';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { SetPasswordPage } from './components/auth/SetPasswordPage';
-import { SyncEngine } from './utils/syncEngine';
-import { hydrateFromSupabase, isRemoteDataActive } from './utils/supabaseHydrate';
-import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { getAuthenticatedAppUser } from './utils/supabaseAuth';
-import { Storage } from './utils/storage';
+import { ClientDataStore } from './utils/clientDataStore';
 import type { User } from './types';
 import { toAppPath } from './utils/appPath';
 
-// Register PWA Service Worker for offline CBC materials caching
+// Register PWA Service Worker for static asset caching
 OfflineCacheManager.registerServiceWorker();
 
 /** Lightweight boot placeholder — replaced by React on first render. */
@@ -42,42 +38,14 @@ async function mount() {
     }
     return;
   }
-  let initialUser: User | null = null;
 
-  if (isSupabaseConfigured && supabase) {
-    await Promise.race([
-      hydrateFromSupabase(),
-      new Promise((resolve) => setTimeout(resolve, 15000)),
-    ]);
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) throw error;
-      if (data.session) {
-        initialUser = await getAuthenticatedAppUser();
-        if (initialUser) {
-          Storage.setCurrentUser(initialUser);
-        }
-      }
-    } catch (err) {
-      console.warn('[auth] Unable to restore the Supabase session, falling back to local user session', err);
-    }
+  // Always hydrate authoritative state and session from central backend SQLite database
+  await Promise.race([
+    ClientDataStore.hydrateFromBackend(true),
+    new Promise((resolve) => setTimeout(resolve, 15000)),
+  ]);
 
-    if (!initialUser) {
-      initialUser = Storage.getCurrentUser();
-      if (initialUser) {
-        SyncEngine.activateIdentity(initialUser.id, initialUser.schoolId);
-      }
-    }
-
-    if (initialUser && !isRemoteDataActive()) {
-      await Promise.race([
-        SyncEngine.hydrate(),
-        new Promise(resolve => setTimeout(resolve, 6000)),
-      ]);
-    }
-  } else {
-    initialUser = Storage.getCurrentUser();
-  }
+  const initialUser: User | null = ClientDataStore.getSessionUser();
 
   const rootElement = document.getElementById('root');
   if (rootElement) {

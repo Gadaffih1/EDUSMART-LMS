@@ -1,20 +1,15 @@
 import { User } from '../types';
+import { ClientDataStore } from './clientDataStore';
 
 const STORAGE_KEY = 'edusmart_provisioned_accounts_v1';
 
 function readAll(): User[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<User[]>(STORAGE_KEY, []);
+  return Array.isArray(data) ? data : [];
 }
 
 function writeAll(users: User[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+  ClientDataStore.setCollection(STORAGE_KEY, users);
 }
 
 export function listProvisionedAccounts(): User[] {

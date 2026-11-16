@@ -39,13 +39,12 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { WorkspaceRoleGuard } from './components/common/WorkspaceRoleGuard';
 import { Maximize2, CheckCheck, Megaphone, Sparkles } from 'lucide-react';
 import { findSystemRole } from './utils/systemRoles';
-import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { SyncEngine } from './utils/syncEngine';
+import { ClientDataStore } from './utils/clientDataStore';
 import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
 import { fromAppPath, toAppPath } from './utils/appPath';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
-const SCHOOL_ROUTE_STORAGE_PREFIX = 'edusmart:school-route:';
+const schoolRouteMap = new Map<string, string>();
 
 function getPortalRoute(pathname: string): { view: PortalView; routeId?: string } {
   const normalizedPath = toAppPath(pathname);
@@ -66,12 +65,13 @@ function getPortalRoute(pathname: string): { view: PortalView; routeId?: string 
 }
 
 function resolveSchoolRoute(routeId: string | undefined): string | undefined {
-  return routeId ? sessionStorage.getItem(`${SCHOOL_ROUTE_STORAGE_PREFIX}${routeId}`) || undefined : undefined;
+  if (!routeId) return undefined;
+  return schoolRouteMap.get(routeId) || routeId;
 }
 
 function createSchoolRouteId(schoolId: string): string {
   const routeId = crypto.randomUUID().replace(/-/g, '');
-  sessionStorage.setItem(`${SCHOOL_ROUTE_STORAGE_PREFIX}${routeId}`, schoolId);
+  schoolRouteMap.set(routeId, schoolId);
   return routeId;
 }
 
@@ -363,15 +363,6 @@ function AppContent({
             ) : !isWorkspaceEnabled(currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
               /* Informative notice if Super Admin deactivated this workspace for this tenant */
               <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-4">
-            ) : findSystemRole(currentUser.role)?.builtIn === false ? (
-              <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-3">
-                <h3 className="text-xl font-black font-serif text-slate-900">
-                  {findSystemRole(currentUser.role)?.name || 'School account'}
-                </h3>
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  {currentUser.name} is signed in at {currentTenant.name}. This role was added by the platform administrator and is ready for assignment.
-                </p>
-              </div>
                 <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-inner">
                   <Sparkles className="w-7 h-7 text-amber-600" />
                 </div>
@@ -387,6 +378,15 @@ function AppContent({
                     Open Platform Customizer to Re-Enable
                   </button>
                 )}
+              </div>
+            ) : findSystemRole(currentUser.role)?.builtIn === false ? (
+              <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-3">
+                <h3 className="text-xl font-black font-serif text-slate-900">
+                  {findSystemRole(currentUser.role)?.name || 'School account'}
+                </h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {currentUser.name} is signed in at {currentTenant.name}. This role was added by the platform administrator and is ready for assignment.
+                </p>
               </div>
             ) : currentUser.role === 'student' ? (
               <WorkspaceRoleGuard
@@ -671,16 +671,15 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
   }, []);
 
   React.useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        SyncEngine.activateIdentity(null);
-        Storage.setCurrentUser(null);
-        setCurrentUser(null);
+    const syncSession = () => {
+      const nextUser = ClientDataStore.getSessionUser();
+      if (nextUser?.id !== currentUser?.id) {
+        setCurrentUser(nextUser);
       }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+    };
+    window.addEventListener('edusmart:data-changed', syncSession);
+    return () => window.removeEventListener('edusmart:data-changed', syncSession);
+  }, [currentUser?.id]);
 
   const handleLoginSuccess = (user: User) => {
     Storage.setCurrentUser(user);
@@ -688,25 +687,44 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
   };
 
   const handleLogout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.signOut();
-      if (error) console.error('[auth] Sign-out failed', error);
-      SyncEngine.activateIdentity(null);
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Ignore network errors during logout
     }
+    ClientDataStore.clearSessionOnly();
     Storage.setCurrentUser(null);
     setCurrentUser(null);
+    await ClientDataStore.hydrateFromBackend(true);
   };
 
-  const handleSwitchUser = (user: User) => {
-    if (isSupabaseConfigured) {
-      SyncEngine.activateIdentity(user.id, user.schoolId);
+  const handleSwitchUser = async (user: User) => {
+    try {
+      const res = await fetch('/api/auth/switch-user', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (res.ok) {
+        await ClientDataStore.hydrateFromBackend(true);
+        const switched = ClientDataStore.getSessionUser() || user;
+        Storage.setCurrentUser(switched);
+        setCurrentUser(switched);
+        return;
+      }
+    } catch {
+      // fallback
     }
     Storage.setCurrentUser(user);
     setCurrentUser(user);
   };
 
   const handleNavigateHome = () => {
-    handleLogout();
+    void handleLogout();
   };
 
   return (

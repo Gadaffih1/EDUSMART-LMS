@@ -1,8 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { getDb, getDbPaths, hashPassword, isHashedPassword } from './db';
+import { getDb, getDbPaths, hashPassword, isHashedPassword, verifyPassword } from './db';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
+
+export const DEFAULT_SUPER_ADMIN_ID = 'platform-admin-1';
+export const DEFAULT_SUPER_ADMIN_EMAIL = 'admin@edusmart.ac.ke';
+export const DEFAULT_SUPER_ADMIN_PASSWORD = 'Arabella@0258';
 
 /** Map from SQL table name in supabase/fresh/*.sql -> frontend collection key */
 export const SQL_TABLE_TO_COLLECTION: Record<string, string> = {
@@ -742,10 +746,10 @@ export function runDatabaseMigrations(rootDir: string = process.cwd()): void {
           'edusmart_platform_admins_v1',
           [
             {
-              id: 'platform-admin-1',
+              id: DEFAULT_SUPER_ADMIN_ID,
               name: 'Platform Super Admin',
-              email: 'admin@edutech.ac.ke',
-              password: hashPassword('1234'),
+              email: DEFAULT_SUPER_ADMIN_EMAIL,
+              password: hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD),
               rights: ['super_admin_page'],
               accessScope: 'super_admin_only',
               isActive: true,
@@ -939,6 +943,79 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
       if (info.changes > 0) seededCount++;
     }
   }
+
+  // C. Strictly set, save, and retain Platform Super Admin login credentials
+  const existingAdmin = db
+    .prepare(
+      `SELECT id, name, email, password_hash, rights_json, access_scope, is_active
+       FROM platform_admins
+       WHERE id = ? OR lower(email) = ?
+       ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END
+       LIMIT 1`
+    )
+    .get(DEFAULT_SUPER_ADMIN_ID, DEFAULT_SUPER_ADMIN_EMAIL, DEFAULT_SUPER_ADMIN_ID) as any;
+
+  const adminName = existingAdmin?.name || 'Platform Super Admin';
+  const adminRights = (() => {
+    try {
+      const parsed = JSON.parse(existingAdmin?.rights_json || '["super_admin_page"]');
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : ['super_admin_page'];
+    } catch {
+      return ['super_admin_page'];
+    }
+  })();
+
+  const needsAdminSeedUpdate =
+    !existingAdmin ||
+    existingAdmin.id !== DEFAULT_SUPER_ADMIN_ID ||
+    String(existingAdmin.email || '').trim().toLowerCase() !== DEFAULT_SUPER_ADMIN_EMAIL ||
+    !verifyPassword(DEFAULT_SUPER_ADMIN_PASSWORD, String(existingAdmin.password_hash || '')) ||
+    existingAdmin.access_scope !== 'super_admin_only' ||
+    existingAdmin.is_active !== 1;
+
+  if (needsAdminSeedUpdate) {
+    db.prepare(`DELETE FROM platform_admins WHERE lower(email) = ? AND id != ?`).run(
+      DEFAULT_SUPER_ADMIN_EMAIL,
+      DEFAULT_SUPER_ADMIN_ID
+    );
+    const retainedHash =
+      existingAdmin?.password_hash && verifyPassword(DEFAULT_SUPER_ADMIN_PASSWORD, String(existingAdmin.password_hash))
+        ? existingAdmin.password_hash
+        : hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD);
+
+    db.prepare(
+      `INSERT OR REPLACE INTO platform_admins
+         (id, name, email, password_hash, rights_json, access_scope, is_active, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'super_admin_only', 1, ?)`
+    ).run(
+      DEFAULT_SUPER_ADMIN_ID,
+      adminName,
+      DEFAULT_SUPER_ADMIN_EMAIL,
+      retainedHash,
+      JSON.stringify(adminRights),
+      now
+    );
+  }
+
+  upsertCollectionRecord(
+    db,
+    'edusmart_platform_admins_v1',
+    DEFAULT_SUPER_ADMIN_ID,
+    'global',
+    {
+      id: DEFAULT_SUPER_ADMIN_ID,
+      name: adminName,
+      email: DEFAULT_SUPER_ADMIN_EMAIL,
+      rights: adminRights,
+      accessScope: 'super_admin_only',
+      isActive: true,
+    },
+    false
+  );
+
+  db.prepare(
+    `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+  ).run('superadmin_credentials_seeded_v1', DEFAULT_SUPER_ADMIN_EMAIL, now);
 
   db.prepare(
     `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`

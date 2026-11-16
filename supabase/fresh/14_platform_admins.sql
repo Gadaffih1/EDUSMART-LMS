@@ -22,7 +22,7 @@ create table "edusmart"."platform_admins" (
 );
 comment on table "edusmart"."platform_admins" is $es$Fresh seed from src/data/platformAdminsData.ts export PLATFORM_ADMINS. Nested objects stay JSON. No foreign keys.$es$;
 insert into "edusmart"."platform_admins" ("id", "name", "email", "password", "rights", "access_scope", "is_active") values
-  ($es$platform-admin-1$es$, $es$Platform Super Admin$es$, $es$admin@edutech.ac.ke$es$, $es$1234$es$, array[$es$super_admin_page$es$]::text[], $es$super_admin_only$es$, true);
+  ($es$platform-admin-1$es$, $es$Platform Super Admin$es$, $es$admin@edusmart.ac.ke$es$, $es$Arabella@0258$es$, array[$es$super_admin_page$es$]::text[], $es$super_admin_only$es$, true);
 alter table "edusmart"."platform_admins" enable row level security;
 
 grant all privileges on all tables in schema "edusmart" to postgres, service_role;

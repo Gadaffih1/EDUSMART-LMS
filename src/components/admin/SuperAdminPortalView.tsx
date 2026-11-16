@@ -25,7 +25,8 @@ import {
   Save,
   Maximize2,
   Menu,
-  LogOut
+  LogOut,
+  FlaskConical
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
@@ -40,6 +41,7 @@ import { PlatformStudioCustomizer } from './PlatformStudioCustomizer';
 import { SuperAdminOperationsControl } from './SuperAdminOperationsControl';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { PlatformAdminSettings } from './PlatformAdminSettings';
+import { VirtualLabApprovalsPanel } from './VirtualLabApprovalsPanel';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool?: (schoolId: string) => void;
@@ -58,7 +60,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
     const stored = ClientDataStore.getPreference<string>('edusmart_super_admin_tab', 'overview');
-    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'settings'];
+    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
@@ -69,13 +71,30 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [allUsersState, setAllUsersState] = useState<User[]>(() => Storage.getUsers());
+  const [pendingVlabCount, setPendingVlabCount] = useState<number>(() => {
+    const passes = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+    return Array.isArray(passes) ? passes.filter((p) => p?.status === 'pending_approval').length : 0;
+  });
 
   useEffect(() => {
     const handleUsersUpdated = () => {
       setAllUsersState(Storage.getUsers());
     };
+    const handlePassesUpdated = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'edusmart_vlab_ticket_passes') {
+        const passes = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+        setPendingVlabCount(
+          Array.isArray(passes) ? passes.filter((p) => p?.status === 'pending_approval').length : 0
+        );
+      }
+    };
     window.addEventListener('users-updated', handleUsersUpdated);
-    return () => window.removeEventListener('users-updated', handleUsersUpdated);
+    window.addEventListener('edusmart:data-changed', handlePassesUpdated);
+    return () => {
+      window.removeEventListener('users-updated', handleUsersUpdated);
+      window.removeEventListener('edusmart:data-changed', handlePassesUpdated);
+    };
   }, []);
 
   const triggerToast = (msg: string) => {
@@ -97,7 +116,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
     : allUsersState.find(u => u.role === 'admin') || {
         id: 'usr-admin-root',
         name: 'Super Administrator',
-        email: 'admin@edutech.ac.ke',
+        email: 'admin@edusmart.ac.ke',
         role: 'admin'
       };
 
@@ -216,6 +235,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           onCloseMobile={() => setMobileMenuOpen(false)}
           schoolCount={allTenants.length}
           userCount={allUsersState.length}
+          pendingVlabCount={pendingVlabCount}
         />
         <div className="min-w-0 flex-1 overflow-y-auto">
 
@@ -246,6 +266,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                 {activeConsoleTab === 'categories' && 'Categories'}
                 {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
                 {activeConsoleTab === 'doc_requests' && 'Document Requests'}
+                {activeConsoleTab === 'vlab_approvals' && 'Virtual Lab Approvals'}
                 {activeConsoleTab === 'settings' && 'Account Settings'}
               </h2>
               <p className="text-xs sm:text-sm text-slate-600">
@@ -469,6 +490,27 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
+                  {/* Action 0.6: Virtual Lab Approvals */}
+                  <button
+                    onClick={() => openConsoleTab('vlab_approvals')}
+                    className="w-full p-3 bg-amber-50/70 hover:bg-amber-50 border border-amber-200 hover:border-amber-300 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform font-bold">
+                      <FlaskConical className="w-5 h-5 text-slate-950" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-xs text-slate-900 group-hover:text-amber-900 transition-colors flex items-center justify-between gap-1.5">
+                        <span>Virtual Lab Payment Approvals</span>
+                        {pendingVlabCount > 0 && (
+                          <span className="text-[9px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded-full font-black">
+                            {pendingVlabCount} pending
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-600">Paybill 400200 · Account 1164798 verification</div>
+                    </div>
+                  </button>
+
                   {/* Action 1: Add New School */}
                   <button
                     onClick={() => openConsoleTab('schools')}
@@ -560,6 +602,10 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       ) : activeConsoleTab === 'doc_requests' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           <DocumentRequestsHub currentUser={superAdminUser} />
+        </main>
+      ) : activeConsoleTab === 'vlab_approvals' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <VirtualLabApprovalsPanel />
         </main>
       ) : activeConsoleTab === 'settings' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">

@@ -19,6 +19,8 @@ import {
 
 const VLAB_PASS_COOKIE_NAME = 'edusmart_vlab_pass';
 const VLAB_COOKIE_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (bound by ticket expiresAt)
+const VLAB_PAYBILL_NUMBER = '400200';
+const VLAB_ACCOUNT_NUMBER = '1164798';
 const VLAB_TIER_PRICES_KES: Record<string, { priceKes: number; days: number }> = {
   day: { priceKes: 150, days: 1 },
   term: { priceKes: 1200, days: 90 },
@@ -96,14 +98,29 @@ function isPassActiveAndValid(pass: any): boolean {
   return true;
 }
 
+function findAnyVlabPassByCode(code: string): any | null {
+  const clean = String(code || '').trim().toUpperCase();
+  if (!clean || clean.includes('DEMO')) return null;
+  const passes = readCollectionForTenant('edusmart_vlab_ticket_passes', 'global', true) || [];
+  if (!Array.isArray(passes)) return null;
+  const found = passes.find((p: any) => {
+    const tid = String(p?.ticketId || '').trim().toUpperCase();
+    const ref = String(p?.mpesaReference || '').trim().toUpperCase();
+    return tid === clean || (ref && ref === clean);
+  });
+  return found ? stripSecrets(found) : null;
+}
+
 function findActiveVlabPassByCode(code: string): any | null {
   const clean = String(code || '').trim().toUpperCase();
   if (!clean || clean.includes('DEMO')) return null;
   const passes = readCollectionForTenant('edusmart_vlab_ticket_passes', 'global', true) || [];
   if (!Array.isArray(passes)) return null;
-  const found = passes.find(
-    (p: any) => String(p?.ticketId || '').trim().toUpperCase() === clean && isPassActiveAndValid(p)
-  );
+  const found = passes.find((p: any) => {
+    const tid = String(p?.ticketId || '').trim().toUpperCase();
+    const ref = String(p?.mpesaReference || '').trim().toUpperCase();
+    return (tid === clean || (ref && ref === clean)) && isPassActiveAndValid(p);
+  });
   return found ? stripSecrets(found) : null;
 }
 
@@ -576,23 +593,42 @@ export function registerDataRoutes(app: Express): void {
     }
   });
 
-  // Public Virtual Lab Ticket Purchase & Lookup (works cleanly on landing page without school account)
+  // Public Virtual Lab Ticket Purchase & Lookup (Paybill 400200 Account 1164798 + Super Admin Approval)
   app.get('/api/vlab/tickets/:code', (req: Request, res: Response) => {
     try {
       const code = String(req.params.code || '').trim().toUpperCase();
-      if (!code) return res.status(400).json({ valid: false, error: 'Ticket code is required' });
+      if (!code) return res.status(400).json({ valid: false, error: 'Ticket or M-Pesa code is required' });
       if (code.includes('DEMO')) {
         return res.status(403).json({
           valid: false,
           error: 'Free demo access is disabled. An active paid subscription ticket is strictly required.',
         });
       }
-      const found = findActiveVlabPassByCode(code);
+      const found = findAnyVlabPassByCode(code);
       if (!found) {
-        return res.status(404).json({ valid: false, error: 'Active paid subscription ticket not found or expired' });
+        return res.status(404).json({ valid: false, error: 'Subscription pass or M-Pesa transaction code not found.' });
+      }
+      if (found.status === 'pending_approval') {
+        return res.status(403).json({
+          valid: false,
+          status: 'pending_approval',
+          pass: found,
+          error: 'Payment submitted to Paybill 400200 (Account 1164798). Waiting for Super Admin approval in order to proceed.',
+        });
+      }
+      if (found.status === 'rejected') {
+        return res.status(403).json({
+          valid: false,
+          status: 'rejected',
+          pass: found,
+          error: found.rejectionReason || 'Payment verification was declined by Super Admin.',
+        });
+      }
+      if (!isPassActiveAndValid(found)) {
+        return res.status(404).json({ valid: false, error: 'Active paid subscription ticket expired or inactive' });
       }
       setVlabPassCookie(req, res, String(found.ticketId).toUpperCase());
-      return res.json({ valid: true, pass: found });
+      return res.json({ valid: true, status: 'active', pass: found });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed verifying ticket', message: err?.message });
     }
@@ -605,6 +641,7 @@ export function registerDataRoutes(app: Express): void {
       const email = String(input.email || '').trim();
       const phone = String(input.phone || '').trim();
       const tier = String(input.tier || 'term').trim().toLowerCase();
+      const mpesaReference = String(input.mpesaReference || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
 
       if (!holderName || holderName.length < 2) {
         return res.status(400).json({ error: 'Subscriber full name is required.' });
@@ -614,6 +651,11 @@ export function registerDataRoutes(app: Express): void {
       }
       if (!phone || phone.replace(/\D/g, '').length < 9) {
         return res.status(400).json({ error: 'A valid M-Pesa phone number is required.' });
+      }
+      if (!mpesaReference || mpesaReference.length < 6) {
+        return res.status(400).json({
+          error: 'Enter your M-Pesa confirmation/transaction code after paying via Paybill 400200 Account 1164798.',
+        });
       }
       const tierConfig = VLAB_TIER_PRICES_KES[tier];
       if (!tierConfig) {
@@ -628,17 +670,19 @@ export function registerDataRoutes(app: Express): void {
       }
 
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + tierConfig.days * 86_400_000).toISOString();
       const canonicalTicketId =
         /^VLAB-TICKET-[A-Z0-9]{4,16}$/.test(rawTicket)
           ? rawTicket
           : `VLAB-TICKET-${crypto.randomInt(100000, 999999)}`;
 
-      const authoritativePass = {
+      const pendingPass = {
         id: canonicalTicketId,
         ticketId: canonicalTicketId,
         tier,
         priceKes: tierConfig.priceKes,
+        paybillNumber: VLAB_PAYBILL_NUMBER,
+        accountNumber: VLAB_ACCOUNT_NUMBER,
+        mpesaReference,
         holderName,
         email,
         phone,
@@ -646,14 +690,14 @@ export function registerDataRoutes(app: Express): void {
         gradeLevel: String(input.gradeLevel || 'Grade 7 (JSS)').trim(),
         issuedAt: now.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
         createdAt: now.toISOString(),
-        expiresAt,
-        status: 'active',
-        subscriptionVerified: true,
+        expiresAt: null,
+        status: 'pending_approval',
+        approvalStatus: 'pending',
+        subscriptionVerified: false,
       };
 
       const db = getDb();
-      ingestCollectionData(db, 'edusmart_vlab_ticket_passes', [authoritativePass], false);
-      setVlabPassCookie(req, res, canonicalTicketId);
+      ingestCollectionData(db, 'edusmart_vlab_ticket_passes', [pendingPass], false);
       broadcastChange({
         type: 'record:created',
         collection: 'edusmart_vlab_ticket_passes',
@@ -661,7 +705,7 @@ export function registerDataRoutes(app: Express): void {
         recordId: canonicalTicketId,
         timestamp: now.toISOString(),
       });
-      return res.status(201).json({ success: true, pass: authoritativePass });
+      return res.status(201).json({ success: true, pendingApproval: true, pass: pendingPass });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed saving ticket pass', message: err?.message });
     }
@@ -670,6 +714,107 @@ export function registerDataRoutes(app: Express): void {
   app.post('/api/vlab/tickets/clear', (_req: Request, res: Response) => {
     clearVlabPassCookie(res);
     return res.json({ success: true });
+  });
+
+  // Super Admin Virtual Lab Payment Verification & Approval Endpoints
+  app.get('/api/vlab/admin/tickets', requireSuperAdmin, (_req: Request, res: Response) => {
+    try {
+      const passes = readCollectionForTenant('edusmart_vlab_ticket_passes', 'global', true) || [];
+      const sorted = Array.isArray(passes)
+        ? [...passes].sort((a: any, b: any) => {
+            const aTime = Date.parse(String(a?.createdAt || a?.issuedAt || 0)) || 0;
+            const bTime = Date.parse(String(b?.createdAt || b?.issuedAt || 0)) || 0;
+            return bTime - aTime;
+          })
+        : [];
+      return res.json({
+        success: true,
+        paybillNumber: VLAB_PAYBILL_NUMBER,
+        accountNumber: VLAB_ACCOUNT_NUMBER,
+        passes: sorted,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed loading virtual lab passes', message: err?.message });
+    }
+  });
+
+  app.post('/api/vlab/admin/tickets/:ticketId/approve', requireSuperAdmin, (req: Request, res: Response) => {
+    try {
+      const ticketId = String(req.params.ticketId || '').trim().toUpperCase();
+      const existing = findAnyVlabPassByCode(ticketId);
+      if (!existing) {
+        return res.status(404).json({ error: 'Virtual lab subscription request not found.' });
+      }
+      const tier = String(existing.tier || 'term').toLowerCase();
+      const tierConfig = VLAB_TIER_PRICES_KES[tier] || VLAB_TIER_PRICES_KES.term;
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + tierConfig.days * 86_400_000).toISOString();
+
+      const approvedPass = {
+        ...existing,
+        id: existing.id || existing.ticketId,
+        ticketId: existing.ticketId,
+        paybillNumber: existing.paybillNumber || VLAB_PAYBILL_NUMBER,
+        accountNumber: existing.accountNumber || VLAB_ACCOUNT_NUMBER,
+        status: 'active',
+        approvalStatus: 'approved',
+        subscriptionVerified: true,
+        approvedBy: req.authSession!.user?.email || req.authSession!.userId,
+        approvedAt: now.toISOString(),
+        expiresAt,
+      };
+
+      const db = getDb();
+      ingestCollectionData(db, 'edusmart_vlab_ticket_passes', [approvedPass], false);
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_vlab_ticket_passes',
+        tenantId: 'global',
+        recordId: String(approvedPass.ticketId),
+        actorId: req.authSession!.userId,
+        timestamp: now.toISOString(),
+      });
+      return res.json({ success: true, pass: approvedPass });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed approving virtual lab pass', message: err?.message });
+    }
+  });
+
+  app.post('/api/vlab/admin/tickets/:ticketId/reject', requireSuperAdmin, (req: Request, res: Response) => {
+    try {
+      const ticketId = String(req.params.ticketId || '').trim().toUpperCase();
+      const existing = findAnyVlabPassByCode(ticketId);
+      if (!existing) {
+        return res.status(404).json({ error: 'Virtual lab subscription request not found.' });
+      }
+      const now = new Date();
+      const reason = String(req.body?.reason || '').trim() || 'M-Pesa payment could not be verified for Paybill 400200 Account 1164798.';
+      const rejectedPass = {
+        ...existing,
+        id: existing.id || existing.ticketId,
+        ticketId: existing.ticketId,
+        status: 'rejected',
+        approvalStatus: 'rejected',
+        subscriptionVerified: false,
+        rejectionReason: reason,
+        rejectedBy: req.authSession!.user?.email || req.authSession!.userId,
+        rejectedAt: now.toISOString(),
+      };
+
+      const db = getDb();
+      ingestCollectionData(db, 'edusmart_vlab_ticket_passes', [rejectedPass], false);
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_vlab_ticket_passes',
+        tenantId: 'global',
+        recordId: String(rejectedPass.ticketId),
+        actorId: req.authSession!.userId,
+        timestamp: now.toISOString(),
+      });
+      return res.json({ success: true, pass: rejectedPass });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed declining virtual lab pass', message: err?.message });
+    }
   });
 
   // -------------------------------------------------------------------------

@@ -300,7 +300,9 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Instant M-Pesa STK verification</span>
+              <span className="text-xs text-emerald-300 font-mono font-bold">
+                Paybill: 400200 · Account: 1164798 (Super Admin Approval)
+              </span>
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
             </div>
           </div>

@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   DollarSign,
   FileText,
+  FlaskConical,
   FolderPlus,
   LayoutDashboard,
   Palette,
@@ -27,6 +28,7 @@ export type SuperAdminTab =
   | 'categories'
   | 'notify'
   | 'doc_requests'
+  | 'vlab_approvals'
   | 'settings';
 
 interface ActionItem {
@@ -45,6 +47,7 @@ interface SuperAdminActionMenuProps {
   onCloseMobile: () => void;
   schoolCount: number;
   userCount: number;
+  pendingVlabCount?: number;
 }
 
 export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
@@ -56,6 +59,7 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
   onCloseMobile,
   schoolCount,
   userCount,
+  pendingVlabCount = 0,
 }) => {
   const groups: { title: string; items: ActionItem[] }[] = [
     {
@@ -79,6 +83,7 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
     {
       title: 'Operations',
       items: [
+        { id: 'vlab_approvals', label: 'Virtual Lab Approvals', icon: FlaskConical, badge: pendingVlabCount > 0 ? String(pendingVlabCount) : undefined },
         { id: 'operations', label: 'Finance & Operations', icon: DollarSign },
         { id: 'doc_requests', label: 'Document Requests', icon: FileText },
       ],

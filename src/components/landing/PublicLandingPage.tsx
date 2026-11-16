@@ -166,7 +166,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
   const [showSuperAdminAuthModal, setShowSuperAdminAuthModal] = useState<boolean>(false);
   const [adminPasscode, setAdminPasscode] = useState<string>('');
   const [showPasscodeText, setShowPasscodeText] = useState<boolean>(false);
-  const [adminEmailInput, setAdminEmailInput] = useState<string>('admin@edutech.ac.ke');
+  const [adminEmailInput, setAdminEmailInput] = useState<string>('admin@edusmart.ac.ke');
   const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
   const [pendingActionAfterAuth, setPendingActionAfterAuth] = useState<'toggle_edit' | 'hero_edit' | null>(null);
 
@@ -2885,7 +2885,7 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   value={adminEmailInput}
                   onChange={(e) => setAdminEmailInput(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-400"
-                  placeholder="admin@edutech.ac.ke"
+                  placeholder="admin@edusmart.ac.ke"
                 />
               </div>
 

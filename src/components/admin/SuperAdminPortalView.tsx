@@ -10,7 +10,6 @@ import {
   CreditCard,
   Plus,
   Settings,
-  BarChart3,
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -26,7 +25,9 @@ import {
   Maximize2,
   Menu,
   LogOut,
-  FlaskConical
+  FlaskConical,
+  Database,
+  Download
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
@@ -97,9 +98,24 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
     };
   }, []);
 
+  const [exportingMysql, setExportingMysql] = useState<boolean>(false);
+
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
+
+  const handleExportMySqlDump = async () => {
+    if (exportingMysql) return;
+    setExportingMysql(true);
+    try {
+      const result = await ClientDataStore.downloadMySqlDump();
+      triggerToast(`Downloaded ${result.filename} (${result.tableCount} tables, ${result.totalRows.toLocaleString()} rows)`);
+    } catch (err: any) {
+      triggerToast(err?.message || 'Failed to export MySQL database dump.');
+    } finally {
+      setExportingMysql(false);
+    }
   };
 
   const platformAdmin = listPlatformAdmins().find((admin) => admin.isActive && admin.accessScope === 'super_admin_only');
@@ -162,6 +178,19 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           {/* Actions & Platform Owner User Profile */}
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             
+            {/* Export Complete MySQL Dump (.sql) to PC */}
+            <button
+              type="button"
+              onClick={handleExportMySqlDump}
+              disabled={exportingMysql}
+              className="px-2 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl border border-emerald-700 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              title="Download full central database as a MySQL 8.0+ / MariaDB (.sql) dump file"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden md:inline">{exportingMysql ? 'Exporting SQL…' : 'Export MySQL (.sql)'}</span>
+              <span className="md:hidden">.SQL</span>
+            </button>
+
             {/* Visual Customizer & CMS Studio Button */}
             <button
               onClick={() => setShowCampusSwitcher(true)}
@@ -245,34 +274,42 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       <section className="bg-gradient-to-br from-white via-white to-blue-50/70 border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto space-y-6">
           
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
-              aria-label="Open platform menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">
-                {activeConsoleTab === 'overview' && 'Platform Overview'}
-                {activeConsoleTab === 'operations' && 'Finance & Operations'}
-                {activeConsoleTab === 'customizer' && 'Platform Studio'}
-                {activeConsoleTab === 'schools' && 'Schools & Tenancy'}
-                {activeConsoleTab === 'branding' && 'Logo & Background'}
-                {activeConsoleTab === 'users' && 'Users & Staff'}
-                {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
-                {activeConsoleTab === 'categories' && 'Categories'}
-                {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
-                {activeConsoleTab === 'doc_requests' && 'Document Requests'}
-                {activeConsoleTab === 'vlab_approvals' && 'Virtual Lab Approvals'}
-                {activeConsoleTab === 'settings' && 'Account Settings'}
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600">
-                Manage all schools, subscriptions and platform settings.
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
+                aria-label="Open platform menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">
+                  {activeConsoleTab === 'overview' && 'Platform Overview'}
+                  {activeConsoleTab === 'operations' && 'Finance & Operations'}
+                  {activeConsoleTab === 'customizer' && 'Platform Studio'}
+                  {activeConsoleTab === 'schools' && 'Schools & Tenancy'}
+                  {activeConsoleTab === 'branding' && 'Logo & Background'}
+                  {activeConsoleTab === 'users' && 'Users & Staff'}
+                  {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
+                  {activeConsoleTab === 'categories' && 'Categories'}
+                  {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
+                  {activeConsoleTab === 'doc_requests' && 'Document Requests'}
+                  {activeConsoleTab === 'vlab_approvals' && 'Virtual Lab Approvals'}
+                  {activeConsoleTab === 'settings' && 'Account Settings'}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600">
+                  Manage all schools, subscriptions and platform settings.
+                </p>
+              </div>
             </div>
+            {toastMessage && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-900 shadow-xs">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                <span>{toastMessage}</span>
+              </div>
+            )}
           </div>
 
           {/* 4 Metric Cards (Matching Panel 4 in User Diagram) */}
@@ -553,17 +590,21 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
-                  {/* Action 4: View Reports */}
+                  {/* Action 4: Download MySQL Dump to PC */}
                   <button
-                    onClick={() => alert("Platform Analytics Report: Monthly active learners: 4,840. Total assessments logged: 19,412. Server latency: 34ms.")}
-                    className="w-full p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
+                    type="button"
+                    onClick={handleExportMySqlDump}
+                    disabled={exportingMysql}
+                    className="w-full p-3 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group disabled:opacity-60"
                   >
-                    <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-700 border border-violet-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                      <BarChart3 className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Database className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="font-bold text-xs text-slate-900 group-hover:text-blue-800 transition-colors">View Reports</div>
-                      <div className="text-[10px] text-slate-600">Platform usage, bandwidth and revenue</div>
+                      <div className="font-bold text-xs text-emerald-950">
+                        {exportingMysql ? 'Generating MySQL Dump…' : 'Export MySQL Dump (.sql)'}
+                      </div>
+                      <div className="text-[10px] text-emerald-800">Download full database backup to this PC</div>
                     </div>
                   </button>
 

@@ -17,6 +17,7 @@ import {
   requireSuperAdmin,
   resolveAuthorizedTenantId,
 } from './authRoutes.ts';
+import { generateMySqlDump, getMySqlExportSummary } from './mysqlExport.ts';
 
 const VLAB_PASS_COOKIE_NAME = 'edusmart_vlab_pass';
 const VLAB_COOKIE_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (bound by ticket expiresAt)
@@ -1311,6 +1312,61 @@ export function registerDataRoutes(app: Express): void {
       });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed checking database status', message: err?.message });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // 7. Super Admin Downloadable MySQL Database Dump Endpoints
+  // -------------------------------------------------------------------------
+  app.get('/api/admin/export-mysql/summary', (req: Request, res: Response) => {
+    try {
+      const session = req.authSession;
+      if (!session || !session.isSuperAdmin) {
+        return res.status(401).json({ error: 'Super Administrator authentication required.' });
+      }
+      const db = getDb();
+      const { dbPath } = initDatabase();
+      const summary = getMySqlExportSummary(db);
+      const dbSizeBytes = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+      return res.json({
+        success: true,
+        ...summary,
+        dbSizeBytes,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed inspecting database summary', message: err?.message });
+    }
+  });
+
+  app.get('/api/admin/export-mysql', (req: Request, res: Response) => {
+    try {
+      const session = req.authSession;
+      if (!session || !session.isSuperAdmin) {
+        return res.status(401).json({ error: 'Super Administrator authentication required.' });
+      }
+      const db = getDb();
+      const dump = generateMySqlDump(db);
+
+      writeSecurityAudit({
+        schoolId: 'global',
+        userId: session.userId,
+        userEmail: session.user?.email,
+        action: 'MYSQL_DUMP_EXPORTED',
+        resource: '/api/admin/export-mysql',
+        details: `Exported ${dump.filename} (${dump.tableCount} tables, ${dump.totalRows} rows)`,
+      });
+
+      res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${dump.filename}"`);
+      res.setHeader('X-EduSmart-Dump-Filename', dump.filename);
+      res.setHeader('X-EduSmart-Dump-Tables', String(dump.tableCount));
+      res.setHeader('X-EduSmart-Dump-Rows', String(dump.totalRows));
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(dump.sql);
+    } catch (err: any) {
+      console.error('Error generating MySQL dump:', err);
+      return res.status(500).json({ error: 'Failed generating MySQL dump', message: err?.message });
     }
   });
 }

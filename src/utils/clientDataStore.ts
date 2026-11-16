@@ -365,6 +365,57 @@ export const ClientDataStore = {
     return body.file;
   },
 
+  async getMySqlExportSummary(): Promise<{
+    tables: Array<{ name: string; rows: number }>;
+    totalTables: number;
+    totalRows: number;
+    dbSizeBytes: number;
+  }> {
+    const res = await fetch('/api/admin/export-mysql/summary', {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed to inspect database tables');
+    }
+    return body;
+  },
+
+  async downloadMySqlDump(): Promise<{ filename: string; tableCount: number; totalRows: number; sizeBytes: number }> {
+    const res = await fetch('/api/admin/export-mysql', {
+      method: 'GET',
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error || `Failed exporting MySQL dump (HTTP ${res.status})`);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const filename =
+      res.headers.get('X-EduSmart-Dump-Filename') ||
+      (filenameMatch ? filenameMatch[1] : `edusmart_mysql_dump_${new Date().toISOString().slice(0, 10)}.sql`);
+    const tableCount = Number(res.headers.get('X-EduSmart-Dump-Tables') || 0);
+    const totalRows = Number(res.headers.get('X-EduSmart-Dump-Rows') || 0);
+
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    return { filename, tableCount, totalRows, sizeBytes: blob.size };
+  },
+
   clearSessionOnly(): void {
     sessionUser = null;
     inMemorySessionToken = null;

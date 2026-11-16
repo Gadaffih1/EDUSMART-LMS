@@ -11,6 +11,7 @@ import { runDatabaseMigrations } from './src/server/migrate.ts';
 import { attachAuthSession, registerAuthRoutes } from './src/server/authRoutes.ts';
 import { registerDataRoutes } from './src/server/dataRoutes.ts';
 import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
+import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
 
@@ -49,21 +50,26 @@ async function startServer() {
 
   const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
 
-  // Initialize central SQLite database and run safe idempotent migrations
+  // Initialize local cache/database and run safe idempotent migrations
   initDatabase(rootDir);
   runDatabaseMigrations(rootDir);
+
+  // Connect live MySQL database when configured via .env (MYSQL_* / MYSQL_URL)
+  await initMySqlBridge();
 
   // Attach HTTP-only session cookie middleware
   app.use(attachAuthSession);
 
   // Health and readiness check endpoints for container orchestrators, load balancers, and Cloud Run
   const healthHandler = (_req: Request, res: Response) => {
+    const mysqlStatus = getMySqlStatus();
     res.status(200).json({
       status: 'ok',
       service: 'EduSmart API',
       port: PORT,
       host: HOST,
-      database: 'sqlite-wal',
+      database: mysqlStatus.connected ? 'mysql2' : 'sqlite-wal',
+      mysql: mysqlStatus,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       geminiConfigured: !!process.env.GEMINI_API_KEY
@@ -620,8 +626,13 @@ Core rules:
   });
 
   // Graceful shutdown handling for container orchestrators (Cloud Run, Docker, Kubernetes)
-  const handleShutdown = (signal: string) => {
-    console.log(`EduSmart server received ${signal}, closing HTTP server cleanly...`);
+  const handleShutdown = async (signal: string) => {
+    console.log(`EduSmart server received ${signal}, flushing MySQL sync & closing HTTP server cleanly...`);
+    try {
+      await flushMySqlSync();
+    } catch {
+      // ignore shutdown sync errors
+    }
     server.close(() => {
       console.log('HTTP server closed successfully.');
       process.exit(0);

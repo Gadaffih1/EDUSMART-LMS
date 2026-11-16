@@ -162,6 +162,10 @@ export const ClientDataStore = {
     inMemorySessionToken = token || null;
   },
 
+  getSessionToken(): string | null {
+    return inMemorySessionToken;
+  },
+
   getAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
     return authHeaders(extra);
   },
@@ -370,6 +374,17 @@ export const ClientDataStore = {
     totalTables: number;
     totalRows: number;
     dbSizeBytes: number;
+    mysql?: {
+      configured: boolean;
+      connected: boolean;
+      driver: 'mysql2' | 'sqlite-fallback';
+      host: string | null;
+      port: number | null;
+      database: string | null;
+      lastSyncedAt: string | null;
+      lastError: string | null;
+      syncSourceOfTruth: 'mysql' | 'local-sqlite';
+    };
   }> {
     const res = await fetch('/api/admin/export-mysql/summary', {
       credentials: 'include',
@@ -378,6 +393,32 @@ export const ClientDataStore = {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       throw new Error(body?.error || 'Failed to inspect database tables');
+    }
+    return body;
+  },
+
+  async syncMySqlNow(): Promise<{
+    success: boolean;
+    mysql?: {
+      configured: boolean;
+      connected: boolean;
+      driver: string;
+      host: string | null;
+      port: number | null;
+      database: string | null;
+      lastSyncedAt: string | null;
+      lastError: string | null;
+    };
+    error?: string;
+  }> {
+    const res = await fetch('/api/admin/mysql/sync', {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'MySQL sync failed');
     }
     return body;
   },

@@ -40,7 +40,6 @@ import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { useAccessibility } from '../../context/AccessibilityContext';
 import { AccessibilityModal } from '../common/AccessibilityModal';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
-import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -1006,20 +1005,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {/* DEDICATED WINDOW FOOTER */}
-            <div className="p-3 sm:px-5 border-t border-slate-200 bg-slate-100 flex items-center justify-between text-xs text-slate-600 shrink-0 gap-2">
-              {!isSupabaseConfigured && (
-                <button
-                  onClick={() => {
-                    Storage.resetAllData();
-                    window.location.reload();
-                  }}
-                  className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 transition-colors font-medium text-xs cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Reset Demo Data</span>
-                </button>
-              )}
-
+            <div className="p-3 sm:px-5 border-t border-slate-200 bg-slate-100 flex items-center justify-end text-xs text-slate-600 shrink-0 gap-2">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsSwitchModalFullscreen(prev => !prev)}

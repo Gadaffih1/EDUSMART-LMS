@@ -174,6 +174,116 @@ export function getMySqlExportSummary(db: DatabaseSync): {
   return { tables, totalTables: tables.length, totalRows };
 }
 
+export interface MySqlTableSchemaMeta {
+  tableName: string;
+  columns: SqliteColumnInfo[];
+  pkCols: string[];
+  createSql: string;
+}
+
+export function buildMySqlTableSchema(
+  db: DatabaseSync,
+  tableName: string,
+  ifNotExists = false
+): MySqlTableSchemaMeta {
+  const quotedSqliteTable = `"${tableName.replace(/"/g, '""')}"`;
+  const columns = db.prepare(`PRAGMA table_info(${quotedSqliteTable})`).all() as unknown as SqliteColumnInfo[];
+  const indexes = db.prepare(`PRAGMA index_list(${quotedSqliteTable})`).all() as unknown as SqliteIndexListRow[];
+
+  const pkCols = columns
+    .filter((c) => c.pk > 0)
+    .sort((a, b) => a.pk - b.pk)
+    .map((c) => c.name);
+
+  const parsedIndexes: Array<{ name: string; unique: boolean; cols: string[] }> = [];
+  const seenIndexSignatures = new Set<string>();
+  const indexedColSet = new Set<string>(pkCols);
+
+  for (const idx of indexes) {
+    if (idx.origin === 'pk') continue; // Primary key emitted separately
+    const infoRows = db
+      .prepare(`PRAGMA index_info("${idx.name.replace(/"/g, '""')}")`)
+      .all() as unknown as SqliteIndexInfoRow[];
+
+    let idxCols = infoRows
+      .sort((a, b) => a.seqno - b.seqno)
+      .map((r) => r.name)
+      .filter((n): n is string => Boolean(n));
+
+    if (idxCols.length === 0) {
+      const masterRow = db
+        .prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`)
+        .get(idx.name) as { sql: string | null } | undefined;
+      idxCols = extractExpressionIndexCols(masterRow?.sql);
+    }
+
+    const colNamesSet = new Set(columns.map((c) => c.name));
+    idxCols = idxCols.filter((c) => colNamesSet.has(c));
+    if (idxCols.length === 0) continue;
+
+    const sig = `${idx.unique ? 'U' : 'N'}:${idxCols.join(',')}`;
+    if (seenIndexSignatures.has(sig)) continue;
+    seenIndexSignatures.add(sig);
+
+    idxCols.forEach((c) => indexedColSet.add(c));
+    parsedIndexes.push({
+      name: idx.name,
+      unique: idx.unique === 1,
+      cols: idxCols,
+    });
+  }
+
+  const columnTypeByName = new Map<string, string>();
+
+  for (const col of columns) {
+    let maxLen = 0;
+    const upper = String(col.type || '').toUpperCase();
+    if (!upper.includes('INT') && !upper.includes('REAL') && !upper.includes('BLOB')) {
+      const lenRow = db
+        .prepare(
+          `SELECT COALESCE(MAX(LENGTH(CAST("${col.name.replace(/"/g, '""')}" AS TEXT))), 0) AS m FROM ${quotedSqliteTable}`
+        )
+        .get() as { m: number };
+      maxLen = Number(lenRow?.m || 0);
+    }
+    columnTypeByName.set(col.name, mapColumnToMySqlType(col, indexedColSet.has(col.name), maxLen));
+  }
+
+  const colDefs: string[] = [];
+  for (const col of columns) {
+    const mysqlType = columnTypeByName.get(col.name) || 'TEXT';
+    const notNull = col.notnull === 1 || col.pk > 0 ? ' NOT NULL' : ' NULL';
+    const defaultClause = formatDefaultClause(col, mysqlType);
+    colDefs.push(`  ${escapeIdent(col.name)} ${mysqlType}${notNull}${defaultClause}`);
+  }
+
+  const formatKeyPart = (colName: string, forcePrefix = false) => {
+    const mysqlType = columnTypeByName.get(colName) || '';
+    if (mysqlType === 'TEXT' || mysqlType === 'LONGTEXT' || mysqlType === 'LONGBLOB' || forcePrefix) {
+      return `${escapeIdent(colName)}(191)`;
+    }
+    return escapeIdent(colName);
+  };
+
+  if (pkCols.length > 0) {
+    const forcePrefix = pkCols.length > 2 && pkCols.some((c) => columnTypeByName.get(c) === 'VARCHAR(255)');
+    const pkExpr = pkCols.map((c) => formatKeyPart(c, forcePrefix)).join(', ');
+    colDefs.push(`  PRIMARY KEY (${pkExpr})`);
+  }
+
+  for (const idx of parsedIndexes) {
+    const kind = idx.unique ? 'UNIQUE KEY' : 'KEY';
+    const forcePrefix = idx.cols.length > 2 && idx.cols.some((c) => columnTypeByName.get(c) === 'VARCHAR(255)');
+    const colsExpr = idx.cols.map((c) => formatKeyPart(c, forcePrefix)).join(', ');
+    colDefs.push(`  ${kind} ${escapeIdent(idx.name)} (${colsExpr})`);
+  }
+
+  const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : '';
+  const createSql = `CREATE TABLE ${ifNotExistsClause}${escapeIdent(tableName)} (\n${colDefs.join(',\n')}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`;
+
+  return { tableName, columns, pkCols, createSql };
+}
+
 export function generateMySqlDump(db: DatabaseSync): MySqlDumpResult {
   const now = new Date();
   const stamp = [
@@ -202,109 +312,14 @@ export function generateMySqlDump(db: DatabaseSync): MySqlDumpResult {
 
   for (const { name: tableName } of tableRows) {
     const quotedSqliteTable = `"${tableName.replace(/"/g, '""')}"`;
-    const columns = db.prepare(`PRAGMA table_info(${quotedSqliteTable})`).all() as unknown as SqliteColumnInfo[];
-    const indexes = db.prepare(`PRAGMA index_list(${quotedSqliteTable})`).all() as unknown as SqliteIndexListRow[];
-
-    const pkCols = columns
-      .filter((c) => c.pk > 0)
-      .sort((a, b) => a.pk - b.pk)
-      .map((c) => c.name);
-
-    const parsedIndexes: Array<{ name: string; unique: boolean; cols: string[] }> = [];
-    const seenIndexSignatures = new Set<string>();
-    const indexedColSet = new Set<string>(pkCols);
-
-    for (const idx of indexes) {
-      if (idx.origin === 'pk') continue; // Primary key emitted separately
-      const infoRows = db
-        .prepare(`PRAGMA index_info("${idx.name.replace(/"/g, '""')}")`)
-        .all() as unknown as SqliteIndexInfoRow[];
-
-      let idxCols = infoRows
-        .sort((a, b) => a.seqno - b.seqno)
-        .map((r) => r.name)
-        .filter((n): n is string => Boolean(n));
-
-      if (idxCols.length === 0) {
-        const masterRow = db
-          .prepare(`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`)
-          .get(idx.name) as { sql: string | null } | undefined;
-        idxCols = extractExpressionIndexCols(masterRow?.sql);
-      }
-
-      // Filter only real table columns
-      const colNamesSet = new Set(columns.map((c) => c.name));
-      idxCols = idxCols.filter((c) => colNamesSet.has(c));
-      if (idxCols.length === 0) continue;
-
-      const sig = `${idx.unique ? 'U' : 'N'}:${idxCols.join(',')}`;
-      if (seenIndexSignatures.has(sig)) continue;
-      seenIndexSignatures.add(sig);
-
-      idxCols.forEach((c) => indexedColSet.add(c));
-      parsedIndexes.push({
-        name: idx.name,
-        unique: idx.unique === 1,
-        cols: idxCols,
-      });
-    }
-
-    // Measure max observed string length per column so indexed VARCHAR sizes never overflow
-    const maxLenByCol = new Map<string, number>();
-    const columnTypeByName = new Map<string, string>();
-
-    for (const col of columns) {
-      let maxLen = 0;
-      const upper = String(col.type || '').toUpperCase();
-      if (!upper.includes('INT') && !upper.includes('REAL') && !upper.includes('BLOB')) {
-        const lenRow = db
-          .prepare(
-            `SELECT COALESCE(MAX(LENGTH(CAST("${col.name.replace(/"/g, '""')}" AS TEXT))), 0) AS m FROM ${quotedSqliteTable}`
-          )
-          .get() as { m: number };
-        maxLen = Number(lenRow?.m || 0);
-      }
-      maxLenByCol.set(col.name, maxLen);
-      columnTypeByName.set(col.name, mapColumnToMySqlType(col, indexedColSet.has(col.name), maxLen));
-    }
-
-    const colDefs: string[] = [];
-    for (const col of columns) {
-      const mysqlType = columnTypeByName.get(col.name) || 'TEXT';
-      const notNull = col.notnull === 1 || col.pk > 0 ? ' NOT NULL' : ' NULL';
-      const defaultClause = formatDefaultClause(col, mysqlType);
-      colDefs.push(`  ${escapeIdent(col.name)} ${mysqlType}${notNull}${defaultClause}`);
-    }
-
-    const formatKeyPart = (colName: string, forcePrefix = false) => {
-      const mysqlType = columnTypeByName.get(colName) || '';
-      if (mysqlType === 'TEXT' || mysqlType === 'LONGTEXT' || mysqlType === 'LONGBLOB' || forcePrefix) {
-        return `${escapeIdent(colName)}(191)`;
-      }
-      return escapeIdent(colName);
-    };
-
-    if (pkCols.length > 0) {
-      const forcePrefix = pkCols.length > 2 && pkCols.some((c) => columnTypeByName.get(c) === 'VARCHAR(255)');
-      const pkExpr = pkCols.map((c) => formatKeyPart(c, forcePrefix)).join(', ');
-      colDefs.push(`  PRIMARY KEY (${pkExpr})`);
-    }
-
-    for (const idx of parsedIndexes) {
-      const kind = idx.unique ? 'UNIQUE KEY' : 'KEY';
-      const forcePrefix = idx.cols.length > 2 && idx.cols.some((c) => columnTypeByName.get(c) === 'VARCHAR(255)');
-      const colsExpr = idx.cols.map((c) => formatKeyPart(c, forcePrefix)).join(', ');
-      colDefs.push(`  ${kind} ${escapeIdent(idx.name)} (${colsExpr})`);
-    }
+    const { columns, createSql } = buildMySqlTableSchema(db, tableName, false);
 
     const tableChunks: string[] = [];
     tableChunks.push(`-- --------------------------------------------------------`);
     tableChunks.push(`-- Table structure for table ${escapeIdent(tableName)}`);
     tableChunks.push(`-- --------------------------------------------------------`);
     tableChunks.push(`DROP TABLE IF EXISTS ${escapeIdent(tableName)};`);
-    tableChunks.push(
-      `CREATE TABLE ${escapeIdent(tableName)} (\n${colDefs.join(',\n')}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
-    );
+    tableChunks.push(createSql);
     tableChunks.push('');
 
     const rows = db.prepare(`SELECT * FROM ${quotedSqliteTable}`).all() as Record<string, unknown>[];

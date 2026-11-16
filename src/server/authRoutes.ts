@@ -1,6 +1,14 @@
 import crypto from 'node:crypto';
 import type { Express, NextFunction, Request, Response } from 'express';
-import { getDb, hashPassword, isHashedPassword, stripSecrets, verifyPassword, writeSecurityAudit } from './db.ts';
+import {
+  getDb,
+  hashPassword,
+  isHashedPassword,
+  notifyMySqlTablesChanged,
+  stripSecrets,
+  verifyPassword,
+  writeSecurityAudit,
+} from './db.ts';
 import { ingestCollectionData, resolveRecordTenantId, upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
 
@@ -131,6 +139,7 @@ export function createAuthSession(
   );
 
   setSessionCookie(req, res, rawToken);
+  notifyMySqlTablesChanged(['auth_sessions']);
   return rawToken;
 }
 
@@ -691,6 +700,7 @@ export function registerAuthRoutes(app: Express): void {
       };
 
       upsertCollectionRecord(db, 'edusmart_platform_admins_v1', admin.id, 'global', safeAdmin, false);
+      notifyMySqlTablesChanged(['platform_admins', 'collections_store']);
       broadcastChange({
         type: 'collection:updated',
         collection: 'edusmart_platform_admins_v1',
@@ -806,6 +816,7 @@ export function registerAuthRoutes(app: Express): void {
     db.prepare(
       `UPDATE auth_sessions SET school_id = ?, user_json = ?, last_seen_at = ? WHERE token_hash = ?`
     ).run(String(schoolId), JSON.stringify(updatedUser), new Date().toISOString(), req.authSession!.tokenHash);
+    notifyMySqlTablesChanged(['auth_sessions']);
 
     return res.json({ success: true, schoolId: String(schoolId) });
   });
@@ -836,17 +847,81 @@ export function registerAuthRoutes(app: Express): void {
 
     // Clean previous session row
     db.prepare(`DELETE FROM auth_sessions WHERE token_hash = ?`).run(session.tokenHash);
+    notifyMySqlTablesChanged(['auth_sessions']);
 
     return res.json({ success: true, sessionToken, user: targetUser });
   });
 
-  // 8. Sign Out (Destroys server session + clears HTTP-only cookie)
+  // 8. Change Own Account Password (Central Database / MySQL)
+  app.post('/api/auth/change-password', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      const { currentPassword, newPassword } = req.body || {};
+      if (!currentPassword || !newPassword || String(newPassword).length < 6) {
+        return res.status(400).json({ error: 'Current password and a new password (at least 6 characters) are required.' });
+      }
+
+      const db = getDb();
+      const now = new Date().toISOString();
+      const nextHash = hashPassword(String(newPassword));
+
+      if (session.isSuperAdmin) {
+        const admin = db.prepare(`SELECT id, password_hash FROM platform_admins WHERE id = ?`).get(session.userId) as any;
+        if (!admin || !verifyPassword(String(currentPassword), admin.password_hash)) {
+          return res.status(401).json({ error: 'Current password is incorrect.' });
+        }
+        db.prepare(`UPDATE platform_admins SET password_hash = ?, updated_at = ? WHERE id = ?`).run(
+          nextHash,
+          now,
+          session.userId
+        );
+        notifyMySqlTablesChanged(['platform_admins']);
+        return res.json({ success: true });
+      }
+
+      const userRow = db
+        .prepare(`SELECT id, password_hash, payload_json FROM users WHERE id = ?`)
+        .get(session.userId) as any;
+      if (!userRow || !verifyPassword(String(currentPassword), userRow.password_hash)) {
+        return res.status(401).json({ error: 'Current password is incorrect.' });
+      }
+
+      const parsed = JSON.parse(userRow.payload_json || '{}');
+      parsed.passwordHash = nextHash;
+      delete parsed.password;
+
+      db.prepare(`UPDATE users SET password_hash = ?, payload_json = ?, updated_at = ? WHERE id = ?`).run(
+        nextHash,
+        JSON.stringify(parsed),
+        now,
+        session.userId
+      );
+      db.prepare(`UPDATE students SET password_hash = ? WHERE id = ?`).run(nextHash, session.userId);
+      upsertCollectionRecord(db, 'edusmart_users_v1', session.userId, session.schoolId, parsed, false);
+
+      writeSecurityAudit({
+        schoolId: session.schoolId,
+        userId: session.userId,
+        userEmail: session.user?.email,
+        action: 'PASSWORD_UPDATED',
+        resource: '/api/auth/change-password',
+      });
+      notifyMySqlTablesChanged(['users', 'students', 'collections_store', 'security_audit_logs']);
+
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed updating password', message: err?.message });
+    }
+  });
+
+  // 9. Sign Out (Destroys server session + clears HTTP-only cookie)
   app.post('/api/auth/logout', (req: Request, res: Response) => {
     try {
       const session = req.authSession;
       if (session) {
         const db = getDb();
         db.prepare(`DELETE FROM auth_sessions WHERE token_hash = ?`).run(session.tokenHash);
+        notifyMySqlTablesChanged(['auth_sessions']);
         writeSecurityAudit({
           schoolId: session.schoolId,
           userId: session.userId,

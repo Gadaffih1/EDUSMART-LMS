@@ -1,4 +1,5 @@
 import type { Response } from 'express';
+import { notifyMySqlTablesChanged } from './db.ts';
 
 export interface RealtimeClient {
   id: string;
@@ -56,6 +57,11 @@ export function registerSseClient(client: RealtimeClient): () => void {
 }
 
 export function broadcastChange(payload: ChangeEventPayload): void {
+  if (payload.collection === 'user_preferences') {
+    notifyMySqlTablesChanged(['user_preferences']);
+  } else {
+    notifyMySqlTablesChanged();
+  }
   const message = `event: data-change\ndata: ${JSON.stringify(payload)}\n\n`;
   for (const [id, client] of clients.entries()) {
     // Enforce multi-tenant isolation on realtime push

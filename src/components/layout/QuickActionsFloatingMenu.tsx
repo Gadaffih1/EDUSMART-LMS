@@ -39,7 +39,6 @@ import {
 } from 'lucide-react';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
-import { isSupabaseConfigured } from '../../lib/supabase';
 
 export interface QuickActionItem {
   id: string;

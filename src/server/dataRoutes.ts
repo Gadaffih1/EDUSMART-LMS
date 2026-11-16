@@ -2,7 +2,13 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Express, Request, Response } from 'express';
-import { getDb, initDatabase, stripSecrets, writeSecurityAudit } from './db.ts';
+import {
+  getDb,
+  initDatabase,
+  notifyMySqlTablesChanged,
+  stripSecrets,
+  writeSecurityAudit,
+} from './db.ts';
 import {
   ingestCollectionData,
   resolveRecordId,
@@ -18,6 +24,7 @@ import {
   resolveAuthorizedTenantId,
 } from './authRoutes.ts';
 import { generateMySqlDump, getMySqlExportSummary } from './mysqlExport.ts';
+import { forceFullMySqlSync, getMySqlStatus } from './mysqlAdapter.ts';
 
 const VLAB_PASS_COOKIE_NAME = 'edusmart_vlab_pass';
 const VLAB_COOKIE_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (bound by ticket expiresAt)
@@ -1211,6 +1218,7 @@ export function registerDataRoutes(app: Express): void {
         publicUrl,
         now
       );
+      notifyMySqlTablesChanged(['uploaded_files']);
 
       return res.status(201).json({
         success: true,
@@ -1298,9 +1306,11 @@ export function registerDataRoutes(app: Express): void {
       const studentsCount = (db.prepare(`SELECT COUNT(*) as c FROM students`).get() as { c: number }).c;
       const tenantsCount = (db.prepare(`SELECT COUNT(*) as c FROM tenants`).get() as { c: number }).c;
 
+      const mysqlStatus = getMySqlStatus();
       return res.json({
         status: 'connected',
-        persistence: 'sqlite-central-database',
+        persistence: mysqlStatus.connected ? 'mysql2-central-database' : 'sqlite-central-database',
+        mysql: mysqlStatus,
         databaseFile: dbPath,
         totalCollections: colStats.cols,
         totalCollectionRecords: colStats.rows,
@@ -1316,7 +1326,7 @@ export function registerDataRoutes(app: Express): void {
   });
 
   // -------------------------------------------------------------------------
-  // 7. Super Admin Downloadable MySQL Database Dump Endpoints
+  // 7. Super Admin MySQL Status, Live Sync & Downloadable Dump Endpoints
   // -------------------------------------------------------------------------
   app.get('/api/admin/export-mysql/summary', (req: Request, res: Response) => {
     try {
@@ -1328,14 +1338,46 @@ export function registerDataRoutes(app: Express): void {
       const { dbPath } = initDatabase();
       const summary = getMySqlExportSummary(db);
       const dbSizeBytes = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+      const mysqlStatus = getMySqlStatus();
       return res.json({
         success: true,
         ...summary,
         dbSizeBytes,
+        mysql: mysqlStatus,
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed inspecting database summary', message: err?.message });
+    }
+  });
+
+  app.post('/api/admin/mysql/sync', async (req: Request, res: Response) => {
+    try {
+      const session = req.authSession;
+      if (!session || !session.isSuperAdmin) {
+        return res.status(401).json({ error: 'Super Administrator authentication required.' });
+      }
+      const mysqlStatus = await forceFullMySqlSync();
+      if (!mysqlStatus.connected) {
+        return res.status(400).json({
+          success: false,
+          mysql: mysqlStatus,
+          error:
+            mysqlStatus.lastError ||
+            'MySQL is not configured or reachable. Set MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE (or MYSQL_URL) in .env.',
+        });
+      }
+      writeSecurityAudit({
+        schoolId: 'global',
+        userId: session.userId,
+        userEmail: session.user?.email,
+        action: 'MYSQL_FULL_SYNC',
+        resource: '/api/admin/mysql/sync',
+        details: `Synchronized live central tables to ${mysqlStatus.host}:${mysqlStatus.port}/${mysqlStatus.database}`,
+      });
+      return res.json({ success: true, mysql: mysqlStatus });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed syncing MySQL database', message: err?.message });
     }
   });
 

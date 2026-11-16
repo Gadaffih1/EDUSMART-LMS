@@ -338,6 +338,18 @@ export function stripSecrets<T extends Record<string, any>>(record: T): T {
   return clone;
 }
 
+let mySqlWriteNotifier: ((tables?: string[]) => void) | null = null;
+
+export function registerMySqlWriteNotifier(notifier: (tables?: string[]) => void): void {
+  mySqlWriteNotifier = notifier;
+}
+
+export function notifyMySqlTablesChanged(tables?: string[]): void {
+  if (mySqlWriteNotifier) {
+    mySqlWriteNotifier(tables);
+  }
+}
+
 export function writeSecurityAudit(entry: {
   schoolId: string;
   userId?: string;
@@ -361,6 +373,7 @@ export function writeSecurityAudit(entry: {
       entry.details || null,
       new Date().toISOString()
     );
+    notifyMySqlTablesChanged(['security_audit_logs']);
   } catch (err) {
     console.warn('[audit] failed writing security audit log:', err);
   }

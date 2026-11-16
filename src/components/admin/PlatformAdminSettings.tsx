@@ -40,8 +40,20 @@ export const PlatformAdminSettings: React.FC<PlatformAdminSettingsProps> = ({ ad
     totalTables: number;
     totalRows: number;
     dbSizeBytes: number;
+    mysql?: {
+      configured: boolean;
+      connected: boolean;
+      driver: 'mysql2' | 'sqlite-fallback';
+      host: string | null;
+      port: number | null;
+      database: string | null;
+      lastSyncedAt: string | null;
+      lastError: string | null;
+      syncSourceOfTruth: 'mysql' | 'local-sqlite';
+    };
   } | null>(null);
   const [exportingMysql, setExportingMysql] = useState(false);
+  const [syncingMysql, setSyncingMysql] = useState(false);
   const [exportStatus, setExportStatus] = useState('');
   const [exportError, setExportError] = useState('');
 
@@ -73,6 +85,24 @@ export const PlatformAdminSettings: React.FC<PlatformAdminSettingsProps> = ({ ad
       setExportError(err?.message || 'Unable to export MySQL dump.');
     } finally {
       setExportingMysql(false);
+    }
+  };
+
+  const handleSyncMysql = async () => {
+    setExportError('');
+    setExportStatus('');
+    setSyncingMysql(true);
+    try {
+      const res = await ClientDataStore.syncMySqlNow();
+      const updated = await ClientDataStore.getMySqlExportSummary().catch(() => null);
+      if (updated) setDbSummary(updated);
+      setExportStatus(
+        `Synced live to MySQL (${res.mysql?.host}:${res.mysql?.port}/${res.mysql?.database}).`
+      );
+    } catch (err: any) {
+      setExportError(err?.message || 'Unable to sync with MySQL server.');
+    } finally {
+      setSyncingMysql(false);
     }
   };
 
@@ -304,15 +334,25 @@ export const PlatformAdminSettings: React.FC<PlatformAdminSettingsProps> = ({ ad
               Download a full MySQL 8.0+ / MariaDB compatible <code className="font-mono">.sql</code> dump containing all schemas, indexes, schools, users, students, settings, and records directly to this PC.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleDownloadMysql}
-            disabled={exportingMysql}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 cursor-pointer"
-          >
-            <Download className="h-4 w-4" />
-            <span>{exportingMysql ? 'Generating MySQL Dump…' : 'Download MySQL Dump (.sql)'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSyncMysql}
+              disabled={syncingMysql}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-100 px-3.5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-200 disabled:opacity-60 cursor-pointer"
+            >
+              <span>{syncingMysql ? 'Syncing…' : 'Sync MySQL Now'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadMysql}
+              disabled={exportingMysql}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60 cursor-pointer"
+            >
+              <Download className="h-4 w-4" />
+              <span>{exportingMysql ? 'Generating MySQL Dump…' : 'Download MySQL Dump (.sql)'}</span>
+            </button>
+          </div>
         </div>
 
         {dbSummary && (
@@ -332,8 +372,14 @@ export const PlatformAdminSettings: React.FC<PlatformAdminSettingsProps> = ({ ad
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Target Dialect</div>
-              <div className="text-sm font-extrabold text-emerald-700 pt-1">MySQL 8 / InnoDB</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">MySQL Engine</div>
+              <div className={`text-sm font-extrabold pt-1 ${dbSummary.mysql?.connected ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {dbSummary.mysql?.connected
+                  ? `Live (${dbSummary.mysql.database})`
+                  : dbSummary.mysql?.configured
+                    ? 'Reconnect Needed'
+                    : 'Set MYSQL_* in .env'}
+              </div>
             </div>
           </div>
         )}

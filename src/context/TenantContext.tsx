@@ -96,8 +96,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       void fetch('/api/auth/switch-tenant', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId }),
+        headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ schoolId: tenantId, tenantId }),
       })
         .then(() => ClientDataStore.hydrateFromBackend(true))
         .catch(() => {});

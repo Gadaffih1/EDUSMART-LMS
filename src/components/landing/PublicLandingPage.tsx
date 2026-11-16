@@ -215,15 +215,28 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: code }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      const rawText = await res.text();
+      let body: any = null;
+      try {
+        body = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        body = null;
+      }
+      if (!res.ok || !body?.user) {
         setAdminAuthError(
           body?.error || 'Invalid credentials. Customization of the hero banner can only be done by Super Admin.'
         );
         return;
       }
 
+      if (body.sessionToken) {
+        ClientDataStore.setSessionToken(String(body.sessionToken));
+      }
+      ClientDataStore.setSessionUser(body.user);
       await ClientDataStore.hydrateFromBackend(true);
+      if (!ClientDataStore.getSessionUser()) {
+        ClientDataStore.setSessionUser(body.user);
+      }
       setIsSuperAdminVerified(true);
       setIsSuperAdminEditMode(true);
       setShowSuperAdminAuthModal(false);
@@ -242,7 +255,12 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
 
   const handleLockSuperAdmin = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: ClientDataStore.getAuthHeaders(),
+      });
+      ClientDataStore.clearSessionOnly();
       await ClientDataStore.hydrateFromBackend(true);
     } catch {}
     setIsSuperAdminVerified(false);

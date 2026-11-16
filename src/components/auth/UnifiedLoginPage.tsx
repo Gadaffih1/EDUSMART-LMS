@@ -75,22 +75,49 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
 
     try {
       const endpoint = adminOnly ? '/api/auth/admin-login' : '/api/auth/login';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: cleanIdent, email: cleanIdent, password }),
-      });
+      const sendAuthRequest = async () => {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: cleanIdent, email: cleanIdent, password }),
+        });
+        const rawText = await res.text();
+        let body: any = null;
+        try {
+          body = rawText ? JSON.parse(rawText) : null;
+        } catch {
+          body = null;
+        }
+        return { res, body };
+      };
 
-      const body = await res.json().catch(() => ({}));
+      let { res, body } = await sendAuthRequest();
+      if (!res.ok && (!body || res.status === 502 || res.status === 503 || res.status === 504)) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        ({ res, body } = await sendAuthRequest());
+      }
+
       if (!res.ok || !body?.user) {
-        setErrorMessage(body?.error || 'Incorrect credentials. Please verify your email and password.');
+        if (!body || typeof body !== 'object') {
+          setErrorMessage(
+            `Server is reconnecting (HTTP ${res.status}). Please wait a moment and click Login again.`
+          );
+        } else {
+          setErrorMessage(body.error || 'Incorrect credentials. Please verify your email and password.');
+        }
         setIsSubmitting(false);
         return;
       }
 
+      if (body.sessionToken) {
+        ClientDataStore.setSessionToken(String(body.sessionToken));
+      }
+      ClientDataStore.setSessionUser(body.user);
+
       await ClientDataStore.hydrateFromBackend(true);
       const authedUser: User = ClientDataStore.getSessionUser() || body.user;
+      ClientDataStore.setSessionUser(authedUser);
 
       if (!adminOnly && authedUser.schoolId) {
         switchTenant(authedUser.schoolId);

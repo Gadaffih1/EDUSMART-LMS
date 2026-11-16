@@ -13,6 +13,7 @@ import {
   Mail,
   Hash,
 } from 'lucide-react';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 interface VlabPassRecord {
   id?: string;
@@ -49,7 +50,10 @@ export const VirtualLabApprovalsPanel: React.FC = () => {
   const loadPasses = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/vlab/admin/tickets', { credentials: 'include' });
+      const res = await fetch('/api/vlab/admin/tickets', {
+        credentials: 'include',
+        headers: ClientDataStore.getAuthHeaders(),
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok && Array.isArray(data.passes)) {
         setPasses(data.passes);
@@ -80,7 +84,7 @@ export const VirtualLabApprovalsPanel: React.FC = () => {
       const res = await fetch(`/api/vlab/admin/tickets/${encodeURIComponent(ticketId)}/approve`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
@@ -103,7 +107,7 @@ export const VirtualLabApprovalsPanel: React.FC = () => {
       const res = await fetch(`/api/vlab/admin/tickets/${encodeURIComponent(ticketId)}/reject`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           reason: 'M-Pesa payment not found under Paybill 400200 Account 1164798.',
         }),

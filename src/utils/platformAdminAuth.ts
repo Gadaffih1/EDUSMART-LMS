@@ -57,7 +57,7 @@ export async function updatePlatformAdminCredentials(
     const res = await fetch('/api/auth/platform-admin/credentials', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         adminId,
         currentPassword: input.currentPassword,
@@ -79,5 +79,6 @@ export async function updatePlatformAdminCredentials(
 export function isPlatformSuperAdmin(user: Pick<User, 'email' | 'accessScope'> | null | undefined): boolean {
   if (!user?.email || user.accessScope !== 'super_admin_only') return false;
   if (ClientDataStore.isSuperAdmin()) return true;
+  if (ClientDataStore.getSessionUser()?.accessScope === 'super_admin_only') return true;
   return Boolean(findActivePlatformAdmin(user.email));
 }

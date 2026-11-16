@@ -3,7 +3,7 @@
  * Enables offline access to critical lesson notes, syllabi, and learning resources.
  */
 
-const CACHE_NAME = 'edusmart-cbc-offline-v6';
+const CACHE_NAME = 'edusmart-cbc-offline-v7';
 const STATIC_ASSETS = [
   '/edusmart-logo.svg',
   '/logo.svg',

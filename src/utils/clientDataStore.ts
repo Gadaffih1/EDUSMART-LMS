@@ -18,12 +18,19 @@ const preferences = new Map<string, any>();
 const listeners = new Set<ChangeListener>();
 
 let sessionUser: User | null = null;
+let inMemorySessionToken: string | null = null;
 let activeTenantId: string = 'tenant-riara';
 let isSuperAdminSession = false;
 let activeVlabPass: any | null = null;
 let hydrated = false;
 let hydratingPromise: Promise<void> | null = null;
 let sseSource: EventSource | null = null;
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return inMemorySessionToken
+    ? { ...extra, Authorization: `Bearer ${inMemorySessionToken}` }
+    : extra;
+}
 
 // Track pending per-key pushes so rapid mutations debounce minimally while still flushing immediately
 const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -60,6 +67,7 @@ async function pullSingleCollection(key: string): Promise<void> {
   try {
     const res = await fetch(`/api/sync/pull?collection=${encodeURIComponent(key)}`, {
       credentials: 'include',
+      headers: authHeaders(),
     });
     if (!res.ok) return;
     const body = await res.json();
@@ -109,7 +117,10 @@ function connectRealtimeStream(): void {
 async function refreshPreferences(): Promise<void> {
   if (!sessionUser) return;
   try {
-    const res = await fetch('/api/preferences', { credentials: 'include' });
+    const res = await fetch('/api/preferences', {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
     if (!res.ok) return;
     const body = await res.json();
     if (body?.preferences && typeof body.preferences === 'object') {
@@ -132,7 +143,7 @@ async function flushCollectionPush(key: string): Promise<boolean> {
       method: 'POST',
       credentials: 'include',
       keepalive: true,
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         collection: key,
         records: payload,
@@ -147,13 +158,24 @@ async function flushCollectionPush(key: string): Promise<boolean> {
 }
 
 export const ClientDataStore = {
+  setSessionToken(token: string | null): void {
+    inMemorySessionToken = token || null;
+  },
+
+  getAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return authHeaders(extra);
+  },
+
   async hydrateFromBackend(force = false): Promise<void> {
     if (hydrated && !force) return;
     if (hydratingPromise && !force) return hydratingPromise;
 
     hydratingPromise = (async () => {
       try {
-        const res = await fetch('/api/bootstrap', { credentials: 'include' });
+        const res = await fetch('/api/bootstrap', {
+          credentials: 'include',
+          headers: authHeaders(),
+        });
         if (!res.ok) throw new Error(`Bootstrap failed (${res.status})`);
         const body = await res.json();
 
@@ -300,7 +322,7 @@ export const ClientDataStore = {
       method: 'PUT',
       credentials: 'include',
       keepalive: true,
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ key, value }),
     }).catch((err) => {
       console.warn('[ClientDataStore] failed saving preference', key, err);
@@ -326,7 +348,7 @@ export const ClientDataStore = {
     const res = await fetch('/api/files/upload', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         fileName: file.name,
         mimeType: file.type || 'application/octet-stream',
@@ -345,6 +367,7 @@ export const ClientDataStore = {
 
   clearSessionOnly(): void {
     sessionUser = null;
+    inMemorySessionToken = null;
     isSuperAdminSession = false;
     preferences.clear();
   },

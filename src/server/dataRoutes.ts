@@ -11,6 +11,7 @@ import {
 } from './migrate';
 import { broadcastChange, getRealtimeClientCount, registerSseClient } from './realtimeBus';
 import {
+  isHttpsRequest,
   parseCookies,
   requireAuth,
   requireSuperAdmin,
@@ -64,25 +65,33 @@ function signVlabTicketToken(ticketId: string): string {
 
 function setVlabPassCookie(req: Request, res: Response, ticketId: string): void {
   const token = signVlabTicketToken(ticketId);
-  const isHttps =
-    req.secure ||
-    String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
+  const isHttps = isHttpsRequest(req);
   const parts = [
     `${VLAB_PASS_COOKIE_NAME}=${encodeURIComponent(token)}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    isHttps ? 'SameSite=None' : 'SameSite=Lax',
     `Max-Age=${VLAB_COOKIE_TTL_SEC}`,
   ];
-  if (isHttps) parts.push('Secure');
+  if (isHttps) {
+    parts.push('Secure', 'Partitioned');
+  }
   res.setHeader('Set-Cookie', parts.join('; '));
 }
 
-function clearVlabPassCookie(res: Response): void {
-  res.setHeader(
-    'Set-Cookie',
-    `${VLAB_PASS_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
-  );
+function clearVlabPassCookie(req: Request, res: Response): void {
+  const isHttps = isHttpsRequest(req);
+  const parts = [
+    `${VLAB_PASS_COOKIE_NAME}=`,
+    'Path=/',
+    'HttpOnly',
+    isHttps ? 'SameSite=None' : 'SameSite=Lax',
+    'Max-Age=0',
+  ];
+  if (isHttps) {
+    parts.push('Secure', 'Partitioned');
+  }
+  res.setHeader('Set-Cookie', parts.join('; '));
 }
 
 function isPassActiveAndValid(pass: any): boolean {
@@ -599,7 +608,7 @@ export function registerDataRoutes(app: Express): void {
       const code = String(req.params.code || '').trim().toUpperCase();
       if (!code) return res.status(400).json({ valid: false, error: 'Ticket or M-Pesa code is required' });
       if (code.includes('DEMO')) {
-        return res.status(403).json({
+        return res.status(402).json({
           valid: false,
           error: 'Free demo access is disabled. An active paid subscription ticket is strictly required.',
         });
@@ -609,7 +618,7 @@ export function registerDataRoutes(app: Express): void {
         return res.status(404).json({ valid: false, error: 'Subscription pass or M-Pesa transaction code not found.' });
       }
       if (found.status === 'pending_approval') {
-        return res.status(403).json({
+        return res.status(423).json({
           valid: false,
           status: 'pending_approval',
           pass: found,
@@ -617,7 +626,7 @@ export function registerDataRoutes(app: Express): void {
         });
       }
       if (found.status === 'rejected') {
-        return res.status(403).json({
+        return res.status(402).json({
           valid: false,
           status: 'rejected',
           pass: found,
@@ -711,8 +720,8 @@ export function registerDataRoutes(app: Express): void {
     }
   });
 
-  app.post('/api/vlab/tickets/clear', (_req: Request, res: Response) => {
-    clearVlabPassCookie(res);
+  app.post('/api/vlab/tickets/clear', (req: Request, res: Response) => {
+    clearVlabPassCookie(req, res);
     return res.json({ success: true });
   });
 

@@ -134,10 +134,10 @@ function AppContent({
         ? allTenants.find((tenant) => tenant.id === schoolId)
         : undefined;
 
-      const isPlatformSuperAdmin = currentUser?.role === 'admin' && (currentUser.email === 'admin@edusmart.ac.ke' || currentUser.email === 'superadmin@edusmart.ac.ke');
+      const isSuperAdminAccess = isPlatformSuperAdmin(currentUser);
 
       // STRICT MULTI-TENANT ISOLATION: A logged-in user can never cross over to another school
-      if (currentUser && !isPlatformSuperAdmin && currentUser.schoolId) {
+      if (currentUser && !isSuperAdminAccess && currentUser.schoolId) {
         if (currentTenant.id !== currentUser.schoolId) {
           switchTenant(currentUser.schoolId);
         }
@@ -673,7 +673,7 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
   React.useEffect(() => {
     const syncSession = () => {
       const nextUser = ClientDataStore.getSessionUser();
-      if (nextUser?.id !== currentUser?.id) {
+      if (nextUser && nextUser.id !== currentUser?.id) {
         setCurrentUser(nextUser);
       }
     };
@@ -691,6 +691,7 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
+        headers: ClientDataStore.getAuthHeaders(),
       });
     } catch {
       // Ignore network errors during logout
@@ -706,12 +707,17 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
       const res = await fetch('/api/auth/switch-user', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ userId: user.id }),
       });
       if (res.ok) {
+        const switchBody = await res.json().catch(() => ({}));
+        if (switchBody?.sessionToken) {
+          ClientDataStore.setSessionToken(String(switchBody.sessionToken));
+        }
         await ClientDataStore.hydrateFromBackend(true);
-        const switched = ClientDataStore.getSessionUser() || user;
+        const switched = ClientDataStore.getSessionUser() || switchBody?.user || user;
+        ClientDataStore.setSessionUser(switched);
         Storage.setCurrentUser(switched);
         setCurrentUser(switched);
         return;

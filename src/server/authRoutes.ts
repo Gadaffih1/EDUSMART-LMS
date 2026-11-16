@@ -57,27 +57,49 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function setSessionCookie(req: Request, res: Response, rawToken: string): void {
-  const isHttps =
+export function isHttpsRequest(req: Request): boolean {
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  const forwardedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').toLowerCase();
+  const origin = String(req.headers.origin || '').toLowerCase();
+  const referer = String(req.headers.referer || '').toLowerCase();
+  return Boolean(
     req.secure ||
-    String(req.headers['x-forwarded-proto'] || '').toLowerCase() === 'https';
+      forwardedProto === 'https' ||
+      origin.startsWith('https://') ||
+      referer.startsWith('https://') ||
+      forwardedHost.includes('.run.app')
+  );
+}
+
+function setSessionCookie(req: Request, res: Response, rawToken: string): void {
+  const isHttps = isHttpsRequest(req);
 
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(rawToken)}`,
     'Path=/',
     'HttpOnly',
-    'SameSite=Lax',
+    isHttps ? 'SameSite=None' : 'SameSite=Lax',
     `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   ];
-  if (isHttps) parts.push('Secure');
+  if (isHttps) {
+    parts.push('Secure', 'Partitioned');
+  }
   res.setHeader('Set-Cookie', parts.join('; '));
 }
 
-export function clearSessionCookie(res: Response): void {
-  res.setHeader(
-    'Set-Cookie',
-    `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
-  );
+export function clearSessionCookie(req: Request, res: Response): void {
+  const isHttps = isHttpsRequest(req);
+  const parts = [
+    `${SESSION_COOKIE_NAME}=`,
+    'Path=/',
+    'HttpOnly',
+    isHttps ? 'SameSite=None' : 'SameSite=Lax',
+    'Max-Age=0',
+  ];
+  if (isHttps) {
+    parts.push('Secure', 'Partitioned');
+  }
+  res.setHeader('Set-Cookie', parts.join('; '));
 }
 
 export function createAuthSession(
@@ -115,7 +137,11 @@ export function createAuthSession(
 export function resolveSessionFromRequest(req: Request): AuthSession | null {
   try {
     const cookies = parseCookies(req);
-    const rawToken = cookies[SESSION_COOKIE_NAME];
+    const authHeader = String(req.headers.authorization || '').trim();
+    const bearerToken = authHeader.toLowerCase().startsWith('bearer ')
+      ? authHeader.slice(7).trim()
+      : '';
+    const rawToken = cookies[SESSION_COOKIE_NAME] || bearerToken;
     if (!rawToken) return null;
 
     const tokenHash = hashToken(rawToken);
@@ -272,12 +298,14 @@ export function registerAuthRoutes(app: Express): void {
       const db = getDb();
 
       // Reject Platform Super Admins on regular school login screen (preserving security boundary)
+      // Use 401 instead of 403 so Nginx proxy_intercept_errors does not replace JSON with forbidden.html
       const superAdmin = db
         .prepare(`SELECT id FROM platform_admins WHERE lower(email) = ? AND is_active = 1`)
         .get(cleanIdent);
       if (superAdmin) {
-        return res.status(403).json({
-          error: 'This account can only open the Super Admin console.',
+        return res.status(401).json({
+          error: 'This account can only open the Super Admin console (/admin).',
+          requireAdminPortal: true,
         });
       }
 
@@ -506,7 +534,7 @@ export function registerAuthRoutes(app: Express): void {
         .get(matchedUser.schoolId) as { payload_json: string } | undefined;
       const tenant = tenantRow ? JSON.parse(tenantRow.payload_json) : null;
 
-      createAuthSession(req, res, matchedUser, 'tenant');
+      const sessionToken = createAuthSession(req, res, matchedUser, 'tenant');
 
       writeSecurityAudit({
         schoolId: matchedUser.schoolId || 'tenant-riara',
@@ -519,6 +547,7 @@ export function registerAuthRoutes(app: Express): void {
 
       return res.json({
         success: true,
+        sessionToken,
         user: stripSecrets(matchedUser),
         tenant,
       });
@@ -550,7 +579,22 @@ export function registerAuthRoutes(app: Express): void {
         )
         .get(cleanEmail) as any;
 
-      if (!admin || !verifyPassword(String(password), admin.password_hash)) {
+      const rawPassword = String(password ?? '');
+      const cleanPassword = rawPassword.replace(/[\r\n]+/g, '');
+      const passwordValid = Boolean(
+        admin &&
+          (verifyPassword(rawPassword, admin.password_hash) ||
+            (cleanPassword !== rawPassword && verifyPassword(cleanPassword, admin.password_hash)))
+      );
+
+      if (!admin || !passwordValid) {
+        writeSecurityAudit({
+          schoolId: 'global',
+          userEmail: cleanEmail,
+          action: 'SUPER_ADMIN_LOGIN_FAILED',
+          resource: '/api/auth/admin-login',
+          details: admin ? 'Invalid password' : 'Admin account not found',
+        });
         return res.status(401).json({
           error: 'The Admin Console only accepts the platform administrator account.',
         });
@@ -558,7 +602,7 @@ export function registerAuthRoutes(app: Express): void {
 
       if (!isHashedPassword(admin.password_hash)) {
         db.prepare(`UPDATE platform_admins SET password_hash = ? WHERE id = ?`).run(
-          hashPassword(String(password)),
+          hashPassword(cleanPassword),
           admin.id
         );
       }
@@ -575,7 +619,7 @@ export function registerAuthRoutes(app: Express): void {
         rights: JSON.parse(admin.rights_json || '["super_admin_page"]'),
       };
 
-      createAuthSession(req, res, sessionUser, 'super_admin_only');
+      const sessionToken = createAuthSession(req, res, sessionUser, 'super_admin_only');
       writeSecurityAudit({
         schoolId: 'global',
         userId: sessionUser.id,
@@ -584,7 +628,7 @@ export function registerAuthRoutes(app: Express): void {
         resource: '/api/auth/admin-login',
       });
 
-      return res.json({ success: true, user: sessionUser });
+      return res.json({ success: true, sessionToken, user: sessionUser });
     } catch (err: any) {
       return res.status(500).json({ error: 'Admin login failed', message: err?.message });
     }
@@ -605,7 +649,7 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ ok: false, message: 'Platform admin account was not found.' });
       }
       if (!verifyPassword(String(currentPassword || ''), admin.password_hash)) {
-        return res.status(403).json({ ok: false, message: 'Current password is incorrect.' });
+        return res.status(401).json({ ok: false, message: 'Current password is incorrect.' });
       }
 
       let nextEmail = admin.email;
@@ -677,7 +721,7 @@ export function registerAuthRoutes(app: Express): void {
         .prepare(`SELECT id FROM platform_admins WHERE lower(email) = ?`)
         .get(cleanEmail);
       if (reservedAdmin) {
-        return res.status(403).json({ error: 'This email is reserved for the Super Admin console.' });
+        return res.status(409).json({ error: 'This email is reserved for the Super Admin console.' });
       }
 
       const existing = db
@@ -709,9 +753,9 @@ export function registerAuthRoutes(app: Express): void {
       ingestCollectionData(db, 'edusmart_users_v1', [registeredUser], false);
       const safeUser = stripSecrets(registeredUser);
 
-      if (autoLogin && !req.authSession) {
-        createAuthSession(req, res, safeUser, 'tenant');
-      }
+      const sessionToken = autoLogin && !req.authSession
+        ? createAuthSession(req, res, safeUser, 'tenant')
+        : undefined;
 
       broadcastChange({
         type: 'record:created',
@@ -724,6 +768,7 @@ export function registerAuthRoutes(app: Express): void {
 
       return res.json({
         success: true,
+        ...(sessionToken ? { sessionToken } : {}),
         user: safeUser,
         message: 'User account registered and synchronized to database successfully.',
         timestamp: new Date().toISOString(),
@@ -787,12 +832,12 @@ export function registerAuthRoutes(app: Express): void {
     }
 
     const targetUser = stripSecrets({ ...JSON.parse(row.payload_json), id: row.id, schoolId: row.school_id });
-    createAuthSession(req, res, targetUser, 'tenant');
+    const sessionToken = createAuthSession(req, res, targetUser, 'tenant');
 
     // Clean previous session row
     db.prepare(`DELETE FROM auth_sessions WHERE token_hash = ?`).run(session.tokenHash);
 
-    return res.json({ success: true, user: targetUser });
+    return res.json({ success: true, sessionToken, user: targetUser });
   });
 
   // 8. Sign Out (Destroys server session + clears HTTP-only cookie)
@@ -810,10 +855,10 @@ export function registerAuthRoutes(app: Express): void {
           resource: '/api/auth/logout',
         });
       }
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       return res.json({ success: true });
     } catch (err: any) {
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       return res.json({ success: true });
     }
   });

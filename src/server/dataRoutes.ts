@@ -2,21 +2,21 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Express, Request, Response } from 'express';
-import { getDb, initDatabase, stripSecrets, writeSecurityAudit } from './db';
+import { getDb, initDatabase, stripSecrets, writeSecurityAudit } from './db.ts';
 import {
   ingestCollectionData,
   resolveRecordId,
   resolveRecordTenantId,
   upsertCollectionRecord,
-} from './migrate';
-import { broadcastChange, getRealtimeClientCount, registerSseClient } from './realtimeBus';
+} from './migrate.ts';
+import { broadcastChange, getRealtimeClientCount, registerSseClient } from './realtimeBus.ts';
 import {
   isHttpsRequest,
   parseCookies,
   requireAuth,
   requireSuperAdmin,
   resolveAuthorizedTenantId,
-} from './authRoutes';
+} from './authRoutes.ts';
 
 const VLAB_PASS_COOKIE_NAME = 'edusmart_vlab_pass';
 const VLAB_COOKIE_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (bound by ticket expiresAt)

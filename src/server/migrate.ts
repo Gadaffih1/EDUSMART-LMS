@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { getDb, getDbPaths, hashPassword, isHashedPassword, verifyPassword } from './db';
-import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
+import { getDb, getDbPaths, hashPassword, isHashedPassword, verifyPassword } from './db.ts';
+import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization.ts';
 
 export const DEFAULT_SUPER_ADMIN_ID = 'platform-admin-1';
 export const DEFAULT_SUPER_ADMIN_EMAIL = 'admin@edusmart.ac.ke';

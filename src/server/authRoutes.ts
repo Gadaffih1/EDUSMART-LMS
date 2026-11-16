@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import type { Express, NextFunction, Request, Response } from 'express';
-import { getDb, hashPassword, isHashedPassword, stripSecrets, verifyPassword, writeSecurityAudit } from './db';
-import { ingestCollectionData, resolveRecordTenantId, upsertCollectionRecord } from './migrate';
-import { broadcastChange } from './realtimeBus';
+import { getDb, hashPassword, isHashedPassword, stripSecrets, verifyPassword, writeSecurityAudit } from './db.ts';
+import { ingestCollectionData, resolveRecordTenantId, upsertCollectionRecord } from './migrate.ts';
+import { broadcastChange } from './realtimeBus.ts';
 
 export const SESSION_COOKIE_NAME = 'edusmart_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days

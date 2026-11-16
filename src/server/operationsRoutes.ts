@@ -1,10 +1,10 @@
 import type { Express, Request, Response } from 'express';
-import { calculateKenyanPayrollDeductions } from '../utils/kenyanPayroll';
-import { getDb } from './db';
-import { ingestCollectionData, resolveRecordId } from './migrate';
-import { requireAuth, resolveAuthorizedTenantId } from './authRoutes';
-import { broadcastChange } from './realtimeBus';
-import { readCollectionForTenant } from './dataRoutes';
+import { calculateKenyanPayrollDeductions } from '../utils/kenyanPayroll.ts';
+import { getDb } from './db.ts';
+import { ingestCollectionData, resolveRecordId } from './migrate.ts';
+import { requireAuth, resolveAuthorizedTenantId } from './authRoutes.ts';
+import { broadcastChange } from './realtimeBus.ts';
+import { readCollectionForTenant } from './dataRoutes.ts';
 
 export function registerOperationsRoutes(app: Express) {
   const readOpsCollection = (collectionKey: string, tenantId: string): any[] => {

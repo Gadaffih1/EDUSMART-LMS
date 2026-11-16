@@ -1,4 +1,4 @@
-import { PlatformCustomizationState } from "../types/customization";
+import type { PlatformCustomizationState } from "../types/customization.ts";
 
 export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
   "landingPage": {

@@ -188,8 +188,14 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
         return;
       }
 
+      if (body.sessionToken) {
+        ClientDataStore.setSessionToken(String(body.sessionToken));
+      }
+      ClientDataStore.setSessionUser(body.user);
+
       await ClientDataStore.hydrateFromBackend(true);
       const createdUser: User = ClientDataStore.getSessionUser() || body.user;
+      ClientDataStore.setSessionUser(createdUser);
       switchTenant(createdUser.schoolId || targetTenant.id);
       Storage.setCurrentUser(createdUser);
       setRegSuccessUser(createdUser);

@@ -1,17 +1,16 @@
 import express from 'express';
 import type { Request, Response } from 'express';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { networkInterfaces } from 'os';
 import { fileURLToPath } from 'url';
-import { initDatabase } from './src/server/db';
-import { runDatabaseMigrations } from './src/server/migrate';
-import { attachAuthSession, registerAuthRoutes } from './src/server/authRoutes';
-import { registerDataRoutes } from './src/server/dataRoutes';
-import { registerOperationsRoutes } from './src/server/operationsRoutes';
+import { initDatabase } from './src/server/db.ts';
+import { runDatabaseMigrations } from './src/server/migrate.ts';
+import { attachAuthSession, registerAuthRoutes } from './src/server/authRoutes.ts';
+import { registerDataRoutes } from './src/server/dataRoutes.ts';
+import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
 
 dotenv.config();
 
@@ -20,11 +19,7 @@ const __dirname = path.dirname(__filename);
 
 // Helper to determine the listening port across container environments, CLI args, and defaults
 function resolvePort(): number {
-  if (process.env.PORT) {
-    const parsed = parseInt(process.env.PORT, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  // Check CLI flags: --port 3000, -p 3000, or --port=3000
+  // Check CLI flags first: --port 3000, -p 3000, or --port=3000
   for (let i = 0; i < process.argv.length; i++) {
     const arg = process.argv[i];
     if (arg === '--port' || arg === '-p') {
@@ -37,6 +32,10 @@ function resolvePort(): number {
       const parsed = parseInt(arg.split('=')[1], 10);
       if (!isNaN(parsed) && parsed > 0) return parsed;
     }
+  }
+  if (process.env.PORT) {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
   }
   return 3000;
 }
@@ -525,6 +524,11 @@ Core rules:
     }
   });
 
+  // Ensure unmatched /api/* endpoints always return JSON rather than HTML fallback
+  app.all('/api/*', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
   const distPath = path.resolve(rootDir, 'dist');
   const indexHtmlPath = path.resolve(distPath, 'index.html');
   const isProd = process.env.NODE_ENV === 'production';
@@ -577,6 +581,7 @@ Core rules:
       }
     });
   } else {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'

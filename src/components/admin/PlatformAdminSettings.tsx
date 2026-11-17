@@ -7,6 +7,7 @@ import {
   updatePlatformAdminCredentials,
   type PlatformAdmin,
 } from '../../utils/platformAdminAuth';
+import { BiometricPasskeysCard } from '../auth/BiometricPasskeysCard';
 
 interface PlatformAdminSettingsProps {
   admin: PlatformAdmin;
@@ -322,6 +323,10 @@ export const PlatformAdminSettings: React.FC<PlatformAdminSettingsProps> = ({ ad
           {savingPassword ? 'Saving…' : 'Save password'}
         </button>
       </form>
+
+      <div className="lg:col-span-2">
+        <BiometricPasskeysCard />
+      </div>
 
       <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

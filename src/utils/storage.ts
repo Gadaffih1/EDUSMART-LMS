@@ -1481,15 +1481,9 @@ export const Storage = {
       firstName: l.firstName || (l.teacherName ? l.teacherName.split(' ')[0] : 'Teacher'),
       lastName: l.lastName || (l.teacherName ? l.teacherName.split(' ').slice(1).join(' ') : 'Educator'),
       email: l.email || `${(l.teacherId || 'staff').replace('usr-teach-', '')}@edusmart.ac.ke`,
-      signInLocation: l.signInLocation || 'EduSmart Main Campus, Staffroom Block A · Nairobi Grounds',
+      signInLocation: l.signInLocation || 'Live geographic location not recorded',
       photoUrl: l.photoUrl || 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
-      geoStamp: l.geoStamp || {
-        latitude: -1.2921,
-        longitude: 36.8219,
-        accuracy: 5,
-        address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
-        verifiedCampus: true
-      }
+      geoStamp: l.geoStamp,
     }));
 
     if (teacherId) {

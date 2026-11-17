@@ -14,11 +14,18 @@ import {
   TeacherAbsenceReport
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
 import { TeacherAbsenceReportModal } from './TeacherAbsenceReportModal';
 import { ReliefBookingModal } from './ReliefBookingModal';
 import { TeacherTimetableCaptureModal } from './TeacherTimetableCaptureModal';
+import { TTWorkspacePayload, ttApiFetch } from './timetableTypes';
+import { TimetableConfigPanel } from './TimetableConfigPanel';
+import { TimetableAllocationsPanel } from './TimetableAllocationsPanel';
+import { TimetableTeachersPanel } from './TimetableTeachersPanel';
+import { TimetableDragDropEditor } from './TimetableDragDropEditor';
+import { TimetableVersionsAndReportsPanel } from './TimetableVersionsAndReportsPanel';
 import { 
   Calendar, 
   Clock, 
@@ -58,7 +65,11 @@ import {
   Check,
   Send,
   CalendarCheck,
-  ListTodo
+  ListTodo,
+  Sliders,
+  UserCog,
+  FileSpreadsheet,
+  LayoutGrid
 } from 'lucide-react';
 
 interface TimetablePortalProps {
@@ -94,6 +105,95 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [bellSchedule, setBellSchedule] = useState<BellPeriodDef[]>(() => Storage.getBellSchedule());
   const [showPeriodTimingsModal, setShowPeriodTimingsModal] = useState(false);
   const [tempBellSchedule, setTempBellSchedule] = useState<BellPeriodDef[]>([]);
+
+  const { currentTenant } = useTenant();
+  const isTimetableAdminUser =
+    !readOnly &&
+    (currentUser.accessScope === 'super_admin_only' ||
+      [
+        'admin',
+        'head_teacher',
+        'deputy_head',
+        'dean_of_studies',
+        'curriculum_coordinator',
+        'school_admin_staff',
+        'senior_teacher',
+        'hod',
+      ].includes(String(currentUser.role || '').toLowerCase()));
+
+  type SuiteTabId = 'published' | 'config' | 'allocations' | 'teachers' | 'editor' | 'approvals';
+  const [suiteTab, setSuiteTab] = useState<SuiteTabId>('published');
+  const [ttWorkspace, setTtWorkspace] = useState<TTWorkspacePayload | null>(null);
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false);
+
+  const loadWorkspace = async (versionId?: string) => {
+    if (!isTimetableAdminUser) return;
+    setLoadingWorkspace(true);
+    try {
+      const qs = versionId ? `?versionId=${encodeURIComponent(versionId)}` : '';
+      const data = await ttApiFetch<TTWorkspacePayload>(`/api/timetable/workspace${qs}`);
+      setTtWorkspace(data);
+    } catch {
+      // Fallback to local state if session/network not yet hydrated
+    } finally {
+      setLoadingWorkspace(false);
+    }
+  };
+
+  const loadPublishedBackendSchedule = async () => {
+    try {
+      const pub = await ttApiFetch<{
+        published: boolean;
+        periods?: Array<{ periodNumber: number; label: string; kind: string; startTime: string; endTime: string }>;
+        entries?: Array<{
+          id: string;
+          dayOfWeek: string;
+          periodNumber: number;
+          grade: number;
+          stream: string;
+          groupName: string;
+          subjectName: string;
+          teacherNames: string[];
+          roomName: string;
+        }>;
+      }>('/api/timetable/published');
+
+      if (pub?.published && Array.isArray(pub.entries) && pub.entries.length > 0) {
+        const periodTimeMap = new Map<number, { startTime: string; endTime: string }>();
+        (pub.periods || []).forEach((p) => {
+          if (p.kind === 'lesson' && p.periodNumber > 0) {
+            periodTimeMap.set(p.periodNumber, { startTime: p.startTime, endTime: p.endTime });
+          }
+        });
+        const mappedSlots: TimetableSlot[] = pub.entries.map((e) => {
+          const tm = periodTimeMap.get(e.periodNumber);
+          return {
+            id: e.id,
+            grade: e.grade as GradeLevel,
+            stream: e.stream as StreamName,
+            dayOfWeek: e.dayOfWeek as TimetableSlot['dayOfWeek'],
+            period: e.periodNumber,
+            startTime: tm?.startTime || '08:00',
+            endTime: tm?.endTime || '08:40',
+            subject: e.subjectName as SubjectName,
+            teacherName: (e.teacherNames || []).join(', ') || 'Faculty',
+            roomName: e.roomName || 'Classroom',
+            notes: e.groupName && e.groupName !== 'Whole Class' ? `Group: ${e.groupName}` : undefined,
+          };
+        });
+        setAllSlots(mappedSlots);
+      }
+    } catch {
+      // Preserve localStorage timetable if backend does not yet have a published version
+    }
+  };
+
+  useEffect(() => {
+    loadPublishedBackendSchedule();
+    if (isTimetableAdminUser) {
+      loadWorkspace();
+    }
+  }, [currentUser.id, currentUser.schoolId, currentUser.role]);
 
   // Listen for storage updates
   useEffect(() => {
@@ -756,7 +856,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
+              <TenantSchoolLogo variant="emblem" size="xs" />
+              <span className="text-white">{currentTenant.name}</span>
               <span className="text-slate-500">·</span>
               <span>Curriculum Timetable & Bell Schedule</span>
               <span className="text-slate-500">·</span>
@@ -941,8 +1042,130 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       </header>
 
       {/* ========================================================
+          INTELLIGENT TIMETABLE MANAGEMENT SUITE NAVIGATION (ADMIN)
+          ======================================================== */}
+      {isTimetableAdminUser && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1">
+            {(
+              [
+                { id: 'published', label: 'Published Views', icon: LayoutGrid },
+                { id: 'config', label: '1. Configuration & Rooms', icon: Sliders },
+                { id: 'allocations', label: '2. Allocations & Groups', icon: Layers },
+                { id: 'teachers', label: '3. Teachers & Limits', icon: UserCog },
+                { id: 'editor', label: '4. Auto-Solver & Editor', icon: Sparkles },
+                { id: 'approvals', label: '5. Approvals & Reports', icon: FileSpreadsheet },
+              ] as const
+            ).map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setSuiteTab(tab.id);
+                    if (tab.id !== 'published' && !ttWorkspace) {
+                      loadWorkspace();
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    suiteTab === tab.id
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {loadingWorkspace && (
+            <span className="text-[11px] font-mono text-slate-500 px-2">Syncing workspace...</span>
+          )}
+        </div>
+      )}
+
+      {isTimetableAdminUser && suiteTab !== 'published' && (
+        <div className="space-y-4">
+          {!ttWorkspace ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-xs text-slate-500">
+              Loading {currentTenant.name} intelligent timetable workspace...
+            </div>
+          ) : (
+            <>
+              {suiteTab === 'config' && (
+                <TimetableConfigPanel
+                  config={ttWorkspace.config}
+                  gradeSchedules={ttWorkspace.gradeSchedules}
+                  periods={ttWorkspace.periods}
+                  classrooms={ttWorkspace.classrooms}
+                  onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'allocations' && (
+                <TimetableAllocationsPanel
+                  gradeSchedules={ttWorkspace.gradeSchedules}
+                  subjects={ttWorkspace.subjects}
+                  classrooms={ttWorkspace.classrooms}
+                  studentGroups={ttWorkspace.studentGroups}
+                  teachers={ttWorkspace.teachers}
+                  gradeAllocations={ttWorkspace.gradeAllocations}
+                  streamAllocations={ttWorkspace.streamAllocations}
+                  jointLessons={ttWorkspace.jointLessons}
+                  allocationIssues={ttWorkspace.allocationIssues}
+                  streamLoadSummary={ttWorkspace.streamLoadSummary}
+                  onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'teachers' && (
+                <TimetableTeachersPanel
+                  teachers={ttWorkspace.teachers}
+                  subjects={ttWorkspace.subjects}
+                  config={ttWorkspace.config}
+                  periods={ttWorkspace.periods}
+                  onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'editor' && (
+                <TimetableDragDropEditor
+                  workspace={ttWorkspace}
+                  onRefresh={async (verId) => {
+                    await loadWorkspace(verId || ttWorkspace.activeVersion?.id);
+                    await loadPublishedBackendSchedule();
+                  }}
+                />
+              )}
+
+              {suiteTab === 'approvals' && (
+                <TimetableVersionsAndReportsPanel
+                  workspace={ttWorkspace}
+                  currentUser={currentUser}
+                  onRefresh={async (verId) => {
+                    await loadWorkspace(verId || ttWorkspace.activeVersion?.id);
+                    await loadPublishedBackendSchedule();
+                  }}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
           2. PERSPECTIVE SWITCHER & PRIMARY NAVIGATION TABS
           ======================================================== */}
+      {suiteTab === 'published' && (
+        <React.Fragment>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
         
         {/* Perspectives strictly filtered by role-based availability */}
@@ -2991,15 +3214,15 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   <div className="text-[10px] font-black uppercase text-emerald-800 tracking-wider">
                     Republic of Kenya · Ministry of Education · CBC Compliant
                   </div>
-                  <h2 className="text-xl font-black text-slate-900">
-                    EDUSMART ACADEMY & JUNIOR SCHOOL
+                  <h2 className="text-xl font-black text-slate-900 uppercase">
+                    {currentTenant.name}
                   </h2>
                   <p className="text-xs text-slate-600">
                     Official Class Routine Timetable · Grade {selectedGrade} ({selectedStream}) · Academic Year 2026
                   </p>
                 </div>
-                <div className="text-right">
-                  <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <div className="text-right flex flex-col items-end">
+                  <TenantSchoolLogo variant="emblem" size="sm" />
                   <div className="text-[10px] font-mono text-slate-500 mt-1">Ref: TIMETABLE/2026/G{selectedGrade}</div>
                 </div>
               </div>
@@ -3368,6 +3591,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             setTimeout(() => setNotificationMsg(null), 4000);
           }}
         />
+      )}
+        </React.Fragment>
       )}
 
       {/* Teacher Absence Reporting Modal */}

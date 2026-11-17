@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { WorkEntryLog, User } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from './EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from './TenantSchoolLogo';
 import { 
   ShieldCheck, 
   MapPin, 
@@ -33,6 +34,7 @@ export const WorkEntryAuditViewer: React.FC<WorkEntryAuditViewerProps> = ({
   title = "Staff Work Entry Sign-In Register",
   subtitle = "Official duty clock-in records, GPS geo-stamps, staff credentials, and verified biometric photos. Strictly read-only audit ledger."
 }) => {
+  const { currentTenant } = useTenant();
   const [logs, setLogs] = useState<WorkEntryLog[]>(() => Storage.getWorkEntryLogs());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLog, setSelectedLog] = useState<WorkEntryLog | null>(null);
@@ -235,9 +237,9 @@ export const WorkEntryAuditViewer: React.FC<WorkEntryAuditViewerProps> = ({
                 filteredLogs.map((log) => {
                   const staffNumber = log.staffNo || (log.teacherId === 'usr-teach-kiprono' ? 'TSC/44120/ED' : 'TSC/39821/ED');
                   const workEmail = log.email || `${log.teacherId.replace('usr-teach-', '')}@edusmart.ac.ke`;
-                  const location = log.signInLocation || 'EduSmart Main Campus, Staffroom Block A · Nairobi Grounds';
-                  const lat = log.geoStamp?.latitude ?? -1.2921;
-                  const lng = log.geoStamp?.longitude ?? 36.8219;
+                  const location = log.signInLocation || 'Live location not captured';
+                  const lat = log.geoStamp?.latitude;
+                  const lng = log.geoStamp?.longitude;
                   const acc = log.geoStamp?.accuracy ?? 5;
 
                   return (
@@ -313,13 +315,19 @@ export const WorkEntryAuditViewer: React.FC<WorkEntryAuditViewerProps> = ({
 
                       {/* Geo Stamp & Coordinates */}
                       <td className="py-2.5 px-3.5 font-mono text-[11px]">
-                        <div className="text-emerald-900 font-semibold flex items-center gap-1">
-                          <Compass className="w-3 h-3 text-emerald-600" />
-                          <span>{lat.toFixed(4)}°, {lng.toFixed(4)}°</span>
-                        </div>
-                        <div className="text-[10px] text-emerald-700 font-medium">
-                          Verified Campus (±{acc}m)
-                        </div>
+                        {lat !== undefined && lng !== undefined ? (
+                          <>
+                            <div className="text-emerald-900 font-semibold flex items-center gap-1">
+                              <Compass className="w-3 h-3 text-emerald-600" />
+                              <span>{lat.toFixed(4)}°, {lng.toFixed(4)}°</span>
+                            </div>
+                            <div className="text-[10px] text-emerald-700 font-medium">
+                              Live GPS (±{acc}m)
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">No GPS record</span>
+                        )}
                       </td>
 
                       {/* Non-Editable / Locked Status */}
@@ -368,7 +376,7 @@ export const WorkEntryAuditViewer: React.FC<WorkEntryAuditViewerProps> = ({
             {/* Modal Header */}
             <div className="p-4 sm:px-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between no-print">
               <div className="flex items-center gap-3">
-                <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                <TenantSchoolLogo variant="horizontal" size="xs" />
                 <span className="text-xs font-extrabold uppercase tracking-wider text-slate-800 border-l border-slate-300 pl-3">
                   Official Work Entry Sign-In Dossier (Read-Only)
                 </span>
@@ -399,10 +407,10 @@ export const WorkEntryAuditViewer: React.FC<WorkEntryAuditViewerProps> = ({
               {/* Slip Official Heading */}
               <div className="text-center pb-4 border-b-2 border-slate-900 space-y-1">
                 <div className="flex justify-center mb-1">
-                  <EduSmartGadsaLogo variant="full" size="md" />
+                  <TenantSchoolLogo variant="full" size="md" />
                 </div>
                 <div className="text-xs font-black text-blue-900 uppercase tracking-widest">
-                  EduSmart Digital Learning &amp; School Governance Platform
+                  {currentTenant.name} · {currentTenant.motto || currentTenant.code}
                 </div>
                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
                   Staff Lesson Work Entry Sign-In Slip
@@ -519,23 +527,25 @@ export const WorkEntryAuditViewer: React.FC<WorkEntryAuditViewerProps> = ({
                       <span>Field 5: Sign-In Location &amp; Geo Stamp</span>
                     </span>
                     <span className="text-[10px] font-mono text-emerald-800 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                      Campus Verified
+                      Live GPS Verified
                     </span>
                   </div>
 
                   <div className="font-bold text-xs text-slate-900">
-                    {selectedLog.signInLocation || 'EduSmart Main Campus, Staffroom Block A · Nairobi Grounds'}
+                    {selectedLog.signInLocation || 'Live geographic location not recorded'}
                   </div>
 
-                  <div className="p-2 bg-emerald-50/80 rounded-xl border border-emerald-200 font-mono text-[11px] text-emerald-950 space-y-0.5">
-                    <div className="flex items-center gap-1 font-bold">
-                      <Compass className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>GPS: {selectedLog.geoStamp?.latitude ?? -1.2921}°, {selectedLog.geoStamp?.longitude ?? 36.8219}° (±{selectedLog.geoStamp?.accuracy ?? 5}m)</span>
+                  {selectedLog.geoStamp && (
+                    <div className="p-2 bg-emerald-50/80 rounded-xl border border-emerald-200 font-mono text-[11px] text-emerald-950 space-y-0.5">
+                      <div className="flex items-center gap-1 font-bold">
+                        <Compass className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>GPS: {selectedLog.geoStamp.latitude}°, {selectedLog.geoStamp.longitude}° (±{selectedLog.geoStamp.accuracy ?? 5}m)</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-800">
+                        {selectedLog.geoStamp.address}
+                      </div>
                     </div>
-                    <div className="text-[10px] text-emerald-800">
-                      {selectedLog.geoStamp?.address || 'EduSmart Campus Gate A · Nairobi Grounds (Verified Campus Boundary)'}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
 

@@ -322,21 +322,15 @@ export function registerAuthRoutes(app: Express): void {
       let storedPasswordHash: string | null = null;
       let passwordUpgradeTarget: { table: string; id: string } | null = null;
 
-      // 1a. Check `users` table
+      // 1a. Check `users` table strictly by assigned email
       const userRow = db
         .prepare(
           `SELECT id, password_hash, school_id, payload_json
            FROM users
-           WHERE is_active = 1 AND (
-             lower(email) = ? OR
-             lower(name) = ? OR
-             lower(admission_number) = ? OR
-             lower(staff_number) = ? OR
-             lower(tsc_number) = ?
-           )
+           WHERE is_active = 1 AND lower(email) = ?
            LIMIT 1`
         )
-        .get(cleanIdent, cleanIdent, cleanIdent, cleanIdent, cleanIdent) as any;
+        .get(cleanIdent) as any;
 
       if (userRow) {
         matchedUser = { ...JSON.parse(userRow.payload_json), id: userRow.id, schoolId: userRow.school_id };
@@ -344,20 +338,16 @@ export function registerAuthRoutes(app: Express): void {
         passwordUpgradeTarget = { table: 'users', id: userRow.id };
       }
 
-      // 1b. Check `provisioned_accounts`
+      // 1b. Check `provisioned_accounts` strictly by assigned email
       if (!matchedUser) {
         const provRow = db
           .prepare(
             `SELECT id, school_id, password_hash, payload_json
              FROM provisioned_accounts
-             WHERE is_active = 1 AND (
-               lower(email) = ? OR
-               lower(admission_number) = ? OR
-               lower(staff_number) = ?
-             )
+             WHERE is_active = 1 AND lower(email) = ?
              LIMIT 1`
           )
-          .get(cleanIdent, cleanIdent, cleanIdent) as any;
+          .get(cleanIdent) as any;
         if (provRow) {
           matchedUser = { ...JSON.parse(provRow.payload_json), id: provRow.id, schoolId: provRow.school_id };
           storedPasswordHash = provRow.password_hash;
@@ -365,20 +355,16 @@ export function registerAuthRoutes(app: Express): void {
         }
       }
 
-      // 1c. Check `students`
+      // 1c. Check `students` strictly by assigned email
       if (!matchedUser) {
         const stuRow = db
           .prepare(
             `SELECT id, school_id, name, email, password_hash, admission_number, phone, upi_number, grade_label, stream_label, class_name, is_active, payload_json
              FROM students
-             WHERE is_active = 1 AND (
-               lower(email) = ? OR
-               lower(admission_number) = ? OR
-               lower(name) = ?
-             )
+             WHERE is_active = 1 AND lower(email) = ?
              LIMIT 1`
           )
-          .get(cleanIdent, cleanIdent, cleanIdent) as any;
+          .get(cleanIdent) as any;
         if (stuRow) {
           const extra = stuRow.payload_json ? JSON.parse(stuRow.payload_json) : {};
           const gradeMatch = String(stuRow.grade_label || '').match(/\b([1-9])\b/);
@@ -402,16 +388,16 @@ export function registerAuthRoutes(app: Express): void {
         }
       }
 
-      // 1d. Check `student_parents`
+      // 1d. Check `student_parents` strictly by assigned email
       if (!matchedUser) {
         const parentRow = db
           .prepare(
             `SELECT id, school_id, student_id, name, email, password_hash, phone
              FROM student_parents
-             WHERE lower(email) = ? OR lower(name) = ? OR lower(phone) = ?
+             WHERE lower(email) = ?
              LIMIT 1`
           )
-          .get(cleanIdent, cleanIdent, cleanIdent) as any;
+          .get(cleanIdent) as any;
         if (parentRow) {
           const siblingRows = db
             .prepare(`SELECT student_id FROM student_parents WHERE lower(email) = ? AND school_id = ?`)
@@ -457,61 +443,28 @@ export function registerAuthRoutes(app: Express): void {
         }
       }
 
-      // 1f. Check `tenants` institutional email & domain login fallback
+      // 1f. Primary tenant institutional contact email ONLY (no wildcard domain synthesis)
       if (!matchedUser) {
-        const tenantRows = db.prepare(`SELECT id, email, domain, short_name, code, payload_json FROM tenants`).all() as any[];
-        for (const row of tenantRows) {
-          const tenant = JSON.parse(row.payload_json);
-          const tEmail = String(row.email || '').toLowerCase().trim();
-          const tDomain = String(row.domain || '').toLowerCase().trim();
-          const tEmailDomain = tEmail.includes('@') ? tEmail.split('@')[1] : '';
-          const schoolSlug = String(row.short_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          const schoolCode = String(row.code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-          if (tEmail && tEmail === cleanIdent) {
-            matchedUser = {
-              id: `usr-admin-${row.id}`,
-              name: tenant.principalName || `${tenant.shortName} Administrator`,
-              email: cleanIdent,
-              role: 'admin',
-              schoolId: row.id,
-              isActive: true,
-            };
-            storedPasswordHash = 'admin2026';
-            break;
-          }
-
-          if (cleanIdent.includes('@')) {
-            const emailDomain = cleanIdent.split('@')[1].trim();
-            const isDomainMatch =
-              (tDomain && emailDomain === tDomain) ||
-              (tEmailDomain && emailDomain === tEmailDomain) ||
-              (schoolSlug && emailDomain.startsWith(schoolSlug)) ||
-              (schoolCode && emailDomain.includes(schoolCode));
-            if (isDomainMatch) {
-              const prefix = cleanIdent.split('@')[0];
-              const mapped = defaultRolePasswordForDomainPrefix(prefix);
-              matchedUser = {
-                id: `usr-${row.id}-${prefix.replace(/[^a-z0-9]/g, '') || Date.now()}`,
-                name:
-                  mapped.role === 'admin'
-                    ? tenant.principalName || `${tenant.shortName} Admin`
-                    : `${tenant.shortName} ${mapped.role.replace(/_/g, ' ')}`,
-                email: cleanIdent,
-                role: mapped.role,
-                schoolId: row.id,
-                isActive: true,
-              };
-              storedPasswordHash = mapped.password;
-              break;
-            }
-          }
+        const tenantRowMatch = db
+          .prepare(`SELECT id, email, payload_json FROM tenants WHERE lower(email) = ? LIMIT 1`)
+          .get(cleanIdent) as any;
+        if (tenantRowMatch) {
+          const tenant = JSON.parse(tenantRowMatch.payload_json);
+          matchedUser = {
+            id: `usr-admin-${tenantRowMatch.id}`,
+            name: tenant.principalName || `${tenant.shortName} Administrator`,
+            email: cleanIdent,
+            role: 'admin',
+            schoolId: tenantRowMatch.id,
+            isActive: true,
+          };
+          storedPasswordHash = 'admin2026';
         }
       }
 
       if (!matchedUser) {
         return res.status(401).json({
-          error: 'This account was not found. Use the email and password for your role.',
+          error: 'Account not found. Sign in strictly with your assigned institutional email and password.',
         });
       }
 
@@ -714,19 +667,28 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  // 4. Register User Account (Persisted in SQLite + sets session cookie if requested)
-  app.post('/api/auth/register', (req: Request, res: Response) => {
+  // 4. Create Assigned User Account (Strictly Restricted to Authenticated School Admins / Registrars / Super Admin)
+  app.post('/api/auth/register', requireAuth, (req: Request, res: Response) => {
     try {
+      const session = req.authSession!;
+      const canProvisionUsers =
+        session.isSuperAdmin ||
+        ['admin', 'head_teacher', 'school_admin_staff'].includes(session.role);
+      if (!canProvisionUsers) {
+        return res.status(403).json({
+          error: 'Public account creation is disabled. Contact your School Administrator to issue credentials.',
+        });
+      }
+
       const payload = req.body?.user ? req.body.user : req.body;
-      const autoLogin = req.body?.autoLogin !== false;
       if (!payload || !payload.email || !payload.name) {
-        return res.status(400).json({ error: 'Missing required user registration fields (name, email)' });
+        return res.status(400).json({ error: 'Missing required user account fields (name, email).' });
       }
 
       const cleanEmail = String(payload.email).trim().toLowerCase();
       const db = getDb();
 
-      // Prevent registering an active platform super admin email
+      // Prevent overwriting an active platform super admin email
       const reservedAdmin = db
         .prepare(`SELECT id FROM platform_admins WHERE lower(email) = ?`)
         .get(cleanEmail);
@@ -734,58 +696,58 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(409).json({ error: 'This email is reserved for the Super Admin console.' });
       }
 
-      const existing = db
-        .prepare(`SELECT id FROM users WHERE lower(email) = ?`)
-        .get(cleanEmail) as { id: string } | undefined;
-      if (existing && !req.authSession) {
-        return res.status(409).json({
-          error: 'An account with this email address already exists. Please sign in instead.',
+      // Strictly lock tenant scope for non-super-admins
+      const schoolId = session.isSuperAdmin
+        ? String(payload.schoolId || session.schoolId || 'tenant-riara')
+        : session.schoolId;
+
+      if (!session.isSuperAdmin && payload.schoolId && payload.schoolId !== session.schoolId) {
+        return res.status(403).json({
+          error: 'Cross-tenant provisioning forbidden. You can only create accounts within your own school.',
         });
       }
 
-      const schoolId =
-        req.authSession && !req.authSession.isSuperAdmin
-          ? req.authSession.schoolId
-          : payload.schoolId || 'tenant-riara';
+      const existing = db
+        .prepare(`SELECT id, school_id FROM users WHERE lower(email) = ?`)
+        .get(cleanEmail) as { id: string; school_id: string } | undefined;
+      if (existing && !session.isSuperAdmin && existing.school_id !== session.schoolId) {
+        return res.status(409).json({
+          error: 'This email is already assigned in another institution.',
+        });
+      }
 
       const role = payload.role || 'student';
-      const rawPass = String(payload.password || 'GR4@2026');
       const registeredUser = {
         ...payload,
         email: cleanEmail,
         role,
         id: existing?.id || payload.id || `usr-${role}-${Date.now()}`,
         schoolId,
-        isActive: true,
+        isActive: payload.isActive !== false,
         registeredAt: new Date().toISOString(),
       };
 
       ingestCollectionData(db, 'edusmart_users_v1', [registeredUser], false);
       const safeUser = stripSecrets(registeredUser);
 
-      const sessionToken = autoLogin && !req.authSession
-        ? createAuthSession(req, res, safeUser, 'tenant')
-        : undefined;
-
       broadcastChange({
         type: 'record:created',
         collection: 'edusmart_users_v1',
         tenantId: resolveRecordTenantId('edusmart_users_v1', safeUser, schoolId),
         recordId: safeUser.id,
-        actorId: safeUser.id,
+        actorId: session.userId,
         timestamp: new Date().toISOString(),
       });
 
       return res.json({
         success: true,
-        ...(sessionToken ? { sessionToken } : {}),
         user: safeUser,
-        message: 'User account registered and synchronized to database successfully.',
+        message: 'Assigned institutional user account saved to database.',
         timestamp: new Date().toISOString(),
       });
     } catch (err: any) {
       console.error('Error in /api/auth/register:', err);
-      return res.status(500).json({ error: 'Failed to register user account', message: err?.message });
+      return res.status(500).json({ error: 'Failed to provision user account', message: err?.message });
     }
   });
 
@@ -821,15 +783,14 @@ export function registerAuthRoutes(app: Express): void {
     return res.json({ success: true, schoolId: String(schoolId) });
   });
 
-  // 7. Authorized Quick Switch User (School Admin within own school OR Super Admin)
+  // 7. Authorized Account / Role Switcher (Super Admin Portal Only)
   app.post('/api/auth/switch-user', requireAuth, (req: Request, res: Response) => {
     const { userId } = req.body || {};
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     const session = req.authSession!;
-    const allowedSwitcher = session.isSuperAdmin || session.role === 'admin' || session.role === 'head_teacher';
-    if (!allowedSwitcher) {
-      return res.status(403).json({ error: 'Only authorized administrators can switch user accounts.' });
+    if (!session.isSuperAdmin) {
+      return res.status(403).json({ error: 'Account switching is restricted exclusively to the Super Admin Portal.' });
     }
 
     const db = getDb();
@@ -838,9 +799,6 @@ export function registerAuthRoutes(app: Express): void {
       .get(String(userId)) as any;
 
     if (!row) return res.status(404).json({ error: 'Target user not found' });
-    if (!session.isSuperAdmin && row.school_id !== session.schoolId) {
-      return res.status(403).json({ error: 'Cannot switch to a user in another school.' });
-    }
 
     const targetUser = stripSecrets({ ...JSON.parse(row.payload_json), id: row.id, schoolId: row.school_id });
     const sessionToken = createAuthSession(req, res, targetUser, 'tenant');

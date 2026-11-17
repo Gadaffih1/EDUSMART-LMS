@@ -15,7 +15,8 @@ import {
   JUNIOR_STREAMS
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
@@ -88,6 +89,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
   currentUser,
   onLogout
 }) => {
+  const { currentTenant } = useTenant();
   // Navigation active tab - default to sanatorium if nurse or sanatorium officer
   const [activeTab, setActiveTab] = useState<AdminTab>(() => 
     currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.designation && currentUser.designation.toLowerCase().includes('nurse'))
@@ -380,8 +382,8 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             
             {/* Branding + Staff Role */}
             <div className="flex items-center gap-4">
-              <div className="bg-white p-2 rounded-xl border border-amber-400 shadow-xs">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+              <div className="bg-white p-1.5 rounded-xl border border-amber-400 shadow-xs">
+                <TenantSchoolLogo variant="horizontal" size="sm" />
               </div>
               <div>
                 <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider text-amber-400 uppercase">
@@ -1767,7 +1769,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div className="flex items-center gap-3">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
                 <div>
                   <h3 className="font-black text-slate-900 text-base">
                     Official CBC Learner Progress Transcript
@@ -1866,7 +1868,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
           <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
               <div className="flex items-center gap-3">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
                 <div>
                   <h3 className="font-black text-slate-900 text-base">
                     {printModalType === 'timetable' && `Official Class Routine Timetable (Grade ${printableGrade} ${printableStream})`}
@@ -1878,7 +1880,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                     {printModalType === 'register' && `Marked Class Attendance Roll (Grade ${attendanceGrade} ${attendanceStream})`}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Edu-Smart PORTAL by Gadsa Systems · Authorized School Seal
+                    {currentTenant.name} · Authorized School Seal
                   </p>
                 </div>
               </div>

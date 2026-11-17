@@ -21,7 +21,7 @@ import {
   School,
   AlertTriangle
 } from 'lucide-react';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { useTenant } from '../../context/TenantContext';
 
 interface TeacherTimetableCaptureModalProps {
@@ -96,7 +96,7 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
   const handleCopyText = () => {
     let text = '';
     if (captureMode === 'daily') {
-      text = `*EDUSMART ACADEMY - TEACHER DAILY TIMETABLE CAPTURE*\n`;
+      text = `*${(currentTenant.name || 'SCHOOL').toUpperCase()} - TEACHER DAILY TIMETABLE CAPTURE*\n`;
       text += `Teacher: ${teacherName}\n`;
       text += `Day: ${selectedDay} | Classes to Visit: ${daySlots.length}\n`;
       text += `Streams: ${dayStreamsList.join(', ')}\n\n`;
@@ -113,7 +113,7 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
         }
       });
     } else {
-      text = `*EDUSMART ACADEMY - MASTER WEEKLY TIMETABLE CAPTURE*\n`;
+      text = `*${(currentTenant.name || 'SCHOOL').toUpperCase()} - MASTER WEEKLY TIMETABLE CAPTURE*\n`;
       text += `Teacher: ${teacherName}\n`;
       text += `Total Weekly Contact Periods: ${teacherSlots.length} (${teacherSlots.length * 40} mins delivery)\n`;
       text += `Streams Covered: ${weeklyStreamsList.join(', ')}\n\n`;
@@ -260,15 +260,7 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
           >
             <div className="flex items-center gap-3">
               <div className="shrink-0">
-                {currentTenant.customLogoBase64 ? (
-                  <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
-                ) : currentTenant.logoUrl ? (
-                  <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
-                ) : (
-                  <div className="p-2 bg-slate-900 text-white rounded-xl shadow-xs">
-                    <EduSmartGadsaLogo variant="horizontal" size="sm" />
-                  </div>
-                )}
+                <TenantSchoolLogo variant="emblem" size="sm" />
               </div>
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase font-serif">
@@ -548,7 +540,7 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
           <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
             <div>
               <p className="font-bold text-slate-700">Dean of Studies & Deputy Head Approved</p>
-              <p className="text-[11px]">EduSmart Timetable & Autonomous Curriculum Scheduling System</p>
+              <p className="text-[11px]">{currentTenant.name} Official Timetable Record</p>
             </div>
             <div className="text-right">
               <span className="font-mono text-[11px] bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">

@@ -43,6 +43,7 @@ import { ClientDataStore } from './utils/clientDataStore';
 import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
 import { fromAppPath, toAppPath } from './utils/appPath';
 import { PWAInstallInvitation, PWAUpdateAndOfflineBanner } from './components/pwa/PWAInstallExperience';
+import { InactivityTimeoutModal } from './components/auth/InactivityTimeoutModal';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
 const schoolRouteMap = new Map<string, string>();
@@ -254,6 +255,12 @@ function AppContent({
         onEnterSchool={async (schoolId: string) => {
           setIsPlatformAdminSession(true);
           await switchTenant(schoolId);
+          navigateToPortal('school_lms', schoolId);
+        }}
+        onSwitchRoleAndEnter={async (targetUser: User, schoolId: string) => {
+          setIsPlatformAdminSession(true);
+          await switchTenant(schoolId);
+          await onSwitchUser({ ...targetUser, schoolId });
           navigateToPortal('school_lms', schoolId);
         }}
         onBackToLanding={() => {
@@ -772,6 +779,7 @@ export default function App({ initialUser = null }: { initialUser?: User | null 
                   onLoginVisibilityChange={setIsLoginVisible}
                 />
                 <PWAInstallInvitation suppressAutoShow={isLoginVisible} />
+                <InactivityTimeoutModal isActive={Boolean(currentUser)} onLogout={handleLogout} />
               </NotificationLayoutProvider>
             </MobileLayoutProvider>
           </AccessibilityProvider>

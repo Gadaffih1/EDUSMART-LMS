@@ -9,8 +9,10 @@ import { fileURLToPath } from 'url';
 import { initDatabase } from './src/server/db.ts';
 import { runDatabaseMigrations } from './src/server/migrate.ts';
 import { attachAuthSession, registerAuthRoutes } from './src/server/authRoutes.ts';
+import { registerWebAuthnRoutes } from './src/server/webauthnRoutes.ts';
 import { registerDataRoutes } from './src/server/dataRoutes.ts';
 import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
+import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
 import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
@@ -82,10 +84,12 @@ async function startServer() {
   app.get('/livez', healthHandler);
   app.get('/readyz', healthHandler);
 
-  // Register Authentication, Central Data/Sync/File/Realtime & Operations routes
+  // Register Authentication, WebAuthn Biometrics, Central Data/Sync/File/Realtime & Timetable routes
   registerAuthRoutes(app);
+  registerWebAuthnRoutes(app);
   registerDataRoutes(app);
   registerOperationsRoutes(app);
+  registerTimetableRoutes(app);
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API
   app.post('/api/quiz-explanation', async (req: Request, res: Response) => {
@@ -604,7 +608,7 @@ Core rules:
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa'
     });
     app.use(vite.middlewares);

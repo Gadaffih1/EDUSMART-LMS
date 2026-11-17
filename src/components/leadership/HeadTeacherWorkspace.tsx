@@ -10,7 +10,7 @@ import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
@@ -179,7 +179,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           </button>
           
           <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+            <TenantSchoolLogo variant="horizontal" size="xs" />
           </div>
 
           <div>
@@ -528,11 +528,11 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b-2 border-slate-900 gap-4">
             <div className="flex items-center gap-3.5">
               <div className="p-1.5 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs shrink-0">
-                <EduSmartGadsaLogo variant="full" size="sm" />
+                <TenantSchoolLogo variant="full" size="sm" />
               </div>
               <div>
                 <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-widest">
-                  Edu-Smart PORTAL · By Gadsa Systems
+                  {currentTenant.name}
                 </div>
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Confidential Executive Briefing</div>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900">Board of Management (BOM) Termly Report</h2>

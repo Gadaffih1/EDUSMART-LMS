@@ -16,15 +16,17 @@ import {
   School,
   CheckCircle2,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Fingerprint
 } from 'lucide-react';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { useTenant } from '../../context/TenantContext';
+import { BiometricPasskeysCard } from '../auth/BiometricPasskeysCard';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultTab?: 'storage' | 'connectivity' | 'preferences';
+  defaultTab?: 'storage' | 'connectivity' | 'security' | 'preferences';
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -32,7 +34,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   defaultTab = 'storage'
 }) => {
-  const [activeTab, setActiveTab] = useState<'storage' | 'connectivity' | 'preferences'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'storage' | 'connectivity' | 'security' | 'preferences'>(defaultTab);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { isMobileOverlapProtectionEnabled, setMobileOverlapProtection } = useMobileLayout();
@@ -151,15 +153,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('security')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              activeTab === 'security' 
+                ? 'bg-emerald-700 text-white shadow-xs' 
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Fingerprint className="w-3.5 h-3.5" />
+            <span>3. Biometrics &amp; Security</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('preferences')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
               activeTab === 'preferences' 
                 ? 'bg-emerald-700 text-white shadow-xs' 
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>3. General & Preferences</span>
+            <span>4. General &amp; Preferences</span>
           </button>
 
         </div>
@@ -168,6 +182,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex-1 min-h-0 overflow-y-auto">
           {activeTab === 'storage' && (
             <StorageManagementDashboard onClose={onClose} />
+          )}
+
+          {activeTab === 'security' && (
+            <div className="p-6 max-w-2xl mx-auto">
+              <BiometricPasskeysCard />
+            </div>
           )}
 
           {activeTab === 'connectivity' && (

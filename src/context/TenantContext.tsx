@@ -6,7 +6,7 @@ import { INITIAL_TENANTS } from '../data/tenantsData';
 
 const ALL_TENANTS_STORAGE_KEY = 'edusmart_all_tenants_registry';
 
-const TenantContext = createContext<TenantContextType | undefined>(undefined);
+export const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 function loadTenantsFromStore(): Tenant[] {
   const stored = ClientDataStore.getCollection<Tenant[]>(ALL_TENANTS_STORAGE_KEY, []);

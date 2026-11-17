@@ -8,7 +8,8 @@ import {
   getStreamsForGrade 
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { 
   LogOut, 
   ShieldCheck, 
@@ -37,6 +38,7 @@ interface StudentGateExitProps {
 }
 
 export const StudentGateExit: React.FC<StudentGateExitProps> = ({ currentUser }) => {
+  const { currentTenant } = useTenant();
   const allUsers = Storage.getUsers();
   const allStudents = allUsers.filter(u => u.role === 'student');
 
@@ -759,7 +761,7 @@ export const StudentGateExit: React.FC<StudentGateExitProps> = ({ currentUser })
             {/* Header */}
             <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                <TenantSchoolLogo variant="horizontal" size="xs" />
                 <span className="font-extrabold text-[11px] uppercase tracking-wider text-slate-800 ml-2">
                   Gate Security Clearance
                 </span>
@@ -776,10 +778,10 @@ export const StudentGateExit: React.FC<StudentGateExitProps> = ({ currentUser })
             <div className="p-6 space-y-4 bg-white text-xs">
               <div className="text-center pb-3 border-b-2 border-slate-900 space-y-1">
                 <div className="flex justify-center mb-2">
-                  <EduSmartGadsaLogo variant="full" size="sm" />
+                  <TenantSchoolLogo variant="full" size="sm" />
                 </div>
                 <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-widest">
-                  Edu-Smart PORTAL · By Gadsa Systems
+                  {currentTenant.name}
                 </div>
                 <h3 className="text-lg font-black text-slate-900 uppercase">
                   Student Gate Exit Pass

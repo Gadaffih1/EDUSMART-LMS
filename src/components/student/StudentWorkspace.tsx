@@ -33,7 +33,8 @@ import { ExternalToolsHub } from './ExternalToolsHub';
 import { SafeBrowser } from './SafeBrowser';
 import { ReportingHub } from '../reports/ReportingHub';
 import { TimetablePortal } from '../timetable/TimetablePortal';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
+import { useTenant } from '../../context/TenantContext';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { 
@@ -103,6 +104,7 @@ type WorkspaceTab =
   | 'browser';
 
 export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser }) => {
+  const { currentTenant } = useTenant();
   const studentGrade = currentUser.grade || 4;
   const studentStream = currentUser.stream || 'Dove';
 
@@ -319,7 +321,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           </button>
           
           <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+            <TenantSchoolLogo variant="horizontal" size="xs" />
           </div>
 
           <div>
@@ -1200,10 +1202,10 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 {/* Official School Header */}
                 <div className="text-center pb-4 border-b border-slate-200 space-y-1">
                   <div className="flex justify-center mb-2">
-                    <EduSmartGadsaLogo variant="full" size="sm" />
+                    <TenantSchoolLogo variant="full" size="sm" />
                   </div>
                   <div className="text-xs font-bold text-emerald-700 uppercase tracking-widest">
-                    Edu-Smart PORTAL · By Gadsa Systems
+                    {currentTenant.name}
                   </div>
                   <h3 className="text-xl font-extrabold text-slate-900">
                     Official Learner Progress Report Card

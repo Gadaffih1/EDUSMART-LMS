@@ -27,7 +27,8 @@ import {
   LogOut,
   FlaskConical,
   Database,
-  Download
+  Download,
+  UserCheck
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
@@ -47,17 +48,23 @@ import { PWAAnalyticsPanel } from './PWAAnalyticsPanel';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool?: (schoolId: string) => void;
+  onSwitchRoleAndEnter?: (user: User, schoolId: string) => Promise<void> | void;
   onBackToLanding?: () => void;
   onSignOut?: () => void;
 }
 
 export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   onEnterSchool,
+  onSwitchRoleAndEnter,
   onBackToLanding,
   onSignOut
 }) => {
   const { currentTenant, allTenants, switchTenant, updateTenant } = useTenant();
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
+  const [showRoleSwitcher, setShowRoleSwitcher] = useState<boolean>(false);
+  const [roleSwitchSchoolId, setRoleSwitchSchoolId] = useState<string>(currentTenant.id);
+  const [roleSwitchQuery, setRoleSwitchQuery] = useState<string>('');
+  const [switchingRole, setSwitchingRole] = useState<boolean>(false);
   const [enteringSchoolId, setEnteringSchoolId] = useState<string | null>(null);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -159,7 +166,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           {/* Brand & Platform Admin Badge */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="bg-white p-1 sm:p-1.5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center shrink-0">
-              <EduSmartGadsaLogo variant="emblem" size="sm" />
+              <EduSmartGadsaLogo forceSystemLogo variant="emblem" size="sm" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -191,6 +198,23 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
               <Download className="w-4 h-4" />
               <span className="hidden md:inline">{exportingMysql ? 'Exporting SQL…' : 'Export MySQL (.sql)'}</span>
               <span className="md:hidden">.SQL</span>
+            </button>
+
+            {/* Super Admin Exclusive Switch Role Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setRoleSwitchSchoolId(currentTenant.id);
+                setRoleSwitchQuery('');
+                setShowRoleSwitcher(true);
+              }}
+              className="px-2 sm:px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Switch to any school role (Super Admin Exclusive)"
+              aria-label="Switch Role"
+            >
+              <UserCheck className="w-4 h-4 text-slate-600" />
+              <span className="hidden sm:inline">Switch Role</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             </button>
 
             {/* Visual Customizer & CMS Studio Button */}
@@ -712,6 +736,117 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           onEnterSchool?.(schoolId);
         }}
       />
+
+      {showRoleSwitcher && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-blue-700" />
+                  <span>Super Admin Role &amp; Portal Switcher</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Preview and enter any tenant school portal using an authorized role profile. Only visible to Super Admins.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRoleSwitcher(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70"
+                aria-label="Close Role Switcher"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Target School Campus
+                  </label>
+                  <select
+                    value={roleSwitchSchoolId}
+                    onChange={(e) => setRoleSwitchSchoolId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-900 font-medium"
+                  >
+                    {allTenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Filter User or Role
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={roleSwitchQuery}
+                      onChange={(e) => setRoleSwitchQuery(e.target.value)}
+                      placeholder="Search name, email, or role..."
+                      className="w-full pl-8 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100">
+              {allUsersState
+                .filter((u) => {
+                  const matchesSchool = !u.schoolId || u.schoolId === roleSwitchSchoolId || roleSwitchSchoolId === 'school-edusmart-main';
+                  if (!matchesSchool) return false;
+                  if (!roleSwitchQuery.trim()) return true;
+                  const q = roleSwitchQuery.trim().toLowerCase();
+                  return (
+                    u.name.toLowerCase().includes(q) ||
+                    u.email.toLowerCase().includes(q) ||
+                    u.role.toLowerCase().includes(q)
+                  );
+                })
+                .slice(0, 60)
+                .map((targetUser) => (
+                  <div key={`${roleSwitchSchoolId}-${targetUser.id}`} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 truncate">{targetUser.name}</div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-2 truncate">
+                        <span className="font-mono">{targetUser.email}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="uppercase font-semibold text-blue-700">{targetUser.role.replace(/_/g, ' ')}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={switchingRole}
+                      onClick={async () => {
+                        setSwitchingRole(true);
+                        try {
+                          if (onSwitchRoleAndEnter) {
+                            await onSwitchRoleAndEnter(targetUser, roleSwitchSchoolId);
+                          } else {
+                            await switchTenant(roleSwitchSchoolId);
+                            onEnterSchool?.(roleSwitchSchoolId);
+                          }
+                          setShowRoleSwitcher(false);
+                        } finally {
+                          setSwitchingRole(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-white shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      Enter Portal
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

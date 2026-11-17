@@ -1675,6 +1675,74 @@ export function registerDataRoutes(app: Express): void {
       return res.status(500).json({ error: 'Failed computing PWA analytics', message: err?.message });
     }
   });
+
+  // Reverse Geocode GPS Coordinates -> Actual Physical Street/Area/Town Name (never campus name)
+  app.get('/api/geocode/reverse', requireAuth, async (req: Request, res: Response) => {
+    const lat = Number(req.query.lat);
+    const lon = Number(req.query.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      return res.status(400).json({ error: 'Valid latitude and longitude coordinates are required.' });
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&zoom=18&addressdetails=1`;
+      const upstream = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'EduSmart-LMS/1.0 (https://www.edusmart.co.ke)',
+          Accept: 'application/json',
+        },
+      });
+      clearTimeout(timeoutId);
+
+      if (upstream.ok) {
+        const data = (await upstream.json()) as any;
+        const addr = data?.address || {};
+        const primaryParts = [
+          addr.road || addr.pedestrian || addr.footway || addr.neighbourhood || addr.suburb || addr.quarter,
+          addr.suburb && addr.suburb !== addr.neighbourhood ? addr.suburb : addr.village || addr.town || addr.city_district,
+          addr.city || addr.town || addr.county || addr.state_district,
+          addr.country,
+        ]
+          .filter((part, idx, arr) => Boolean(part) && arr.indexOf(part) === idx)
+          .map((p) => String(p).trim());
+
+        const locationName =
+          primaryParts.length >= 2
+            ? primaryParts.join(', ')
+            : String(data?.display_name || '')
+                .split(',')
+                .slice(0, 4)
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+                .join(', ');
+
+        if (locationName) {
+          return res.json({
+            success: true,
+            locationName,
+            latitude: Number(lat.toFixed(6)),
+            longitude: Number(lon.toFixed(6)),
+            addressDetails: addr,
+            source: 'nominatim',
+          });
+        }
+      }
+    } catch {
+      clearTimeout(timeoutId);
+    }
+
+    return res.json({
+      success: true,
+      locationName: `GPS Coordinates (${lat.toFixed(5)}°, ${lon.toFixed(5)}°)`,
+      latitude: Number(lat.toFixed(6)),
+      longitude: Number(lon.toFixed(6)),
+      rawCoordinatesOnly: true,
+      source: 'gps_coordinates',
+    });
+  });
 }
 
 // Export helper for operationsRoutes.ts

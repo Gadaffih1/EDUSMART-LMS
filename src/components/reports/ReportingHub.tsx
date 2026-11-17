@@ -13,7 +13,8 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { exportToPdf } from '../../utils/pdfExport';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { PrintReportModal } from '../common/PrintReportModal';
 import { 
   FileText, 
@@ -57,6 +58,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
   defaultPeriod = 'Monthly',
   onClose
 }) => {
+  const { currentTenant } = useTenant();
   const isParent = currentUser.role === 'parent';
   const isStudent = currentUser.role === 'student';
   const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
@@ -368,9 +370,12 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 <body>
   <div class="header">
     <div style="display: flex; justify-content: center; margin-bottom: 12px;">
-      <img src="/edusmart-logo.svg" alt="Edu-Smart PORTAL by Gadsa Systems" style="width: 130px; height: auto;" />
+      ${(currentTenant.customLogoBase64 || currentTenant.logoUrl)
+        ? `<img src="${currentTenant.customLogoBase64 || currentTenant.logoUrl}" alt="${currentTenant.name}" style="width: 72px; height: 72px; object-fit: contain; border-radius: 12px;" />`
+        : `<div style="width: 64px; height: 64px; border-radius: 12px; background: #0f172a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px;">${currentTenant.name.slice(0, 2).toUpperCase()}</div>`
+      }
     </div>
-    <div class="school-title">Edu-Smart PORTAL · By Gadsa Systems</div>
+    <div class="school-title">${currentTenant.name}</div>
     <div class="report-title">${aggregatedStudentData.periodLabel}</div>
     <div class="sub">Official Learner Progress Report & Academic Competency Dossier</div>
   </div>
@@ -499,7 +504,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+            <TenantSchoolLogo variant="horizontal" size="xs" />
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">· Centralized Reporting Hub</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -811,7 +816,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           <div className="p-6 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs shrink-0">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
               </div>
               <div>
                 <div className="text-[11px] font-bold text-amber-600 uppercase tracking-widest">
@@ -1134,7 +1139,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-4">
               <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs shrink-0">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
               </div>
               <div>
                 <div className="text-xs font-bold text-emerald-700 uppercase tracking-widest">

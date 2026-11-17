@@ -30,6 +30,7 @@ import {
 } from '../../types/financeOperations';
 import { User } from '../../types';
 import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 
 interface StoresPortalViewProps {
   currentUser: User;
@@ -892,7 +893,10 @@ export const StoresPortalView: React.FC<StoresPortalViewProps> = ({
             </div>
 
             <div className="printable-report border border-slate-300 p-5 rounded-2xl bg-white space-y-3 text-xs font-mono">
-              <div className="text-center pb-2 border-b border-dashed border-slate-300 space-y-0.5">
+              <div className="text-center pb-2 border-b border-dashed border-slate-300 space-y-1">
+                <div className="flex justify-center">
+                  <TenantSchoolLogo variant="emblem" size="sm" />
+                </div>
                 <div className="font-black text-sm font-serif uppercase tracking-tight text-slate-950">{currentTenant.name}</div>
                 <div className="text-[10px] text-slate-500">Central Stores & Receiving Bay</div>
                 <div className="font-extrabold text-xs pt-1 text-blue-800">GOODS RECEIVED NOTE (GRN)</div>

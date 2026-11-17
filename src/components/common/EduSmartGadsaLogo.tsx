@@ -1,22 +1,40 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { TenantContext } from '../../context/TenantContext';
+import { TenantSchoolLogo } from './TenantSchoolLogo';
 
 interface EduSmartGadsaLogoProps {
   className?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'doc';
   variant?: 'full' | 'emblem' | 'horizontal' | 'badge';
   monochrome?: boolean;
+  /** Only Public Landing, Super Admin Console & Auth screens pass true so school portals & printables render the tenant school logo */
+  forceSystemLogo?: boolean;
 }
 
 export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
   className = '',
   size = 'md',
   variant = 'full',
-  monochrome = false
+  monochrome = false,
+  forceSystemLogo = false
 }) => {
-  // Official image asset path provided by user
+  const tenantCtx = useContext(TenantContext);
+
+  // Strict Tenant & Printable Rule: inside active school portals or printable documents,
+  // automatically render the Tenant School Logo unless explicitly marked forceSystemLogo.
+  if (!forceSystemLogo && tenantCtx?.currentTenant) {
+    return (
+      <TenantSchoolLogo
+        className={className}
+        size={size}
+        variant={variant}
+        monochrome={monochrome}
+      />
+    );
+  }
+
   const logoSrc = "/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg";
 
-  // Dimensions based on size preset
   const sizeMap: Record<string, { width: number; height: number; classDim: string }> = {
     xs: { width: 28, height: 28, classDim: 'w-7 h-7' },
     sm: { width: 38, height: 38, classDim: 'w-10 h-10' },
@@ -29,11 +47,10 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
 
   const currentSize = sizeMap[size] || sizeMap.md;
 
-  // Variant: horizontal (emblem + text)
   if (variant === 'horizontal') {
     return (
       <div className={`inline-flex items-center gap-2.5 ${className}`}>
-        <div 
+        <div
           className="rounded-xl overflow-hidden bg-white p-0.5 shrink-0 flex items-center justify-center border border-slate-200 shadow-xs"
           style={{ width: currentSize.width, height: currentSize.height }}
         >
@@ -57,10 +74,9 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
     );
   }
 
-  // Variant: emblem (compact crest image in container)
   if (variant === 'emblem') {
     return (
-      <div 
+      <div
         className={`rounded-2xl overflow-hidden bg-white p-1 flex items-center justify-center shrink-0 shadow-2xs border border-white/60 ${className}`}
         style={{ width: currentSize.width, height: currentSize.height }}
       >
@@ -73,7 +89,6 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
     );
   }
 
-  // Variant: badge (pill with small logo + Gadsa text)
   if (variant === 'badge') {
     return (
       <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 shadow-2xs ${className}`}>
@@ -91,9 +106,8 @@ export const EduSmartGadsaLogo: React.FC<EduSmartGadsaLogoProps> = ({
     );
   }
 
-  // Default: full graphic image
   return (
-    <div 
+    <div
       className={`inline-flex flex-col items-center justify-center ${className}`}
       style={{ width: currentSize.width, height: currentSize.height }}
     >

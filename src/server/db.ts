@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { initTimetableSchema } from './timetableSchema.ts';
 
 export interface DbContext {
   db: DatabaseSync;
@@ -301,7 +302,42 @@ export function initDatabase(rootDir: string = process.cwd()): DbContext {
     CREATE INDEX IF NOT EXISTS idx_pwa_events_type ON pwa_install_events(event_type, created_at);
     CREATE INDEX IF NOT EXISTS idx_pwa_events_device ON pwa_install_events(device_category);
     CREATE INDEX IF NOT EXISTS idx_pwa_events_install ON pwa_install_events(install_id, event_type);
+
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      user_role TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      user_email TEXT NOT NULL,
+      is_super_admin INTEGER NOT NULL DEFAULT 0,
+      credential_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      counter INTEGER NOT NULL DEFAULT 0,
+      transports_json TEXT NOT NULL DEFAULT '[]',
+      device_type TEXT,
+      backed_up INTEGER NOT NULL DEFAULT 0,
+      device_label TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_used_at TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_webauthn_cred_id ON webauthn_credentials(credential_id);
+    CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id, school_id);
+    CREATE INDEX IF NOT EXISTS idx_webauthn_email ON webauthn_credentials(lower(user_email));
+
+    CREATE TABLE IF NOT EXISTS webauthn_challenges (
+      id TEXT PRIMARY KEY,
+      challenge TEXT NOT NULL,
+      flow_type TEXT NOT NULL,
+      user_id TEXT,
+      user_email TEXT,
+      is_super_admin INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_webauthn_challenge_exp ON webauthn_challenges(expires_at);
   `);
+
+  initTimetableSchema(db);
 
   cachedContext = { db, dbPath, uploadsDir };
   return cachedContext;

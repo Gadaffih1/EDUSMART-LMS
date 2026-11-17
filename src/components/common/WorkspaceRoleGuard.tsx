@@ -231,29 +231,13 @@ export const WorkspaceRoleGuard: React.FC<WorkspaceRoleGuardProps> = ({
 
           {/* Navigation and Action Options */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <button
-              onClick={() => {
-                // Open user switch modal or return to default home
-                const switchBtn = document.querySelector('button[title*="Switch User"], button[title*="Quick Switch"]') as HTMLButtonElement | null;
-                if (switchBtn) {
-                  switchBtn.click();
-                } else {
-                  window.dispatchEvent(new CustomEvent('open-user-switch-modal'));
-                }
-              }}
-              className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4 text-emerald-400" />
-              <span>Switch to Authorized Account</span>
-            </button>
-
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="w-full sm:w-auto px-5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <LogOut className="w-4 h-4 text-slate-500" />
-                <span>Sign Out</span>
+                <LogOut className="w-4 h-4 text-slate-300" />
+                <span>Sign Out &amp; Use Assigned Account</span>
               </button>
             )}
           </div>

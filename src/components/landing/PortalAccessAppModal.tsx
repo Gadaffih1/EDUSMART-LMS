@@ -305,8 +305,8 @@ export const PortalAccessAppModal: React.FC<PortalAccessAppModalProps> = ({
   const [processingProgress, setProcessingProgress] = useState(0);
   
   const app = PORTAL_APPS_CONFIG[appKey] || PORTAL_APPS_CONFIG['student'];
-  const [inputEmail, setInputEmail] = useState(app.defaultEmail);
-  const [inputPassword, setInputPassword] = useState(app.defaultPassword);
+  const [inputEmail, setInputEmail] = useState('');
+  const [inputPassword, setInputPassword] = useState('');
 
   if (!isOpen) return null;
 
@@ -341,10 +341,6 @@ export const PortalAccessAppModal: React.FC<PortalAccessAppModalProps> = ({
         onLogin(emailToUse, passwordToUse);
       }, 250);
     }, 1050);
-  };
-
-  const handleQuickDemoSubmit = () => {
-    processAndConnect(app.defaultEmail, app.defaultPassword);
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -466,7 +462,7 @@ export const PortalAccessAppModal: React.FC<PortalAccessAppModalProps> = ({
                 </div>
               )}
 
-              {/* 1-Click Fast Demo Launch Banner (Disabled for Virtual Lab) */}
+              {/* Strict Credential Requirement Notice (Free Demo Bypass Disabled) */}
               {app.id === 'virtuallab' ? (
                 <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl space-y-3 text-left">
                   <div className="flex items-start gap-2.5">
@@ -494,27 +490,11 @@ export const PortalAccessAppModal: React.FC<PortalAccessAppModalProps> = ({
                   </div>
                 </div>
               ) : (
-                <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-2xs">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/60 px-2 py-0.5 rounded-full">
-                      1-Click Instant App Launch
-                    </span>
-                    <div className="font-extrabold text-xs text-slate-900 mt-1">
-                      {app.demoSubtitle}
-                    </div>
-                    <div className="text-[11px] text-slate-500 font-mono">
-                      {app.defaultEmail}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleQuickDemoSubmit}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                  >
-                    <span>Launch Now</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-emerald-400" />
-                  </button>
+                <div className="p-3.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700">
+                  <div className="font-bold text-slate-900">Strict Role &amp; School Authentication</div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Sign in using the assigned email address and password issued by your school registrar. Accounts only open their assigned campus.
+                  </p>
                 </div>
               )}
 
@@ -634,12 +614,12 @@ export const PortalAccessAppModal: React.FC<PortalAccessAppModalProps> = ({
                 </div>
               </div>
 
-              {/* Quick Launch CTA */}
+              {/* Sign In CTA */}
               <button
-                onClick={handleQuickDemoSubmit}
+                onClick={() => setActiveTab('signin')}
                 className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Launch {app.name} in LMS Mode</span>
+                <span>Proceed to Sign In for {app.name}</span>
                 <ArrowRight className="w-4 h-4 text-emerald-400" />
               </button>
             </div>

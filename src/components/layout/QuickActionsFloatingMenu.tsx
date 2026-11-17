@@ -1091,16 +1091,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
         badgeColor: 'bg-emerald-700 text-white',
         actionType: 'storage_modal'
       },
-      {
-        id: 'switch-user-persona',
-        title: 'Quick Switch User / Role Persona',
-        subtitle: 'Seamlessly test teacher, student, head teacher, dean or admin perspectives',
-        icon: UserIcon,
-        iconBg: 'bg-indigo-100',
-        iconColor: 'text-indigo-700',
-        category: 'utility',
-        actionType: 'switch_user'
-      }
     ];
     return actions;
   }, []);
@@ -1129,17 +1119,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
     if (action.actionType === 'storage_modal') {
       window.dispatchEvent(new CustomEvent('open-storage-settings'));
-      return;
-    }
-
-    if (action.actionType === 'switch_user') {
-      // Find switch user button in navbar or dispatch event
-      const switchBtn = document.querySelector('button[title*="Switch User"], button[title*="Quick Switch"]') as HTMLButtonElement | null;
-      if (switchBtn) {
-        switchBtn.click();
-      } else {
-        window.dispatchEvent(new CustomEvent('open-user-switch-modal'));
-      }
       return;
     }
 

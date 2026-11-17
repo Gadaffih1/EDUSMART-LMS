@@ -39,6 +39,7 @@ import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModa
 import { StudentStreamManager } from './StudentStreamManager';
 import { TeacherLessonFileManager } from './TeacherLessonFileManager';
 import { TeacherSubjectChatInbox } from './TeacherSubjectChatInbox';
+import { SubjectTeacherVirtualLessonsPanel } from '../virtual-classroom/SubjectTeacherVirtualLessonsPanel';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -502,7 +503,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
         { id: 'virtual_lab', label: '7b. Science Virtual Lab', icon: FlaskConical, badge: 'Demonstrations', badgeColor: 'bg-emerald-600' },
         { id: 'quizzes', label: '8. CBC Topical Quizzes', icon: CheckSquare },
         { id: 'resources', label: '9. Curriculum Resources & Links', icon: FolderTree },
-        { id: 'virtual_class', label: '10. Virtual Class (Meet)', icon: Video }
+        { id: 'virtual_class', label: '10. Virtual Classrooms (LiveKit)', icon: Video }
       ]
     },
     {
@@ -575,7 +576,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
             className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Video className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Google Meet</span>
+            <span className="hidden md:inline">Virtual Classrooms</span>
           </button>
 
           <div className="text-right text-xs hidden md:block pl-2 border-l border-slate-700">
@@ -1894,78 +1895,9 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          AUX TAB: VIRTUAL CLASS GOOGLE MEET
+          AUX TAB: LIVEKIT VIRTUAL CLASSROOMS
           ======================================================== */}
-      {activeTab === 'virtual_class' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Start Virtual Class (Google Meet Room)
-              </h2>
-              <p className="text-xs text-slate-500">
-                Launch your real-time video classroom, invite learners, and teach virtually.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-emerald-800">Google Meet Integrated</span>
-            </div>
-          </div>
-
-          <div className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-4 max-w-xl">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Virtual Lesson Topic
-              </label>
-              <input
-                type="text"
-                value={meetTopicInput}
-                onChange={(e) => setMeetTopicInput(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Google Meet Room URL
-              </label>
-              <input
-                type="text"
-                value={meetLinkInput}
-                onChange={(e) => setMeetLinkInput(e.target.value)}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold text-blue-700"
-              />
-            </div>
-
-            <div className="pt-2 flex flex-wrap items-center gap-3">
-              <a
-                href={meetLinkInput}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMeetLiveActive(true)}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2"
-              >
-                <Video className="w-4 h-4" />
-                <span>Start Google Meet Now</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-
-              <button
-                onClick={() => {
-                  setReminderTitle(`Live Class Alert: ${meetTopicInput}`);
-                  setReminderContent(`All learners are requested to join the active Google Meet session.`);
-                  setReminderMeetLink(meetLinkInput);
-                  setActiveTab('reminders');
-                }}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition-colors"
-              >
-                Broadcast Join Alert
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      {activeTab === 'virtual_class' && <SubjectTeacherVirtualLessonsPanel />}
 
       {/* ========================================================
           AUX TAB: POST & MANAGE CLASS TIMETABLE

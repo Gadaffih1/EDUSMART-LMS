@@ -134,7 +134,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
         { id: 'doc_requests', label: 'Document Requests Hub', icon: FileText },
         { id: 'staff_appraisal', label: 'Staff Appraisal (TSC TPAD)', icon: Award },
         { id: 'passwords', label: 'Grade Passwords Management', icon: KeyRound },
-        { id: 'virtual_rooms', label: 'Google Meet Room Links', icon: Video },
+        { id: 'virtual_rooms', label: 'Virtual Classroom Monitoring', icon: Video },
         { id: 'work_entry_audit', label: 'Work Entry Sign-Ins', icon: FileText, badge: String(workLogCount) },
       ],
     },

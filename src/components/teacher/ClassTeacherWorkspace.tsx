@@ -38,6 +38,7 @@ import {
   GradeAnnouncementsPanel,
   StudentInterventionsPanel,
 } from '../academic-hierarchy/GradeReportSubmitAndReviewPanels';
+import { SubjectTeacherVirtualLessonsPanel } from '../virtual-classroom/SubjectTeacherVirtualLessonsPanel';
 import {
   UserCheck,
   Award,
@@ -63,6 +64,7 @@ import {
   Printer,
   BookOpen,
   RefreshCw,
+  Video,
 } from 'lucide-react';
 
 export type ClassTeacherTab =
@@ -80,6 +82,7 @@ export type ClassTeacherTab =
   | 'lunch_register'
   | 'gate_exit'
   | 'timetable'
+  | 'virtual_classrooms'
   | 'work_entry'
   | 'staff_appraisal';
 
@@ -216,6 +219,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
         'lunch_register',
         'gate_exit',
         'timetable',
+        'virtual_classrooms',
         'work_entry',
         'staff_appraisal',
       ];
@@ -573,6 +577,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
         { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
         { id: 'gate_exit', label: 'Student Gate Exit', icon: DoorOpen },
         { id: 'timetable', label: 'Class Timetable', icon: Calendar },
+        { id: 'virtual_classrooms', label: 'Virtual Classrooms', icon: Video },
         { id: 'work_entry', label: 'Daily Work Entry', icon: Briefcase },
         { id: 'staff_appraisal', label: 'TPAD Appraisal', icon: TrendingUp },
       ],
@@ -1529,6 +1534,8 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
           {activeTab === 'gate_exit' && <StudentGateExit currentUser={currentUser} />}
 
           {activeTab === 'timetable' && <TimetablePortal currentUser={currentUser} />}
+
+          {activeTab === 'virtual_classrooms' && <SubjectTeacherVirtualLessonsPanel />}
 
           {activeTab === 'work_entry' && <TeacherWorkEntryForm currentUser={currentUser} />}
 

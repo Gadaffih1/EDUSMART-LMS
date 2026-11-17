@@ -27,6 +27,7 @@ import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { EventTicketModal } from '../events/EventTicketModal';
 import { ahApiFetch, type GradeAnnouncementItem } from '../academic-hierarchy/academicHierarchyTypes';
+import { ParentVirtualLearningPanel } from '../virtual-classroom/ParentVirtualLearningPanel';
 import { 
   Home,
   Users, 
@@ -81,7 +82,8 @@ import {
   X,
   ChevronLeft,
   QrCode,
-  Edit2
+  Edit2,
+  Video
 } from 'lucide-react';
 
 interface ParentWorkspaceProps {
@@ -97,6 +99,7 @@ export type ParentNavigationTab =
   | 'attendance'            // 4. Attendance
   | 'assignments'           // 5. Assignments
   | 'timetable'             // 6. Timetable
+  | 'virtual_learning'      // 6b. Virtual Classrooms
   | 'fees'                  // 7. Fees & Payments
   | 'messages'              // 8. Messages
   | 'announcements'         // 9. School Announcements
@@ -171,7 +174,7 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['dashboard', 'my_children', 'performance', 'attendance', 'assignments', 'timetable', 'fees', 'messages', 'announcements', 'calendar', 'transport', 'gate_records', 'achievements', 'discipline', 'resources', 'reports', 'notifications'].includes(tab)) {
+        if (['dashboard', 'my_children', 'performance', 'attendance', 'assignments', 'timetable', 'virtual_learning', 'fees', 'messages', 'announcements', 'calendar', 'transport', 'gate_records', 'achievements', 'discipline', 'resources', 'reports', 'notifications'].includes(tab)) {
           setActiveTab(tab as ParentNavigationTab);
         } else if (tab === 'grades' || tab === 'results' || tab === 'gradebook' || tab === 'report_cards') {
           setActiveTab('reports');
@@ -495,6 +498,7 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
         { id: 'attendance' as ParentNavigationTab, label: '4. Attendance Register', icon: ClipboardCheck },
         { id: 'assignments' as ParentNavigationTab, label: '5. Assignments & Tasks', icon: FileText },
         { id: 'timetable' as ParentNavigationTab, label: '6. Class Timetable', icon: Calendar },
+        { id: 'virtual_learning' as ParentNavigationTab, label: '6b. Virtual Classrooms', icon: Video },
         { id: 'resources' as ParentNavigationTab, label: '7. Learning Resources', icon: BookOpen },
         { id: 'reports' as ParentNavigationTab, label: '8. Termly Reports', icon: FileSpreadsheet },
         { id: 'achievements' as ParentNavigationTab, label: '9. Honours & Badges', icon: Trophy }
@@ -2447,6 +2451,16 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
 
           <ReportingHub currentUser={currentUser} initialStudentId={selectedChild?.id} />
         </section>
+      )}
+
+      {activeTab === 'virtual_learning' && (
+        <ParentVirtualLearningPanel
+          selectedChildId={selectedChildId}
+          onOpenPayment={(cid) => {
+            setPayChildId(cid || myChildren[0]?.id || '');
+            setShowPaymentModal(true);
+          }}
+        />
       )}
 
       {/* ========================================================

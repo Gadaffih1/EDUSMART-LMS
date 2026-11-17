@@ -6,6 +6,7 @@ import {
   FileText,
   FlaskConical,
   FolderPlus,
+  GraduationCap,
   LayoutDashboard,
   Palette,
   School,
@@ -23,6 +24,7 @@ export type SuperAdminTab =
   | 'operations'
   | 'customizer'
   | 'schools'
+  | 'grades_streams'
   | 'branding'
   | 'users'
   | 'spelling'
@@ -69,6 +71,7 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
       items: [
         { id: 'overview', label: 'Platform Overview', icon: LayoutDashboard },
         { id: 'schools', label: 'Schools & Tenancy', icon: School, badge: String(schoolCount) },
+        { id: 'grades_streams', label: 'Grades & Streams', icon: GraduationCap },
         { id: 'branding', label: 'Logo & Background', icon: Palette },
         { id: 'users', label: 'Users & Staff', icon: Users, badge: String(userCount) },
       ],

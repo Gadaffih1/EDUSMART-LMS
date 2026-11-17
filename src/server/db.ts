@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { initTimetableSchema } from './timetableSchema.ts';
 import { initAcademicHierarchySchema } from './academicHierarchySchema.ts';
+import { initVirtualClassroomSchema } from './virtualClassroomSchema.ts';
 
 export interface DbContext {
   db: DatabaseSync;
@@ -340,6 +341,7 @@ export function initDatabase(rootDir: string = process.cwd()): DbContext {
 
   initTimetableSchema(db);
   initAcademicHierarchySchema(db);
+  initVirtualClassroomSchema(db);
 
   cachedContext = { db, dbPath, uploadsDir };
   return cachedContext;

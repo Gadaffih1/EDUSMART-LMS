@@ -14,6 +14,7 @@ import { registerDataRoutes } from './src/server/dataRoutes.ts';
 import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
 import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
 import { registerAcademicHierarchyRoutes } from './src/server/academicHierarchyRoutes.ts';
+import { registerVirtualClassroomRoutes, startVirtualLessonScheduler } from './src/server/virtualClassroomRoutes.ts';
 import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
@@ -49,7 +50,15 @@ async function startServer() {
   const PORT = resolvePort();
   const HOST = process.env.HOST || '0.0.0.0';
 
-  app.use(express.json({ limit: '35mb' }));
+  app.use(
+    express.json({
+      limit: '35mb',
+      type: ['application/json', 'application/webhook+json'],
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf.toString('utf8');
+      },
+    })
+  );
 
   const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
 
@@ -92,6 +101,8 @@ async function startServer() {
   registerOperationsRoutes(app);
   registerTimetableRoutes(app);
   registerAcademicHierarchyRoutes(app);
+  registerVirtualClassroomRoutes(app);
+  startVirtualLessonScheduler();
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API
   app.post('/api/quiz-explanation', async (req: Request, res: Response) => {

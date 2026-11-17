@@ -28,7 +28,8 @@ import {
   FlaskConical,
   Database,
   Download,
-  UserCheck
+  UserCheck,
+  GraduationCap
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
@@ -45,6 +46,7 @@ import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { PlatformAdminSettings } from './PlatformAdminSettings';
 import { VirtualLabApprovalsPanel } from './VirtualLabApprovalsPanel';
 import { PWAAnalyticsPanel } from './PWAAnalyticsPanel';
+import { GradeStreamManagementConsole } from '../academic-hierarchy/GradeStreamManagementConsole';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool?: (schoolId: string) => void;
@@ -70,7 +72,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
     const stored = ClientDataStore.getPreference<string>('edusmart_super_admin_tab', 'overview');
-    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'pwa_analytics', 'settings'];
+    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'grades_streams', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'pwa_analytics', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
@@ -316,6 +318,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                   {activeConsoleTab === 'operations' && 'Finance & Operations'}
                   {activeConsoleTab === 'customizer' && 'Platform Studio'}
                   {activeConsoleTab === 'schools' && 'Schools & Tenancy'}
+                  {activeConsoleTab === 'grades_streams' && 'Grades & Streams Management'}
                   {activeConsoleTab === 'branding' && 'Logo & Background'}
                   {activeConsoleTab === 'users' && 'Users & Staff'}
                   {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
@@ -604,6 +607,20 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
+                  {/* Action 1.5: Manage Grades & Streams */}
+                  <button
+                    onClick={() => openConsoleTab('grades_streams')}
+                    className="w-full p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <GraduationCap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 group-hover:text-blue-800 transition-colors">Manage Grades &amp; Streams</div>
+                      <div className="text-[10px] text-slate-600">Add, edit, or remove grades &amp; streams across any school</div>
+                    </div>
+                  </button>
+
                   {/* Action 2: Manage Subscriptions */}
                   <button
                     onClick={() => openConsoleTab('operations')}
@@ -689,6 +706,10 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       ) : activeConsoleTab === 'vlab_approvals' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           <VirtualLabApprovalsPanel />
+        </main>
+      ) : activeConsoleTab === 'grades_streams' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <GradeStreamManagementConsole allowCampusSelection defaultMode="grades" />
         </main>
       ) : activeConsoleTab === 'pwa_analytics' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">

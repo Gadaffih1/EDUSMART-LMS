@@ -274,19 +274,30 @@ export interface GradeOverviewPayload {
   recentClassReports: ClassTeacherReportItem[];
 }
 
-export async function ahApiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+export async function ahApiFetch<T = any>(
+  url: string,
+  options: RequestInit & { tenantId?: string } = {}
+): Promise<T> {
+  const { tenantId, ...fetchOptions } = options;
   const headers = ClientDataStore.getAuthHeaders({
-    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    ...((options.headers as Record<string, string>) || {}),
+    ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(tenantId ? { 'x-tenant-id': tenantId } : {}),
+    ...((fetchOptions.headers as Record<string, string>) || {}),
   });
   const res = await fetch(url, {
     credentials: 'include',
-    ...options,
+    ...fetchOptions,
     headers,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data?.error || `Request failed (${res.status})`);
+    const err = new Error(data?.error || `Request failed (${res.status})`) as Error & {
+      status?: number;
+      data?: any;
+    };
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data as T;
 }

@@ -907,6 +907,20 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         actorId: session.userId,
         timestamp: now,
       });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_grades_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
 
       return res.status(201).json({
         success: true,
@@ -996,6 +1010,20 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         actorId: session.userId,
         timestamp: now,
       });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_grades_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
 
       return res.json({ success: true, createdGrades, createdStreams });
     } catch (err: any) {
@@ -1007,9 +1035,9 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
     try {
       const session = req.authSession!;
       if (!isSchoolAdmin(session)) {
-        return res.status(403).json({ error: 'Only School Administrators can update grades.' });
+        return res.status(403).json({ error: 'Only School Administrators or Super Admins can update grades.' });
       }
-      const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+      const schoolId = resolveAuthorizedTenantId(req, res, (req.body?.schoolId || req.query.schoolId || req.query.tenantId) as string);
       if (!schoolId) return;
 
       const gradeId = String(req.params.id);
@@ -1020,36 +1048,204 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       if (!existing) return res.status(404).json({ error: 'Grade not found.' });
 
       const name = String(req.body?.name || existing.name).trim();
+      if (!name) return res.status(400).json({ error: 'Grade name cannot be empty.' });
+
+      const duplicate = db
+        .prepare(`SELECT id FROM grades WHERE school_id = ? AND lower(name) = ? AND id != ?`)
+        .get(schoolId, name.toLowerCase(), gradeId);
+      if (duplicate) {
+        return res.status(409).json({ error: `Another grade named "${name}" already exists in this school.` });
+      }
+
+      const explicitGradeNum =
+        req.body?.gradeNumber !== undefined && req.body?.gradeNumber !== null && req.body?.gradeNumber !== ''
+          ? Number(req.body.gradeNumber)
+          : name !== existing.name
+            ? null
+            : existing.grade_number;
+      const gradeNumber = parseGradeNumber(name, explicitGradeNum);
       const levelBand = String(req.body?.levelBand || existing.level_band).trim();
       const academicYear = String(req.body?.academicYear || existing.academic_year).trim();
       const description = req.body?.description !== undefined ? String(req.body.description) : existing.description;
       const isActive = req.body?.isActive !== undefined ? (req.body.isActive ? 1 : 0) : existing.is_active;
       const now = nowIso();
 
-      db.prepare(
-        `UPDATE grades SET name = ?, level_band = ?, academic_year = ?, description = ?, is_active = ?, updated_at = ?
-         WHERE id = ? AND school_id = ?`
-      ).run(name, levelBand, academicYear, description, isActive, now, gradeId, schoolId);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare(
+          `UPDATE grades SET name = ?, grade_number = ?, level_band = ?, academic_year = ?, description = ?, is_active = ?, updated_at = ?
+           WHERE id = ? AND school_id = ?`
+        ).run(name, gradeNumber, levelBand, academicYear, description, isActive, now, gradeId, schoolId);
 
-      // Keep stream display_name consistent if grade renamed
-      if (name !== existing.name) {
-        const childStreams = db
-          .prepare(`SELECT id, name FROM streams WHERE grade_id = ? AND school_id = ?`)
-          .all(gradeId, schoolId) as Array<{ id: string; name: string }>;
-        for (const st of childStreams) {
-          db.prepare(`UPDATE streams SET display_name = ?, updated_at = ? WHERE id = ?`).run(
-            `${name} ${st.name}`.trim(),
-            now,
-            st.id
-          );
+        if (name !== existing.name) {
+          const childStreams = db
+            .prepare(`SELECT id, name, display_name, room_label FROM streams WHERE grade_id = ? AND school_id = ?`)
+            .all(gradeId, schoolId) as Array<{ id: string; name: string; display_name: string; room_label: string | null }>;
+          for (const st of childStreams) {
+            const nextDisplay = `${name} ${st.name}`.trim();
+            const nextRoom = !st.room_label || st.room_label === st.display_name ? nextDisplay : st.room_label;
+            db.prepare(`UPDATE streams SET display_name = ?, room_label = ?, updated_at = ? WHERE id = ?`).run(
+              nextDisplay,
+              nextRoom,
+              now,
+              st.id
+            );
+          }
         }
+
+        mirrorGradeToLegacyCollections(db, schoolId);
+        logAcademicAudit(db, {
+          schoolId,
+          actor: session,
+          action: 'GRADE_UPDATED',
+          entityType: 'grade',
+          entityId: gradeId,
+          gradeId,
+          details: { previousName: existing.name, name, gradeNumber, levelBand, academicYear, isActive },
+        });
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
       }
 
-      mirrorGradeToLegacyCollections(db, schoolId);
       notifyMySqlTablesChanged([...ACADEMIC_HIERARCHY_TABLES, 'school_grades', 'school_streams', 'collections_store']);
-      return res.json({ success: true });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        recordId: gradeId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_grades_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      return res.json({
+        success: true,
+        grade: { id: gradeId, schoolId, name, gradeNumber, levelBand, academicYear, description, isActive: Boolean(isActive) },
+      });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed updating grade', message: err?.message });
+    }
+  });
+
+  app.delete('/api/academic/grades/:id', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      if (!isSchoolAdmin(session)) {
+        return res.status(403).json({ error: 'Only School Administrators or Super Admins can remove grades.' });
+      }
+      const schoolId = resolveAuthorizedTenantId(
+        req,
+        res,
+        (req.query.schoolId || req.query.tenantId || req.body?.schoolId) as string
+      );
+      if (!schoolId) return;
+
+      const gradeId = String(req.params.id);
+      const force = req.query.force === 'true' || Boolean(req.body?.force);
+      const db = getDb();
+      const existing = db
+        .prepare(`SELECT * FROM grades WHERE id = ? AND school_id = ?`)
+        .get(gradeId, schoolId) as any;
+      if (!existing) return res.status(404).json({ error: 'Grade not found.' });
+
+      const activeStudents = db
+        .prepare(
+          `SELECT COUNT(*) as c FROM student_stream_assignments
+           WHERE school_id = ? AND grade_id = ? AND is_active = 1`
+        )
+        .get(schoolId, gradeId) as { c: number };
+      const childStreams = db
+        .prepare(`SELECT id, name FROM streams WHERE school_id = ? AND grade_id = ?`)
+        .all(schoolId, gradeId) as Array<{ id: string; name: string }>;
+
+      if (activeStudents.c > 0 && !force) {
+        return res.status(409).json({
+          error: `"${existing.name}" has ${activeStudents.c} active enrolled student(s) across ${childStreams.length} stream(s). Confirm removal to unassign them and remove the grade.`,
+          requiresForce: true,
+          activeStudentsCount: activeStudents.c,
+          streamsCount: childStreams.length,
+        });
+      }
+
+      const now = nowIso();
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare(`UPDATE students SET grade_id = NULL, stream_id = NULL WHERE school_id = ? AND grade_id = ?`).run(
+          schoolId,
+          gradeId
+        );
+        for (const st of childStreams) {
+          db.prepare(`DELETE FROM school_streams WHERE id = ? AND school_id = ?`).run(st.id, schoolId);
+        }
+        db.prepare(`DELETE FROM school_streams WHERE grade_id = ? AND school_id = ?`).run(gradeId, schoolId);
+        db.prepare(`DELETE FROM school_grades WHERE id = ? AND school_id = ?`).run(gradeId, schoolId);
+        db.prepare(`DELETE FROM grades WHERE id = ? AND school_id = ?`).run(gradeId, schoolId);
+
+        logAcademicAudit(db, {
+          schoolId,
+          actor: session,
+          action: 'GRADE_REMOVED',
+          entityType: 'grade',
+          entityId: gradeId,
+          details: {
+            removedGradeName: existing.name,
+            removedStreamsCount: childStreams.length,
+            unassignedStudentsCount: activeStudents.c,
+            force,
+          },
+        });
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
+      }
+
+      notifyMySqlTablesChanged([...ACADEMIC_HIERARCHY_TABLES, 'school_grades', 'school_streams', 'students', 'collections_store']);
+      broadcastChange({
+        type: 'record:deleted',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        recordId: gradeId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_grades_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+
+      return res.json({
+        success: true,
+        removedGradeId: gradeId,
+        removedGradeName: existing.name,
+        removedStreamsCount: childStreams.length,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed removing grade', message: err?.message });
     }
   });
 
@@ -1120,6 +1316,13 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         actorId: session.userId,
         timestamp: now,
       });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
 
       return res.status(201).json({
         success: true,
@@ -1135,9 +1338,13 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
     try {
       const session = req.authSession!;
       if (!isSchoolAdmin(session)) {
-        return res.status(403).json({ error: 'Only School Administrators can update streams.' });
+        return res.status(403).json({ error: 'Only School Administrators or Super Admins can update streams.' });
       }
-      const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+      const schoolId = resolveAuthorizedTenantId(
+        req,
+        res,
+        (req.body?.schoolId || req.query.schoolId || req.query.tenantId) as string
+      );
       if (!schoolId) return;
 
       const streamId = String(req.params.id);
@@ -1147,27 +1354,197 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         .get(streamId, schoolId) as any;
       if (!existing) return res.status(404).json({ error: 'Stream not found.' });
 
+      const targetGradeId = String(req.body?.gradeId || existing.grade_id).trim();
       const grade = db
-        .prepare(`SELECT name FROM grades WHERE id = ?`)
-        .get(existing.grade_id) as { name: string } | undefined;
+        .prepare(`SELECT id, name FROM grades WHERE id = ? AND school_id = ?`)
+        .get(targetGradeId, schoolId) as { id: string; name: string } | undefined;
+      if (!grade) return res.status(404).json({ error: 'Target parent grade not found in this school.' });
 
       const name = String(req.body?.name || existing.name).trim();
-      const displayName = String(req.body?.displayName || `${grade?.name || ''} ${name}`).trim();
-      const capacity = req.body?.capacity !== undefined ? Number(req.body.capacity) : existing.capacity;
-      const roomLabel = String(req.body?.roomLabel || displayName).trim();
+      if (!name) return res.status(400).json({ error: 'Stream name cannot be empty.' });
+
+      const duplicate = db
+        .prepare(`SELECT id FROM streams WHERE grade_id = ? AND lower(name) = ? AND id != ?`)
+        .get(targetGradeId, name.toLowerCase(), streamId);
+      if (duplicate) {
+        return res.status(409).json({ error: `Stream "${name}" already exists under ${grade.name}.` });
+      }
+
+      const displayName = String(req.body?.displayName || `${grade.name} ${name}`).trim();
+      const capacity = req.body?.capacity !== undefined ? Math.max(10, Number(req.body.capacity)) : existing.capacity;
+      const roomLabel = String(
+        req.body?.roomLabel !== undefined
+          ? req.body.roomLabel
+          : !existing.room_label || existing.room_label === existing.display_name
+            ? displayName
+            : existing.room_label
+      ).trim();
       const isActive = req.body?.isActive !== undefined ? (req.body.isActive ? 1 : 0) : existing.is_active;
       const now = nowIso();
 
-      db.prepare(
-        `UPDATE streams SET name = ?, display_name = ?, capacity = ?, room_label = ?, is_active = ?, updated_at = ?
-         WHERE id = ? AND school_id = ?`
-      ).run(name, displayName, capacity, roomLabel, isActive, now, streamId, schoolId);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare(
+          `UPDATE streams SET grade_id = ?, name = ?, display_name = ?, capacity = ?, room_label = ?, is_active = ?, updated_at = ?
+           WHERE id = ? AND school_id = ?`
+        ).run(targetGradeId, name, displayName, capacity, roomLabel, isActive, now, streamId, schoolId);
 
-      mirrorGradeToLegacyCollections(db, schoolId);
-      notifyMySqlTablesChanged([...ACADEMIC_HIERARCHY_TABLES, 'school_streams', 'collections_store']);
-      return res.json({ success: true });
+        if (targetGradeId !== existing.grade_id) {
+          db.prepare(`UPDATE stream_class_teachers SET grade_id = ?, updated_at = ? WHERE stream_id = ? AND school_id = ?`).run(
+            targetGradeId,
+            now,
+            streamId,
+            schoolId
+          );
+          db.prepare(`UPDATE student_stream_assignments SET grade_id = ?, updated_at = ? WHERE stream_id = ? AND school_id = ?`).run(
+            targetGradeId,
+            now,
+            streamId,
+            schoolId
+          );
+          db.prepare(`UPDATE students SET grade_id = ? WHERE stream_id = ? AND school_id = ?`).run(
+            targetGradeId,
+            streamId,
+            schoolId
+          );
+        }
+
+        mirrorGradeToLegacyCollections(db, schoolId);
+        logAcademicAudit(db, {
+          schoolId,
+          actor: session,
+          action: 'STREAM_UPDATED',
+          entityType: 'stream',
+          entityId: streamId,
+          gradeId: targetGradeId,
+          streamId,
+          details: { previousName: existing.name, name, gradeId: targetGradeId, displayName, capacity, roomLabel },
+        });
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
+      }
+
+      notifyMySqlTablesChanged([
+        ...ACADEMIC_HIERARCHY_TABLES,
+        'school_streams',
+        'students',
+        'collections_store',
+      ]);
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        recordId: streamId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      return res.json({
+        success: true,
+        stream: { id: streamId, schoolId, gradeId: targetGradeId, name, displayName, capacity, roomLabel, isActive: Boolean(isActive) },
+      });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed updating stream', message: err?.message });
+    }
+  });
+
+  app.delete('/api/academic/streams/:id', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      if (!isSchoolAdmin(session)) {
+        return res.status(403).json({ error: 'Only School Administrators or Super Admins can remove streams.' });
+      }
+      const schoolId = resolveAuthorizedTenantId(
+        req,
+        res,
+        (req.query.schoolId || req.query.tenantId || req.body?.schoolId) as string
+      );
+      if (!schoolId) return;
+
+      const streamId = String(req.params.id);
+      const force = req.query.force === 'true' || Boolean(req.body?.force);
+      const db = getDb();
+      const existing = db
+        .prepare(`SELECT * FROM streams WHERE id = ? AND school_id = ?`)
+        .get(streamId, schoolId) as any;
+      if (!existing) return res.status(404).json({ error: 'Stream not found.' });
+
+      const activeStudents = db
+        .prepare(
+          `SELECT COUNT(*) as c FROM student_stream_assignments
+           WHERE school_id = ? AND stream_id = ? AND is_active = 1`
+        )
+        .get(schoolId, streamId) as { c: number };
+
+      if (activeStudents.c > 0 && !force) {
+        return res.status(409).json({
+          error: `"${existing.display_name}" currently has ${activeStudents.c} active enrolled student(s). Transfer them or confirm removal to unassign them and delete the stream.`,
+          requiresForce: true,
+          activeStudentsCount: activeStudents.c,
+        });
+      }
+
+      const now = nowIso();
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare(`UPDATE students SET stream_id = NULL WHERE school_id = ? AND stream_id = ?`).run(
+          schoolId,
+          streamId
+        );
+        db.prepare(`DELETE FROM school_streams WHERE id = ? AND school_id = ?`).run(streamId, schoolId);
+        db.prepare(`DELETE FROM streams WHERE id = ? AND school_id = ?`).run(streamId, schoolId);
+
+        logAcademicAudit(db, {
+          schoolId,
+          actor: session,
+          action: 'STREAM_REMOVED',
+          entityType: 'stream',
+          entityId: streamId,
+          gradeId: existing.grade_id,
+          details: {
+            removedDisplayName: existing.display_name,
+            unassignedStudentsCount: activeStudents.c,
+            force,
+          },
+        });
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
+      }
+
+      notifyMySqlTablesChanged([...ACADEMIC_HIERARCHY_TABLES, 'school_streams', 'students', 'collections_store']);
+      broadcastChange({
+        type: 'record:deleted',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        recordId: streamId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_school_streams_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+
+      return res.json({
+        success: true,
+        removedStreamId: streamId,
+        removedDisplayName: existing.display_name,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed removing stream', message: err?.message });
     }
   });
 

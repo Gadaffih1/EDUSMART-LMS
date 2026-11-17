@@ -38,6 +38,7 @@ import { useTenant } from '../../context/TenantContext';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { ahApiFetch, type GradeAnnouncementItem } from '../academic-hierarchy/academicHierarchyTypes';
+import { StudentVirtualClassroomPanel } from '../virtual-classroom/StudentVirtualClassroomPanel';
 import { 
   BookOpen, 
   Bell, 
@@ -123,7 +124,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['resources', 'browser', 'timetable', 'assignments', 'reports', 'badges', 'portfolio'].includes(tab)) {
+        if (['resources', 'browser', 'timetable', 'assignments', 'reports', 'badges', 'portfolio', 'virtual_class'].includes(tab)) {
           setActiveTab(tab as WorkspaceTab);
         } else if (tab === 'results' || tab === 'gradebook' || tab === 'grades' || tab === 'marks') {
           setActiveTab('reports');
@@ -296,7 +297,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       title: 'OPERATIONAL & COLLABORATION',
       items: [
         { id: 'announcements' as WorkspaceTab, label: '7. Announcements & Notices', icon: Bell, badge: gradeAnnouncements.length > 0 ? `${gradeAnnouncements.length}` : undefined, badgeColor: 'bg-rose-600' },
-        { id: 'virtual_class' as WorkspaceTab, label: '8. Virtual Class (Meet Live)', icon: Video },
+        { id: 'virtual_class' as WorkspaceTab, label: '8. My Virtual Classrooms', icon: Video },
         { id: 'grade_chats' as WorkspaceTab, label: '9. Stream & Teacher Chats', icon: MessageSquare },
         { id: 'badges' as WorkspaceTab, label: '10. Badges & Streaks Matrix', icon: Flame, badge: `${learnerTotalXP} BP · 🔥`, badgeColor: 'bg-orange-600' },
         { id: 'browser' as WorkspaceTab, label: '11. Safe Browser (AI Guarded)', icon: Globe },
@@ -506,6 +507,13 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
 
         {/* Content View Area */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+
+      {activeTab !== 'virtual_class' && (
+        <StudentVirtualClassroomPanel
+          compactBannerOnly
+          onOpenFullTab={() => setActiveTab('virtual_class')}
+        />
+      )}
 
       {/* ========================================================
           ACHIEVEMENT SYSTEM: DIGITAL BADGES SHELF WIDGET
@@ -1511,86 +1519,9 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       )}
 
       {/* ========================================================
-          TAB 5: VIRTUAL CLASS (Google Meet Integration)
+          TAB 5: MY VIRTUAL CLASSROOMS (LiveKit Integration)
           ======================================================== */}
-      {activeTab === 'virtual_class' && (
-        <section className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Grade {studentGrade} Google Meet Virtual Class
-              </h2>
-              <p className="text-xs text-slate-500">
-                Access your official Google Meet virtual classroom for live lectures, demonstrations, and teacher Q&A.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Google Meet Ready</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {gradeVirtualClasses.map((vc) => (
-              <div
-                key={vc.id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase flex items-center gap-1.5 ${
-                        vc.isLive
-                          ? 'bg-rose-100 text-rose-800 animate-pulse'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${vc.isLive ? 'bg-rose-600' : 'bg-slate-400'}`} />
-                      {vc.isLive ? 'LIVE NOW' : 'SCHEDULED'}
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                      Grade {vc.grade} {vc.stream ? `· ${vc.stream}` : ''}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-bold text-slate-900 mb-1">
-                    {vc.subject}: {vc.topic}
-                  </h3>
-                  <div className="text-xs text-slate-600">
-                    Host: <strong>{vc.teacherName}</strong>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1 font-mono">
-                    Time: {vc.scheduledTime} ({vc.durationMinutes} mins)
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 space-y-2">
-                  <div className="text-[11px] text-slate-500 font-mono break-all">
-                    Link: {vc.googleMeetLink}
-                  </div>
-                  <a
-                    href={vc.googleMeetLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
-                  >
-                    <Video className="w-4 h-4" />
-                    <span>Join Google Meet Session</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
-            <div className="font-bold text-slate-800">Virtual Classroom Guidelines:</div>
-            <div>1. Ensure your microphone is muted upon entry; use the "Raise Hand" icon to speak.</div>
-            <div>2. Have your notebook and CBC curriculum textbook open for note taking.</div>
-            <div>3. Direct technical issues to your class teacher via the Grade Chats tab.</div>
-          </div>
-        </section>
-      )}
+      {activeTab === 'virtual_class' && <StudentVirtualClassroomPanel />}
 
       {/* ========================================================
           TAB 6: GRADE CHATS & DIRECT TEACHER CHAT

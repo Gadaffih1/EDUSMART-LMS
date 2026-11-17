@@ -30,6 +30,8 @@ import {
   Trophy,
   UserCheck,
   Users,
+  Video,
+  Zap,
 } from 'lucide-react';
 import { GradeLevel, User } from '../../types';
 import { Storage } from '../../utils/storage';
@@ -62,6 +64,7 @@ import {
   SeniorClassReportReviewList,
   StudentInterventionsPanel,
 } from '../academic-hierarchy/GradeReportSubmitAndReviewPanels';
+import { SeniorVirtualClassroomManager } from '../virtual-classroom/SeniorVirtualClassroomManager';
 
 interface SeniorTeacherWorkspaceProps {
   currentUser: User;
@@ -88,6 +91,7 @@ type SupervisionTab =
   | 'cocurricular'
   | 'mentorship'
   | 'curriculum_coordination'
+  | 'virtual_classrooms'
   | 'reporting_hub';
 
 const REPORT_CATALOG: Array<{ key: string; label: string; description: string }> = [
@@ -105,6 +109,7 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
   const { currentTenant } = useTenant();
   const [activeTab, setActiveTab] = useState<SupervisionTab>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [vcInitialModalMode, setVcInitialModalMode] = useState<'schedule' | 'instant' | null>(null);
 
   // Backend-scoped Grade Coordinator state
   const [bootstrap, setBootstrap] = useState<AcademicBootstrapPayload | null>(null);
@@ -222,6 +227,7 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
         'cocurricular',
         'mentorship',
         'curriculum_coordination',
+        'virtual_classrooms',
         'reporting_hub',
       ];
       if (valid.includes(tab as SupervisionTab)) {
@@ -232,6 +238,8 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
         setActiveTab('grade_reports');
       } else if (tab === 'work_ledger' || tab === 'work_entries') {
         setActiveTab('work_entry_audit');
+      } else if (tab === 'virtual_class' || tab === 'virtual_rooms') {
+        setActiveTab('virtual_classrooms');
       }
     };
     window.addEventListener('workspace-nav-tab', handleNavEvent);
@@ -361,6 +369,7 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
           badgeColor: 'bg-amber-600',
         },
         { id: 'students', label: 'Students', icon: UserCheck },
+        { id: 'virtual_classrooms', label: 'Virtual Classrooms', icon: Video },
       ],
     },
     {
@@ -523,6 +532,28 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVcInitialModalMode('schedule');
+                          setActiveTab('virtual_classrooms');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        <span>SCHEDULE VIRTUAL LESSON</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVcInitialModalMode('instant');
+                          setActiveTab('virtual_classrooms');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>START INSTANT VIRTUAL LESSON</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => void handleExportReport('consolidated', 'pdf')}
@@ -1316,6 +1347,13 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
             </section>
           )}
 
+          {activeTab === 'virtual_classrooms' && (
+            <SeniorVirtualClassroomManager
+              selectedGradeId={selectedGradeId}
+              initialOpenMode={vcInitialModalMode}
+              onModalHandled={() => setVcInitialModalMode(null)}
+            />
+          )}
           {activeTab === 'staff_appraisal' && <SchoolStaffAppraisal currentUser={currentUser} />}
           {activeTab === 'reporting_hub' && <ReportingHub currentUser={currentUser} />}
         </main>

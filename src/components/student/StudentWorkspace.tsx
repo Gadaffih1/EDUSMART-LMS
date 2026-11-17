@@ -37,6 +37,7 @@ import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { useTenant } from '../../context/TenantContext';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
+import { ahApiFetch, type GradeAnnouncementItem } from '../academic-hierarchy/academicHierarchyTypes';
 import { 
   BookOpen, 
   Bell, 
@@ -220,8 +221,14 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const gradeAudios = Storage.getAudios(studentGrade);
   const gradeImages = Storage.getLessonImages(studentGrade);
   const gradeQuizzes = Storage.getQuizzes(studentGrade);
-  // Strictly stream-filtered announcements
+  // Strictly stream-filtered announcements (Local + Grade-Based Hierarchy Backend)
   const gradeAnnouncements = Storage.getAnnouncements(studentGrade, studentStream);
+  const [scopedDbAnnouncements, setScopedDbAnnouncements] = useState<GradeAnnouncementItem[]>([]);
+  useEffect(() => {
+    void ahApiFetch<{ announcements: GradeAnnouncementItem[] }>('/api/academic/announcements')
+      .then((res) => setScopedDbAnnouncements(res.announcements || []))
+      .catch(() => setScopedDbAnnouncements([]));
+  }, [currentUser.id, revision]);
   const studentAttempts = Storage.getQuizAttempts(currentUser.id);
   const gradeVirtualClasses = Storage.getVirtualClasses(studentGrade);
   const studentReportCards = Storage.getReportCards(currentUser.id);
@@ -1056,6 +1063,25 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           </div>
 
           <div className="space-y-4">
+            {scopedDbAnnouncements.map((ann) => (
+              <div key={ann.id} className="p-5 rounded-xl border border-slate-200 bg-white space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="font-semibold text-emerald-700">
+                      {ann.stream_display_name || ann.grade_name || 'School Notice'}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="uppercase font-semibold">{ann.priority}</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono tabular-nums">{ann.created_at.slice(0, 10)}</span>
+                </div>
+                <h3 className="font-bold text-sm text-slate-900">{ann.title}</h3>
+                <p className="text-xs text-slate-700 leading-relaxed">{ann.message}</p>
+                <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                  Posted by <span className="font-semibold text-slate-800">{ann.author_name}</span> ({ann.author_role.replace(/_/g, ' ')})
+                </div>
+              </div>
+            ))}
             {gradeAnnouncements.map((ann) => (
               <div
                 key={ann.id}

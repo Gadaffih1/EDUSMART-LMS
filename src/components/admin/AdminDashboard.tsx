@@ -12,7 +12,8 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ClientDataStore } from '../../utils/clientDataStore';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
+import { GradeStreamManagementConsole, type AdminAcademicMode } from '../academic-hierarchy/GradeStreamManagementConsole';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
@@ -125,7 +126,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['overview', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
+        if (['overview', 'grade_management', 'stream_management', 'senior_assignments', 'class_assignments', 'grade_performance', 'consolidated_reports', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
           openTab(tab as AdminActionTab);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
@@ -439,7 +440,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             <Menu className="h-5 w-5" />
           </button>
           <div className="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 hidden sm:flex items-center justify-center">
-            <EduSmartGadsaLogo variant="horizontal" size="sm" />
+            <TenantSchoolLogo variant="horizontal" size="sm" />
           </div>
           <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white font-bold text-xl flex sm:hidden items-center justify-center shadow-xs shrink-0">
             <School className="w-6 h-6 text-emerald-400" />
@@ -473,6 +474,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           </div>
         </div>
       </div>
+
+      {(activeTab === 'grade_management' ||
+        activeTab === 'stream_management' ||
+        activeTab === 'senior_assignments' ||
+        activeTab === 'class_assignments' ||
+        activeTab === 'grade_performance' ||
+        activeTab === 'consolidated_reports') && (
+        <GradeStreamManagementConsole
+          mode={
+            (activeTab === 'grade_management'
+              ? 'grades'
+              : activeTab === 'stream_management'
+              ? 'streams'
+              : activeTab) as AdminAcademicMode
+          }
+          onChangeMode={(nextMode) => {
+            const tabMap: Record<AdminAcademicMode, AdminActionTab> = {
+              grades: 'grade_management',
+              streams: 'stream_management',
+              senior_assignments: 'senior_assignments',
+              class_assignments: 'class_assignments',
+              grade_performance: 'grade_performance',
+              consolidated_reports: 'consolidated_reports',
+            };
+            openTab(tabMap[nextMode]);
+          }}
+        />
+      )}
 
       {activeTab === 'grades' && (
         <GradeClassPages

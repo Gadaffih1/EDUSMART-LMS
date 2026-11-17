@@ -150,6 +150,7 @@ export default defineConfig(() => {
       port: 3000,
       strictPort: true,
       hmr: false,
+      ws: false as const,
       watch: null,
     },
     preview: {

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDb, getDbPaths, hashPassword, isHashedPassword, verifyPassword } from './db.ts';
+import { syncAcademicHierarchyFromExistingData } from './academicHierarchySchema.ts';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization.ts';
 
 export const DEFAULT_SUPER_ADMIN_ID = 'platform-admin-1';
@@ -761,6 +762,9 @@ export function runDatabaseMigrations(rootDir: string = process.cwd()): void {
 
       // 4. Strictly seed platform & per-school settings while retaining all existing settings
       seedAndRetainSettings(db);
+
+      // 5. Non-destructive idempotent backfill for Grade-Based Academic Management hierarchy
+      syncAcademicHierarchyFromExistingData(db);
 
       db.exec('COMMIT');
     } catch (err) {

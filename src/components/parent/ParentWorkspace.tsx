@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   QuizAttempt, 
@@ -26,6 +26,7 @@ import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { EventTicketModal } from '../events/EventTicketModal';
+import { ahApiFetch, type GradeAnnouncementItem } from '../academic-hierarchy/academicHierarchyTypes';
 import { 
   Home,
   Users, 
@@ -252,6 +253,13 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
     'ann-term3-fee': '2026-09-20 09:12 AM',
     'ann-sports-day': '2026-09-24 14:05 PM'
   });
+
+  const [scopedDbAnnouncements, setScopedDbAnnouncements] = useState<GradeAnnouncementItem[]>([]);
+  useEffect(() => {
+    void ahApiFetch<{ announcements: GradeAnnouncementItem[] }>('/api/academic/announcements')
+      .then((res) => setScopedDbAnnouncements(res.announcements || []))
+      .catch(() => setScopedDbAnnouncements([]));
+  }, [currentUser.id]);
 
   // Chat with Class Teacher State
   const [messageInput, setMessageInput] = useState('');
@@ -1806,6 +1814,22 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
           </div>
 
           <div className="space-y-3">
+            {scopedDbAnnouncements.map((ann) => (
+              <div key={ann.id} className="p-5 bg-white rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-emerald-700">
+                      {ann.stream_display_name || ann.grade_name || 'School Circular'}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>From {ann.author_name} ({ann.author_role.replace(/_/g, ' ')})</span>
+                  </div>
+                  <span className="font-mono tabular-nums text-[11px]">{ann.created_at.slice(0, 10)}</span>
+                </div>
+                <h3 className="font-bold text-slate-900 text-sm">{ann.title}</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">{ann.message}</p>
+              </div>
+            ))}
             {relevantAnnouncements.map((ann) => {
               const isAcknowledged = !!acknowledgedAnnouncements[ann.id];
               return (

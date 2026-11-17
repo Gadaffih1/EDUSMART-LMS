@@ -29,6 +29,12 @@ import {
 
 export type AdminActionTab =
   | 'overview'
+  | 'grade_management'
+  | 'stream_management'
+  | 'senior_assignments'
+  | 'class_assignments'
+  | 'grade_performance'
+  | 'consolidated_reports'
   | 'grades'
   | 'students'
   | 'departments'
@@ -88,10 +94,21 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       title: 'School',
       items: [
         { id: 'overview', label: 'Dashboard Overview', icon: School },
-        { id: 'grades', label: 'Grades & Streams', icon: GraduationCap },
+        { id: 'grades', label: 'Grades & Streams Directory', icon: GraduationCap },
         { id: 'students', label: 'Students', icon: IdCard },
         { id: 'departments', label: 'Departments', icon: Building2 },
         { id: 'analytics', label: 'Attendance & Academic KPIs', icon: BarChart3 },
+      ],
+    },
+    {
+      title: 'Academic Structure',
+      items: [
+        { id: 'grade_management', label: 'Grade Management', icon: GraduationCap },
+        { id: 'stream_management', label: 'Stream Management', icon: Users },
+        { id: 'senior_assignments', label: 'Senior Teacher Assignments', icon: ShieldCheck },
+        { id: 'class_assignments', label: 'Class Teacher Assignments', icon: ClipboardCheck },
+        { id: 'grade_performance', label: 'Grade Performance', icon: BarChart3 },
+        { id: 'consolidated_reports', label: 'Consolidated Reports', icon: FileSpreadsheet },
       ],
     },
     {

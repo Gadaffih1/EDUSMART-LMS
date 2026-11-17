@@ -13,6 +13,7 @@ import { registerWebAuthnRoutes } from './src/server/webauthnRoutes.ts';
 import { registerDataRoutes } from './src/server/dataRoutes.ts';
 import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
 import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
+import { registerAcademicHierarchyRoutes } from './src/server/academicHierarchyRoutes.ts';
 import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
@@ -90,6 +91,7 @@ async function startServer() {
   registerDataRoutes(app);
   registerOperationsRoutes(app);
   registerTimetableRoutes(app);
+  registerAcademicHierarchyRoutes(app);
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API
   app.post('/api/quiz-explanation', async (req: Request, res: Response) => {
@@ -608,8 +610,51 @@ Core rules:
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: 'spa'
+    });
+    // Serve a clean WebSocket-free Vite client shim in dev when HMR is disabled
+    app.get('/@vite/client', (_req: Request, res: Response) => {
+      res.type('application/javascript').send(`
+const sheetsMap = new Map();
+export function updateStyle(id, content) {
+  let style = sheetsMap.get(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.setAttribute('type', 'text/css');
+    style.setAttribute('data-vite-dev-id', id);
+    style.textContent = content;
+    document.head.appendChild(style);
+    sheetsMap.set(id, style);
+  } else {
+    style.textContent = content;
+  }
+}
+export function removeStyle(id) {
+  const style = sheetsMap.get(id);
+  if (style) {
+    document.head.removeChild(style);
+    sheetsMap.delete(id);
+  }
+}
+export function createHotContext() {
+  return {
+    data: {},
+    accept() {},
+    acceptExports() {},
+    dispose() {},
+    prune() {},
+    decline() {},
+    invalidate() {},
+    on() {},
+    off() {},
+    send() {},
+  };
+}
+export function injectQuery(url) { return url; }
+export class ErrorOverlay extends HTMLElement {}
+export default {};
+`);
     });
     app.use(vite.middlewares);
     app.use('*', async (req: Request, res: Response, next) => {

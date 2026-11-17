@@ -225,7 +225,7 @@ const GLOBAL_WRITE_COLLECTIONS = new Set([
   'edusmart_starter_package_docs_v1',
 ]);
 
-function readCollectionForTenant(
+export function readCollectionForTenant(
   collectionKey: string,
   tenantId: string | null,
   includeAllTenants: boolean
@@ -1745,5 +1745,3 @@ export function registerDataRoutes(app: Express): void {
   });
 }
 
-// Export helper for operationsRoutes.ts
-export { readCollectionForTenant };

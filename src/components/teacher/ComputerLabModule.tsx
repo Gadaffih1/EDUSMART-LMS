@@ -51,13 +51,13 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
 }) => {
   // --- 1. Faculty Clearance & Access Control ---
   // Must be teacher, class_teacher, hod, dean_of_studies or admin, and have CS faculty clearance
-  const isTeacherRole = ['teacher', 'class_teacher', 'hod', 'dean_of_studies', 'admin', 'head_teacher'].includes(currentUser.role);
+  const isTeacherRole = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'admin', 'head_teacher'].includes(currentUser.role);
   
   // Faculty clearance check: check assigned subjects or designation, with quick faculty clearance authentication bypass
   const assignedSubjects = currentUser.assignedSubjects || [];
   const hasCsInSubjects = assignedSubjects.some(s => s.toLowerCase().includes('computer') || s.toLowerCase().includes('science'));
   const [facultyClearanceGranted, setFacultyClearanceGranted] = useState<boolean>(() => {
-    return isTeacherRole && (hasCsInSubjects || currentUser.role === 'hod' || currentUser.role === 'dean_of_studies');
+    return isTeacherRole && (hasCsInSubjects || ['hod', 'dean_of_studies', 'deputy_head', 'curriculum_coordinator', 'senior_teacher', 'teacher'].includes(currentUser.role));
   });
   const [facultyPassCode, setFacultyPassCode] = useState('');
   const [facultyAuthError, setFacultyAuthError] = useState(false);

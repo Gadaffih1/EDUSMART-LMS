@@ -165,7 +165,7 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
   // Get all registered students from storage
   const allUsers = useMemo(() => Storage.getUsers(), []);
   const allTeachers = useMemo(() => {
-    return allUsers.filter(u => u.role === 'teacher' || u.role === 'class_teacher' || u.role === 'hod' || u.role === 'senior_teacher');
+    return allUsers.filter(u => ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator'].includes(u.role));
   }, [allUsers]);
 
   // Learners enrolled in selected grade

@@ -79,7 +79,7 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
   const [isScienceViewerOpen, setIsScienceViewerOpen] = useState(false);
   const [isPrintReportOpen, setIsPrintReportOpen] = useState(false);
 
-  const isTeacher = !!currentUser && ['teacher', 'class_teacher', 'hod', 'dean_of_studies'].includes(currentUser.role);
+  const isTeacher = !!currentUser && ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
 
   // Sync if an assigned experiment/scratch is launched by learner
   useEffect(() => {

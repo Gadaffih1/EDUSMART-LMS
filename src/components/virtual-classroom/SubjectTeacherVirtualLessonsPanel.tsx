@@ -30,7 +30,7 @@ export const SubjectTeacherVirtualLessonsPanel: React.FC = () => {
       const res = await vcApiFetch<{
         lessons: VirtualLessonItem[];
         notifications: VirtualLessonNotification[];
-      }>('/api/virtual-lessons');
+      }>('/api/virtual-lessons?viewAs=teacher');
       setLessons(res.lessons || []);
       setNotifications(res.notifications || []);
     } catch {

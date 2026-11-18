@@ -63,7 +63,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
   const { currentTenant } = useTenant();
   const isParent = currentUser.role === 'parent';
   const isStudent = currentUser.role === 'student';
-  const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
+  const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
 
   const [hubSection, setHubSection] = useState<'academic' | 'shared_executive'>('academic');
   const [sharedExecCount, setSharedExecCount] = useState<number>(0);

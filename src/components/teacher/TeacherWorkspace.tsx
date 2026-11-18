@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { 
   User, 
+  UserRole,
   GradeLevel, 
   StreamName, 
   SubjectName,
@@ -81,9 +82,12 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
+import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
 
 interface TeacherWorkspaceProps {
   currentUser: User;
+  switchedFromRole?: UserRole;
+  onReturnToAdminWorkspace?: () => void;
 }
 
 type TeacherTab = 
@@ -107,7 +111,11 @@ type TeacherTab =
   | 'reminders'
   | 'reporting_hub';
 
-export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser }) => {
+export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
+  currentUser,
+  switchedFromRole,
+  onReturnToAdminWorkspace,
+}) => {
   const isClassTeacher = currentUser.role === 'class_teacher';
   const defaultGrade = currentUser.grade || 4;
   const defaultStream = currentUser.stream || 'Dove';
@@ -543,6 +551,11 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
                 {isClassTeacher ? `Grade ${currentUser.grade} ${currentUser.stream} Class Teacher` : 'Subject Teacher'}
               </span>
+              {switchedFromRole && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  From {getAdministrativeRoleShortName(switchedFromRole)}
+                </span>
+              )}
             </h1>
             <p className="text-[11px] text-slate-400 hidden sm:block">
               Assigned: {currentUser.assignedSubjects?.join(', ') || 'CBC Curriculum'} · Lesson logs, registers & CBC marks
@@ -551,6 +564,15 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({ currentUser 
         </div>
 
         <div className="flex items-center gap-2">
+          {switchedFromRole && onReturnToAdminWorkspace && (
+            <button
+              type="button"
+              onClick={onReturnToAdminWorkspace}
+              className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>&larr; Return to {getAdministrativeRoleShortName(switchedFromRole)}</span>
+            </button>
+          )}
           {/* Quick Result Upload / View Button */}
           <button
             onClick={() => setActiveTab('cbc_results')}

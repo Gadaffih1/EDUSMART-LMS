@@ -44,6 +44,12 @@ import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
 import { fromAppPath, toAppPath } from './utils/appPath';
 import { PWAInstallInvitation, PWAUpdateAndOfflineBanner } from './components/pwa/PWAInstallExperience';
 import { InactivityTimeoutModal } from './components/auth/InactivityTimeoutModal';
+import {
+  SUBJECT_TEACHER_ELIGIBLE_ROLES,
+  canSwitchToSubjectTeacher,
+  createSubjectTeacherProxyUser,
+  getAdministrativeRoleDisplayName,
+} from './utils/subjectTeacherSwitch';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
 const schoolRouteMap = new Map<string, string>();
@@ -105,6 +111,19 @@ function AppContent({
   const [portalView, setPortalView] = useState<PortalView>(() => getPortalRoute(window.location.pathname).view);
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
+  const [workspaceMode, setWorkspaceMode] = useState<'default' | 'subject_teacher'>('default');
+
+  React.useEffect(() => {
+    setWorkspaceMode('default');
+  }, [currentUser?.id, currentUser?.role]);
+
+  const canSwitchSubjectTeacher = Boolean(currentUser && canSwitchToSubjectTeacher(currentUser));
+  const isSubjectTeacherMode = canSwitchSubjectTeacher && workspaceMode === 'subject_teacher';
+
+  const handleToggleSubjectTeacherMode = React.useCallback(() => {
+    setViewingOperationsHub(false);
+    setWorkspaceMode((prev) => (prev === 'subject_teacher' ? 'default' : 'subject_teacher'));
+  }, []);
 
   const navigateToPortal = (view: PortalView, schoolId = currentTenant.id, replace = false) => {
     const path = fromAppPath(view === 'public_landing'
@@ -185,15 +204,21 @@ function AppContent({
   }, [currentUser, portalView, onLoginVisibilityChange]);
 
   React.useEffect(() => {
-    const handleOpenOps = () => setViewingOperationsHub(true);
+    const handleOpenOps = () => {
+      setWorkspaceMode('default');
+      setViewingOperationsHub(true);
+    };
     const handleCloseOps = () => setViewingOperationsHub(false);
+    const handleToggleSubjectTeacher = () => handleToggleSubjectTeacherMode();
     window.addEventListener('open-operations-hub', handleOpenOps);
     window.addEventListener('close-operations-hub', handleCloseOps);
+    window.addEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
     return () => {
       window.removeEventListener('open-operations-hub', handleOpenOps);
       window.removeEventListener('close-operations-hub', handleCloseOps);
+      window.removeEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
     };
-  }, []);
+  }, [handleToggleSubjectTeacherMode]);
 
   // Public landing stays available, including while the platform admin is signed in.
   if (portalView === 'public_landing' && (!currentUser || isPlatformSuperAdmin(currentUser))) {
@@ -301,11 +326,15 @@ function AppContent({
         currentUser={currentUser}
         onLogout={() => {
           setIsPlatformAdminSession(false);
+          setWorkspaceMode('default');
           onLogout();
           navigateToPortal('public_landing');
         }}
         onSwitchUser={onSwitchUser}
         isPlatformAdminSession={effectivePlatformAdminSession}
+        canSwitchToSubjectTeacher={canSwitchSubjectTeacher}
+        isSubjectTeacherMode={isSubjectTeacherMode}
+        onToggleSubjectTeacherMode={handleToggleSubjectTeacherMode}
         onReturnToSuperAdmin={() => {
           setIsPlatformAdminSession(true);
           if (!platformAdminSession) {
@@ -388,7 +417,7 @@ function AppContent({
                 onLoginSuccess={onLoginSuccess} 
                 onReturnToSuperAdmin={effectivePlatformAdminSession ? () => navigateToPortal('super_admin') : undefined}
               />
-            ) : !isWorkspaceEnabled(currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
+            ) : !isWorkspaceEnabled(isSubjectTeacherMode ? 'teacher' : currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
               /* Informative notice if Super Admin deactivated this workspace for this tenant */
               <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-inner">
@@ -435,6 +464,40 @@ function AppContent({
                 onSwitchUser={onSwitchUser}
               >
                 <ParentWorkspace currentUser={currentUser} onLogout={onLogout} />
+              </WorkspaceRoleGuard>
+            ) : isSubjectTeacherMode ? (
+              <WorkspaceRoleGuard
+                currentUser={currentUser}
+                allowedRoles={[...SUBJECT_TEACHER_ELIGIBLE_ROLES, 'teacher']}
+                workspaceName="Subject Teacher Portal"
+                onLogout={onLogout}
+                onSwitchUser={onSwitchUser}
+              >
+                <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-emerald-950 text-white border-b border-indigo-500/30 px-4 sm:px-6 py-2">
+                  <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-bold uppercase tracking-wider text-[10px]">
+                        Subject Teacher Mode Active
+                      </span>
+                      <span className="text-slate-200">
+                        Full Subject Teacher workspace &amp; teaching rights active · Primary Role:{' '}
+                        <strong className="text-white">{getAdministrativeRoleDisplayName(currentUser.role)}</strong>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setWorkspaceMode('default')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white text-slate-900 hover:bg-amber-100 font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                    >
+                      <span>&larr; Return to {getAdministrativeRoleDisplayName(currentUser.role)}</span>
+                    </button>
+                  </div>
+                </div>
+                <TeacherWorkspace
+                  currentUser={createSubjectTeacherProxyUser(currentUser)}
+                  switchedFromRole={currentUser.role}
+                  onReturnToAdminWorkspace={() => setWorkspaceMode('default')}
+                />
               </WorkspaceRoleGuard>
             ) : currentUser.role === 'class_teacher' ? (
               <WorkspaceRoleGuard
@@ -664,6 +727,9 @@ function AppContent({
         <QuickActionsFloatingMenu 
           currentUser={currentUser} 
           onSwitchUser={onSwitchUser}
+          canSwitchToSubjectTeacher={canSwitchSubjectTeacher}
+          isSubjectTeacherMode={isSubjectTeacherMode}
+          onToggleSubjectTeacherMode={handleToggleSubjectTeacherMode}
         />
       )}
 

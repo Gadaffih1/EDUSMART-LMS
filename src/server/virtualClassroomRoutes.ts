@@ -1277,12 +1277,16 @@ function resolveUserTeacherPrivilegesForLesson(
   if (session.role === 'senior_teacher') {
     const myGradeIds = getSeniorGradeIds(db, schoolId, session.userId);
     const managesGrade = myGradeIds.includes(lesson.grade_id) || lesson.coordinator_id === session.userId;
-    return {
-      canModerate: managesGrade,
-      canView: managesGrade,
-      isAssignedCoordinator: managesGrade,
-      isCoTeacher: false,
-    };
+    if (managesGrade) {
+      return {
+        canModerate: true,
+        canView: true,
+        isAssignedCoordinator: true,
+        isCoTeacher: false,
+      };
+    }
+    // Fall through so a Senior Teacher assigned as a Subject Teacher / Room Lead / Co-Teacher
+    // in another grade retains full Subject Teacher classroom privileges.
   }
 
   // Check explicit room / lesson assignment
@@ -1486,10 +1490,11 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     if (!schoolId) return;
     const statusFilter = req.query.status ? String(req.query.status) : null;
     const gradeIdFilter = req.query.gradeId ? String(req.query.gradeId) : null;
+    const viewAsTeacher = String(req.query.viewAs || '').toLowerCase() === 'teacher';
 
     let rows: any[] = [];
 
-    if (isSchoolAdmin(session)) {
+    if (isSchoolAdmin(session) && !viewAsTeacher) {
       rows = db
         .prepare(
           `SELECT * FROM virtual_lessons
@@ -1499,25 +1504,48 @@ export function registerVirtualClassroomRoutes(app: Express): void {
            ORDER BY scheduled_start_at DESC`
         )
         .all(schoolId, statusFilter, statusFilter, gradeIdFilter, gradeIdFilter) as any[];
-    } else if (session.role === 'senior_teacher') {
+    } else if (session.role === 'senior_teacher' && !viewAsTeacher) {
       const assignedIds = getSeniorGradeIds(db, schoolId, session.userId);
-      if (assignedIds.length === 0) {
-        return res.json({ schoolId, lessons: [], notifications: [] });
-      }
       if (gradeIdFilter && !assignedIds.includes(gradeIdFilter)) {
         return res.status(403).json({ error: 'Access denied: you are only authorized for your assigned grade.' });
       }
-      const placeholders = assignedIds.map(() => '?').join(',');
-      rows = db
-        .prepare(
-          `SELECT * FROM virtual_lessons
-           WHERE school_id = ?
-             AND grade_id IN (${placeholders})
-             AND (? IS NULL OR status = ?)
-             AND (? IS NULL OR grade_id = ?)
-           ORDER BY scheduled_start_at DESC`
-        )
-        .all(schoolId, ...assignedIds, statusFilter, statusFilter, gradeIdFilter, gradeIdFilter) as any[];
+      if (assignedIds.length === 0) {
+        rows = db
+          .prepare(
+            `SELECT DISTINCT vl.*
+             FROM virtual_lessons vl
+             LEFT JOIN virtual_lesson_teacher_assignments vlta
+               ON vlta.lesson_id = vl.id AND vlta.teacher_id = ?
+             LEFT JOIN virtual_classrooms vc
+               ON vc.lesson_id = vl.id AND vc.assigned_teacher_id = ?
+             LEFT JOIN grade_teacher_assignments gta
+               ON gta.school_id = vl.school_id AND gta.grade_id = vl.grade_id AND gta.teacher_id = ? AND gta.is_active = 1
+             WHERE vl.school_id = ?
+               AND (vlta.id IS NOT NULL OR vc.id IS NOT NULL OR gta.id IS NOT NULL)
+               AND (? IS NULL OR vl.status = ?)
+             ORDER BY vl.scheduled_start_at DESC`
+          )
+          .all(session.userId, session.userId, session.userId, schoolId, statusFilter, statusFilter) as any[];
+      } else {
+        const placeholders = assignedIds.map(() => '?').join(',');
+        rows = db
+          .prepare(
+            `SELECT DISTINCT vl.*
+             FROM virtual_lessons vl
+             LEFT JOIN virtual_lesson_teacher_assignments vlta
+               ON vlta.lesson_id = vl.id AND vlta.teacher_id = ?
+             LEFT JOIN virtual_classrooms vc
+               ON vc.lesson_id = vl.id AND vc.assigned_teacher_id = ?
+             LEFT JOIN grade_teacher_assignments gta
+               ON gta.school_id = vl.school_id AND gta.grade_id = vl.grade_id AND gta.teacher_id = ? AND gta.is_active = 1
+             WHERE vl.school_id = ?
+               AND (vl.grade_id IN (${placeholders}) OR vlta.id IS NOT NULL OR vc.id IS NOT NULL OR gta.id IS NOT NULL)
+               AND (? IS NULL OR vl.status = ?)
+               AND (? IS NULL OR vl.grade_id = ?)
+             ORDER BY vl.scheduled_start_at DESC`
+          )
+          .all(session.userId, session.userId, session.userId, schoolId, ...assignedIds, statusFilter, statusFilter, gradeIdFilter, gradeIdFilter) as any[];
+      }
     } else if (session.role === 'student') {
       const placement = getStudentStreamPlacement(db, schoolId, session.userId);
       if (!placement) {
@@ -1628,7 +1656,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
         return { ...bundle, childrenProgress: childRecords };
       }
 
-      if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
+      if (viewAsTeacher || (!isSchoolAdmin(session) && session.role !== 'senior_teacher')) {
         const priv = resolveUserTeacherPrivilegesForLesson(db, session, schoolId, r);
         const myAssignments = bundle.teacherAssignments.filter((t) => t.teacherId === session.userId);
         return {

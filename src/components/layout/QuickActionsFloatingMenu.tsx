@@ -51,17 +51,23 @@ export interface QuickActionItem {
   badge?: string;
   badgeColor?: string;
   tabTarget?: string;
-  actionType?: 'nav_tab' | 'absence_modal' | 'storage_modal' | 'switch_user' | 'toggle_notif';
+  actionType?: 'nav_tab' | 'absence_modal' | 'storage_modal' | 'switch_user' | 'toggle_notif' | 'toggle_subject_teacher';
 }
 
 interface QuickActionsFloatingMenuProps {
   currentUser: User;
   onSwitchUser?: (user: User) => void;
+  canSwitchToSubjectTeacher?: boolean;
+  isSubjectTeacherMode?: boolean;
+  onToggleSubjectTeacherMode?: () => void;
 }
 
 export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> = ({
   currentUser,
-  onSwitchUser
+  onSwitchUser,
+  canSwitchToSubjectTeacher = false,
+  isSubjectTeacherMode = false,
+  onToggleSubjectTeacherMode
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,8 +118,9 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
   // Construct Role-Specific Action List
   const roleActions: QuickActionItem[] = useMemo(() => {
-    const role = currentUser.role;
+    const role = isSubjectTeacherMode ? 'teacher' : currentUser.role;
 
+    const getBaseActions = (): QuickActionItem[] => {
     switch (role) {
       case 'teacher':
       case 'class_teacher':
@@ -1074,7 +1081,39 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
           }
         ];
     }
-  }, [currentUser]);
+    };
+
+    const base = getBaseActions();
+    if (canSwitchToSubjectTeacher && onToggleSubjectTeacherMode) {
+      const switchItem: QuickActionItem = isSubjectTeacherMode
+        ? {
+            id: 'return-from-subject-teacher',
+            title: `Return to ${currentUser.role.replace(/_/g, ' ')} Workspace`,
+            subtitle: 'Exit Subject Teacher workspace and resume primary administrative duties',
+            icon: ArrowRight,
+            iconBg: 'bg-amber-100',
+            iconColor: 'text-amber-700',
+            category: 'primary',
+            badge: 'Admin Mode',
+            badgeColor: 'bg-amber-600 text-white',
+            actionType: 'toggle_subject_teacher',
+          }
+        : {
+            id: 'switch-to-subject-teacher',
+            title: 'Switch as Subject Teacher',
+            subtitle: 'Enter full Subject Teacher workspace with complete teaching, marks & live class rights',
+            icon: BookOpen,
+            iconBg: 'bg-indigo-100',
+            iconColor: 'text-indigo-700',
+            category: 'primary',
+            badge: 'Role Switch',
+            badgeColor: 'bg-indigo-600 text-white',
+            actionType: 'toggle_subject_teacher',
+          };
+      return [switchItem, ...base];
+    }
+    return base;
+  }, [currentUser, canSwitchToSubjectTeacher, isSubjectTeacherMode, onToggleSubjectTeacherMode]);
 
   // System Utility Actions available to all logged-in users
   const utilityActions = useMemo<QuickActionItem[]>(() => {
@@ -1122,6 +1161,17 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       return;
     }
 
+    if (action.actionType === 'toggle_subject_teacher') {
+      onToggleSubjectTeacherMode?.();
+      setToastMessage(
+        isSubjectTeacherMode
+          ? `Returned to ${currentUser.role.replace(/_/g, ' ')} workspace`
+          : 'Switched to Subject Teacher workspace'
+      );
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
     if (action.actionType === 'nav_tab' && action.tabTarget) {
       window.dispatchEvent(new CustomEvent('workspace-nav-tab', { detail: action.tabTarget }));
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1149,6 +1199,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
   // Format friendly role title
   const friendlyRoleTitle = useMemo(() => {
+    if (isSubjectTeacherMode) return 'Subject Teacher (Switched)';
     switch (currentUser.role) {
       case 'student': return 'Learner';
       case 'parent': return 'Parent';
@@ -1167,7 +1218,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       case 'admin': return 'System Administrator';
       default: return 'Faculty Staff';
     }
-  }, [currentUser]);
+  }, [currentUser, isSubjectTeacherMode]);
 
   const { 
     isMobileOverlapProtectionEnabled, 

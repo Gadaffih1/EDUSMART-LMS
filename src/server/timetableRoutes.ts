@@ -1962,7 +1962,18 @@ export function registerTimetableRoutes(app: Express): void {
 
     let filteredEntries = allEntries;
 
-    // Enforce strict portal data scoping for students, parents, and teachers
+    const viewAsTeacher = String(req.query.viewAs || '').toLowerCase() === 'teacher';
+    const TEACHER_VIEW_ELIGIBLE = new Set([
+      'teacher',
+      'class_teacher',
+      'hod',
+      'senior_teacher',
+      'deputy_head',
+      'dean_of_studies',
+      'curriculum_coordinator',
+    ]);
+
+    // Enforce strict portal data scoping for students, parents, and teachers (or leadership acting as Subject Teacher)
     if (role === 'student') {
       const grade = Number(session.user.grade || 0);
       const stream = String(session.user.stream || '').toLowerCase();
@@ -1989,7 +2000,7 @@ export function registerTimetableRoutes(app: Express): void {
         }
       }
       filteredEntries = allEntries.filter((e) => allowedClasses.has(`${e.grade}|${String(e.stream).toLowerCase()}`));
-    } else if (role === 'teacher' || role === 'class_teacher') {
+    } else if (role === 'teacher' || role === 'class_teacher' || (viewAsTeacher && TEACHER_VIEW_ELIGIBLE.has(role))) {
       const userId = String(session.userId);
       const userNameLower = String(session.user.name || '').toLowerCase();
       const tProf = db
@@ -2000,7 +2011,7 @@ export function registerTimetableRoutes(app: Express): void {
         const tIds = safeJsonParse<string[]>(e.teacher_ids_json, []);
         const tNames = safeJsonParse<string[]>(e.teacher_names_json, []).map((n) => n.toLowerCase());
         const matchesTeacher = (myProfileId && tIds.includes(myProfileId)) || tNames.includes(userNameLower);
-        if (role === 'class_teacher' && session.user.grade && session.user.stream) {
+        if (!viewAsTeacher && role === 'class_teacher' && session.user.grade && session.user.stream) {
           const isOwnClass =
             Number(e.grade) === Number(session.user.grade) &&
             String(e.stream || '').toLowerCase() === String(session.user.stream).toLowerCase();

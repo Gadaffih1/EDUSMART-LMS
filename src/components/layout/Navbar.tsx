@@ -41,6 +41,7 @@ import { useAccessibility } from '../../context/AccessibilityContext';
 import { AccessibilityModal } from '../common/AccessibilityModal';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
 import { PWAInstallButton } from '../pwa/PWAInstallExperience';
+import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -49,6 +50,9 @@ interface NavbarProps {
   onNavigateHome: () => void;
   isPlatformAdminSession?: boolean;
   onReturnToSuperAdmin?: () => void;
+  canSwitchToSubjectTeacher?: boolean;
+  isSubjectTeacherMode?: boolean;
+  onToggleSubjectTeacherMode?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -57,7 +61,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSwitchUser,
   onNavigateHome,
   isPlatformAdminSession = false,
-  onReturnToSuperAdmin
+  onReturnToSuperAdmin,
+  canSwitchToSubjectTeacher = false,
+  isSubjectTeacherMode = false,
+  onToggleSubjectTeacherMode
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const { isMobileOverlapProtectionEnabled, toggleMobileOverlapProtection } = useMobileLayout();
@@ -206,6 +213,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="font-medium text-slate-900">{currentUser.name}</span>
               <span aria-hidden="true" className="text-slate-300">·</span>
               <span className="text-emerald-700 font-semibold">{getRoleLabel(currentUser.role)}</span>
+              {isSubjectTeacherMode && (
+                <>
+                  <span aria-hidden="true" className="text-slate-300">&rarr;</span>
+                  <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">
+                    Subject Teacher Workspace
+                  </span>
+                </>
+              )}
               {currentUser.grade && (
                 <>
                   <span aria-hidden="true" className="text-slate-300">·</span>
@@ -331,6 +346,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Settings className="w-4 h-4" />
           </button>
 
+          {/* Switch to Subject Teacher Workspace Button (Authorized Admin/Leadership Roles) */}
+          {currentUser && canSwitchToSubjectTeacher && onToggleSubjectTeacherMode && (
+            <button
+              type="button"
+              onClick={onToggleSubjectTeacherMode}
+              className={`px-2.5 py-1.5 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer flex items-center gap-1.5 text-xs font-bold whitespace-nowrap ${
+                isSubjectTeacherMode
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                  : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 shadow-xs'
+              }`}
+              title={
+                isSubjectTeacherMode
+                  ? `Return to your primary ${getRoleLabel(currentUser.role)} workspace`
+                  : 'Switch to Subject Teacher workspace with full Subject Teacher rights'
+              }
+              aria-pressed={isSubjectTeacherMode}
+            >
+              {isSubjectTeacherMode ? (
+                <>
+                  <ArrowLeft className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
+                </>
+              ) : (
+                <>
+                  <BookOpen className="w-3.5 h-3.5 text-indigo-100" />
+                  <span>Switch as Subject Teacher</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Integrated Operations & Architecture Quick Launcher */}
           {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
             <button
@@ -432,7 +478,34 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        <div className="relative xl:hidden">
+        <div className="flex items-center gap-2 xl:hidden">
+          {currentUser && canSwitchToSubjectTeacher && onToggleSubjectTeacherMode && (
+            <button
+              type="button"
+              onClick={onToggleSubjectTeacherMode}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
+                isSubjectTeacherMode
+                  ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                  : 'border-indigo-700 bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+              aria-pressed={isSubjectTeacherMode}
+            >
+              {isSubjectTeacherMode ? (
+                <>
+                  <ArrowLeft className="h-3.5 w-3.5 text-amber-700" />
+                  <span className="hidden sm:inline">Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
+                  <span className="sm:hidden">Admin View</span>
+                </>
+              ) : (
+                <>
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Switch as Subject Teacher</span>
+                  <span className="sm:hidden">Subject Teacher</span>
+                </>
+              )}
+            </button>
+          )}
+          <div className="relative">
           <button
             type="button"
             onClick={() => setIsMobileActionsOpen(prev => !prev)}
@@ -516,6 +589,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Settings className="h-4 w-4" /> Settings and storage
               </button>
+              {currentUser && canSwitchToSubjectTeacher && onToggleSubjectTeacherMode && (
+                <button
+                  type="button"
+                  onClick={() => { onToggleSubjectTeacherMode(); setIsMobileActionsOpen(false); }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
+                    isSubjectTeacherMode
+                      ? 'text-amber-900 bg-amber-50 hover:bg-amber-100'
+                      : 'text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100'
+                  }`}
+                  role="menuitem"
+                >
+                  {isSubjectTeacherMode ? (
+                    <>
+                      <ArrowLeft className="h-4 w-4 text-amber-700" /> Return to {getAdministrativeRoleShortName(currentUser.role)}
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-4 w-4 text-indigo-700" /> Switch as Subject Teacher
+                    </>
+                  )}
+                </button>
+              )}
               {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
                 <button
                   type="button"
@@ -575,6 +670,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
 

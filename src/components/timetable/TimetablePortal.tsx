@@ -142,6 +142,12 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   const loadPublishedBackendSchedule = async () => {
     try {
+      const shouldRequestTeacherScope =
+        initialPerspective === 'teacher' ||
+        ['teacher', 'hod', 'senior_teacher', 'curriculum_coordinator'].includes(currentUser.role);
+      const publishedUrl = shouldRequestTeacherScope
+        ? '/api/timetable/published?viewAs=teacher'
+        : '/api/timetable/published';
       const pub = await ttApiFetch<{
         published: boolean;
         periods?: Array<{ periodNumber: number; label: string; kind: string; startTime: string; endTime: string }>;
@@ -156,7 +162,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           teacherNames: string[];
           roomName: string;
         }>;
-      }>('/api/timetable/published');
+      }>(publishedUrl);
 
       if (pub?.published && Array.isArray(pub.entries) && pub.entries.length > 0) {
         const periodTimeMap = new Map<number, { startTime: string; endTime: string }>();
@@ -251,7 +257,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const isStudent = currentUser.role === 'student';
   const isParent = currentUser.role === 'parent';
   const isClassTeacher = currentUser.role === 'class_teacher';
-  const isSubjectTeacher = currentUser.role === 'teacher' || currentUser.role === 'hod' || currentUser.role === 'senior_teacher';
+  const isSubjectTeacher = ['teacher', 'hod', 'senior_teacher', 'curriculum_coordinator'].includes(currentUser.role);
 
   interface ClassOption {
     grade: GradeLevel;

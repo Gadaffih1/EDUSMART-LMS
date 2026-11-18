@@ -2119,27 +2119,45 @@ export const Storage = {
     const list = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     if (!user) return list;
 
-    // Filter relevant to user's role, grade, or user ID
+    // Filter relevant to user's role, grade, department, or user ID
     return list.filter(n => {
       // 1. Direct user match
       if (n.targetUserId && n.targetUserId === user.id) return true;
+      if (Array.isArray(n.targetUserIds) && n.targetUserIds.includes(user.id)) return true;
 
       // 2. Role match
       if (n.targetRole === 'all') return true;
-      if (n.targetRole === user.role) return true;
+      if (n.targetRole && n.targetRole === user.role) return true;
       if (n.targetRole === 'teacher' && user.role === 'class_teacher') return true;
+      if (Array.isArray(n.targetRoles) && n.targetRoles.includes(user.role)) return true;
 
-      // 3. Student grade match
+      // 3. Department match
+      if (Array.isArray(n.targetDepartments) && n.targetDepartments.length > 0 && user.department) {
+        const uDept = user.department.trim().toLowerCase();
+        if (n.targetDepartments.some(d => d.trim().toLowerCase() === uDept || uDept.includes(d.trim().toLowerCase()))) {
+          return true;
+        }
+      }
+
+      // 4. Student grade match
       if (user.role === 'student' && n.targetGrade && n.targetGrade === user.grade) return true;
 
-      // 4. Parent child grade match
+      // 5. Parent child grade match
       if (user.role === 'parent' && n.targetGrade) {
         const children = this.getParentChildren(user);
         if (children.some(c => c.grade === n.targetGrade)) return true;
       }
 
-      // If no specific target role or grade, include for all
-      if (!n.targetRole && !n.targetGrade && !n.targetUserId) return true;
+      // If no specific target role, grade, department, or user ID, include for all
+      const hasAnyTarget = Boolean(
+        n.targetRole ||
+        n.targetGrade ||
+        n.targetUserId ||
+        (Array.isArray(n.targetRoles) && n.targetRoles.length > 0) ||
+        (Array.isArray(n.targetUserIds) && n.targetUserIds.length > 0) ||
+        (Array.isArray(n.targetDepartments) && n.targetDepartments.length > 0)
+      );
+      if (!hasAnyTarget) return true;
 
       return false;
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

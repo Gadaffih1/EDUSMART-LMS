@@ -8,6 +8,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ReportingHub } from '../reports/ReportingHub';
+import { HeadTeacherReportsManager } from './HeadTeacherReportsManager';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ExecutiveAnalyticsDashboard } from '../analytics/ExecutiveAnalyticsDashboard';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
@@ -134,7 +135,7 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
         { id: 'analytics', label: 'Executive Health, Attendance & Academic Analytics', icon: TrendingUp },
         { id: 'executive', label: 'Executive Overview', icon: BarChart3 },
         { id: 'announcements', label: 'Directives & Notices', icon: Bell, badge: announcements.length },
-        { id: 'bom_report', label: 'BoM Governance Report', icon: Building2 }
+        { id: 'bom_report', label: 'BoM & Executive Reports', icon: Building2 }
       ]
     },
     {
@@ -521,55 +522,10 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
       )}
 
       {/* ========================================================
-          TAB 4: BOM REPORT
+          TAB 4: BOM & INSTITUTIONAL REPORTS (CREATE, EDIT, DELETE & SHARE)
           ======================================================== */}
       {activeTab === 'bom_report' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-8 shadow-xs space-y-6 max-w-4xl mx-auto border-t-4 border-t-emerald-600 print:m-0 print:border-none print:shadow-none">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b-2 border-slate-900 gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="p-1.5 bg-slate-50 rounded-2xl border border-slate-200 shadow-2xs shrink-0">
-                <TenantSchoolLogo variant="full" size="sm" />
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-emerald-800 uppercase tracking-widest">
-                  {currentTenant.name}
-                </div>
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Confidential Executive Briefing</div>
-                <h2 className="text-xl sm:text-2xl font-black text-slate-900">Board of Management (BOM) Termly Report</h2>
-                <div className="text-xs text-slate-500 font-mono mt-0.5">Reporting Period: Term 3 · Academic Year 2026</div>
-              </div>
-            </div>
-            <button
-              onClick={() => window.print()}
-              className="px-3.5 py-2 text-xs font-bold bg-slate-900 text-white rounded-xl flex items-center gap-1.5 shadow-xs shrink-0 self-start sm:self-auto"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print BOM Dossier</span>
-            </button>
-          </div>
-
-          <div className="space-y-4 text-xs text-slate-700 leading-relaxed">
-            <h3 className="text-sm font-bold text-slate-900 uppercase">1. Institutional Status & Enrollment</h3>
-            <p>
-              The institution has maintained stable operational efficiency across both Primary (Grades 1 to 6) and Junior School (Grades 7 to 9) cohorts, with full capacity utilized across 15 recognized streams. Total student headcount stands at optimal teacher-to-learner ratios conforming to Ministry of Education guidelines.
-            </p>
-
-            <h3 className="text-sm font-bold text-slate-900 uppercase">2. Competency-Based Curriculum (CBC) Transition</h3>
-            <p>
-              Curriculum progression for all 8 Primary learning areas and 9 Junior School learning areas exceeds 92% completion. Preparations for Grade 6 KPSEA national assessment simulations are fully on schedule under the Dean of Studies and Head of Department supervision.
-            </p>
-
-            <h3 className="text-sm font-bold text-slate-900 uppercase">3. Campus Safety, Discipline & Gate Pass Protocol</h3>
-            <p>
-              Implementation of the digital Student Gate Exit Pass system has eliminated unauthorized campus exits. Zero security breaches were recorded this academic term. Learner discipline cases have been handled restoratively through the Deputy Head Teacher and Senior Teacher mentorship initiatives.
-            </p>
-
-            <div className="pt-6 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono">
-              <div>Certified by: Dr. Arthur Mwangi, Head Teacher</div>
-              <div>EduSmart Governance Directorate</div>
-            </div>
-          </div>
-        </section>
+        <HeadTeacherReportsManager currentUser={currentUser} />
       )}
 
       {/* ========================================================

@@ -176,7 +176,7 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       if (tab) {
         if (['dashboard', 'my_children', 'performance', 'attendance', 'assignments', 'timetable', 'virtual_learning', 'fees', 'messages', 'announcements', 'calendar', 'transport', 'gate_records', 'achievements', 'discipline', 'resources', 'reports', 'notifications'].includes(tab)) {
           setActiveTab(tab as ParentNavigationTab);
-        } else if (tab === 'grades' || tab === 'results' || tab === 'gradebook' || tab === 'report_cards') {
+        } else if (tab === 'grades' || tab === 'results' || tab === 'gradebook' || tab === 'report_cards' || tab === 'reporting_hub') {
           setActiveTab('reports');
         } else if (tab === 'finance' || tab === 'fee') {
           setActiveTab('fees');

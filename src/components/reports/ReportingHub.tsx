@@ -12,10 +12,12 @@ import {
   PRIMARY_STREAMS
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { exportToPdf } from '../../utils/pdfExport';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { PrintReportModal } from '../common/PrintReportModal';
+import { SharedExecutiveReportsPanel } from './SharedExecutiveReportsPanel';
 import { 
   FileText, 
   Download, 
@@ -62,6 +64,28 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
   const isParent = currentUser.role === 'parent';
   const isStudent = currentUser.role === 'student';
   const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
+
+  const [hubSection, setHubSection] = useState<'academic' | 'shared_executive'>('academic');
+  const [sharedExecCount, setSharedExecCount] = useState<number>(0);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadCount = async () => {
+      try {
+        const res = await ClientDataStore.apiFetchExecutiveReports(currentTenant.id);
+        if (active) setSharedExecCount(res.reports.length);
+      } catch {
+        // ignore unauthenticated/network errors
+      }
+    };
+    void loadCount();
+    const onExecUpdate = () => void loadCount();
+    window.addEventListener('executive-reports-updated', onExecUpdate);
+    return () => {
+      active = false;
+      window.removeEventListener('executive-reports-updated', onExecUpdate);
+    };
+  }, [currentTenant.id]);
 
   // Period Type
   const [periodType, setPeriodType] = useState<'Monthly' | 'Termly' | 'Annually'>(defaultPeriod);
@@ -499,6 +523,46 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           <span>{downloadSuccess}</span>
         </div>
       )}
+
+      {/* Hub Section Switcher: Academic Reports vs Shared Head Teacher & BoM Reports */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs inline-flex flex-wrap gap-1.5 print:hidden">
+        <button
+          type="button"
+          onClick={() => setHubSection('academic')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            hubSection === 'academic'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Academic &amp; Learner Reports
+        </button>
+        <button
+          type="button"
+          onClick={() => setHubSection('shared_executive')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+            hubSection === 'shared_executive'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <span>Shared Head Teacher &amp; BoM Reports</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+              hubSection === 'shared_executive'
+                ? 'bg-white text-emerald-800'
+                : 'bg-emerald-100 text-emerald-800'
+            }`}
+          >
+            {sharedExecCount}
+          </span>
+        </button>
+      </div>
+
+      {hubSection === 'shared_executive' ? (
+        <SharedExecutiveReportsPanel currentUser={currentUser} />
+      ) : (
+        <>
 
       {/* Main Hub Control Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1310,6 +1374,8 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           principalRemarks="Certified and confirmed by School Leadership Administration."
           showSignatures={true}
         />
+      )}
+        </>
       )}
     </div>
   );

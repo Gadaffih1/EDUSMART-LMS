@@ -350,6 +350,61 @@ export function initDatabase(rootDir: string = process.cwd()): DbContext {
     CREATE INDEX IF NOT EXISTS idx_cred_vault_school ON user_credential_vault(school_id);
     CREATE INDEX IF NOT EXISTS idx_cred_vault_record ON user_credential_vault(record_id);
     CREATE INDEX IF NOT EXISTS idx_cred_vault_email ON user_credential_vault(lower(email));
+
+    CREATE TABLE IF NOT EXISTS executive_reports (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'bom_report',
+      classification TEXT NOT NULL DEFAULT 'CONFIDENTIAL EXECUTIVE BRIEFING',
+      reporting_period TEXT NOT NULL,
+      term TEXT,
+      academic_year TEXT,
+      summary TEXT,
+      sections_json TEXT NOT NULL,
+      certified_by TEXT NOT NULL,
+      directorate_label TEXT NOT NULL DEFAULT 'EduSmart Governance Directorate',
+      status TEXT NOT NULL DEFAULT 'published',
+      created_by_id TEXT NOT NULL,
+      created_by_name TEXT NOT NULL,
+      updated_by_id TEXT,
+      updated_by_name TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_exec_reports_school ON executive_reports(school_id, deleted_at);
+    CREATE INDEX IF NOT EXISTS idx_exec_reports_cat ON executive_reports(school_id, category);
+
+    CREATE TABLE IF NOT EXISTS executive_report_shares (
+      id TEXT PRIMARY KEY,
+      report_id TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_label TEXT NOT NULL,
+      target_meta_json TEXT NOT NULL DEFAULT '{}',
+      shared_by_id TEXT NOT NULL,
+      shared_by_name TEXT NOT NULL,
+      shared_note TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_exec_shares_report ON executive_report_shares(report_id);
+    CREATE INDEX IF NOT EXISTS idx_exec_shares_school ON executive_report_shares(school_id, target_type);
+
+    CREATE TABLE IF NOT EXISTS executive_report_groups (
+      id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      member_user_ids_json TEXT NOT NULL DEFAULT '[]',
+      member_roles_json TEXT NOT NULL DEFAULT '[]',
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      deleted_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_exec_groups_school ON executive_report_groups(school_id, deleted_at);
   `);
 
   initTimetableSchema(db);

@@ -504,6 +504,12 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
             )}
           </div>
 
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-[11px] text-slate-600 flex items-center justify-between gap-2">
+            <span>
+              <strong className="text-slate-900">Single-Teacher Rule:</strong> Each subject in a specific stream can have at most one assigned teacher. Saving updates Faculty Workload &amp; Academic Hierarchy automatically.
+            </span>
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
@@ -513,7 +519,7 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                     <th className="p-3">Source</th>
                     <th className="p-3">Group</th>
                     <th className="p-3">Weekly / Split (1p·2p·3p)</th>
-                    <th className="p-3">Assigned Teachers</th>
+                    <th className="p-3">Assigned Teacher</th>
                     <th className="p-3">Preferred Room</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
@@ -590,35 +596,18 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                           </div>
                         </td>
                         <td className="p-3">
-                          <div className="flex flex-col gap-1">
-                            <select
-                              value={row.teacherIds[0] || ''}
-                              onChange={(e) => {
-                                const co = row.teacherIds[1] ? [row.teacherIds[1]] : [];
-                                setS(row.id, orig, { teacherIds: e.target.value ? [e.target.value, ...co] : co });
-                              }}
-                              className="w-40 px-2 py-1 border border-slate-200 rounded bg-white"
-                            >
-                              <option value="">-- Lead Teacher --</option>
-                              {teachers.filter((t) => t.activeInTimetable).map((t) => (
-                                <option key={t.id} value={t.id}>{t.teacherName}</option>
-                              ))}
-                            </select>
-                            <select
-                              value={row.teacherIds[1] || ''}
-                              onChange={(e) => {
-                                const lead = row.teacherIds[0] || '';
-                                const next = [lead, e.target.value].filter(Boolean);
-                                setS(row.id, orig, { teacherIds: next });
-                              }}
-                              className="w-40 px-2 py-1 border border-slate-200 rounded bg-slate-50 text-[11px]"
-                            >
-                              <option value="">-- Optional Co-Teacher --</option>
-                              {teachers.filter((t) => t.activeInTimetable && t.id !== row.teacherIds[0]).map((t) => (
-                                <option key={t.id} value={t.id}>{t.teacherName}</option>
-                              ))}
-                            </select>
-                          </div>
+                          <select
+                            value={row.teacherIds[0] || ''}
+                            onChange={(e) => {
+                              setS(row.id, orig, { teacherIds: e.target.value ? [e.target.value] : [] });
+                            }}
+                            className="w-44 px-2 py-1 border border-slate-200 rounded bg-white"
+                          >
+                            <option value="">-- Unassigned --</option>
+                            {teachers.filter((t) => t.activeInTimetable).map((t) => (
+                              <option key={t.id} value={t.id}>{t.teacherName}</option>
+                            ))}
+                          </select>
                         </td>
                         <td className="p-3">
                           <select

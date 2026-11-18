@@ -1,6 +1,8 @@
+import crypto from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { getDb, notifyMySqlTablesChanged } from './db.ts';
 import { requireAuth, resolveAuthorizedTenantId } from './authRoutes.ts';
+import { upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
 import {
   classKeyOf,
@@ -754,6 +756,14 @@ export function registerTimetableRoutes(app: Express): void {
     }
 
     const grade = Number(b.grade);
+    const teacherIds: string[] = Array.isArray(b.teacherIds)
+      ? Array.from(new Set<string>(b.teacherIds.map((x: any) => String(x || '').trim()).filter(Boolean)))
+      : [];
+    if (teacherIds.length > 1) {
+      res.status(400).json({ error: 'No subject in any stream can have more than one teacher.' });
+      return;
+    }
+
     const single = Number(b.singleLessons ?? 0);
     const dbl = Number(b.doubleLessons ?? 0);
     const triple = Number(b.tripleLessons ?? 0);
@@ -798,7 +808,7 @@ export function registerTimetableRoutes(app: Express): void {
       JSON.stringify(Array.isArray(b.preferredPeriods) ? b.preferredPeriods : []),
       String(b.requiredRoomType || 'general'),
       b.defaultRoomId || null,
-      JSON.stringify(Array.isArray(b.teacherIds) ? b.teacherIds : []),
+      JSON.stringify(teacherIds),
       String(b.studentGroupLabel || 'Whole Class'),
       b.isActive === false ? 0 : 1,
       now
@@ -940,6 +950,19 @@ export function registerTimetableRoutes(app: Express): void {
       return;
     }
 
+    const teacherIds: string[] = Array.isArray(b.teacherIds)
+      ? Array.from(new Set<string>(b.teacherIds.map((x: any) => String(x || '').trim()).filter(Boolean)))
+      : [];
+    if (teacherIds.length > 1) {
+      res.status(400).json({
+        error: 'No subject in any stream can have more than one teacher. Assign at most one teacher.',
+      });
+      return;
+    }
+
+    const gradeNum = Number(b.grade);
+    const streamName = String(b.stream).trim();
+    const subjectName = String(b.subjectName).trim();
     const now = new Date().toISOString();
     const id = b.id || uid('ttsa');
     const single = Number(b.singleLessons ?? 0);
@@ -969,7 +992,7 @@ export function registerTimetableRoutes(app: Express): void {
         JSON.stringify(Array.isArray(b.preferredPeriods) ? b.preferredPeriods : []),
         String(b.requiredRoomType || 'general'),
         b.roomId || null,
-        JSON.stringify(Array.isArray(b.teacherIds) ? b.teacherIds : []),
+        JSON.stringify(teacherIds),
         b.isActive === false ? 0 : 1,
         now,
         b.id,
@@ -984,10 +1007,10 @@ export function registerTimetableRoutes(app: Express): void {
         id,
         tenantId,
         configId,
-        Number(b.grade),
-        String(b.stream).trim(),
+        gradeNum,
+        streamName,
         b.groupId || null,
-        String(b.subjectName).trim(),
+        subjectName,
         b.inheritedFromId || null,
         isOverridden,
         required,
@@ -1001,13 +1024,168 @@ export function registerTimetableRoutes(app: Express): void {
         JSON.stringify(Array.isArray(b.preferredPeriods) ? b.preferredPeriods : []),
         String(b.requiredRoomType || 'general'),
         b.roomId || null,
-        JSON.stringify(Array.isArray(b.teacherIds) ? b.teacherIds : []),
+        JSON.stringify(teacherIds),
         b.isActive === false ? 0 : 1,
         now
       );
     }
 
-    notifyMySqlTablesChanged(['tt_stream_subject_allocations']);
+    // Synchronize stream-subject single teacher into grade_teacher_assignments and users.payload_json
+    const syncedTables = ['tt_stream_subject_allocations'];
+    const gradeRow = db
+      .prepare(
+        `SELECT id, name, grade_number FROM grades
+         WHERE school_id = ? AND is_active = 1 AND (grade_number = ? OR lower(name) = lower(?))
+         LIMIT 1`
+      )
+      .get(tenantId, gradeNum, `Grade ${gradeNum}`) as { id: string; name: string; grade_number: number | null } | undefined;
+    const streamRow = gradeRow
+      ? (db
+          .prepare(
+            `SELECT id, name FROM streams
+             WHERE school_id = ? AND grade_id = ? AND is_active = 1 AND lower(name) = lower(?)
+             LIMIT 1`
+          )
+          .get(tenantId, gradeRow.id, streamName) as { id: string; name: string } | undefined)
+      : undefined;
+
+    if (gradeRow && streamRow) {
+      const affectedUserIds = new Set<string>();
+      const existingGta = db
+        .prepare(
+          `SELECT id, teacher_id FROM grade_teacher_assignments
+           WHERE school_id = ? AND grade_id = ? AND stream_id = ? AND lower(subject_name) = lower(?) AND is_active = 1
+           LIMIT 1`
+        )
+        .get(tenantId, gradeRow.id, streamRow.id, subjectName) as { id: string; teacher_id: string } | undefined;
+
+      let assignedUserId: string | null = null;
+      let assignedUserName: string | null = null;
+      if (teacherIds[0]) {
+        const tp = db
+          .prepare(`SELECT user_id, teacher_name FROM tt_teacher_profiles WHERE tenant_id = ? AND (id = ? OR user_id = ?) LIMIT 1`)
+          .get(tenantId, teacherIds[0], teacherIds[0]) as { user_id: string; teacher_name: string } | undefined;
+        if (tp?.user_id) {
+          const uRow = db
+            .prepare(`SELECT id, name FROM users WHERE id = ? AND school_id = ? LIMIT 1`)
+            .get(tp.user_id, tenantId) as { id: string; name: string } | undefined;
+          if (uRow) {
+            assignedUserId = uRow.id;
+            assignedUserName = uRow.name;
+          }
+        }
+      }
+
+      if (assignedUserId && assignedUserName) {
+        if (existingGta && existingGta.teacher_id === assignedUserId) {
+          db.prepare(
+            `UPDATE grade_teacher_assignments SET periods_per_week = ?, teacher_name = ?, updated_at = ? WHERE id = ?`
+          ).run(Math.max(1, required || 4), assignedUserName, now, existingGta.id);
+        } else {
+          if (existingGta) {
+            db.prepare(
+              `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ? WHERE id = ?`
+            ).run(now, now, existingGta.id);
+            affectedUserIds.add(existingGta.teacher_id);
+          }
+          db.prepare(
+            `INSERT INTO grade_teacher_assignments
+              (id, school_id, grade_id, stream_id, teacher_id, teacher_name, subject_name, academic_year, periods_per_week, is_active, assigned_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, '2026', ?, 1, ?, ?, ?)`
+          ).run(
+            `gta-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+            tenantId,
+            gradeRow.id,
+            streamRow.id,
+            assignedUserId,
+            assignedUserName,
+            subjectName,
+            Math.max(1, required || 4),
+            now,
+            now,
+            now
+          );
+        }
+        affectedUserIds.add(assignedUserId);
+      } else if (existingGta && teacherIds.length === 0) {
+        db.prepare(
+          `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ? WHERE id = ?`
+        ).run(now, now, existingGta.id);
+        affectedUserIds.add(existingGta.teacher_id);
+      }
+
+      for (const uidToSync of affectedUserIds) {
+        const gRows = db
+          .prepare(
+            `SELECT gta.id, gta.grade_id, gta.stream_id, gta.subject_name, gta.periods_per_week, g.grade_number, g.name as grade_name, s.name as stream_name
+             FROM grade_teacher_assignments gta
+             JOIN grades g ON g.id = gta.grade_id
+             JOIN streams s ON s.id = gta.stream_id
+             WHERE gta.school_id = ? AND gta.teacher_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL`
+          )
+          .all(tenantId, uidToSync) as any[];
+        const allocations = gRows.map((r) => ({
+          id: r.id,
+          grade: Number(r.grade_number || gradeNum),
+          stream: String(r.stream_name),
+          subject: String(r.subject_name),
+          gradeId: String(r.grade_id),
+          streamId: String(r.stream_id),
+          periodsPerWeek: Number(r.periods_per_week || 4),
+        }));
+        const uniqueSubjects = Array.from(new Set(allocations.map((a) => a.subject)));
+        const streamSeen = new Set<string>();
+        const uniqueStreams: Array<{ grade: number; stream: string }> = [];
+        for (const a of allocations) {
+          const k = `${a.grade}::${a.stream.toLowerCase()}`;
+          if (!streamSeen.has(k)) {
+            streamSeen.add(k);
+            uniqueStreams.push({ grade: a.grade, stream: a.stream });
+          }
+        }
+        const uRow = db
+          .prepare(`SELECT payload_json FROM users WHERE id = ? AND school_id = ?`)
+          .get(uidToSync, tenantId) as { payload_json: string } | undefined;
+        if (uRow) {
+          const payload = safeJsonParse<Record<string, any>>(uRow.payload_json, {});
+          const nextPayload: Record<string, any> = {
+            ...payload,
+            assignedSubjectAllocations: allocations,
+            assignedSubjects: uniqueSubjects,
+            assignedStreams: uniqueStreams,
+          };
+          delete nextPayload.password;
+          delete nextPayload.passwordHash;
+          db.prepare(`UPDATE users SET payload_json = ?, updated_at = ? WHERE id = ? AND school_id = ?`).run(
+            JSON.stringify(nextPayload),
+            now,
+            uidToSync,
+            tenantId
+          );
+          upsertCollectionRecord(db, 'edusmart_users_v1', uidToSync, tenantId, nextPayload, false);
+        }
+      }
+
+      if (affectedUserIds.size > 0) {
+        syncedTables.push('grade_teacher_assignments', 'users', 'collections_store');
+        broadcastChange({
+          type: 'record:updated',
+          collection: 'academic_hierarchy',
+          tenantId,
+          actorId: req.authSession!.userId,
+          timestamp: now,
+        });
+        broadcastChange({
+          type: 'record:updated',
+          collection: 'edusmart_users_v1',
+          tenantId,
+          actorId: req.authSession!.userId,
+          timestamp: now,
+        });
+      }
+    }
+
+    notifyMySqlTablesChanged(syncedTables);
     res.json({ ok: true, id });
   });
 
@@ -1021,6 +1199,14 @@ export function registerTimetableRoutes(app: Express): void {
     const b = req.body || {};
     if (!b.title || !b.subjectName || !Array.isArray(b.participatingClasses) || b.participatingClasses.length < 2) {
       res.status(400).json({ error: 'Joint lesson requires title, subjectName, and at least 2 participating classes.' });
+      return;
+    }
+
+    const jlTeacherIds: string[] = Array.isArray(b.teacherIds)
+      ? Array.from(new Set<string>(b.teacherIds.map((x: any) => String(x || '').trim()).filter(Boolean)))
+      : [];
+    if (jlTeacherIds.length > 1) {
+      res.status(400).json({ error: 'No subject in any stream can have more than one teacher.' });
       return;
     }
 
@@ -1057,7 +1243,7 @@ export function registerTimetableRoutes(app: Express): void {
       String(b.title).trim(),
       String(b.subjectName).trim(),
       JSON.stringify(b.participatingClasses),
-      JSON.stringify(Array.isArray(b.teacherIds) ? b.teacherIds : []),
+      JSON.stringify(jlTeacherIds),
       Math.max(1, Number(b.weeklyPeriods || 1)),
       Math.min(3, Math.max(1, Number(b.lessonLength || 1))),
       b.roomId || null,

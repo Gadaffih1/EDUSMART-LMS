@@ -787,11 +787,19 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         });
       }
 
-      // Subject teacher assignments scoped by visible grades
+      // Subject teacher assignments scoped by visible grades (enriched with grade & stream metadata)
       const visibleGradeIdSet = new Set(visibleGrades.map((g) => g.id));
       const subjectAssignments = (
         db
-          .prepare(`SELECT * FROM grade_teacher_assignments WHERE school_id = ? AND is_active = 1`)
+          .prepare(
+            `SELECT gta.*, g.name as grade_name, g.grade_number as grade_number,
+                    s.name as stream_name, s.display_name as stream_display_name
+             FROM grade_teacher_assignments gta
+             JOIN grades g ON g.id = gta.grade_id
+             LEFT JOIN streams s ON s.id = gta.stream_id
+             WHERE gta.school_id = ? AND gta.is_active = 1
+             ORDER BY COALESCE(g.grade_number, 99) ASC, s.name ASC, gta.subject_name ASC`
+          )
           .all(schoolId) as any[]
       ).filter((a) => visibleGradeIdSet.has(a.grade_id));
 
@@ -1830,7 +1838,155 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
     }
   });
 
-  // Subject Teacher Assignments per Grade / Stream
+  const syncTeacherPayloadFromAssignments = (
+    db: DatabaseSync,
+    schoolId: string,
+    teacherId: string,
+    extraPatch?: Record<string, any>
+  ) => {
+    const rows = db
+      .prepare(
+        `SELECT gta.id, gta.grade_id, gta.stream_id, gta.subject_name, gta.periods_per_week,
+                g.name as grade_name, g.grade_number,
+                s.name as stream_name
+         FROM grade_teacher_assignments gta
+         JOIN grades g ON g.id = gta.grade_id
+         JOIN streams s ON s.id = gta.stream_id
+         WHERE gta.school_id = ? AND gta.teacher_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL
+         ORDER BY COALESCE(g.grade_number, 99) ASC, s.name ASC, gta.subject_name ASC`
+      )
+      .all(schoolId, teacherId) as any[];
+
+    const allocations = rows.map((r) => ({
+      id: r.id,
+      grade: (r.grade_number || parseGradeNumber(r.grade_name) || 1) as number,
+      stream: String(r.stream_name),
+      subject: String(r.subject_name),
+      gradeId: String(r.grade_id),
+      streamId: String(r.stream_id),
+      periodsPerWeek: Number(r.periods_per_week || 4),
+    }));
+
+    const uniqueSubjects = Array.from(new Set(allocations.map((a) => a.subject)));
+    const streamSeen = new Set<string>();
+    const uniqueStreams: Array<{ grade: number; stream: string }> = [];
+    for (const a of allocations) {
+      const k = `${a.grade}::${a.stream.toLowerCase()}`;
+      if (!streamSeen.has(k)) {
+        streamSeen.add(k);
+        uniqueStreams.push({ grade: a.grade, stream: a.stream });
+      }
+    }
+
+    updateUserPayloadMetadata(db, schoolId, teacherId, {
+      ...(extraPatch || {}),
+      assignedSubjectAllocations: allocations,
+      assignedSubjects: uniqueSubjects,
+      assignedStreams: uniqueStreams,
+    });
+  };
+
+  const syncStreamSubjectToTimetable = (
+    db: DatabaseSync,
+    schoolId: string,
+    gradeNumber: number | null,
+    streamName: string,
+    subjectName: string,
+    userId: string | null,
+    expectedOldUserId?: string | null
+  ) => {
+    if (!gradeNumber || !streamName || !subjectName) return;
+    const cfg = db
+      .prepare(`SELECT id FROM tt_configs WHERE tenant_id = ? ORDER BY updated_at DESC LIMIT 1`)
+      .get(schoolId) as { id: string } | undefined;
+    if (!cfg) return;
+
+    let targetTtTeacherId: string | null = null;
+    if (userId) {
+      const ttT = db
+        .prepare(`SELECT id FROM tt_teacher_profiles WHERE tenant_id = ? AND user_id = ? LIMIT 1`)
+        .get(schoolId, userId) as { id: string } | undefined;
+      targetTtTeacherId = ttT?.id || null;
+    }
+
+    const now = nowIso();
+    if (userId && targetTtTeacherId) {
+      db.prepare(
+        `UPDATE tt_stream_subject_allocations
+         SET teacher_ids_json = ?, is_overridden = 1, updated_at = ?
+         WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?)`
+      ).run(JSON.stringify([targetTtTeacherId]), now, cfg.id, schoolId, gradeNumber, streamName, subjectName);
+    } else if (!userId && expectedOldUserId) {
+      const oldTt = db
+        .prepare(`SELECT id FROM tt_teacher_profiles WHERE tenant_id = ? AND user_id = ? LIMIT 1`)
+        .get(schoolId, expectedOldUserId) as { id: string } | undefined;
+      if (oldTt) {
+        db.prepare(
+          `UPDATE tt_stream_subject_allocations
+           SET teacher_ids_json = '[]', updated_at = ?
+           WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?)
+             AND teacher_ids_json = ?`
+        ).run(now, cfg.id, schoolId, gradeNumber, streamName, subjectName, JSON.stringify([oldTt.id]));
+      }
+    }
+  };
+
+  // Subject Teacher Assignments per Grade + Specific Stream (Strict 1 Teacher per Subject per Stream)
+  app.get('/api/academic/teacher-assignments', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      const schoolId = resolveAuthorizedTenantId(req, res, (req.query.schoolId || req.query.tenantId) as string);
+      if (!schoolId) return;
+
+      const db = getDb();
+      const gradeId = req.query.gradeId ? String(req.query.gradeId).trim() : null;
+      const streamId = req.query.streamId ? String(req.query.streamId).trim() : null;
+      const teacherId = req.query.teacherId ? String(req.query.teacherId).trim() : null;
+      const subjectName = req.query.subjectName ? String(req.query.subjectName).trim() : null;
+
+      let sql = `
+        SELECT gta.*, g.name as grade_name, g.grade_number as grade_number,
+               s.name as stream_name, s.display_name as stream_display_name
+        FROM grade_teacher_assignments gta
+        JOIN grades g ON g.id = gta.grade_id
+        LEFT JOIN streams s ON s.id = gta.stream_id
+        WHERE gta.school_id = ? AND gta.is_active = 1
+      `;
+      const args: any[] = [schoolId];
+
+      if (session.role === 'senior_teacher' && !isSchoolAdmin(session)) {
+        const allowedGrades = getSeniorGradeIds(db, schoolId, session.userId);
+        if (allowedGrades.length === 0) {
+          return res.json({ success: true, assignments: [] });
+        }
+        sql += ` AND gta.grade_id IN (${allowedGrades.map(() => '?').join(',')})`;
+        args.push(...allowedGrades);
+      }
+      if (gradeId) {
+        sql += ` AND gta.grade_id = ?`;
+        args.push(gradeId);
+      }
+      if (streamId) {
+        sql += ` AND gta.stream_id = ?`;
+        args.push(streamId);
+      }
+      if (teacherId) {
+        sql += ` AND gta.teacher_id = ?`;
+        args.push(teacherId);
+      }
+      if (subjectName) {
+        sql += ` AND lower(gta.subject_name) = lower(?)`;
+        args.push(subjectName);
+      }
+
+      sql += ` ORDER BY COALESCE(g.grade_number, 99) ASC, s.name ASC, gta.subject_name ASC`;
+      const assignments = db.prepare(sql).all(...args);
+      return res.json({ success: true, assignments });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed loading subject assignments', message: err?.message });
+    }
+  });
+
   app.post('/api/academic/teacher-assignments', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
@@ -1838,58 +1994,512 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       if (!schoolId) return;
 
       const gradeId = String(req.body?.gradeId || '').trim();
-      const streamId = req.body?.streamId ? String(req.body.streamId).trim() : null;
+      const streamId = String(req.body?.streamId || '').trim();
       const teacherId = String(req.body?.teacherId || '').trim();
       const subjectName = String(req.body?.subjectName || '').trim();
       const periodsPerWeek = Math.max(1, Number(req.body?.periodsPerWeek || 4));
-      if (!gradeId || !teacherId || !subjectName) {
-        return res.status(400).json({ error: 'gradeId, teacherId, and subjectName are required.' });
+      const replaceExisting = Boolean(req.body?.replaceExisting);
+
+      if (!gradeId || !streamId || !teacherId || !subjectName) {
+        return res.status(400).json({
+          error: 'gradeId, specific streamId, teacherId, and subjectName are all required when assigning a subject lesson.',
+        });
       }
 
       const db = getDb();
       if (!assertGradeScope(db, session, schoolId, gradeId, res, true)) return;
+
+      const gradeRow = db
+        .prepare(`SELECT id, name, grade_number FROM grades WHERE id = ? AND school_id = ?`)
+        .get(gradeId, schoolId) as { id: string; name: string; grade_number: number | null } | undefined;
+      if (!gradeRow) return res.status(404).json({ error: 'Grade not found in this school.' });
+
+      const streamRow = db
+        .prepare(`SELECT id, grade_id, name, display_name FROM streams WHERE id = ? AND school_id = ?`)
+        .get(streamId, schoolId) as { id: string; grade_id: string; name: string; display_name: string } | undefined;
+      if (!streamRow || streamRow.grade_id !== gradeId) {
+        return res.status(400).json({ error: 'Selected stream does not belong to the chosen grade in this school.' });
+      }
 
       const teacher = db
         .prepare(`SELECT id, name FROM users WHERE id = ? AND school_id = ?`)
         .get(teacherId, schoolId) as { id: string; name: string } | undefined;
       if (!teacher) return res.status(404).json({ error: 'Teacher not found in this school.' });
 
-      const now = nowIso();
-      const id = `gta-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-      db.prepare(
-        `INSERT INTO grade_teacher_assignments
-          (id, school_id, grade_id, stream_id, teacher_id, teacher_name, subject_name, academic_year, periods_per_week, is_active, assigned_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, '2026', ?, 1, ?, ?, ?)`
-      ).run(id, schoolId, gradeId, streamId, teacher.id, teacher.name, subjectName, periodsPerWeek, now, now, now);
+      const existing = db
+        .prepare(
+          `SELECT id, teacher_id, teacher_name FROM grade_teacher_assignments
+           WHERE school_id = ? AND grade_id = ? AND stream_id = ? AND lower(subject_name) = lower(?) AND is_active = 1
+           LIMIT 1`
+        )
+        .get(schoolId, gradeId, streamId, subjectName) as { id: string; teacher_id: string; teacher_name: string } | undefined;
 
-      notifyMySqlTablesChanged(['grade_teacher_assignments']);
-      return res.status(201).json({ success: true, id });
+      if (existing && existing.teacher_id !== teacher.id && !replaceExisting) {
+        return res.status(409).json({
+          error: `${subjectName} in ${streamRow.display_name} is already assigned to ${existing.teacher_name}. No subject in any stream can have more than one teacher.`,
+          conflict: {
+            assignmentId: existing.id,
+            currentTeacherId: existing.teacher_id,
+            currentTeacherName: existing.teacher_name,
+            subjectName,
+            streamDisplayName: streamRow.display_name,
+          },
+        });
+      }
+
+      const now = nowIso();
+      let assignmentId = existing?.id || `gta-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+      const displacedTeacherId = existing && existing.teacher_id !== teacher.id ? existing.teacher_id : null;
+
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        if (existing && existing.teacher_id === teacher.id) {
+          db.prepare(
+            `UPDATE grade_teacher_assignments
+             SET subject_name = ?, teacher_name = ?, periods_per_week = ?, updated_at = ?
+             WHERE id = ? AND school_id = ?`
+          ).run(subjectName, teacher.name, periodsPerWeek, now, existing.id, schoolId);
+        } else {
+          if (existing) {
+            db.prepare(
+              `UPDATE grade_teacher_assignments
+               SET is_active = 0, unassigned_at = ?, updated_at = ?
+               WHERE id = ? AND school_id = ?`
+            ).run(now, now, existing.id, schoolId);
+            assignmentId = `gta-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+          }
+          db.prepare(
+            `INSERT INTO grade_teacher_assignments
+              (id, school_id, grade_id, stream_id, teacher_id, teacher_name, subject_name, academic_year, periods_per_week, is_active, assigned_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, '2026', ?, 1, ?, ?, ?)`
+          ).run(assignmentId, schoolId, gradeId, streamId, teacher.id, teacher.name, subjectName, periodsPerWeek, now, now, now);
+        }
+
+        const gradeNum = gradeRow.grade_number ?? parseGradeNumber(gradeRow.name);
+        syncStreamSubjectToTimetable(db, schoolId, gradeNum, streamRow.name, subjectName, teacher.id);
+        syncTeacherPayloadFromAssignments(db, schoolId, teacher.id);
+        if (displacedTeacherId) {
+          syncTeacherPayloadFromAssignments(db, schoolId, displacedTeacherId);
+        }
+
+        logAcademicAudit(db, {
+          schoolId,
+          actor: session,
+          action: displacedTeacherId ? 'SUBJECT_TEACHER_REASSIGNED' : 'SUBJECT_TEACHER_ASSIGNED',
+          entityType: 'grade_teacher_assignment',
+          entityId: assignmentId,
+          gradeId,
+          streamId,
+          details: { subjectName, teacherId: teacher.id, teacherName: teacher.name, displacedTeacherId },
+        });
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
+      }
+
+      notifyMySqlTablesChanged(['grade_teacher_assignments', 'users', 'collections_store', 'tt_stream_subject_allocations', 'academic_audit_logs']);
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_users_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+
+      return res.status(201).json({ success: true, id: assignmentId });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed creating subject assignment', message: err?.message });
+    }
+  });
+
+  // Atomically synchronize all Grade + Specific Stream + Subject assignments for a single teacher
+  app.put('/api/academic/teacher-assignments/sync-teacher', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
+        return res.status(403).json({ error: 'Only Academic Leadership or School Administrators can assign teacher lessons.' });
+      }
+      const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+      if (!schoolId) return;
+
+      const teacherId = String(req.body?.teacherId || '').trim();
+      const rawAllocations = Array.isArray(req.body?.allocations) ? req.body.allocations : null;
+      const replaceExisting = Boolean(req.body?.replaceExisting);
+      const department = req.body?.department !== undefined ? String(req.body.department).trim() : undefined;
+
+      if (!teacherId || !rawAllocations) {
+        return res.status(400).json({ error: 'teacherId and allocations array are required.' });
+      }
+
+      const db = getDb();
+      const teacher = db
+        .prepare(`SELECT id, name FROM users WHERE id = ? AND school_id = ?`)
+        .get(teacherId, schoolId) as { id: string; name: string } | undefined;
+      if (!teacher) return res.status(404).json({ error: 'Teacher not found in this school.' });
+
+      const schoolGrades = db
+        .prepare(`SELECT id, name, grade_number FROM grades WHERE school_id = ? AND is_active = 1`)
+        .all(schoolId) as Array<{ id: string; name: string; grade_number: number | null }>;
+      const schoolStreams = db
+        .prepare(`SELECT id, grade_id, name, display_name FROM streams WHERE school_id = ? AND is_active = 1`)
+        .all(schoolId) as Array<{ id: string; grade_id: string; name: string; display_name: string }>;
+
+      const seniorAllowedGrades =
+        session.role === 'senior_teacher' && !isSchoolAdmin(session)
+          ? new Set(getSeniorGradeIds(db, schoolId, session.userId))
+          : null;
+
+      const resolvedMap = new Map<
+        string,
+        {
+          gradeId: string;
+          gradeNumber: number | null;
+          gradeName: string;
+          streamId: string;
+          streamName: string;
+          streamDisplayName: string;
+          subjectName: string;
+          periodsPerWeek: number;
+        }
+      >();
+
+      const now = nowIso();
+      for (const item of rawAllocations) {
+        const subjectName = String(item?.subjectName || item?.subject || '').trim();
+        if (!subjectName) {
+          return res.status(400).json({ error: 'Each lesson assignment must specify a subject.' });
+        }
+
+        // Resolve Grade
+        let gradeRow = item?.gradeId
+          ? schoolGrades.find((g) => g.id === String(item.gradeId).trim())
+          : undefined;
+        if (!gradeRow && item?.grade !== undefined && item?.grade !== null && item?.grade !== '') {
+          const gNum = Number(item.grade);
+          gradeRow = schoolGrades.find(
+            (g) => g.grade_number === gNum || g.name.toLowerCase() === `grade ${gNum}` || g.name.toLowerCase() === String(item.grade).trim().toLowerCase()
+          );
+          if (!gradeRow && Number.isFinite(gNum) && gNum >= 1 && gNum <= 12) {
+            const gName = `Grade ${gNum}`;
+            const newGradeId = `grade-${slugToken(schoolId)}-${slugToken(gName)}`;
+            const band = inferLevelBand(gNum, gName);
+            db.prepare(
+              `INSERT OR IGNORE INTO grades (id, school_id, name, grade_number, level_band, academic_year, description, is_active, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, '2026', ?, 1, ?, ?)`
+            ).run(newGradeId, schoolId, gName, gNum, band, `${gName} (${band})`, now, now);
+            gradeRow = { id: newGradeId, name: gName, grade_number: gNum };
+            schoolGrades.push(gradeRow);
+          }
+        }
+        if (!gradeRow) {
+          return res.status(400).json({ error: `Valid grade is required for ${subjectName}.` });
+        }
+
+        if (seniorAllowedGrades && !seniorAllowedGrades.has(gradeRow.id)) {
+          return res.status(403).json({
+            error: `Access denied. You cannot modify subject assignments for ${gradeRow.name}.`,
+          });
+        }
+
+        // Resolve Specific Stream
+        let streamRow = item?.streamId
+          ? schoolStreams.find((s) => s.id === String(item.streamId).trim() && s.grade_id === gradeRow!.id)
+          : undefined;
+        if (!streamRow && item?.stream) {
+          const stClean = String(item.stream).trim();
+          streamRow = schoolStreams.find(
+            (s) => s.grade_id === gradeRow!.id && s.name.toLowerCase() === stClean.toLowerCase()
+          );
+          if (!streamRow && stClean) {
+            const newStreamId = `stream-${slugToken(gradeRow.id)}-${slugToken(stClean)}`;
+            const disp = `${gradeRow.name} ${stClean}`;
+            db.prepare(
+              `INSERT OR IGNORE INTO streams (id, school_id, grade_id, name, display_name, capacity, room_label, is_active, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 45, ?, 1, ?, ?)`
+            ).run(newStreamId, schoolId, gradeRow.id, stClean, disp, disp, now, now);
+            streamRow = { id: newStreamId, grade_id: gradeRow.id, name: stClean, display_name: disp };
+            schoolStreams.push(streamRow);
+          }
+        }
+        if (!streamRow) {
+          return res.status(400).json({
+            error: `A specific stream is required when assigning ${subjectName} in ${gradeRow.name}.`,
+          });
+        }
+
+        const key = `${gradeRow.id}::${streamRow.id}::${subjectName.toLowerCase()}`;
+        resolvedMap.set(key, {
+          gradeId: gradeRow.id,
+          gradeNumber: gradeRow.grade_number ?? parseGradeNumber(gradeRow.name),
+          gradeName: gradeRow.name,
+          streamId: streamRow.id,
+          streamName: streamRow.name,
+          streamDisplayName: streamRow.display_name,
+          subjectName,
+          periodsPerWeek: Math.max(1, Number(item?.periodsPerWeek || 4)),
+        });
+      }
+
+      // Enforce 1-teacher-per-subject-per-stream across the school
+      const conflicts: Array<{
+        subjectName: string;
+        streamDisplayName: string;
+        currentTeacherId: string;
+        currentTeacherName: string;
+        assignmentId: string;
+      }> = [];
+
+      for (const target of resolvedMap.values()) {
+        const existingOther = db
+          .prepare(
+            `SELECT id, teacher_id, teacher_name FROM grade_teacher_assignments
+             WHERE school_id = ? AND grade_id = ? AND stream_id = ? AND lower(subject_name) = lower(?) AND is_active = 1 AND teacher_id != ?
+             LIMIT 1`
+          )
+          .get(schoolId, target.gradeId, target.streamId, target.subjectName, teacher.id) as
+          | { id: string; teacher_id: string; teacher_name: string }
+          | undefined;
+        if (existingOther) {
+          conflicts.push({
+            subjectName: target.subjectName,
+            streamDisplayName: target.streamDisplayName,
+            currentTeacherId: existingOther.teacher_id,
+            currentTeacherName: existingOther.teacher_name,
+            assignmentId: existingOther.id,
+          });
+        }
+      }
+
+      if (conflicts.length > 0 && !replaceExisting) {
+        const first = conflicts[0];
+        return res.status(409).json({
+          error: `${first.subjectName} in ${first.streamDisplayName} is already assigned to ${first.currentTeacherName}. No subject in any stream can have more than one teacher.`,
+          conflicts,
+        });
+      }
+
+      const displacedTeacherIds = new Set<string>();
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        mirrorGradeToLegacyCollections(db, schoolId);
+
+        // Current active assignments held by this teacher
+        const currentRows = db
+          .prepare(
+            `SELECT gta.id, gta.grade_id, gta.stream_id, gta.subject_name, g.name as grade_name, g.grade_number, s.name as stream_name
+             FROM grade_teacher_assignments gta
+             JOIN grades g ON g.id = gta.grade_id
+             LEFT JOIN streams s ON s.id = gta.stream_id
+             WHERE gta.school_id = ? AND gta.teacher_id = ? AND gta.is_active = 1`
+          )
+          .all(schoolId, teacher.id) as any[];
+
+        // Deactivate removed slots
+        for (const cur of currentRows) {
+          const curKey = `${cur.grade_id}::${cur.stream_id || ''}::${String(cur.subject_name).toLowerCase()}`;
+          if (!resolvedMap.has(curKey)) {
+            if (seniorAllowedGrades && !seniorAllowedGrades.has(cur.grade_id)) {
+              continue; // Senior Teacher only mutates their own grade(s)
+            }
+            db.prepare(
+              `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ? WHERE id = ?`
+            ).run(now, now, cur.id);
+            const gNum = cur.grade_number ?? parseGradeNumber(cur.grade_name);
+            if (cur.stream_name) {
+              syncStreamSubjectToTimetable(db, schoolId, gNum, cur.stream_name, cur.subject_name, null, teacher.id);
+            }
+          }
+        }
+
+        // Displace conflicting assignments only when explicitly requested
+        if (replaceExisting && conflicts.length > 0) {
+          for (const c of conflicts) {
+            db.prepare(
+              `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ? WHERE id = ? AND school_id = ?`
+            ).run(now, now, c.assignmentId, schoolId);
+            displacedTeacherIds.add(c.currentTeacherId);
+          }
+        }
+
+        // Upsert target slots for this teacher
+        for (const target of resolvedMap.values()) {
+          const mine = db
+            .prepare(
+              `SELECT id FROM grade_teacher_assignments
+               WHERE school_id = ? AND grade_id = ? AND stream_id = ? AND lower(subject_name) = lower(?) AND teacher_id = ? AND is_active = 1
+               LIMIT 1`
+            )
+            .get(schoolId, target.gradeId, target.streamId, target.subjectName, teacher.id) as { id: string } | undefined;
+
+          if (mine) {
+            db.prepare(
+              `UPDATE grade_teacher_assignments SET periods_per_week = ?, teacher_name = ?, updated_at = ? WHERE id = ?`
+            ).run(target.periodsPerWeek, teacher.name, now, mine.id);
+          } else {
+            const newId = `gta-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+            db.prepare(
+              `INSERT INTO grade_teacher_assignments
+                (id, school_id, grade_id, stream_id, teacher_id, teacher_name, subject_name, academic_year, periods_per_week, is_active, assigned_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, '2026', ?, 1, ?, ?, ?)`
+            ).run(
+              newId,
+              schoolId,
+              target.gradeId,
+              target.streamId,
+              teacher.id,
+              teacher.name,
+              target.subjectName,
+              target.periodsPerWeek,
+              now,
+              now,
+              now
+            );
+          }
+          syncStreamSubjectToTimetable(
+            db,
+            schoolId,
+            target.gradeNumber,
+            target.streamName,
+            target.subjectName,
+            teacher.id
+          );
+        }
+
+        syncTeacherPayloadFromAssignments(
+          db,
+          schoolId,
+          teacher.id,
+          department !== undefined ? { department: department || undefined } : undefined
+        );
+        for (const dId of displacedTeacherIds) {
+          syncTeacherPayloadFromAssignments(db, schoolId, dId);
+        }
+
+        logAcademicAudit(db, {
+          schoolId,
+          actor: session,
+          action: 'TEACHER_SUBJECT_ALLOCATIONS_SYNCED',
+          entityType: 'user',
+          entityId: teacher.id,
+          details: {
+            count: resolvedMap.size,
+            displacedCount: displacedTeacherIds.size,
+          },
+        });
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
+      }
+
+      notifyMySqlTablesChanged([
+        'grade_teacher_assignments',
+        'grades',
+        'streams',
+        'school_grades',
+        'school_streams',
+        'users',
+        'collections_store',
+        'tt_stream_subject_allocations',
+        'academic_audit_logs',
+      ]);
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_users_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+
+      const updatedUserRow = db.prepare(`SELECT payload_json FROM users WHERE id = ? AND school_id = ?`).get(teacher.id, schoolId) as any;
+      const updatedUser = stripSecrets(safeParseJson<Record<string, any>>(updatedUserRow?.payload_json, {}));
+      const allActive = db
+        .prepare(
+          `SELECT gta.*, g.name as grade_name, g.grade_number as grade_number,
+                  s.name as stream_name, s.display_name as stream_display_name
+           FROM grade_teacher_assignments gta
+           JOIN grades g ON g.id = gta.grade_id
+           LEFT JOIN streams s ON s.id = gta.stream_id
+           WHERE gta.school_id = ? AND gta.is_active = 1
+           ORDER BY COALESCE(g.grade_number, 99) ASC, s.name ASC, gta.subject_name ASC`
+        )
+        .all(schoolId);
+
+      return res.json({ success: true, user: updatedUser, assignments: allActive });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed syncing teacher subject allocations', message: err?.message });
     }
   });
 
   app.delete('/api/academic/teacher-assignments/:id', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
+      const schoolId = resolveAuthorizedTenantId(req, res, (req.query.tenantId || req.query.schoolId) as string);
       if (!schoolId) return;
 
       const id = String(req.params.id);
       const db = getDb();
       const existing = db
-        .prepare(`SELECT grade_id FROM grade_teacher_assignments WHERE id = ? AND school_id = ?`)
-        .get(id, schoolId) as { grade_id: string } | undefined;
+        .prepare(
+          `SELECT gta.grade_id, gta.teacher_id, gta.subject_name, g.name as grade_name, g.grade_number, s.name as stream_name
+           FROM grade_teacher_assignments gta
+           JOIN grades g ON g.id = gta.grade_id
+           LEFT JOIN streams s ON s.id = gta.stream_id
+           WHERE gta.id = ? AND gta.school_id = ?`
+        )
+        .get(id, schoolId) as any;
       if (!existing) return res.status(404).json({ error: 'Assignment not found.' });
       if (!assertGradeScope(db, session, schoolId, existing.grade_id, res, true)) return;
 
       const now = nowIso();
-      db.prepare(
-        `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ?
-         WHERE id = ? AND school_id = ?`
-      ).run(now, now, id, schoolId);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare(
+          `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ?
+           WHERE id = ? AND school_id = ?`
+        ).run(now, now, id, schoolId);
 
-      notifyMySqlTablesChanged(['grade_teacher_assignments']);
+        const gNum = existing.grade_number ?? parseGradeNumber(existing.grade_name);
+        if (existing.stream_name) {
+          syncStreamSubjectToTimetable(db, schoolId, gNum, existing.stream_name, existing.subject_name, null, existing.teacher_id);
+        }
+        syncTeacherPayloadFromAssignments(db, schoolId, existing.teacher_id);
+        db.exec('COMMIT');
+      } catch (txErr) {
+        db.exec('ROLLBACK');
+        throw txErr;
+      }
+
+      notifyMySqlTablesChanged(['grade_teacher_assignments', 'users', 'collections_store', 'tt_stream_subject_allocations']);
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'academic_hierarchy',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+      broadcastChange({
+        type: 'record:updated',
+        collection: 'edusmart_users_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
       return res.json({ success: true });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed removing subject assignment', message: err?.message });

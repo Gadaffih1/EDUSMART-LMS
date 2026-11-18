@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
+  BookOpen,
   Building2,
   Download,
   History,
@@ -13,6 +14,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
+import { PRIMARY_SUBJECTS, JUNIOR_SUBJECTS } from '../../types';
 import { useTenant } from '../../context/TenantContext';
 import {
   ahApiFetch,
@@ -83,6 +85,12 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
   const [assignClassStreamId, setAssignClassStreamId] = useState('');
   const [assignClassTeacherId, setAssignClassTeacherId] = useState('');
 
+  // Subject-per-stream teacher assignment state
+  const [subAssignStreamId, setSubAssignStreamId] = useState('');
+  const [subAssignTeacherId, setSubAssignTeacherId] = useState('');
+  const [subAssignSubject, setSubAssignSubject] = useState('Mathematics');
+  const [subAssignReplace, setSubAssignReplace] = useState(false);
+
   // Grade Edit & Delete modal state
   const [editingGrade, setEditingGrade] = useState<AcademicGrade | null>(null);
   const [editGradeName, setEditGradeName] = useState('');
@@ -146,9 +154,13 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
         setAssignClassStreamId((prev) =>
           prev && data.streams.some((s) => s.id === prev) ? prev : data.streams[0].id
         );
+        setSubAssignStreamId((prev) =>
+          prev && data.streams.some((s) => s.id === prev) ? prev : data.streams[0].id
+        );
       } else {
         setSelectedStreamId('');
         setAssignClassStreamId('');
+        setSubAssignStreamId('');
       }
       const cReports = await ahApiFetch<{ reports: ConsolidatedGradeReportItem[] }>(
         '/api/academic/consolidated-reports',
@@ -503,9 +515,53 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
     }
   };
 
+  const handleAssignSubjectToStream = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subAssignStreamId || !subAssignTeacherId || !subAssignSubject.trim()) return;
+    const streamObj = streams.find((s) => s.id === subAssignStreamId);
+    if (!streamObj) return;
+    setSubmitting(true);
+    try {
+      await ahApiFetch('/api/academic/teacher-assignments', {
+        method: 'POST',
+        tenantId: activeSchoolId,
+        body: JSON.stringify({
+          schoolId: activeSchoolId,
+          gradeId: streamObj.gradeId,
+          streamId: streamObj.id,
+          teacherId: subAssignTeacherId,
+          subjectName: subAssignSubject.trim(),
+          replaceExisting: subAssignReplace,
+        }),
+      });
+      notify(`${subAssignSubject.trim()} in ${streamObj.displayName} assigned successfully.`);
+      setSubAssignReplace(false);
+      await loadBootstrap();
+    } catch (err: any) {
+      notify(err.message, 'err');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveSubjectAssignment = async (assignmentId: string) => {
+    try {
+      await ahApiFetch(`/api/academic/teacher-assignments/${assignmentId}`, {
+        method: 'DELETE',
+        tenantId: activeSchoolId,
+      });
+      notify('Subject-stream assignment removed.');
+      await loadBootstrap();
+    } catch (err: any) {
+      notify(err.message, 'err');
+    }
+  };
+
   const grades = bootstrap?.grades || [];
   const streams = bootstrap?.streams || [];
   const staff = bootstrap?.staffDirectory || [];
+  const subjectAssignments = (bootstrap?.subjectAssignments || []).filter((a: any) => Boolean(a.stream_id));
+  const subjectOptions = Array.from(new Set<string>([...PRIMARY_SUBJECTS, ...JUNIOR_SUBJECTS])).sort();
   const compliance = bootstrap?.compliance || { gradesMissingSeniorTeacher: [], streamsMissingClassTeacher: [] };
 
   const tabs: Array<{ id: AdminAcademicMode; label: string }> = [
@@ -1046,91 +1102,220 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
         </div>
       )}
 
-      {/* MODE 4: CLASS TEACHER ASSIGNMENTS */}
+      {/* MODE 4: CLASS TEACHER & SUBJECT-STREAM ASSIGNMENTS */}
       {effectiveMode === 'class_assignments' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <form onSubmit={handleAssignClassTeacher} className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="pb-3 border-b border-slate-200">
-              <h3 className="text-base font-bold text-slate-900">Assign Designated Class Teacher</h3>
-              <p className="text-xs text-slate-500">
-                Every active stream requires one designated Class Teacher. Historical postings remain intact when reassigned.
-              </p>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Select Stream</label>
-              <select
-                value={assignClassStreamId}
-                onChange={(e) => {
-                  setAssignClassStreamId(e.target.value);
-                  const st = streams.find((x) => x.id === e.target.value);
-                  if (st) setSelectedGradeId(st.gradeId);
-                }}
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
-              >
-                {streams.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.displayName} {s.classTeacherName ? `(Current: ${s.classTeacherName})` : '(Unassigned)'}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Select Class Teacher</label>
-              <select
-                value={assignClassTeacherId}
-                onChange={(e) => setAssignClassTeacherId(e.target.value)}
-                required
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
-              >
-                <option value="">Choose educator...</option>
-                {staff.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name} · {st.role.replace(/_/g, ' ')} ({st.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg cursor-pointer"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Assign Class Teacher</span>
-            </button>
-          </form>
-
-          <section className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="pb-3 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Stream Class Teacher Assignment History</h3>
-                <p className="text-xs text-slate-500">All active and archived Class Teachers in {grades.find((g) => g.id === selectedGradeId)?.name || 'Grade'}</p>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <form onSubmit={handleAssignClassTeacher} className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+              <div className="pb-3 border-b border-slate-200">
+                <h3 className="text-base font-bold text-slate-900">Assign Designated Class Teacher</h3>
+                <p className="text-xs text-slate-500">
+                  Every active stream requires one designated Class Teacher. Historical postings remain intact when reassigned.
+                </p>
               </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-slate-200 text-slate-500 font-semibold">
-                  <tr>
-                    <th className="py-2 pr-3">Stream</th>
-                    <th className="py-2 pr-3">Class Teacher</th>
-                    <th className="py-2 pr-3">Assigned</th>
-                    <th className="py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {(historyData?.classTeacherHistory || []).map((h) => (
-                    <tr key={h.id}>
-                      <td className="py-2.5 pr-3 font-semibold text-slate-900">{h.stream_display_name}</td>
-                      <td className="py-2.5 pr-3 text-slate-800">{h.teacher_name}</td>
-                      <td className="py-2.5 pr-3 font-mono tabular-nums text-slate-600">{String(h.assigned_at).slice(0, 10)}</td>
-                      <td className={`py-2.5 font-semibold ${h.is_active ? 'text-emerald-700' : 'text-slate-500'}`}>
-                        {h.is_active ? 'Active' : `Ended ${String(h.unassigned_at || '').slice(0, 10)}`}
-                      </td>
-                    </tr>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Stream</label>
+                <select
+                  value={assignClassStreamId}
+                  onChange={(e) => {
+                    setAssignClassStreamId(e.target.value);
+                    const st = streams.find((x) => x.id === e.target.value);
+                    if (st) setSelectedGradeId(st.gradeId);
+                  }}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                >
+                  {streams.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.displayName} {s.classTeacherName ? `(Current: ${s.classTeacherName})` : '(Unassigned)'}
+                    </option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Class Teacher</label>
+                <select
+                  value={assignClassTeacherId}
+                  onChange={(e) => setAssignClassTeacherId(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                >
+                  <option value="">Choose educator...</option>
+                  {staff.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name} · {st.role.replace(/_/g, ' ')} ({st.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg cursor-pointer"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>Assign Class Teacher</span>
+              </button>
+            </form>
+
+            <section className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+              <div className="pb-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Stream Class Teacher Assignment History</h3>
+                  <p className="text-xs text-slate-500">All active and archived Class Teachers in {grades.find((g) => g.id === selectedGradeId)?.name || 'Grade'}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-200 text-slate-500 font-semibold">
+                    <tr>
+                      <th className="py-2 pr-3">Stream</th>
+                      <th className="py-2 pr-3">Class Teacher</th>
+                      <th className="py-2 pr-3">Assigned</th>
+                      <th className="py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {(historyData?.classTeacherHistory || []).map((h) => (
+                      <tr key={h.id}>
+                        <td className="py-2.5 pr-3 font-semibold text-slate-900">{h.stream_display_name}</td>
+                        <td className="py-2.5 pr-3 text-slate-800">{h.teacher_name}</td>
+                        <td className="py-2.5 pr-3 font-mono tabular-nums text-slate-600">{String(h.assigned_at).slice(0, 10)}</td>
+                        <td className={`py-2.5 font-semibold ${h.is_active ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          {h.is_active ? 'Active' : `Ended ${String(h.unassigned_at || '').slice(0, 10)}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          {/* Subject Teacher Assignments per Specific Stream (1 Teacher Max per Subject/Stream) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <form onSubmit={handleAssignSubjectToStream} className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+              <div className="pb-3 border-b border-slate-200">
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-emerald-700" />
+                  <span>Assign Subject Teacher to Specific Stream</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Links a subject directly to a Grade &amp; Stream. One teacher may teach multiple streams or grades, and each subject in any stream has at most one teacher.
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Specific Grade &amp; Stream</label>
+                <select
+                  value={subAssignStreamId}
+                  onChange={(e) => setSubAssignStreamId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                >
+                  {streams.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                <select
+                  value={subAssignSubject}
+                  onChange={(e) => setSubAssignSubject(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                >
+                  {subjectOptions.map((sub) => (
+                    <option key={sub} value={sub}>
+                      {sub}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Subject Teacher</label>
+                <select
+                  value={subAssignTeacherId}
+                  onChange={(e) => setSubAssignTeacherId(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white"
+                >
+                  <option value="">Choose educator...</option>
+                  {staff.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name} · {st.role.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={subAssignReplace}
+                  onChange={(e) => setSubAssignReplace(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-emerald-600"
+                />
+                <span>Replace current teacher if this stream-subject is already taken</span>
+              </label>
+              <button
+                type="submit"
+                disabled={submitting || !subAssignStreamId || !subAssignTeacherId}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded-lg cursor-pointer"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Assign Subject to Stream</span>
+              </button>
+            </form>
+
+            <section className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+              <div className="pb-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Active Subject ↔ Stream Teacher Links</h3>
+                  <p className="text-xs text-slate-500">Strict 1-to-1 subject ownership per stream across {activeTenant.name}</p>
+                </div>
+                <span className="text-xs font-mono tabular-nums text-slate-500">{subjectAssignments.length} active</span>
+              </div>
+              <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-slate-200 text-slate-500 font-semibold sticky top-0 bg-white">
+                    <tr>
+                      <th className="py-2 pr-3">Grade &amp; Stream</th>
+                      <th className="py-2 pr-3">Subject</th>
+                      <th className="py-2 pr-3">Assigned Teacher</th>
+                      <th className="py-2 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {subjectAssignments.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-slate-500">
+                          No subject-stream teacher links configured yet. Use the form on the left to assign a subject teacher to any specific stream.
+                        </td>
+                      </tr>
+                    ) : (
+                      subjectAssignments.map((a: any) => (
+                        <tr key={a.id} className="hover:bg-slate-50">
+                          <td className="py-2 pr-3 font-semibold text-slate-900">
+                            {a.stream_display_name || `${a.grade_name || ''} ${a.stream_name || ''}`.trim()}
+                          </td>
+                          <td className="py-2 pr-3 font-medium text-emerald-800">{a.subject_name}</td>
+                          <td className="py-2 pr-3 text-slate-800">{a.teacher_name}</td>
+                          <td className="py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveSubjectAssignment(a.id)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200 hover:bg-rose-50 rounded cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Remove</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
         </div>
       )}
 

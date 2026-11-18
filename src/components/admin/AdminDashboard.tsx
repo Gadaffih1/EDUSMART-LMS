@@ -21,6 +21,7 @@ import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { ReportingHub } from '../reports/ReportingHub';
+import { HeadTeacherReportsManager } from '../leadership/HeadTeacherReportsManager';
 import { ExtraRolesManager } from './ExtraRolesManager';
 import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
@@ -1961,6 +1962,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           ======================================================== */}
       {activeTab === 'operations' && (
         <IntegratedOperationsHub currentUser={currentUser} />
+      )}
+
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          <HeadTeacherReportsManager currentUser={currentUser} />
+          <ReportingHub currentUser={currentUser} />
+        </div>
       )}
 
       {/* ========================================================

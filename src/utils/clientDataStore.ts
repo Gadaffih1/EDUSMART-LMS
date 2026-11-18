@@ -9,7 +9,14 @@
  * ============================================================================
  */
 
-import type { User } from '../types';
+import type {
+  User,
+  ExecutiveReport,
+  ExecutiveReportCategory,
+  ExecutiveReportGroup,
+  ExecutiveReportSection,
+  ExecutiveReportShareTargetType,
+} from '../types';
 
 type ChangeListener = (key: string) => void;
 
@@ -154,6 +161,10 @@ function connectRealtimeStream(): void {
         }
         if (payload?.type === 'settings:updated') {
           void ClientDataStore.loadSchoolSettings(payload?.tenantId && payload.tenantId !== 'global' ? payload.tenantId : activeTenantId);
+        }
+        if (col === 'executive_reports' || col === 'executive_report_groups') {
+          window.dispatchEvent(new CustomEvent('executive-reports-updated', { detail: payload }));
+          return;
         }
         // Pull authoritative updated collection state from central database
         void pullSingleCollection(col);
@@ -733,6 +744,221 @@ export const ClientDataStore = {
       throw new Error(body?.error || 'Failed loading printable user credentials');
     }
     return body as PrintableCredentialsResponse;
+  },
+
+  async apiFetchExecutiveReports(schoolId?: string): Promise<{
+    canManage: boolean;
+    reports: ExecutiveReport[];
+    groups: ExecutiveReportGroup[];
+    departments: Array<{ id: string; name: string; kind: string; subjects: string[]; activities: string[] }>;
+  }> {
+    const qs = schoolId ? `?schoolId=${encodeURIComponent(schoolId)}` : '';
+    const res = await fetch(`/api/reports/executive${qs}`, {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed loading executive reports');
+    }
+    return {
+      canManage: Boolean(body.canManage),
+      reports: Array.isArray(body.reports) ? body.reports : [],
+      groups: Array.isArray(body.groups) ? body.groups : [],
+      departments: Array.isArray(body.departments) ? body.departments : [],
+    };
+  },
+
+  async apiFetchReportAudienceOptions(schoolId?: string): Promise<{
+    departments: Array<{ id: string; name: string; kind: string; subjects: string[]; activities: string[] }>;
+    users: Array<User & { childrenGrades?: number[] }>;
+    groups: ExecutiveReportGroup[];
+  }> {
+    const qs = schoolId ? `?schoolId=${encodeURIComponent(schoolId)}` : '';
+    const res = await fetch(`/api/reports/executive/audience-options${qs}`, {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed loading share audience options');
+    }
+    return {
+      departments: Array.isArray(body.departments) ? body.departments : [],
+      users: Array.isArray(body.users) ? body.users : [],
+      groups: Array.isArray(body.groups) ? body.groups : [],
+    };
+  },
+
+  async apiCreateExecutiveReport(payload: {
+    schoolId?: string;
+    title: string;
+    category: ExecutiveReportCategory;
+    classification?: string;
+    reportingPeriod: string;
+    term?: string;
+    academicYear?: string;
+    summary?: string;
+    sections: ExecutiveReportSection[];
+    certifiedBy?: string;
+    directorateLabel?: string;
+    status?: 'draft' | 'published';
+    shares?: Array<{
+      targetType: ExecutiveReportShareTargetType;
+      targetId: string;
+      targetLabel: string;
+      targetMeta?: Record<string, any>;
+    }>;
+    sharedNote?: string;
+    notifyRecipients?: boolean;
+  }): Promise<ExecutiveReport> {
+    const res = await fetch('/api/reports/executive', {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.report) {
+      throw new Error(body?.error || 'Failed creating report');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
+    return body.report as ExecutiveReport;
+  },
+
+  async apiUpdateExecutiveReport(
+    id: string,
+    payload: {
+      title?: string;
+      category?: ExecutiveReportCategory;
+      classification?: string;
+      reportingPeriod?: string;
+      term?: string;
+      academicYear?: string;
+      summary?: string;
+      sections?: ExecutiveReportSection[];
+      certifiedBy?: string;
+      directorateLabel?: string;
+      status?: 'draft' | 'published';
+      shares?: Array<{
+        targetType: ExecutiveReportShareTargetType;
+        targetId: string;
+        targetLabel: string;
+        targetMeta?: Record<string, any>;
+      }>;
+      sharedNote?: string;
+    }
+  ): Promise<ExecutiveReport> {
+    const res = await fetch(`/api/reports/executive/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.report) {
+      throw new Error(body?.error || 'Failed updating report');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
+    return body.report as ExecutiveReport;
+  },
+
+  async apiShareExecutiveReport(
+    id: string,
+    payload: {
+      shares: Array<{
+        targetType: ExecutiveReportShareTargetType;
+        targetId: string;
+        targetLabel: string;
+        targetMeta?: Record<string, any>;
+      }>;
+      sharedNote?: string;
+      publish?: boolean;
+      notifyRecipients?: boolean;
+    }
+  ): Promise<ExecutiveReport> {
+    const res = await fetch(`/api/reports/executive/${encodeURIComponent(id)}/share`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.report) {
+      throw new Error(body?.error || 'Failed sharing report');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
+    return body.report as ExecutiveReport;
+  },
+
+  async apiDeleteExecutiveReport(id: string): Promise<void> {
+    const res = await fetch(`/api/reports/executive/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed deleting report');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
+  },
+
+  async apiCreateReportGroup(payload: {
+    schoolId?: string;
+    name: string;
+    description?: string;
+    memberUserIds: string[];
+    memberRoles?: string[];
+  }): Promise<ExecutiveReportGroup> {
+    const res = await fetch('/api/reports/executive/groups', {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.group) {
+      throw new Error(body?.error || 'Failed creating recipient group');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
+    return body.group as ExecutiveReportGroup;
+  },
+
+  async apiUpdateReportGroup(
+    id: string,
+    payload: {
+      name?: string;
+      description?: string;
+      memberUserIds?: string[];
+      memberRoles?: string[];
+    }
+  ): Promise<ExecutiveReportGroup> {
+    const res = await fetch(`/api/reports/executive/groups/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.group) {
+      throw new Error(body?.error || 'Failed updating recipient group');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
+    return body.group as ExecutiveReportGroup;
+  },
+
+  async apiDeleteReportGroup(id: string): Promise<void> {
+    const res = await fetch(`/api/reports/executive/groups/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed deleting recipient group');
+    }
+    window.dispatchEvent(new CustomEvent('executive-reports-updated'));
   },
 
   clearSessionOnly(): void {

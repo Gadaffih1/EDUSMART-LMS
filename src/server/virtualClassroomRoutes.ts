@@ -2050,6 +2050,18 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       targetStreamIds = gradeStreams.map((s) => s.id);
     }
 
+    // Lookup explicit 1-to-1 (grade, specific stream, subject) -> teacher assignments
+    const streamSubjectTeacherRows = db
+      .prepare(
+        `SELECT stream_id, teacher_id, teacher_name
+         FROM grade_teacher_assignments
+         WHERE school_id = ? AND grade_id = ? AND lower(subject_name) = lower(?) AND is_active = 1 AND stream_id IS NOT NULL`
+      )
+      .all(schoolId, gradeId, subjectName) as Array<{ stream_id: string; teacher_id: string; teacher_name: string }>;
+    const streamSubjectTeacherMap = new Map(
+      streamSubjectTeacherRows.map((r) => [r.stream_id, { id: r.teacher_id, name: r.teacher_name }])
+    );
+
     interface SeparateRoomInput {
       streamId: string;
       teacherId: string;
@@ -2066,15 +2078,16 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       if (rawItems.length > 0) {
         separateRooms = rawItems.map((item: any) => {
           const sid = String(item.streamId || '').trim();
-          const tid = String(item.teacherId || session.userId).trim();
+          const linked = streamSubjectTeacherMap.get(sid);
+          const tid = String(item.teacherId || linked?.id || body.leadTeacherId || session.userId).trim();
           const tRow = db.prepare(`SELECT id, name FROM users WHERE id = ? AND school_id = ?`).get(tid, schoolId) as
             | { id: string; name: string }
             | undefined;
           const dur = Number(item.durationMinutes || durationMinutes);
           return {
             streamId: sid,
-            teacherId: tRow?.id || session.userId,
-            teacherName: tRow?.name || String(session.user?.name || 'Teacher'),
+            teacherId: tRow?.id || linked?.id || session.userId,
+            teacherName: tRow?.name || linked?.name || String(session.user?.name || 'Teacher'),
             scheduledDate: isInstantStart ? nairobiNow.dateStr : String(item.scheduledDate || scheduledDate).trim(),
             startTime: isInstantStart ? nairobiNow.timeStr : String(item.startTime || startTime).trim(),
             durationMinutes: dur,
@@ -2082,14 +2095,17 @@ export function registerVirtualClassroomRoutes(app: Express): void {
           };
         });
       } else {
-        separateRooms = targetStreamIds.map((sid) => ({
-          streamId: sid,
-          teacherId: String(body.leadTeacherId || session.userId),
-          teacherName: String(body.leadTeacherName || session.user?.name || 'Teacher'),
-          scheduledDate,
-          startTime,
-          durationMinutes,
-        }));
+        separateRooms = targetStreamIds.map((sid) => {
+          const linked = streamSubjectTeacherMap.get(sid);
+          return {
+            streamId: sid,
+            teacherId: String(body.leadTeacherId || linked?.id || session.userId),
+            teacherName: String(body.leadTeacherName || linked?.name || session.user?.name || 'Teacher'),
+            scheduledDate,
+            startTime,
+            durationMinutes,
+          };
+        });
       }
       targetStreamIds = separateRooms.map((r) => r.streamId);
     }
@@ -2109,13 +2125,15 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       }
     }
 
-    // Lead teacher for combined mode
-    const leadTeacherId = String(body.leadTeacherId || session.userId).trim();
+    // Lead teacher for combined / individual mode (prefers explicit stream-subject assignment when omitted)
+    const defaultLinkedTeacher =
+      targetStreamIds.length === 1 ? streamSubjectTeacherMap.get(targetStreamIds[0]) : undefined;
+    const leadTeacherId = String(body.leadTeacherId || defaultLinkedTeacher?.id || session.userId).trim();
     const leadTeacherRow = db
       .prepare(`SELECT id, name, email FROM users WHERE id = ? AND school_id = ?`)
       .get(leadTeacherId, schoolId) as { id: string; name: string; email: string } | undefined;
 
-    const leadTeacherName = leadTeacherRow?.name || String(session.user?.name || 'Senior Teacher');
+    const leadTeacherName = leadTeacherRow?.name || defaultLinkedTeacher?.name || String(session.user?.name || 'Senior Teacher');
 
     // Run conflict validation across streams & teachers
     const validationInput =

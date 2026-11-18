@@ -523,6 +523,37 @@ export function ensureTenantTimetableSeeded(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'spread', ?, ?, '[]', '[]', ?, ?, ?, 1, ?)`
     );
 
+    const ttTeacherByUserId = new Map<string, string>();
+    const tpUsers = db
+      .prepare(`SELECT id, user_id FROM tt_teacher_profiles WHERE tenant_id = ?`)
+      .all(tenantId) as Array<{ id: string; user_id: string }>;
+    for (const tp of tpUsers) ttTeacherByUserId.set(String(tp.user_id), String(tp.id));
+
+    const explicitStreamTeacherMap = new Map<string, string>();
+    try {
+      const gtaRows = db
+        .prepare(
+          `SELECT gta.teacher_id, gta.subject_name, g.grade_number, g.name as grade_name, s.name as stream_name
+           FROM grade_teacher_assignments gta
+           JOIN grades g ON g.id = gta.grade_id
+           JOIN streams s ON s.id = gta.stream_id
+           WHERE gta.school_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL`
+        )
+        .all(tenantId) as any[];
+      for (const r of gtaRows) {
+        const gNum = Number(r.grade_number || String(r.grade_name || '').match(/\d+/)?.[0] || 0);
+        const ttTid = ttTeacherByUserId.get(String(r.teacher_id));
+        if (gNum > 0 && r.stream_name && ttTid) {
+          explicitStreamTeacherMap.set(
+            `${gNum}::${String(r.stream_name).toLowerCase()}::${String(r.subject_name).toLowerCase()}`,
+            ttTid
+          );
+        }
+      }
+    } catch {
+      // ignore if hierarchy tables not yet initialized
+    }
+
     const wholeGroups = db
       .prepare(`SELECT id, grade, stream FROM tt_student_groups WHERE tenant_id = ? AND is_whole_class = 1`)
       .all(tenantId) as any[];
@@ -566,8 +597,15 @@ export function ensureTenantTimetableSeeded(
         );
 
         streams.forEach((stream, sIdx) => {
+          const linkedTeacherId = explicitStreamTeacherMap.get(
+            `${grade}::${stream.toLowerCase()}::${p.subject.toLowerCase()}`
+          );
           const streamTeacher = chosenPool.length > 0 ? chosenPool[(grade + subIdx + sIdx) % chosenPool.length] : null;
-          const streamTeacherIds = streamTeacher ? [String(streamTeacher.id)] : [];
+          const streamTeacherIds = linkedTeacherId
+            ? [linkedTeacherId]
+            : streamTeacher
+            ? [String(streamTeacher.id)]
+            : [];
           const homeRoom = rooms.find(
             (r) => Number(r.assigned_grade) === grade && String(r.assigned_stream || '').toLowerCase() === stream.toLowerCase()
           );
@@ -782,7 +820,17 @@ export function expandRequirementUnits(
       classRequiredTotals.set(ck, (classRequiredTotals.get(ck) || 0) + reqWeekly);
     }
 
-    const teacherIds = safeJsonParse<string[]>(sa.teacher_ids_json, []);
+    const rawTeacherIds = safeJsonParse<string[]>(sa.teacher_ids_json, []);
+    const uniqueTeacherIds = Array.from(new Set(rawTeacherIds.filter(Boolean)));
+    if (uniqueTeacherIds.length > 1) {
+      allocationIssues.push({
+        grade,
+        stream,
+        subject: String(sa.subject_name),
+        message: `Multiple teachers assigned to Grade ${grade} ${stream} · ${sa.subject_name}. No subject in any stream can have more than one teacher.`,
+      });
+    }
+    const teacherIds = uniqueTeacherIds.slice(0, 1);
     const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Unassigned Teacher');
     if (teacherIds.length === 0) {
       allocationIssues.push({

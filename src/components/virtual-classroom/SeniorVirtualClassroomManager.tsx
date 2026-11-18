@@ -167,7 +167,19 @@ export const SeniorVirtualClassroomManager: React.FC<SeniorVirtualClassroomManag
     return meta.streams.filter((s) => s.gradeId === gradeId);
   }, [meta, gradeId]);
 
-  // Synchronize separate-stream rows when streams or grade changes
+  const subjectTeacherByStreamId = useMemo(() => {
+    const map = new Map<string, { teacherId: string; teacherName: string }>();
+    if (!meta || !gradeId || !subjectName) return map;
+    const subLower = subjectName.trim().toLowerCase();
+    for (const a of meta.gradeSubjectAssignments || []) {
+      if (a.gradeId === gradeId && a.streamId && a.subjectName.trim().toLowerCase() === subLower) {
+        map.set(a.streamId, { teacherId: a.teacherId, teacherName: a.teacherName });
+      }
+    }
+    return map;
+  }, [meta, gradeId, subjectName]);
+
+  // Synchronize separate-stream rows when streams, grade, or subject changes
   useEffect(() => {
     if (gradeStreams.length === 0) return;
     setSelectedStreamIds((prev) => {
@@ -175,15 +187,27 @@ export const SeniorVirtualClassroomManager: React.FC<SeniorVirtualClassroomManag
       return valid.length > 0 ? valid : [gradeStreams[0].id];
     });
     setSeparateRows(
-      gradeStreams.map((s) => ({
-        streamId: s.id,
-        teacherId: s.classTeacherId || meta?.teachers[0]?.id || '',
-        scheduledDate: scheduledDate || meta?.nairobiNow.dateStr || '',
-        startTime: startTime || meta?.nairobiNow.timeStr || '',
-        durationMinutes: durationMinutes || 40,
-      }))
+      gradeStreams.map((s) => {
+        const linked = subjectTeacherByStreamId.get(s.id);
+        return {
+          streamId: s.id,
+          teacherId: linked?.teacherId || s.classTeacherId || meta?.teachers[0]?.id || '',
+          scheduledDate: scheduledDate || meta?.nairobiNow.dateStr || '',
+          startTime: startTime || meta?.nairobiNow.timeStr || '',
+          durationMinutes: durationMinutes || 40,
+        };
+      })
     );
-  }, [gradeStreams, meta, scheduledDate, startTime, durationMinutes]);
+  }, [gradeStreams, meta, scheduledDate, startTime, durationMinutes, subjectTeacherByStreamId]);
+
+  useEffect(() => {
+    if (schedulingMode === 'individual_stream' && selectedStreamIds.length === 1) {
+      const linked = subjectTeacherByStreamId.get(selectedStreamIds[0]);
+      if (linked?.teacherId) {
+        setLeadTeacherId(linked.teacherId);
+      }
+    }
+  }, [schedulingMode, selectedStreamIds, subjectTeacherByStreamId]);
 
   const openSchedulingModal = useCallback(
     (mode: 'schedule' | 'instant') => {
@@ -995,7 +1019,14 @@ export const SeniorVirtualClassroomManager: React.FC<SeniorVirtualClassroomManag
                         const stObj = gradeStreams.find((s) => s.id === row.streamId);
                         return (
                           <div key={row.streamId} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center bg-white p-2.5 rounded-lg border border-slate-200">
-                            <div className="font-bold text-slate-900">{stObj?.displayName}</div>
+                            <div className="font-bold text-slate-900">
+                              <div>{stObj?.displayName}</div>
+                              {subjectTeacherByStreamId.get(row.streamId) && (
+                                <div className="text-[10px] font-medium text-emerald-700">
+                                  Subject Teacher: {subjectTeacherByStreamId.get(row.streamId)?.teacherName}
+                                </div>
+                              )}
+                            </div>
                             <select
                               value={row.teacherId}
                               onChange={(e) =>

@@ -128,6 +128,16 @@ export function getSubjectsForGrade(grade: GradeLevel): SubjectName[] {
   return [...JUNIOR_SUBJECTS];
 }
 
+export interface SubjectStreamAllocation {
+  id?: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  subject: SubjectName;
+  gradeId?: string;
+  streamId?: string;
+  periodsPerWeek?: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -137,8 +147,9 @@ export interface User {
   grade?: GradeLevel; // Exactly 1 grade for student
   stream?: StreamName; // Exactly 1 stream for student, or assigned stream for class teacher
   className?: string;
-  assignedStreams?: { grade: GradeLevel; stream: StreamName }[]; // For teachers who teach multiple streams
-  assignedSubjects?: SubjectName[]; // For teachers who teach multiple subjects
+  assignedStreams?: { grade: GradeLevel; stream: StreamName }[]; // Derived unique streams from subject allocations
+  assignedSubjects?: SubjectName[]; // Derived unique subjects from subject allocations
+  assignedSubjectAllocations?: SubjectStreamAllocation[]; // Explicit Grade + Specific Stream + Subject links (max 1 teacher per subject/stream)
   assignedActivities?: string[]; // For non-teaching staff, such as drivers
   department?: string; // For HOD (e.g. 'Sciences & Mathematics', 'Languages', 'Humanities')
   childrenIds?: string[]; // For Parent (IDs of student children)
@@ -1174,13 +1185,90 @@ export interface AppNotification {
   message: string;
   category: NotificationCategory;
   targetRole?: UserRole | 'all';
+  targetRoles?: string[];
   targetGrade?: GradeLevel;
   targetStream?: StreamName;
   targetUserId?: string;
+  targetUserIds?: string[];
+  targetDepartments?: string[];
   urgency: 'normal' | 'high' | 'urgent';
   linkTab?: string;
   createdAt: string;
   readByUserIds: string[];
+}
+
+export type ExecutiveReportCategory =
+  | 'bom_report'
+  | 'academic_report'
+  | 'department_review'
+  | 'discipline_safety'
+  | 'finance_operations'
+  | 'parent_briefing'
+  | 'general_report';
+
+export type ExecutiveReportShareTargetType =
+  | 'bom'
+  | 'teachers'
+  | 'departments'
+  | 'parents'
+  | 'individual'
+  | 'group';
+
+export interface ExecutiveReportSection {
+  id: string;
+  heading: string;
+  body: string;
+}
+
+export interface ExecutiveReportShare {
+  id: string;
+  reportId: string;
+  schoolId: string;
+  targetType: ExecutiveReportShareTargetType;
+  targetId: string;
+  targetLabel: string;
+  targetMeta?: Record<string, any>;
+  sharedById: string;
+  sharedByName: string;
+  sharedNote?: string;
+  createdAt: string;
+}
+
+export interface ExecutiveReport {
+  id: string;
+  schoolId: string;
+  title: string;
+  category: ExecutiveReportCategory;
+  classification: string;
+  reportingPeriod: string;
+  term?: string;
+  academicYear?: string;
+  summary?: string;
+  sections: ExecutiveReportSection[];
+  certifiedBy: string;
+  directorateLabel: string;
+  status: 'draft' | 'published';
+  createdById: string;
+  createdByName: string;
+  updatedById?: string;
+  updatedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  shares: ExecutiveReportShare[];
+  matchedReasons?: string[];
+}
+
+export interface ExecutiveReportGroup {
+  id: string;
+  schoolId: string;
+  name: string;
+  description?: string;
+  memberUserIds: string[];
+  memberRoles: string[];
+  isBuiltIn?: boolean;
+  createdById?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LearnerBadge {

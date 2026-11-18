@@ -118,8 +118,24 @@ export function initAcademicHierarchySchema(db: DatabaseSync): void {
       FOREIGN KEY (grade_id) REFERENCES grades(id) ON DELETE CASCADE,
       FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE SET NULL
     );
+    DELETE FROM grade_teacher_assignments
+    WHERE is_active = 1 AND stream_id IS NOT NULL AND id NOT IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (
+          PARTITION BY school_id, grade_id, stream_id, lower(subject_name)
+          ORDER BY updated_at DESC, created_at DESC, id DESC
+        ) as rn
+        FROM grade_teacher_assignments
+        WHERE is_active = 1 AND stream_id IS NOT NULL
+      ) WHERE rn = 1
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_ah_gta_one_teacher_per_stream_subject
+      ON grade_teacher_assignments(school_id, grade_id, stream_id, lower(subject_name))
+      WHERE is_active = 1 AND stream_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_ah_gta_lookup
       ON grade_teacher_assignments(school_id, grade_id, stream_id, is_active);
+    CREATE INDEX IF NOT EXISTS idx_ah_gta_teacher
+      ON grade_teacher_assignments(school_id, teacher_id, is_active);
 
     CREATE TABLE IF NOT EXISTS student_stream_assignments (
       id TEXT PRIMARY KEY,
@@ -675,6 +691,42 @@ export function syncAcademicHierarchyFromExistingData(db: DatabaseSync): void {
           st.admission_number || '',
           gradeId,
           streamId,
+          now,
+          now,
+          now
+        );
+      }
+    }
+
+    // 5. Backfill explicit grade+stream+subject teacher links from user payloads if not yet in grade_teacher_assignments
+    for (const u of schoolUsers) {
+      if (!u.is_active) continue;
+      let payload: Record<string, any> = {};
+      try {
+        payload = u.payload_json ? JSON.parse(u.payload_json) : {};
+      } catch {
+        payload = {};
+      }
+      if (!Array.isArray(payload.assignedSubjectAllocations)) continue;
+      for (const alloc of payload.assignedSubjectAllocations) {
+        if (!alloc?.grade || !alloc?.stream || !alloc?.subject) continue;
+        const gRow = findOrCreateGrade(Number(alloc.grade) || String(alloc.grade));
+        const sRow = findOrCreateStream(gRow, String(alloc.stream));
+        const subj = String(alloc.subject).trim();
+        if (!subj) continue;
+        db.prepare(`
+          INSERT OR IGNORE INTO grade_teacher_assignments
+            (id, school_id, grade_id, stream_id, teacher_id, teacher_name, subject_name, academic_year, periods_per_week, is_active, assigned_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, '2026', ?, 1, ?, ?, ?)
+        `).run(
+          `gta-${slugToken(sRow.id)}-${slugToken(subj)}`,
+          schoolId,
+          gRow.id,
+          sRow.id,
+          u.id,
+          u.name,
+          subj,
+          Math.max(1, Number(alloc.periodsPerWeek || 4)),
           now,
           now,
           now

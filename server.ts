@@ -15,6 +15,7 @@ import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
 import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
 import { registerAcademicHierarchyRoutes } from './src/server/academicHierarchyRoutes.ts';
 import { registerVirtualClassroomRoutes, startVirtualLessonScheduler } from './src/server/virtualClassroomRoutes.ts';
+import { registerUserManagementRoutes } from './src/server/userManagementRoutes.ts';
 import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
@@ -102,6 +103,7 @@ async function startServer() {
   registerTimetableRoutes(app);
   registerAcademicHierarchyRoutes(app);
   registerVirtualClassroomRoutes(app);
+  registerUserManagementRoutes(app);
   startVirtualLessonScheduler();
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API

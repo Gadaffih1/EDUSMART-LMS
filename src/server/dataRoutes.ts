@@ -10,6 +10,7 @@ import {
   writeSecurityAudit,
 } from './db.ts';
 import {
+  ensureDefaultSchoolSettings,
   ingestCollectionData,
   resolveRecordId,
   resolveRecordTenantId,
@@ -532,6 +533,24 @@ export function registerDataRoutes(app: Express): void {
         return res.status(403).json({ error: 'Administrator privileges required to modify school registry.' });
       }
 
+      if (
+        (collection === 'edusmart_users_v1' ||
+          collection === 'edusmart_provisioned_accounts_v1' ||
+          collection === 'edusmart_school_accounts_v1') &&
+        !session.isSuperAdmin &&
+        !['admin', 'head_teacher', 'school_admin_staff'].includes(session.role)
+      ) {
+        return res.status(403).json({
+          error: 'Administrator privileges required to synchronize institutional user accounts.',
+        });
+      }
+
+      if (collection === 'edusmart_school_accounts_v1' && !session.isSuperAdmin && session.role !== 'admin') {
+        return res.status(403).json({
+          error: 'Administrator privileges required to modify school login accounts.',
+        });
+      }
+
       const db = getDb();
       const now = new Date().toISOString();
 
@@ -600,6 +619,14 @@ export function registerDataRoutes(app: Express): void {
             });
 
           ingestCollectionData(db, collection, allowedRecords, false);
+
+          if (collection === 'edusmart_all_tenants_registry' || collection === 'edusmart_school_registry_v1') {
+            for (const item of allowedRecords) {
+              if (item && typeof item === 'object' && item.id) {
+                ensureDefaultSchoolSettings(db, item);
+              }
+            }
+          }
         }
 
         db.exec('COMMIT');
@@ -1083,10 +1110,72 @@ export function registerDataRoutes(app: Express): void {
   // -------------------------------------------------------------------------
   app.get('/api/settings', requireAuth, (req: Request, res: Response) => {
     try {
-      const tenantId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
+      const session = req.authSession!;
+      const db = getDb();
+      const wantsAll = req.query.all === '1' || req.query.tenantId === 'all' || req.query.schoolId === 'all';
+
+      if (wantsAll) {
+        if (!session.isSuperAdmin) {
+          return res.status(403).json({ error: 'Super Administrator privileges required to inspect all tenant settings.' });
+        }
+        const tenantRows = db
+          .prepare(`SELECT id, name, code, payload_json FROM tenants ORDER BY name ASC`)
+          .all() as Array<{ id: string; name: string; code: string; payload_json: string }>;
+
+        const schools = tenantRows.map((t) => {
+          let parsedTenant: any = {};
+          try {
+            parsedTenant = t.payload_json ? JSON.parse(t.payload_json) : {};
+          } catch {
+            parsedTenant = { id: t.id, name: t.name, code: t.code };
+          }
+          ensureDefaultSchoolSettings(db, {
+            id: t.id,
+            name: parsedTenant.name || t.name,
+            shortName: parsedTenant.shortName || parsedTenant.name || t.name,
+            code: parsedTenant.code || t.code,
+            motto: parsedTenant.motto,
+            location: parsedTenant.location,
+            primaryColor: parsedTenant.primaryColor,
+            logoUrl: parsedTenant.logoUrl,
+            curriculum: parsedTenant.curriculum,
+          });
+          const sRows = db
+            .prepare(`SELECT setting_key, payload_json, updated_at FROM school_settings WHERE school_id = ?`)
+            .all(t.id) as Array<{ setting_key: string; payload_json: string; updated_at: string }>;
+          const settings: Record<string, any> = {};
+          for (const sr of sRows) {
+            try {
+              settings[sr.setting_key] = JSON.parse(sr.payload_json);
+            } catch {
+              settings[sr.setting_key] = sr.payload_json;
+            }
+          }
+          return {
+            tenantId: t.id,
+            tenant: parsedTenant,
+            settings,
+          };
+        });
+
+        return res.json({
+          success: true,
+          scope: 'all',
+          schools,
+        });
+      }
+
+      const tenantId = resolveAuthorizedTenantId(req, res, (req.query.tenantId || req.query.schoolId) as string);
       if (!tenantId) return;
 
-      const db = getDb();
+      const tenantRow = db.prepare(`SELECT name, code, payload_json FROM tenants WHERE id = ?`).get(tenantId) as
+        | { name: string; code: string; payload_json: string }
+        | undefined;
+      const parsedTenant = tenantRow?.payload_json ? JSON.parse(tenantRow.payload_json) : null;
+      if (parsedTenant) {
+        ensureDefaultSchoolSettings(db, parsedTenant);
+      }
+
       const rows = db
         .prepare(`SELECT setting_key, payload_json, updated_at FROM school_settings WHERE school_id = ?`)
         .all(tenantId) as Array<{ setting_key: string; payload_json: string; updated_at: string }>;
@@ -1100,11 +1189,10 @@ export function registerDataRoutes(app: Express): void {
         }
       }
 
-      const tenantRow = db.prepare(`SELECT payload_json FROM tenants WHERE id = ?`).get(tenantId) as { payload_json: string } | undefined;
       return res.json({
         success: true,
         tenantId,
-        tenant: tenantRow ? JSON.parse(tenantRow.payload_json) : null,
+        tenant: parsedTenant,
         settings,
       });
     } catch (err: any) {
@@ -1120,36 +1208,70 @@ export function registerDataRoutes(app: Express): void {
         return res.status(403).json({ error: 'Administrator privileges required to update school settings.' });
       }
 
-      const { tenantId: bodyTenantId, settingKey, value, tenantUpdates } = req.body || {};
-      const tenantId = resolveAuthorizedTenantId(req, res, bodyTenantId);
+      const { tenantId: bodyTenantId, schoolId: bodySchoolId, settingKey, value, settings: batchSettings, tenantUpdates } =
+        req.body || {};
+      const tenantId = resolveAuthorizedTenantId(req, res, bodyTenantId || bodySchoolId);
       if (!tenantId) return;
 
       const db = getDb();
       const now = new Date().toISOString();
 
+      const upsertSettingStmt = db.prepare(
+        `INSERT INTO school_settings (school_id, setting_key, payload_json, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(school_id, setting_key)
+         DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`
+      );
+
       db.exec('BEGIN IMMEDIATE');
       try {
         if (settingKey && value !== undefined) {
-          db.prepare(
-            `INSERT INTO school_settings (school_id, setting_key, payload_json, updated_at)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT(school_id, setting_key)
-             DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`
-          ).run(tenantId, String(settingKey), JSON.stringify(value), now);
+          upsertSettingStmt.run(tenantId, String(settingKey), JSON.stringify(value), now);
         }
 
-        if (tenantUpdates && typeof tenantUpdates === 'object') {
-          const row = db.prepare(`SELECT payload_json FROM tenants WHERE id = ?`).get(tenantId) as { payload_json: string } | undefined;
+        if (batchSettings && typeof batchSettings === 'object' && !Array.isArray(batchSettings)) {
+          for (const [k, v] of Object.entries(batchSettings)) {
+            if (v !== undefined) {
+              upsertSettingStmt.run(tenantId, String(k), JSON.stringify(v), now);
+            }
+          }
+        }
+
+        const brandingFromSetting =
+          settingKey === 'profile_and_branding' && value && typeof value === 'object'
+            ? value
+            : batchSettings?.profile_and_branding && typeof batchSettings.profile_and_branding === 'object'
+            ? batchSettings.profile_and_branding
+            : null;
+
+        const effectiveTenantUpdates =
+          tenantUpdates && typeof tenantUpdates === 'object'
+            ? { ...(brandingFromSetting || {}), ...tenantUpdates }
+            : brandingFromSetting;
+
+        if (effectiveTenantUpdates && typeof effectiveTenantUpdates === 'object') {
+          const row = db.prepare(`SELECT payload_json FROM tenants WHERE id = ?`).get(tenantId) as
+            | { payload_json: string }
+            | undefined;
           if (row) {
             const current = JSON.parse(row.payload_json);
-            const merged = { ...current, ...tenantUpdates, id: tenantId };
+            const merged = { ...current, ...effectiveTenantUpdates, id: tenantId };
             ingestCollectionData(db, 'edusmart_all_tenants_registry', [merged], false);
-            db.prepare(
-              `INSERT INTO school_settings (school_id, setting_key, payload_json, updated_at)
-               VALUES (?, 'profile_and_branding', ?, ?)
-               ON CONFLICT(school_id, setting_key)
-               DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`
-            ).run(tenantId, JSON.stringify(merged), now);
+            upsertSettingStmt.run(
+              tenantId,
+              'profile_and_branding',
+              JSON.stringify({
+                id: tenantId,
+                name: merged.name,
+                shortName: merged.shortName || merged.name,
+                code: merged.code,
+                motto: merged.motto || 'Excellence & Integrity',
+                location: merged.location || 'Kenya',
+                primaryColor: merged.primaryColor || '#2563eb',
+                logoUrl: merged.logoUrl || '',
+              }),
+              now
+            );
           }
         }
         db.exec('COMMIT');
@@ -1158,6 +1280,7 @@ export function registerDataRoutes(app: Express): void {
         throw e;
       }
 
+      notifyMySqlTablesChanged(['school_settings', 'tenants', 'collections_store']);
       broadcastChange({
         type: 'settings:updated',
         collection: 'edusmart_all_tenants_registry',
@@ -1166,7 +1289,19 @@ export function registerDataRoutes(app: Express): void {
         timestamp: now,
       });
 
-      return res.json({ success: true, tenantId, timestamp: now });
+      const updatedRows = db
+        .prepare(`SELECT setting_key, payload_json FROM school_settings WHERE school_id = ?`)
+        .all(tenantId) as Array<{ setting_key: string; payload_json: string }>;
+      const updatedSettings: Record<string, any> = {};
+      for (const r of updatedRows) {
+        try {
+          updatedSettings[r.setting_key] = JSON.parse(r.payload_json);
+        } catch {
+          updatedSettings[r.setting_key] = r.payload_json;
+        }
+      }
+
+      return res.json({ success: true, tenantId, settings: updatedSettings, timestamp: now });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed updating school settings', message: err?.message });
     }

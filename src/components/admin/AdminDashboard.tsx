@@ -60,7 +60,12 @@ import {
   SlidersHorizontal,
   Building2,
   ChevronLeft,
-  Menu
+  Menu,
+  Search,
+  Trash2,
+  UserCheck,
+  UserX,
+  AlertTriangle
 } from 'lucide-react';
 import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 
@@ -81,6 +86,7 @@ import { StudentDirectoryPage } from './StudentDirectoryPage';
 import { GradeClassPages } from './GradeClassPages';
 import { DepartmentPages } from './DepartmentPages';
 import { RoleDirectory } from './RoleDirectory';
+import { SchoolSettingsPanel } from './SchoolSettingsPanel';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -123,11 +129,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   }, []);
 
   React.useEffect(() => {
+    ClientDataStore.apiFetchUsers({ schoolId: currentTenant.id }).catch(() => {});
+    ClientDataStore.loadSchoolSettings(currentTenant.id).catch(() => {});
+  }, [currentTenant.id]);
+
+  React.useEffect(() => {
     const handleNavEvent = (e: Event) => {
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['overview', 'grade_management', 'stream_management', 'senior_assignments', 'class_assignments', 'grade_performance', 'consolidated_reports', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
+        if (['overview', 'school_settings', 'grade_management', 'stream_management', 'senior_assignments', 'class_assignments', 'grade_performance', 'consolidated_reports', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
           openTab(tab as AdminActionTab);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
@@ -141,6 +152,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     window.addEventListener('workspace-nav-tab', handleNavEvent);
     return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
   }, []);
+
+  const tenantUsers = React.useMemo(
+    () => allUsers.filter((u) => (u.schoolId || currentTenant.id) === currentTenant.id),
+    [allUsers, currentTenant.id]
+  );
+
+  // User Directory Filters & Management Modals
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'deactivated'>('all');
+  const [editSaving, setEditSaving] = useState(false);
+  const [createUserBusy, setCreateUserBusy] = useState(false);
+
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<User | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordBusy, setResetPasswordBusy] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState('');
+
+  const [deleteUserTarget, setDeleteUserTarget] = useState<User | null>(null);
+  const [deleteUserBusy, setDeleteUserBusy] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState('');
 
   // Edit User & Assign Role Modal State
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -188,58 +220,155 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const gatePasses = Storage.getGatePasses();
   const virtualClasses = Storage.getVirtualClasses();
 
-  // Open Edit User & Assign Role Modal
+  const filteredTenantUsers = React.useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return tenantUsers.filter((u) => {
+      const matchesSearch =
+        !q ||
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.admissionNumber && u.admissionNumber.toLowerCase().includes(q)) ||
+        (u.staffNumber && u.staffNumber.toLowerCase().includes(q)) ||
+        (u.tscNumber && u.tscNumber.toLowerCase().includes(q)) ||
+        (u.phone && u.phone.toLowerCase().includes(q));
+      const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+      const isUserActive = u.isActive !== false;
+      const matchesStatus =
+        userStatusFilter === 'all' ? true : userStatusFilter === 'active' ? isUserActive : !isUserActive;
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [tenantUsers, userSearch, userRoleFilter, userStatusFilter]);
+
+  // Open Edit User & Assign Role Modal (leave password blank unless changing)
   const handleOpenEditUserModal = (user: User) => {
     setEditingUser(user);
     setEditName(user.name);
     setEditEmail(user.email);
-    setEditPassword(user.password || '');
+    setEditPassword('');
     setEditRole(user.role);
     setEditGrade(user.grade || 4);
     setEditStream(user.stream || 'Dove');
-    setEditIdNumber(user.admissionNumber || user.tscNumber || '');
+    setEditIdNumber(user.admissionNumber || user.staffNumber || user.tscNumber || '');
     setEditDepartment(user.department || '');
     setEditDesignation(user.designation || '');
-    // Load custom permissions or default from current role
     setEditCustomPermissions(user.customPermissions ? { ...user.customPermissions } : {});
   };
 
-  // Save Edited User and Role
-  const handleSaveUserRoleAndPermissions = (e: React.FormEvent) => {
+  // Save Edited User and Role directly via authoritative /api/users/:id endpoint
+  const handleSaveUserRoleAndPermissions = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || editSaving) return;
 
     if (!editEmail.includes('@')) {
       showToast('Please provide a valid email address.', 'error');
       return;
     }
 
-    const updates: Partial<User> = {
+    const trimmedPassword = editPassword.trim();
+    if (trimmedPassword.length > 0 && trimmedPassword.length < 4) {
+      showToast('New password must be at least 4 characters.', 'error');
+      return;
+    }
+
+    const roleMeta = systemRoles.find((r) => r.slug === editRole);
+    const updates: Partial<User> & { password?: string } = {
       name: editName.trim(),
       email: editEmail.trim().toLowerCase(),
-      password: editPassword.trim(),
       role: editRole,
+      schoolId: editingUser.schoolId || currentTenant.id,
       designation: editDesignation.trim(),
       grade: ['student', 'class_teacher'].includes(editRole) ? editGrade : undefined,
       stream: ['student', 'class_teacher'].includes(editRole) ? editStream : undefined,
       department: editRole === 'hod' ? editDepartment : undefined,
-      admissionNumber: editRole === 'student' ? editIdNumber : undefined,
-      tscNumber: ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'deputy_head', 'librarian', 'head_teacher', 'nurse'].includes(editRole) ? editIdNumber : undefined,
+      admissionNumber: editRole === 'student' || roleMeta?.numberKind === 'admission' ? editIdNumber.trim() || undefined : undefined,
+      staffNumber: roleMeta?.numberKind === 'staff' ? editIdNumber.trim() || undefined : editingUser.staffNumber,
+      tscNumber: ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'deputy_head', 'librarian', 'head_teacher', 'nurse'].includes(editRole) ? (editIdNumber.trim() || undefined) : undefined,
       customPermissions: Object.keys(editCustomPermissions).length > 0 ? editCustomPermissions : undefined
     };
+    if (trimmedPassword.length > 0) {
+      updates.password = trimmedPassword;
+    }
 
     const previousRole = editingUser.role;
-    const updated = Storage.updateUser(editingUser.id, updates);
-    if (updated) {
+    setEditSaving(true);
+    try {
+      let updated = await ClientDataStore.apiUpdateUser(editingUser.id, updates);
       if (updated.role !== previousRole && isDirectoryRole(updated.role)) {
         const seat = assignUserToRole(currentTenant.id, updated.role, updated, keptProfile(editingUser));
         const started = [...seat.holders].reverse().find((holder) => !holder.endedAt)?.startedAt;
-        if (started) Storage.updateUser(updated.id, { roleStartedAt: started, roleReleasedAt: undefined });
+        if (started) {
+          updated = await ClientDataStore.apiUpdateUser(updated.id, { roleStartedAt: started, roleReleasedAt: undefined });
+        }
       }
-      saveProvisionedAccount(Storage.getUsers().find((user) => user.id === updated.id) || updated);
+      saveProvisionedAccount({ ...updated, ...(trimmedPassword ? { password: trimmedPassword } : {}) });
       setAllUsers(Storage.getUsers());
       showToast(`User ${updated.name} successfully updated! Role assigned as ${editRole.replace('_', ' ').toUpperCase()}.`, 'success');
       setEditingUser(null);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed saving user details.', 'error');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleToggleUserActivation = async (user: User) => {
+    const nextStatus = user.isActive === false;
+    try {
+      await ClientDataStore.apiUpdateUser(user.id, { isActive: nextStatus });
+      setAllUsers(Storage.getUsers());
+      showToast(`Account for ${user.name} is now ${nextStatus ? 'ACTIVE' : 'DEACTIVATED'}.`, nextStatus ? 'success' : 'info');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed updating account status.', 'error');
+    }
+  };
+
+  const handleOpenResetPassword = (user: User) => {
+    setResetPasswordTarget(user);
+    setResetPasswordValue('');
+    setResetPasswordError('');
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordTarget || resetPasswordBusy) return;
+    const nextPass = resetPasswordValue.trim();
+    if (nextPass.length < 4) {
+      setResetPasswordError('Password must be at least 4 characters.');
+      return;
+    }
+    setResetPasswordBusy(true);
+    setResetPasswordError('');
+    try {
+      await ClientDataStore.apiResetUserPassword(resetPasswordTarget.id, nextPass);
+      saveProvisionedAccount({ ...resetPasswordTarget, password: nextPass });
+      showToast(`Password reset for ${resetPasswordTarget.name} (${resetPasswordTarget.email}).`, 'success');
+      setResetPasswordTarget(null);
+      setResetPasswordValue('');
+    } catch (err: any) {
+      setResetPasswordError(err?.message || 'Failed resetting password.');
+    } finally {
+      setResetPasswordBusy(false);
+    }
+  };
+
+  const handleOpenDeleteUser = (user: User) => {
+    setDeleteUserTarget(user);
+    setDeleteUserError('');
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteUserTarget || deleteUserBusy) return;
+    setDeleteUserBusy(true);
+    setDeleteUserError('');
+    try {
+      await ClientDataStore.apiDeleteUser(deleteUserTarget.id);
+      setAllUsers(Storage.getUsers());
+      showToast(`Removed user account ${deleteUserTarget.name} (${deleteUserTarget.email}).`, 'info');
+      setDeleteUserTarget(null);
+    } catch (err: any) {
+      setDeleteUserError(err?.message || 'Failed deleting user account.');
+    } finally {
+      setDeleteUserBusy(false);
     }
   };
 
@@ -283,9 +412,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     showToast('All role access permissions have been reset to factory defaults.', 'info');
   };
 
-  // Handle Create User
-  const handleCreateUser = (e: React.FormEvent) => {
+  // Handle Create User directly against /api/users
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (createUserBusy) return;
     setCreateUserError('');
     setCreateUserSuccess(false);
 
@@ -309,13 +439,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       return;
     }
 
+    const targetSchoolId = currentTenant?.id || 'tenant-riara';
     const newUser: User = {
       id: `usr-${newRole}-${Date.now()}`,
       name: newName.trim(),
       email: newEmail.trim().toLowerCase(),
       password: newPassword,
       role: newRole as UserRole,
-      schoolId: currentTenant?.id || 'tenant-riara',
+      schoolId: targetSchoolId,
       isActive: true,
       grade: newRole === 'student' || newRole === 'class_teacher' ? newGrade : undefined,
       stream: newRole === 'student' || newRole === 'class_teacher' ? newStream : undefined,
@@ -327,84 +458,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       assignedSubjects: newRole === 'teacher' ? ['Mathematics', 'Integrated Science'] : undefined
     };
 
-    // If creating a student and parent details are entered, interlink them
-    if (newRole === 'student' && newStudentParentName.trim()) {
-      const pName = newStudentParentName.trim();
-      const pPhone = newStudentParentPhone.trim();
-      const pRel = newStudentParentRel.trim() || 'Parent';
-      const cleanEmail = newStudentParentEmail.trim().toLowerCase() || `parent.${pName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
+    setCreateUserBusy(true);
+    try {
+      // If creating a student and parent details are entered, interlink them
+      if (newRole === 'student' && newStudentParentName.trim()) {
+        const pName = newStudentParentName.trim();
+        const pPhone = newStudentParentPhone.trim();
+        const pRel = newStudentParentRel.trim() || 'Parent';
+        const cleanEmail = newStudentParentEmail.trim().toLowerCase() || `parent.${pName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
 
-      const allExisting = Storage.getUsers();
-      const existingParent = allExisting.find(u => 
-        u.role === 'parent' && (
-          (cleanEmail && u.email.toLowerCase() === cleanEmail) ||
-          (pPhone && u.phone && u.phone.replace(/\D/g, '') === pPhone.replace(/\D/g, ''))
-        )
-      );
+        const existingParent = tenantUsers.find(u =>
+          u.role === 'parent' && (
+            (cleanEmail && u.email.toLowerCase() === cleanEmail) ||
+            (pPhone && u.phone && u.phone.replace(/\D/g, '') === pPhone.replace(/\D/g, ''))
+          )
+        );
 
-      if (existingParent) {
-        newUser.parentId = existingParent.id;
-        newUser.parentName = existingParent.name;
-        newUser.parentPhone = existingParent.phone;
-        newUser.parentEmail = existingParent.email;
-        newUser.parentRelationship = pRel;
-        const currentChildren = new Set(existingParent.childrenIds || []);
-        currentChildren.add(newUser.id);
-        existingParent.childrenIds = Array.from(currentChildren);
-        Storage.addUser(existingParent);
-        saveProvisionedAccount(existingParent);
-      } else {
-        const newParentUser: User = {
-          id: `usr-parent-${Date.now()}`,
-          name: pName,
-          email: cleanEmail,
-          password: 'parent2026',
-          role: 'parent',
-          schoolId: currentTenant?.id || 'tenant-riara',
-          isActive: true,
-          phone: pPhone || undefined,
-          childrenIds: [newUser.id],
-          designation: `${pRel} / Guardian`,
-        };
-        newUser.parentId = newParentUser.id;
-        newUser.parentName = newParentUser.name;
-        newUser.parentPhone = newParentUser.phone;
-        newUser.parentEmail = newParentUser.email;
-        newUser.parentRelationship = pRel;
-        Storage.addUser(newParentUser);
-        saveProvisionedAccount(newParentUser);
+        if (existingParent) {
+          newUser.parentId = existingParent.id;
+          newUser.parentName = existingParent.name;
+          newUser.parentPhone = existingParent.phone;
+          newUser.parentEmail = existingParent.email;
+          newUser.parentRelationship = pRel;
+          const currentChildren = new Set(existingParent.childrenIds || []);
+          currentChildren.add(newUser.id);
+          const updatedParent = await ClientDataStore.apiUpdateUser(existingParent.id, {
+            childrenIds: Array.from(currentChildren),
+          });
+          saveProvisionedAccount(updatedParent);
+        } else {
+          const parentPass = `pr@${new Date().getFullYear()}`;
+          const newParentUser: User = {
+            id: `usr-parent-${Date.now()}`,
+            name: pName,
+            email: cleanEmail,
+            password: parentPass,
+            role: 'parent',
+            schoolId: targetSchoolId,
+            isActive: true,
+            phone: pPhone || undefined,
+            childrenIds: [newUser.id],
+            designation: `${pRel} / Guardian`,
+          };
+          newUser.parentId = newParentUser.id;
+          newUser.parentName = newParentUser.name;
+          newUser.parentPhone = newParentUser.phone;
+          newUser.parentEmail = newParentUser.email;
+          newUser.parentRelationship = pRel;
+          const createdParent = await ClientDataStore.apiCreateUser(newParentUser);
+          saveProvisionedAccount({ ...createdParent, password: parentPass });
+        }
       }
-    }
 
-    // If creating a parent, bidirectional link to selected child
-    if (newRole === 'parent' && newSelectedChildId) {
-      const allExisting = Storage.getUsers();
-      const childStudent = allExisting.find(u => u.id === newSelectedChildId);
-      if (childStudent) {
-        childStudent.parentId = newUser.id;
-        childStudent.parentName = newUser.name;
-        childStudent.parentPhone = newUser.phone;
-        childStudent.parentEmail = newUser.email;
-        childStudent.parentRelationship = 'Parent';
-        Storage.addUser(childStudent);
-        saveProvisionedAccount(childStudent);
+      const createdUser = await ClientDataStore.apiCreateUser(newUser);
+      saveProvisionedAccount({ ...createdUser, password: newPassword });
+
+      // If creating a parent, bidirectional link to selected child
+      if (newRole === 'parent' && newSelectedChildId) {
+        const childStudent = tenantUsers.find(u => u.id === newSelectedChildId);
+        if (childStudent) {
+          const updatedStudent = await ClientDataStore.apiUpdateUser(childStudent.id, {
+            parentId: createdUser.id,
+            parentName: createdUser.name,
+            parentPhone: createdUser.phone,
+            parentEmail: createdUser.email,
+            parentRelationship: 'Parent',
+          });
+          saveProvisionedAccount(updatedStudent);
+        }
       }
-    }
 
-    Storage.addUser(newUser);
-    saveProvisionedAccount(newUser);
-    setAllUsers(Storage.getUsers());
-    setCreateUserSuccess(true);
-    setNewName('');
-    setNewEmail('');
-    setNewPassword('');
-    setNewRole('');
-    setNewIdNumber('');
-    setNewStudentParentName('');
-    setNewStudentParentPhone('');
-    setNewStudentParentEmail('');
-    setNewStudentParentRel('Parent');
-    setTimeout(() => setCreateUserSuccess(false), 3000);
+      setAllUsers(Storage.getUsers());
+      setCreateUserSuccess(true);
+      showToast(`Created ${createdUser.name} (${createdUser.email}).`, 'success');
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('');
+      setNewIdNumber('');
+      setNewStudentParentName('');
+      setNewStudentParentPhone('');
+      setNewStudentParentEmail('');
+      setNewStudentParentRel('Parent');
+      setTimeout(() => setCreateUserSuccess(false), 3000);
+    } catch (err: any) {
+      setCreateUserError(err?.message || 'Could not create user account on the database.');
+    } finally {
+      setCreateUserBusy(false);
+    }
   };
 
   // Update grade password
@@ -425,10 +566,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         onToggleCollapsed={() => setMenuCollapsed((open) => !open)}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
-        userCount={allUsers.length}
+        userCount={tenantUsers.length}
         workLogCount={workLogs.length}
       />
       <div className="min-w-0 flex-1 px-4 py-6 space-y-6 sm:px-6 lg:px-8">
+      {actionToast && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold shadow-xs ${
+          actionToast.type === 'error'
+            ? 'bg-rose-50 text-rose-900 border-rose-200'
+            : actionToast.type === 'info'
+            ? 'bg-blue-50 text-blue-900 border-blue-200'
+            : 'bg-emerald-50 text-emerald-950 border-emerald-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {actionToast.type === 'error' ? <AlertTriangle className="w-4 h-4 text-rose-600" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+            <span>{actionToast.message}</span>
+          </div>
+          <button type="button" onClick={() => setActionToast(null)} className="text-slate-500 hover:text-slate-800 cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Leadership & Admin Banner */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -466,8 +625,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         {/* Quick summary stats */}
         <div className="flex items-center gap-3 text-xs">
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="text-slate-500 text-[10px] uppercase font-bold">Total Accounts</div>
-            <div className="text-base font-extrabold font-mono text-slate-900">{allUsers.length}</div>
+            <div className="text-slate-500 text-[10px] uppercase font-bold">School Accounts</div>
+            <div className="text-base font-extrabold font-mono text-slate-900">{tenantUsers.length}</div>
           </div>
           <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
             <div className="text-emerald-800 text-[10px] uppercase font-bold">Active Passes</div>
@@ -806,13 +965,165 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         </section>
       )}
 
+      {activeTab === 'school_settings' && (
+        <SchoolSettingsPanel schoolId={currentTenant.id} />
+      )}
+
       {activeTab === 'users' && (
-        <RoleDirectory
-          schoolId={currentTenant.id}
-          users={allUsers}
-          onEdit={handleOpenEditUserModal}
-          onChanged={(message) => { setAllUsers(Storage.getUsers()); showToast(message, 'success'); }}
-        />
+        <div className="space-y-6">
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  {currentTenant.name} — User Accounts Directory
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Create accounts, edit details & permissions, reset passwords, activate/deactivate, or remove accounts within your school.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openTab('create_user')}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Create Account</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search name, email, Adm/Staff #..."
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <select
+                value={userRoleFilter}
+                onChange={(e) => setUserRoleFilter(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">All School Roles</option>
+                {systemRoles.map((role) => (
+                  <option key={role.id} value={role.slug}>{role.name}</option>
+                ))}
+              </select>
+              <select
+                value={userStatusFilter}
+                onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'deactivated')}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">All Account Statuses</option>
+                <option value="active">Active Only</option>
+                <option value="deactivated">Deactivated Only</option>
+              </select>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3">User &amp; Email</th>
+                    <th className="py-2.5 px-3">Role &amp; Class</th>
+                    <th className="py-2.5 px-3">ID / Contact</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTenantUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-400">
+                        No school user accounts match your current filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTenantUsers.map((u) => {
+                      const active = u.isActive !== false;
+                      const isSelf = u.id === currentUser.id;
+                      return (
+                        <tr key={u.id} className={`hover:bg-slate-50/80 ${!active ? 'bg-rose-50/30' : ''}`}>
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900">{u.name}</div>
+                            <div className="text-[11px] font-mono text-slate-500">{u.email}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 capitalize">
+                              {u.role.replace(/_/g, ' ')}
+                            </span>
+                            {u.grade && (
+                              <div className="text-[10px] text-slate-500 mt-0.5">
+                                Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">
+                            <div className="font-mono text-[11px]">{u.admissionNumber || u.staffNumber || u.tscNumber || '—'}</div>
+                            {u.phone && <div className="text-[10px] text-slate-400">{u.phone}</div>}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              type="button"
+                              disabled={isSelf}
+                              onClick={() => handleToggleUserActivation(u)}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
+                                active
+                                  ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                  : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                              }`}
+                              title={isSelf ? 'Current signed-in account' : active ? 'Click to deactivate' : 'Click to activate'}
+                            >
+                              {active ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                              <span>{active ? 'Active' : 'Deactivated'}</span>
+                            </button>
+                          </td>
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditUserModal(u)}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-indigo-700 cursor-pointer"
+                              title="Edit details, role & permissions"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenResetPassword(u)}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-amber-50 hover:text-amber-700 cursor-pointer"
+                              title="Reset password"
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSelf}
+                              onClick={() => handleOpenDeleteUser(u)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={isSelf ? 'Cannot delete your own active account' : 'Remove account'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <RoleDirectory
+            schoolId={currentTenant.id}
+            users={tenantUsers}
+            onEdit={handleOpenEditUserModal}
+            onChanged={(message) => { setAllUsers(Storage.getUsers()); showToast(message, 'success'); }}
+          />
+        </div>
       )}
 
 
@@ -1071,7 +1382,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   onChange={(e) => setNewSelectedChildId(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
                 >
-                  {allUsers.filter(u => u.role === 'student').map(s => (
+                  {tenantUsers.filter(u => u.role === 'student').map(s => (
                     <option key={s.id} value={s.id}>
                       {s.name} (Grade {s.grade} {s.stream}) - {s.admissionNumber}
                     </option>
@@ -1083,9 +1394,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             <div className="pt-2">
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                disabled={createUserBusy}
+                className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                Create Account & Provision Access
+                {createUserBusy ? 'Saving to Database…' : 'Create Account & Provision Access'}
               </button>
             </div>
           </form>
@@ -1711,12 +2023,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      New Password <span className="text-[10px] font-normal text-slate-500">(optional — leave blank to keep existing)</span>
+                    </label>
                     <input
                       type="text"
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
-                      required
+                      placeholder="Leave blank to preserve current password"
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                     />
                   </div>
@@ -1923,13 +2237,136 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  disabled={editSaving}
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 disabled:opacity-60 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save User & Apply Permissions</span>
+                  <span>{editSaving ? 'Saving…' : 'Save User & Apply Permissions'}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: RESET USER PASSWORD
+          ======================================================== */}
+      {resetPasswordTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Reset Account Password</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">{resetPasswordTarget.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetPasswordTarget(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleConfirmResetPassword} className="p-5 space-y-4 text-xs">
+              <p className="text-slate-600">
+                Set a new database-retained password for <strong className="text-slate-900">{resetPasswordTarget.name}</strong>. Active sessions for this account will be revoked immediately.
+              </p>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">New Password (min 4 characters)</label>
+                <input
+                  type="text"
+                  required
+                  minLength={4}
+                  autoFocus
+                  value={resetPasswordValue}
+                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  placeholder="Enter new password..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              {resetPasswordError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold">
+                  {resetPasswordError}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordBusy}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {resetPasswordBusy ? 'Resetting…' : 'Reset Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: CONFIRM DELETE USER ACCOUNT
+          ======================================================== */}
+      {deleteUserTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-rose-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-950">Remove User Account</h3>
+                  <p className="text-[11px] text-rose-700 font-mono">{deleteUserTarget.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteUserTarget(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-700 leading-relaxed">
+                Are you sure you want to permanently remove <strong className="text-slate-900">{deleteUserTarget.name}</strong> from <strong className="text-slate-900">{currentTenant.name}</strong>? Their sign-in credentials and sessions will be deleted across the database.
+              </p>
+              {deleteUserError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold">
+                  {deleteUserError}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteUserTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteUserBusy}
+                  onClick={handleConfirmDeleteUser}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {deleteUserBusy ? 'Removing…' : 'Remove Account'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

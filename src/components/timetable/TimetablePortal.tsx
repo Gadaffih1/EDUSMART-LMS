@@ -184,7 +184,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         setAllSlots(mappedSlots);
       }
     } catch {
-      // Preserve localStorage timetable if backend does not yet have a published version
+      // Preserve database-hydrated timetable cache if backend does not yet have a published version
     }
   };
 

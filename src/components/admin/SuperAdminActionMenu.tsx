@@ -11,6 +11,7 @@ import {
   Palette,
   School,
   Settings,
+  SlidersHorizontal,
   Smartphone,
   Sparkles,
   SpellCheck,
@@ -26,6 +27,7 @@ export type SuperAdminTab =
   | 'schools'
   | 'grades_streams'
   | 'branding'
+  | 'school_settings'
   | 'users'
   | 'spelling'
   | 'categories'
@@ -73,6 +75,7 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
         { id: 'schools', label: 'Schools & Tenancy', icon: School, badge: String(schoolCount) },
         { id: 'grades_streams', label: 'Grades & Streams', icon: GraduationCap },
         { id: 'branding', label: 'Logo & Background', icon: Palette },
+        { id: 'school_settings', label: 'Tenant School Settings', icon: SlidersHorizontal },
         { id: 'users', label: 'Users & Staff', icon: Users, badge: String(userCount) },
       ],
     },

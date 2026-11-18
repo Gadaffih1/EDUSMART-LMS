@@ -14,6 +14,7 @@ import {
   HeartPulse,
   KeyRound,
   School,
+  Settings,
   Shield,
   ShieldCheck,
   SlidersHorizontal,
@@ -59,7 +60,8 @@ export type AdminActionTab =
   | 'oversight'
   | 'reports'
   | 'pwa_analytics'
-  | 'operations';
+  | 'operations'
+  | 'school_settings';
 
 interface ActionItem {
   id: AdminActionTab;
@@ -94,6 +96,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       title: 'School',
       items: [
         { id: 'overview', label: 'Dashboard Overview', icon: School },
+        { id: 'school_settings', label: 'School Settings & Profile', icon: Settings },
         { id: 'grades', label: 'Grades & Streams Directory', icon: GraduationCap },
         { id: 'students', label: 'Students', icon: IdCard },
         { id: 'departments', label: 'Departments', icon: Building2 },

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { getDb, getDbPaths, hashPassword, isHashedPassword, verifyPassword } from './db.ts';
+import { getDb, getDbPaths, hashPassword, isHashedPassword, upsertCredentialVault, verifyPassword } from './db.ts';
 import { syncAcademicHierarchyFromExistingData } from './academicHierarchySchema.ts';
 import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization.ts';
 
@@ -408,48 +408,137 @@ function upsertRelationalRow(db: DatabaseSync, collectionKey: string, item: any,
 
   if (collectionKey === 'edusmart_users_v1') {
     if (!item.id || !item.email) return;
-    const rawPass = item.password || item.passwordHash || 'admin2026';
-    const passHash = isHashedPassword(rawPass) ? rawPass : hashPassword(String(rawPass));
-    const cleanPayload = { ...item };
+    const cleanEmail = String(item.email).trim().toLowerCase();
+    const existingRow = db
+      .prepare(`SELECT password_hash FROM users WHERE id = ?`)
+      .get(String(item.id)) as { password_hash?: string | null } | undefined;
+
+    const explicitPass = item.password || item.passwordHash || '';
+    let passHash = existingRow?.password_hash || '';
+    if (explicitPass) {
+      passHash = isHashedPassword(explicitPass) ? explicitPass : hashPassword(String(explicitPass));
+    } else if (!passHash) {
+      passHash = hashPassword('admin2026');
+    }
+
+    const cleanPayload = { ...item, email: cleanEmail };
     delete cleanPayload.password;
     delete cleanPayload.passwordHash;
-    db.prepare(
-      `${mode} INTO users (id, email, name, role, school_id, admission_number, staff_number, tsc_number, password_hash, is_active, payload_json, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(item.id),
-      String(item.email).trim().toLowerCase(),
-      String(item.name || 'User'),
-      String(item.role || 'student'),
-      String(item.schoolId || 'tenant-riara'),
-      item.admissionNumber || null,
-      item.staffNumber || null,
-      item.tscNumber || null,
-      passHash,
-      item.isActive === false ? 0 : 1,
-      JSON.stringify(cleanPayload),
-      now
-    );
+
+    if (onlyIfMissing) {
+      db.prepare(
+        `INSERT OR IGNORE INTO users (id, email, name, role, school_id, admission_number, staff_number, tsc_number, password_hash, is_active, payload_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        String(item.id),
+        cleanEmail,
+        String(item.name || 'User'),
+        String(item.role || 'student'),
+        String(item.schoolId || 'tenant-riara'),
+        item.admissionNumber || null,
+        item.staffNumber || null,
+        item.tscNumber || null,
+        passHash,
+        item.isActive === false ? 0 : 1,
+        JSON.stringify(cleanPayload),
+        now
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO users (id, email, name, role, school_id, admission_number, staff_number, tsc_number, password_hash, is_active, payload_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           email = excluded.email,
+           name = excluded.name,
+           role = excluded.role,
+           school_id = excluded.school_id,
+           admission_number = excluded.admission_number,
+           staff_number = excluded.staff_number,
+           tsc_number = excluded.tsc_number,
+           password_hash = CASE WHEN ? != '' THEN excluded.password_hash ELSE COALESCE(users.password_hash, excluded.password_hash) END,
+           is_active = excluded.is_active,
+           payload_json = excluded.payload_json,
+           updated_at = excluded.updated_at`
+      ).run(
+        String(item.id),
+        cleanEmail,
+        String(item.name || 'User'),
+        String(item.role || 'student'),
+        String(item.schoolId || 'tenant-riara'),
+        item.admissionNumber || null,
+        item.staffNumber || null,
+        item.tscNumber || null,
+        passHash,
+        item.isActive === false ? 0 : 1,
+        JSON.stringify(cleanPayload),
+        now,
+        explicitPass ? '1' : ''
+      );
+    }
+
+    if (item.password && !isHashedPassword(String(item.password))) {
+      upsertCredentialVault(db, {
+        sourceTable: 'users',
+        recordId: String(item.id),
+        schoolId: String(item.schoolId || 'tenant-riara'),
+        email: cleanEmail,
+        plaintextPassword: String(item.password),
+      });
+    }
     return;
   }
 
   if (collectionKey === 'edusmart_platform_admins_v1') {
     if (!item.id || !item.email) return;
-    const rawPass = item.password || item.passwordHash || '';
-    const passHash = isHashedPassword(rawPass) ? rawPass : hashPassword(String(rawPass));
-    db.prepare(
-      `${mode} INTO platform_admins (id, name, email, password_hash, rights_json, access_scope, is_active, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(item.id),
-      String(item.name || 'Platform Super Admin'),
-      String(item.email).trim().toLowerCase(),
-      passHash,
-      JSON.stringify(item.rights || ['super_admin_page']),
-      String(item.accessScope || 'super_admin_only'),
-      item.isActive === false ? 0 : 1,
-      now
-    );
+    const cleanEmail = String(item.email).trim().toLowerCase();
+    const existingAdminRow = db
+      .prepare(`SELECT password_hash FROM platform_admins WHERE id = ?`)
+      .get(String(item.id)) as { password_hash?: string | null } | undefined;
+    const explicitPass = item.password || item.passwordHash || '';
+    const passHash = explicitPass
+      ? isHashedPassword(explicitPass)
+        ? explicitPass
+        : hashPassword(String(explicitPass))
+      : existingAdminRow?.password_hash || '';
+
+    if (onlyIfMissing) {
+      db.prepare(
+        `INSERT OR IGNORE INTO platform_admins (id, name, email, password_hash, rights_json, access_scope, is_active, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        String(item.id),
+        String(item.name || 'Platform Super Admin'),
+        cleanEmail,
+        passHash,
+        JSON.stringify(item.rights || ['super_admin_page']),
+        String(item.accessScope || 'super_admin_only'),
+        item.isActive === false ? 0 : 1,
+        now
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO platform_admins (id, name, email, password_hash, rights_json, access_scope, is_active, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name,
+           email = excluded.email,
+           password_hash = CASE WHEN ? != '' THEN excluded.password_hash ELSE COALESCE(platform_admins.password_hash, excluded.password_hash) END,
+           rights_json = excluded.rights_json,
+           access_scope = excluded.access_scope,
+           is_active = excluded.is_active,
+           updated_at = excluded.updated_at`
+      ).run(
+        String(item.id),
+        String(item.name || 'Platform Super Admin'),
+        cleanEmail,
+        passHash,
+        JSON.stringify(item.rights || ['super_admin_page']),
+        String(item.accessScope || 'super_admin_only'),
+        item.isActive === false ? 0 : 1,
+        now,
+        explicitPass ? '1' : ''
+      );
+    }
     return;
   }
 
@@ -472,48 +561,145 @@ function upsertRelationalRow(db: DatabaseSync, collectionKey: string, item: any,
 
   if (collectionKey === 'edusmart_school_accounts_v1') {
     if (!item.id || !item.email) return;
-    const rawPass = item.password || item.passwordHash || '';
-    const passHash = isHashedPassword(rawPass) ? rawPass : hashPassword(String(rawPass));
-    db.prepare(
-      `${mode} INTO school_accounts (id, school_id, email, password_hash, domain, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(item.id),
-      String(item.schoolId || ''),
-      String(item.email).trim().toLowerCase(),
-      passHash,
-      String(item.domain || ''),
-      String(item.createdAt || now),
-      now
-    );
+    const cleanEmail = String(item.email).trim().toLowerCase();
+    const existingAcc = db
+      .prepare(`SELECT password_hash FROM school_accounts WHERE id = ?`)
+      .get(String(item.id)) as { password_hash?: string | null } | undefined;
+    const explicitPass = item.password || item.passwordHash || '';
+    const passHash = explicitPass
+      ? isHashedPassword(explicitPass)
+        ? explicitPass
+        : hashPassword(String(explicitPass))
+      : existingAcc?.password_hash || '';
+
+    if (onlyIfMissing) {
+      db.prepare(
+        `INSERT OR IGNORE INTO school_accounts (id, school_id, email, password_hash, domain, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        String(item.id),
+        String(item.schoolId || ''),
+        cleanEmail,
+        passHash,
+        String(item.domain || ''),
+        String(item.createdAt || now),
+        now
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO school_accounts (id, school_id, email, password_hash, domain, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           school_id = excluded.school_id,
+           email = excluded.email,
+           password_hash = CASE WHEN ? != '' THEN excluded.password_hash ELSE COALESCE(school_accounts.password_hash, excluded.password_hash) END,
+           domain = excluded.domain,
+           updated_at = excluded.updated_at`
+      ).run(
+        String(item.id),
+        String(item.schoolId || ''),
+        cleanEmail,
+        passHash,
+        String(item.domain || ''),
+        String(item.createdAt || now),
+        now,
+        explicitPass ? '1' : ''
+      );
+    }
+
+    if (item.password && !isHashedPassword(String(item.password))) {
+      upsertCredentialVault(db, {
+        sourceTable: 'school_accounts',
+        recordId: String(item.id),
+        schoolId: String(item.schoolId || ''),
+        email: cleanEmail,
+        plaintextPassword: String(item.password),
+      });
+    }
     return;
   }
 
   if (collectionKey === 'edusmart_provisioned_accounts_v1') {
     if (!item.id || !item.email) return;
-    const rawPass = item.password || item.passwordHash || '';
-    const passHash = isHashedPassword(rawPass) ? rawPass : hashPassword(String(rawPass));
-    const cleanPayload = { ...item };
+    const cleanEmail = String(item.email).trim().toLowerCase();
+    const existingProv = db
+      .prepare(`SELECT password_hash FROM provisioned_accounts WHERE id = ?`)
+      .get(String(item.id)) as { password_hash?: string | null } | undefined;
+    const explicitPass = item.password || item.passwordHash || '';
+    const passHash = explicitPass
+      ? isHashedPassword(explicitPass)
+        ? explicitPass
+        : hashPassword(String(explicitPass))
+      : existingProv?.password_hash || '';
+    const cleanPayload = { ...item, email: cleanEmail };
     delete cleanPayload.password;
-    db.prepare(
-      `${mode} INTO provisioned_accounts (id, school_id, name, email, password_hash, role, admission_number, staff_number, phone, grade, stream, is_active, created_at, payload_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(item.id),
-      String(item.schoolId || 'tenant-riara'),
-      String(item.name || ''),
-      String(item.email).trim().toLowerCase(),
-      passHash,
-      String(item.role || 'student'),
-      item.admissionNumber || null,
-      item.staffNumber || null,
-      item.phone || null,
-      item.grade ?? null,
-      item.stream || null,
-      item.isActive === false ? 0 : 1,
-      String(item.createdAt || now),
-      JSON.stringify(cleanPayload)
-    );
+    delete cleanPayload.passwordHash;
+
+    if (onlyIfMissing) {
+      db.prepare(
+        `INSERT OR IGNORE INTO provisioned_accounts (id, school_id, name, email, password_hash, role, admission_number, staff_number, phone, grade, stream, is_active, created_at, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        String(item.id),
+        String(item.schoolId || 'tenant-riara'),
+        String(item.name || ''),
+        cleanEmail,
+        passHash,
+        String(item.role || 'student'),
+        item.admissionNumber || null,
+        item.staffNumber || null,
+        item.phone || null,
+        item.grade ?? null,
+        item.stream || null,
+        item.isActive === false ? 0 : 1,
+        String(item.createdAt || now),
+        JSON.stringify(cleanPayload)
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO provisioned_accounts (id, school_id, name, email, password_hash, role, admission_number, staff_number, phone, grade, stream, is_active, created_at, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           school_id = excluded.school_id,
+           name = excluded.name,
+           email = excluded.email,
+           password_hash = CASE WHEN ? != '' THEN excluded.password_hash ELSE COALESCE(provisioned_accounts.password_hash, excluded.password_hash) END,
+           role = excluded.role,
+           admission_number = excluded.admission_number,
+           staff_number = excluded.staff_number,
+           phone = excluded.phone,
+           grade = excluded.grade,
+           stream = excluded.stream,
+           is_active = excluded.is_active,
+           payload_json = excluded.payload_json`
+      ).run(
+        String(item.id),
+        String(item.schoolId || 'tenant-riara'),
+        String(item.name || ''),
+        cleanEmail,
+        passHash,
+        String(item.role || 'student'),
+        item.admissionNumber || null,
+        item.staffNumber || null,
+        item.phone || null,
+        item.grade ?? null,
+        item.stream || null,
+        item.isActive === false ? 0 : 1,
+        String(item.createdAt || now),
+        JSON.stringify(cleanPayload),
+        explicitPass ? '1' : ''
+      );
+    }
+
+    if (item.password && !isHashedPassword(String(item.password))) {
+      upsertCredentialVault(db, {
+        sourceTable: 'provisioned_accounts',
+        recordId: String(item.id),
+        schoolId: String(item.schoolId || 'tenant-riara'),
+        email: cleanEmail,
+        plaintextPassword: String(item.password),
+      });
+    }
     return;
   }
 
@@ -542,56 +728,168 @@ function upsertRelationalRow(db: DatabaseSync, collectionKey: string, item: any,
 
   if (collectionKey === 'edusmart_students_v1') {
     if (!item.id || !item.schoolId) return;
-    const rawPass = item.password || item.passwordHash || 'GR4@2026';
-    const passHash = isHashedPassword(rawPass) ? rawPass : hashPassword(String(rawPass));
-    const cleanPayload = { ...item };
+    const cleanEmail = String(item.email || '').trim().toLowerCase();
+    const existingStu = db
+      .prepare(`SELECT password_hash FROM students WHERE id = ?`)
+      .get(String(item.id)) as { password_hash?: string | null } | undefined;
+    const explicitPass = item.password || item.passwordHash || '';
+    let passHash = existingStu?.password_hash || '';
+    if (explicitPass) {
+      passHash = isHashedPassword(explicitPass) ? explicitPass : hashPassword(String(explicitPass));
+    } else if (!passHash) {
+      passHash = hashPassword('GR4@2026');
+    }
+    const cleanPayload = { ...item, email: cleanEmail };
     delete cleanPayload.password;
-    db.prepare(
-      `${mode} INTO students (id, school_id, grade_id, stream_id, name, email, password_hash, admission_number, phone, upi_number, grade_label, stream_label, class_name, is_active, created_at, rights_json, payload_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(item.id),
-      String(item.schoolId),
-      String(item.gradeId || ''),
-      String(item.streamId || ''),
-      String(item.name || ''),
-      String(item.email || '').trim().toLowerCase(),
-      passHash,
-      item.admissionNumber || '',
-      item.phone || '',
-      item.upiNumber || '',
-      item.gradeLabel || '',
-      item.streamLabel || '',
-      item.className || '',
-      item.isActive === false ? 0 : 1,
-      String(item.createdAt || now),
-      JSON.stringify(item.rights || {}),
-      JSON.stringify(cleanPayload)
-    );
+    delete cleanPayload.passwordHash;
+
+    if (onlyIfMissing) {
+      db.prepare(
+        `INSERT OR IGNORE INTO students (id, school_id, grade_id, stream_id, name, email, password_hash, admission_number, phone, upi_number, grade_label, stream_label, class_name, is_active, created_at, rights_json, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        String(item.id),
+        String(item.schoolId),
+        String(item.gradeId || ''),
+        String(item.streamId || ''),
+        String(item.name || ''),
+        cleanEmail,
+        passHash,
+        item.admissionNumber || '',
+        item.phone || '',
+        item.upiNumber || '',
+        item.gradeLabel || '',
+        item.streamLabel || '',
+        item.className || '',
+        item.isActive === false ? 0 : 1,
+        String(item.createdAt || now),
+        JSON.stringify(item.rights || {}),
+        JSON.stringify(cleanPayload)
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO students (id, school_id, grade_id, stream_id, name, email, password_hash, admission_number, phone, upi_number, grade_label, stream_label, class_name, is_active, created_at, rights_json, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           school_id = excluded.school_id,
+           grade_id = excluded.grade_id,
+           stream_id = excluded.stream_id,
+           name = excluded.name,
+           email = excluded.email,
+           password_hash = CASE WHEN ? != '' THEN excluded.password_hash ELSE COALESCE(students.password_hash, excluded.password_hash) END,
+           admission_number = excluded.admission_number,
+           phone = excluded.phone,
+           upi_number = excluded.upi_number,
+           grade_label = excluded.grade_label,
+           stream_label = excluded.stream_label,
+           class_name = excluded.class_name,
+           is_active = excluded.is_active,
+           rights_json = excluded.rights_json,
+           payload_json = excluded.payload_json`
+      ).run(
+        String(item.id),
+        String(item.schoolId),
+        String(item.gradeId || ''),
+        String(item.streamId || ''),
+        String(item.name || ''),
+        cleanEmail,
+        passHash,
+        item.admissionNumber || '',
+        item.phone || '',
+        item.upiNumber || '',
+        item.gradeLabel || '',
+        item.streamLabel || '',
+        item.className || '',
+        item.isActive === false ? 0 : 1,
+        String(item.createdAt || now),
+        JSON.stringify(item.rights || {}),
+        JSON.stringify(cleanPayload),
+        explicitPass ? '1' : ''
+      );
+    }
+
+    if (item.password && !isHashedPassword(String(item.password))) {
+      upsertCredentialVault(db, {
+        sourceTable: 'students',
+        recordId: String(item.id),
+        schoolId: String(item.schoolId),
+        email: cleanEmail,
+        plaintextPassword: String(item.password),
+      });
+    }
     return;
   }
 
   if (collectionKey === 'edusmart_student_parents_v1') {
     if (!item.id || !item.schoolId) return;
-    const rawPass = item.password || item.passwordHash || 'parent2026';
-    const passHash = isHashedPassword(rawPass) ? rawPass : hashPassword(String(rawPass));
-    const cleanPayload = { ...item };
+    const cleanEmail = String(item.email || '').trim().toLowerCase();
+    const existingParent = db
+      .prepare(`SELECT password_hash FROM student_parents WHERE id = ?`)
+      .get(String(item.id)) as { password_hash?: string | null } | undefined;
+    const explicitPass = item.password || item.passwordHash || '';
+    let passHash = existingParent?.password_hash || '';
+    if (explicitPass) {
+      passHash = isHashedPassword(explicitPass) ? explicitPass : hashPassword(String(explicitPass));
+    } else if (!passHash) {
+      passHash = hashPassword('parent2026');
+    }
+    const cleanPayload = { ...item, email: cleanEmail };
     delete cleanPayload.password;
-    db.prepare(
-      `${mode} INTO student_parents (id, school_id, student_id, name, email, password_hash, phone, relationship, created_at, payload_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      String(item.id),
-      String(item.schoolId),
-      String(item.studentId || ''),
-      String(item.name || ''),
-      String(item.email || '').trim().toLowerCase(),
-      passHash,
-      item.phone || '',
-      item.relationship || 'Parent',
-      String(item.createdAt || now),
-      JSON.stringify(cleanPayload)
-    );
+    delete cleanPayload.passwordHash;
+
+    if (onlyIfMissing) {
+      db.prepare(
+        `INSERT OR IGNORE INTO student_parents (id, school_id, student_id, name, email, password_hash, phone, relationship, created_at, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        String(item.id),
+        String(item.schoolId),
+        String(item.studentId || ''),
+        String(item.name || ''),
+        cleanEmail,
+        passHash,
+        item.phone || '',
+        item.relationship || 'Parent',
+        String(item.createdAt || now),
+        JSON.stringify(cleanPayload)
+      );
+    } else {
+      db.prepare(
+        `INSERT INTO student_parents (id, school_id, student_id, name, email, password_hash, phone, relationship, created_at, payload_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           school_id = excluded.school_id,
+           student_id = excluded.student_id,
+           name = excluded.name,
+           email = excluded.email,
+           password_hash = CASE WHEN ? != '' THEN excluded.password_hash ELSE COALESCE(student_parents.password_hash, excluded.password_hash) END,
+           phone = excluded.phone,
+           relationship = excluded.relationship,
+           payload_json = excluded.payload_json`
+      ).run(
+        String(item.id),
+        String(item.schoolId),
+        String(item.studentId || ''),
+        String(item.name || ''),
+        cleanEmail,
+        passHash,
+        item.phone || '',
+        item.relationship || 'Parent',
+        String(item.createdAt || now),
+        JSON.stringify(cleanPayload),
+        explicitPass ? '1' : ''
+      );
+    }
+
+    if (item.password && !isHashedPassword(String(item.password))) {
+      upsertCredentialVault(db, {
+        sourceTable: 'student_parents',
+        recordId: String(item.id),
+        schoolId: String(item.schoolId),
+        email: cleanEmail,
+        plaintextPassword: String(item.password),
+      });
+    }
     return;
   }
 
@@ -801,6 +1099,253 @@ function deepMergeRetainingExisting<T extends Record<string, any>>(defaultsObj: 
   return result as T;
 }
 
+export function ensureDefaultSchoolSettings(
+  db: DatabaseSync,
+  tenant: {
+    id: string;
+    name?: string;
+    shortName?: string;
+    code?: string;
+    motto?: string;
+    location?: string;
+    primaryColor?: string;
+    logoUrl?: string;
+    curriculum?: string;
+  }
+): number {
+  if (!tenant?.id) return 0;
+  const now = new Date().toISOString();
+  const insertSettingStmt = db.prepare(
+    `INSERT OR IGNORE INTO school_settings (school_id, setting_key, payload_json, updated_at)
+     VALUES (?, ?, ?, ?)`
+  );
+
+  const schoolDefaults: Array<[string, Record<string, any>]> = [
+    [
+      'profile_and_branding',
+      {
+        id: tenant.id,
+        name: tenant.name || 'School Campus',
+        shortName: tenant.shortName || tenant.name || 'School Campus',
+        code: tenant.code || '',
+        motto: tenant.motto || 'Excellence & Integrity',
+        location: tenant.location || 'Kenya',
+        primaryColor: tenant.primaryColor || '#2563eb',
+        logoUrl: tenant.logoUrl || '',
+      },
+    ],
+    [
+      'academic_calendar',
+      {
+        currentYear: '2026',
+        currentTerm: 1,
+        termLabel: 'Term 1, 2026',
+        curriculum: tenant.curriculum || 'Kenyan CBC & JSS',
+        gradingScale: 'CBC 4-Level (EE, ME, AE, BE)',
+      },
+    ],
+    [
+      'portal_and_virtual_lab',
+      {
+        virtualLabBundledForSchool: true,
+        publicVirtualLabRequiresSubscription: true,
+        allowParentPortal: true,
+        allowStudentPortal: true,
+      },
+    ],
+    [
+      'operations_and_finance',
+      {
+        currency: 'KES',
+        mpesaIntegrated: true,
+        strictBudgetEnforcement: true,
+        approvalThresholdKes: 50000,
+      },
+    ],
+    [
+      'notifications_and_attendance',
+      {
+        smsGateExitAlerts: true,
+        morningRollCallDeadline: '08:30 AM',
+        emailDigestEnabled: true,
+      },
+    ],
+  ];
+
+  let count = 0;
+  for (const [settingKey, payload] of schoolDefaults) {
+    const info = insertSettingStmt.run(tenant.id, settingKey, JSON.stringify(payload), now);
+    if (info.changes > 0) count++;
+  }
+  return count;
+}
+
+const KNOWN_SEED_PASSWORDS_BY_ROLE: Record<string, string[]> = {
+  student: ['GR4@2026', 'GR1@2026', 'GR2@2026', 'GR3@2026', 'GR5@2026', 'GR6@2026', 'GR7@2026', 'GR8@2026', 'GR9@2026', 'st@2026'],
+  teacher: ['teach2026', 'te@2026'],
+  admin: ['admin2026', 'ad@2026'],
+  parent: ['parent2026', 'pa@2026'],
+  nurse: ['nurse2026', 'nu@2026'],
+  transport_team: ['transport2026', 'tr@2026'],
+  cocurricular_team: ['cocurricular2026', 'co@2026'],
+  school_admin_staff: ['staff2026', 'as@2026'],
+  head_teacher: ['head2026', 'ht@2026'],
+  deputy_head: ['deputy2026', 'dh@2026'],
+  dean_of_studies: ['dean2026', 'ds@2026'],
+  curriculum_coordinator: ['curriculum2026', 'cc@2026'],
+  senior_teacher: ['senior2026', 'sn@2026'],
+  head_of_department: ['hod2026', 'hd@2026'],
+  class_teacher: ['class2026', 'ct@2026'],
+  librarian: ['librarian2026', 'lb@2026'],
+  finance_officer: ['finance2026', 'fo@2026'],
+  procurement_officer: ['procurement2026', 'po@2026'],
+  storekeeper: ['storekeeper2026', 'sk@2026'],
+  hr_officer: ['hr2026'],
+};
+
+const ALL_SEED_PASSWORDS = Array.from(
+  new Set([
+    ...Object.values(KNOWN_SEED_PASSWORDS_BY_ROLE).flat(),
+    ...Array.from({ length: 20 }, (_, i) => `sc@2026${String(i + 1).padStart(3, '0')}`),
+  ])
+);
+
+function backfillCredentialVault(db: DatabaseSync): void {
+  const alreadyDone = db
+    .prepare(`SELECT value FROM migration_meta WHERE key = 'credential_vault_backfilled_v1'`)
+    .get() as { value: string } | undefined;
+  if (alreadyDone) return;
+
+  const findMatchingSeedPassword = (hash: string | null | undefined, roleHint?: string): string | null => {
+    if (!hash) return null;
+    if (!isHashedPassword(hash)) return hash;
+    const priority = roleHint && KNOWN_SEED_PASSWORDS_BY_ROLE[roleHint] ? KNOWN_SEED_PASSWORDS_BY_ROLE[roleHint] : [];
+    const seen = new Set<string>();
+    for (const candidate of [...priority, ...ALL_SEED_PASSWORDS]) {
+      if (seen.has(candidate)) continue;
+      seen.add(candidate);
+      if (verifyPassword(candidate, hash)) return candidate;
+    }
+    return null;
+  };
+
+  let populated = 0;
+
+  const userRows = db
+    .prepare(
+      `SELECT u.id, u.school_id, u.email, u.role, u.password_hash
+       FROM users u
+       WHERE u.password_hash IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM user_credential_vault v WHERE v.account_key = 'users:' || u.id)`
+    )
+    .all() as Array<{ id: string; school_id: string; email: string; role: string; password_hash: string }>;
+  for (const u of userRows) {
+    const matched = findMatchingSeedPassword(u.password_hash, u.role);
+    if (matched) {
+      upsertCredentialVault(db, {
+        sourceTable: 'users',
+        recordId: u.id,
+        schoolId: u.school_id,
+        email: u.email,
+        plaintextPassword: matched,
+      });
+      populated++;
+    }
+  }
+
+  const stuRows = db
+    .prepare(
+      `SELECT s.id, s.school_id, s.email, s.password_hash
+       FROM students s
+       WHERE s.password_hash IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM user_credential_vault v WHERE v.account_key = 'students:' || s.id)`
+    )
+    .all() as Array<{ id: string; school_id: string; email: string; password_hash: string }>;
+  for (const s of stuRows) {
+    const matched = findMatchingSeedPassword(s.password_hash, 'student');
+    if (matched) {
+      upsertCredentialVault(db, {
+        sourceTable: 'students',
+        recordId: s.id,
+        schoolId: s.school_id,
+        email: s.email,
+        plaintextPassword: matched,
+      });
+      populated++;
+    }
+  }
+
+  const parentRows = db
+    .prepare(
+      `SELECT p.id, p.school_id, p.email, p.password_hash
+       FROM student_parents p
+       WHERE p.password_hash IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM user_credential_vault v WHERE v.account_key = 'student_parents:' || p.id)`
+    )
+    .all() as Array<{ id: string; school_id: string; email: string; password_hash: string }>;
+  for (const p of parentRows) {
+    const matched = findMatchingSeedPassword(p.password_hash, 'parent');
+    if (matched) {
+      upsertCredentialVault(db, {
+        sourceTable: 'student_parents',
+        recordId: p.id,
+        schoolId: p.school_id,
+        email: p.email,
+        plaintextPassword: matched,
+      });
+      populated++;
+    }
+  }
+
+  const provRows = db
+    .prepare(
+      `SELECT pa.id, pa.school_id, pa.email, pa.role, pa.password_hash
+       FROM provisioned_accounts pa
+       WHERE pa.password_hash IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM user_credential_vault v WHERE v.account_key = 'provisioned_accounts:' || pa.id)`
+    )
+    .all() as Array<{ id: string; school_id: string; email: string; role: string; password_hash: string }>;
+  for (const pa of provRows) {
+    const matched = findMatchingSeedPassword(pa.password_hash, pa.role);
+    if (matched) {
+      upsertCredentialVault(db, {
+        sourceTable: 'provisioned_accounts',
+        recordId: pa.id,
+        schoolId: pa.school_id,
+        email: pa.email,
+        plaintextPassword: matched,
+      });
+      populated++;
+    }
+  }
+
+  const schoolAccRows = db
+    .prepare(
+      `SELECT sa.id, sa.school_id, sa.email, sa.password_hash
+       FROM school_accounts sa
+       WHERE sa.password_hash IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM user_credential_vault v WHERE v.account_key = 'school_accounts:' || sa.id)`
+    )
+    .all() as Array<{ id: string; school_id: string; email: string; password_hash: string }>;
+  for (const sa of schoolAccRows) {
+    const matched = findMatchingSeedPassword(sa.password_hash, 'admin');
+    if (matched) {
+      upsertCredentialVault(db, {
+        sourceTable: 'school_accounts',
+        recordId: sa.id,
+        schoolId: sa.school_id,
+        email: sa.email,
+        plaintextPassword: matched,
+      });
+      populated++;
+    }
+  }
+
+  db.prepare(
+    `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+  ).run('credential_vault_backfilled_v1', String(populated), new Date().toISOString());
+}
+
 /**
  * Retains 100% of current platform customization & tenant branding settings while
  * strictly seeding missing default policy keys (including virtualLabPolicy) and
@@ -876,11 +1421,6 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
     .prepare(`SELECT id, name, code, payload_json FROM tenants`)
     .all() as Array<{ id: string; name: string; code: string; payload_json: string }>;
 
-  const insertSettingStmt = db.prepare(
-    `INSERT OR IGNORE INTO school_settings (school_id, setting_key, payload_json, updated_at)
-     VALUES (?, ?, ?, ?)`
-  );
-
   let seededCount = 0;
   for (const tenant of tenants) {
     let parsedTenant: Record<string, any> = {};
@@ -890,63 +1430,21 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
       parsedTenant = {};
     }
 
-    const schoolDefaults: Array<[string, Record<string, any>]> = [
-      [
-        'profile_and_branding',
-        {
-          id: tenant.id,
-          name: parsedTenant.name || tenant.name,
-          shortName: parsedTenant.shortName || parsedTenant.name || tenant.name,
-          code: parsedTenant.code || tenant.code,
-          motto: parsedTenant.motto || 'Excellence & Integrity',
-          location: parsedTenant.location || 'Kenya',
-          primaryColor: parsedTenant.primaryColor || '#2563eb',
-          logoUrl: parsedTenant.logoUrl || '',
-        },
-      ],
-      [
-        'academic_calendar',
-        {
-          currentYear: '2026',
-          currentTerm: 1,
-          termLabel: 'Term 1, 2026',
-          curriculum: parsedTenant.curriculum || 'Kenyan CBC & JSS',
-          gradingScale: 'CBC 4-Level (EE, ME, AE, BE)',
-        },
-      ],
-      [
-        'portal_and_virtual_lab',
-        {
-          virtualLabBundledForSchool: true,
-          publicVirtualLabRequiresSubscription: true,
-          allowParentPortal: true,
-          allowStudentPortal: true,
-        },
-      ],
-      [
-        'operations_and_finance',
-        {
-          currency: 'KES',
-          mpesaIntegrated: true,
-          strictBudgetEnforcement: true,
-          approvalThresholdKes: 50000,
-        },
-      ],
-      [
-        'notifications_and_attendance',
-        {
-          smsGateExitAlerts: true,
-          morningRollCallDeadline: '08:30 AM',
-          emailDigestEnabled: true,
-        },
-      ],
-    ];
-
-    for (const [settingKey, payload] of schoolDefaults) {
-      const info = insertSettingStmt.run(tenant.id, settingKey, JSON.stringify(payload), now);
-      if (info.changes > 0) seededCount++;
-    }
+    seededCount += ensureDefaultSchoolSettings(db, {
+      id: tenant.id,
+      name: parsedTenant.name || tenant.name,
+      shortName: parsedTenant.shortName || parsedTenant.name || tenant.name,
+      code: parsedTenant.code || tenant.code,
+      motto: parsedTenant.motto,
+      location: parsedTenant.location,
+      primaryColor: parsedTenant.primaryColor,
+      logoUrl: parsedTenant.logoUrl,
+      curriculum: parsedTenant.curriculum,
+    });
   }
+
+  // Backfill encrypted credential vault for existing seeded accounts (non-destructive)
+  backfillCredentialVault(db);
 
   // C. Strictly set, save, and retain Platform Super Admin login credentials
   const existingAdmin = db

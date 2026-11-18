@@ -6,6 +6,7 @@ import {
   isHashedPassword,
   notifyMySqlTablesChanged,
   stripSecrets,
+  upsertCredentialVault,
   verifyPassword,
   writeSecurityAudit,
 } from './db.ts';
@@ -491,6 +492,21 @@ export function registerAuthRoutes(app: Express): void {
         );
       }
 
+      if (passwordUpgradeTarget) {
+        upsertCredentialVault(db, {
+          sourceTable: passwordUpgradeTarget.table as
+            | 'users'
+            | 'students'
+            | 'student_parents'
+            | 'provisioned_accounts'
+            | 'school_accounts',
+          recordId: passwordUpgradeTarget.id,
+          schoolId: String(matchedUser.schoolId || 'tenant-riara'),
+          email: String(matchedUser.email || cleanIdent).trim().toLowerCase(),
+          plaintextPassword: String(password),
+        });
+      }
+
       const tenantRow = db
         .prepare(`SELECT payload_json FROM tenants WHERE id = ?`)
         .get(matchedUser.schoolId) as { payload_json: string } | undefined;
@@ -855,6 +871,15 @@ export function registerAuthRoutes(app: Express): void {
         session.userId
       );
       db.prepare(`UPDATE students SET password_hash = ? WHERE id = ?`).run(nextHash, session.userId);
+      db.prepare(`UPDATE student_parents SET password_hash = ? WHERE id = ?`).run(nextHash, session.userId);
+      db.prepare(`UPDATE provisioned_accounts SET password_hash = ? WHERE id = ?`).run(nextHash, session.userId);
+      upsertCredentialVault(db, {
+        sourceTable: 'users',
+        recordId: session.userId,
+        schoolId: session.schoolId,
+        email: String(parsed.email || session.user?.email || '').trim().toLowerCase(),
+        plaintextPassword: String(newPassword),
+      });
       upsertCollectionRecord(db, 'edusmart_users_v1', session.userId, session.schoolId, parsed, false);
 
       writeSecurityAudit({
@@ -864,7 +889,7 @@ export function registerAuthRoutes(app: Express): void {
         action: 'PASSWORD_UPDATED',
         resource: '/api/auth/change-password',
       });
-      notifyMySqlTablesChanged(['users', 'students', 'collections_store', 'security_audit_logs']);
+      notifyMySqlTablesChanged(['users', 'students', 'student_parents', 'provisioned_accounts', 'user_credential_vault', 'collections_store', 'security_audit_logs']);
 
       return res.json({ success: true });
     } catch (err: any) {

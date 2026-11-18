@@ -43,11 +43,20 @@ export function normalizeLiveKitUrls(rawUrl: string): { clientWsUrl: string; ser
   return { clientWsUrl: `wss://${clean}`, serverHttpUrl: `https://${clean}` };
 }
 
+function isValidSecretValue(value: string): boolean {
+  if (!value) return false;
+  // Reject masked UI strings (e.g., "••••••") or non-ASCII placeholders
+  if (/[•\u2022*]/.test(value)) return false;
+  return true;
+}
+
 export function getLiveKitConfig(): LiveKitRuntimeConfig {
   const rawUrl = String(process.env.LIVEKIT_URL || '').trim();
   const apiKey = String(process.env.LIVEKIT_API_KEY || '').trim();
-  const apiSecret = String(process.env.LIVEKIT_API_SECRET || '').trim();
-  const webhookSecret = String(process.env.LIVEKIT_WEBHOOK_SECRET || apiSecret).trim();
+  const rawSecret = String(process.env.LIVEKIT_API_SECRET || '').trim();
+  const apiSecret = isValidSecretValue(rawSecret) ? rawSecret : '';
+  const rawWebhookSecret = String(process.env.LIVEKIT_WEBHOOK_SECRET || '').trim();
+  const webhookSecret = (isValidSecretValue(rawWebhookSecret) ? rawWebhookSecret : apiSecret).trim();
 
   const missingKeys: string[] = [];
   if (!rawUrl) missingKeys.push('LIVEKIT_URL');

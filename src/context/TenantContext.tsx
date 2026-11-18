@@ -111,6 +111,8 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch {
         // Ignore network errors while switching tenant view
       }
+    } else if (ClientDataStore.getSessionUser()) {
+      void ClientDataStore.loadSchoolSettings(tenantId).catch(() => {});
     }
   };
 
@@ -121,6 +123,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
       const savedTenant = updated.find((tenant) => tenant.id === targetId);
       if (savedTenant) saveDurableSchool(savedTenant);
+      if (ClientDataStore.getSessionUser()) {
+        void ClientDataStore.saveSchoolSettings({ tenantId: targetId, tenantUpdates: updates }).catch(() => {});
+      }
       window.dispatchEvent(new CustomEvent('tenant-branding-updated', { detail: { tenantId: targetId, updates } }));
       return updated;
     });
@@ -145,6 +150,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
       const saved = updated.find((tenant) => tenant.id === tenantId);
       if (saved) saveDurableSchool(saved);
+      if (ClientDataStore.getSessionUser()) {
+        void ClientDataStore.saveSchoolSettings({ tenantId, tenantUpdates: updates }).catch(() => {});
+      }
       window.dispatchEvent(new CustomEvent('tenant-updated', { detail: { tenantId, updates } }));
       return updated;
     });

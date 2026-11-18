@@ -15,6 +15,7 @@ type ChangeListener = (key: string) => void;
 
 const collections = new Map<string, any>();
 const preferences = new Map<string, any>();
+const schoolSettingsByTenant = new Map<string, Record<string, any>>();
 const listeners = new Set<ChangeListener>();
 
 let sessionUser: User | null = null;
@@ -25,6 +26,55 @@ let activeVlabPass: any | null = null;
 let hydrated = false;
 let hydratingPromise: Promise<void> | null = null;
 let sseSource: EventSource | null = null;
+
+export interface PrintableCredentialUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string | null;
+  passwordStatus: 'verified' | 'reset_required';
+  role: string;
+  roleLabel: string;
+  identifier: string;
+  admissionNumber: string;
+  staffNumber: string;
+  tscNumber: string;
+  phone: string;
+  grade: string | number;
+  stream: string;
+  designation: string;
+  department: string;
+  isActive: boolean;
+}
+
+export interface PrintableCredentialSchool {
+  schoolId: string;
+  schoolName: string;
+  shortName: string;
+  code: string;
+  domain: string;
+  email: string;
+  motto: string;
+  location: string;
+  primaryColor: string;
+  logoUrl: string;
+  schoolAccount: {
+    id: string;
+    email: string;
+    domain: string;
+    password: string | null;
+    passwordStatus: 'verified' | 'reset_required';
+  } | null;
+  totalUsers: number;
+  users: PrintableCredentialUser[];
+}
+
+export interface PrintableCredentialsResponse {
+  success: boolean;
+  generatedAt: string;
+  generatedBy: string;
+  schools: PrintableCredentialSchool[];
+}
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   return inMemorySessionToken
@@ -101,6 +151,9 @@ function connectRealtimeStream(): void {
         if (col === 'user_preferences') {
           void refreshPreferences();
           return;
+        }
+        if (payload?.type === 'settings:updated') {
+          void ClientDataStore.loadSchoolSettings(payload?.tenantId && payload.tenantId !== 'global' ? payload.tenantId : activeTenantId);
         }
         // Pull authoritative updated collection state from central database
         void pullSingleCollection(col);
@@ -204,6 +257,10 @@ export const ClientDataStore = {
           activeTenantId = String(body.activeTenantId);
         } else if (sessionUser?.schoolId) {
           activeTenantId = sessionUser.schoolId;
+        }
+
+        if (body.schoolSettings && typeof body.schoolSettings === 'object') {
+          schoolSettingsByTenant.set(activeTenantId, body.schoolSettings);
         }
 
         hydrated = true;
@@ -457,11 +514,233 @@ export const ClientDataStore = {
     return { filename, tableCount, totalRows, sizeBytes: blob.size };
   },
 
+  getSchoolSettings(tenantId?: string): Record<string, any> {
+    const target = tenantId || activeTenantId || 'tenant-riara';
+    return schoolSettingsByTenant.get(target) || {};
+  },
+
+  getSchoolSetting<T>(key: string, fallback: T, tenantId?: string): T {
+    const all = this.getSchoolSettings(tenantId);
+    return all[key] !== undefined ? (all[key] as T) : fallback;
+  },
+
+  async loadSchoolSettings(tenantId?: string): Promise<Record<string, any>> {
+    if (!sessionUser) return {};
+    const target = tenantId || activeTenantId || 'tenant-riara';
+    const res = await fetch(`/api/settings?tenantId=${encodeURIComponent(target)}`, {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed loading school settings');
+    }
+    if (body.settings && typeof body.settings === 'object') {
+      schoolSettingsByTenant.set(target, body.settings);
+      emitWindowEvents('school_settings');
+    }
+    return body.settings || {};
+  },
+
+  async loadAllSchoolSettings(): Promise<Array<{ tenantId: string; tenant: any; settings: Record<string, any> }>> {
+    const res = await fetch('/api/settings?all=1', {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed loading all tenant settings');
+    }
+    const schools = Array.isArray(body.schools) ? body.schools : [];
+    for (const s of schools) {
+      if (s?.tenantId && s?.settings) {
+        schoolSettingsByTenant.set(s.tenantId, s.settings);
+      }
+    }
+    return schools;
+  },
+
+  async saveSchoolSettings(params: {
+    tenantId?: string;
+    settingKey?: string;
+    value?: any;
+    settings?: Record<string, any>;
+    tenantUpdates?: Record<string, any>;
+  }): Promise<Record<string, any>> {
+    const target = params.tenantId || activeTenantId || 'tenant-riara';
+    const res = await fetch('/api/settings/school', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        tenantId: target,
+        settingKey: params.settingKey,
+        value: params.value,
+        settings: params.settings,
+        tenantUpdates: params.tenantUpdates,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed saving school settings');
+    }
+    if (body.settings && typeof body.settings === 'object') {
+      schoolSettingsByTenant.set(target, body.settings);
+    }
+    await pullSingleCollection('edusmart_all_tenants_registry');
+    emitWindowEvents('school_settings');
+    return body.settings || this.getSchoolSettings(target);
+  },
+
+  async apiFetchUsers(params: {
+    schoolId?: string;
+    search?: string;
+    role?: string;
+    status?: string;
+  } = {}): Promise<User[]> {
+    const qs = new URLSearchParams();
+    if (params.schoolId) qs.set('schoolId', params.schoolId);
+    if (params.search) qs.set('search', params.search);
+    if (params.role && params.role !== 'all') qs.set('role', params.role);
+    if (params.status && params.status !== 'all') qs.set('status', params.status);
+
+    const res = await fetch(`/api/users${qs.toString() ? `?${qs.toString()}` : ''}`, {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed loading users from database');
+    }
+    const list: User[] = Array.isArray(body.users) ? body.users : [];
+    // Sync full unfiltered fetch into in-memory collection cache without pushing back
+    if (!params.search && (!params.role || params.role === 'all') && (!params.status || params.status === 'all')) {
+      if (!params.schoolId || params.schoolId === 'all' || !isSuperAdminSession) {
+        collections.set('edusmart_users_v1', list);
+        emitWindowEvents('edusmart_users_v1');
+      } else {
+        const existing = collections.get('edusmart_users_v1');
+        const others = Array.isArray(existing)
+          ? existing.filter((u: any) => u.schoolId !== params.schoolId)
+          : [];
+        collections.set('edusmart_users_v1', [...others, ...list]);
+        emitWindowEvents('edusmart_users_v1');
+      }
+    }
+    return list;
+  },
+
+  async apiCreateUser(payload: Partial<User> & { password?: string }): Promise<User> {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.user) {
+      throw new Error(body?.error || 'Failed creating user account');
+    }
+    const created: User = body.user;
+    const existing = collections.get('edusmart_users_v1');
+    const next = Array.isArray(existing)
+      ? [...existing.filter((u: any) => u.id !== created.id), created]
+      : [created];
+    collections.set('edusmart_users_v1', next);
+    emitWindowEvents('edusmart_users_v1');
+    return created;
+  },
+
+  async apiUpdateUser(id: string, updates: Partial<User> & { password?: string }): Promise<User> {
+    const res = await fetch(`/api/users/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(updates),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.user) {
+      throw new Error(body?.error || 'Failed updating user account');
+    }
+    const updated: User = body.user;
+    const existing = collections.get('edusmart_users_v1');
+    if (Array.isArray(existing)) {
+      const next = existing.some((u: any) => u.id === id)
+        ? existing.map((u: any) => (u.id === id ? updated : u))
+        : [...existing, updated];
+      collections.set('edusmart_users_v1', next);
+      emitWindowEvents('edusmart_users_v1');
+    }
+    if (sessionUser?.id === id) {
+      sessionUser = { ...sessionUser, ...updated };
+    }
+    return updated;
+  },
+
+  async apiResetUserPassword(
+    id: string,
+    newPassword: string
+  ): Promise<{ success: boolean; userId: string; email: string }> {
+    const res = await fetch(`/api/users/${encodeURIComponent(id)}/reset-password`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ newPassword }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed resetting user password');
+    }
+    return body;
+  },
+
+  async apiDeleteUser(id: string): Promise<void> {
+    const res = await fetch(`/api/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed deleting user account');
+    }
+    const existing = collections.get('edusmart_users_v1');
+    if (Array.isArray(existing)) {
+      collections.set(
+        'edusmart_users_v1',
+        existing.filter((u: any) => u.id !== id)
+      );
+      emitWindowEvents('edusmart_users_v1');
+    }
+  },
+
+  async apiFetchPrintableCredentials(params: {
+    schoolId?: string;
+    role?: string;
+    status?: string;
+  } = {}): Promise<PrintableCredentialsResponse> {
+    const qs = new URLSearchParams();
+    if (params.schoolId) qs.set('schoolId', params.schoolId);
+    if (params.role && params.role !== 'all') qs.set('role', params.role);
+    if (params.status && params.status !== 'all') qs.set('status', params.status);
+
+    const res = await fetch(`/api/users/printable-credentials${qs.toString() ? `?${qs.toString()}` : ''}`, {
+      credentials: 'include',
+      headers: authHeaders(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || 'Failed loading printable user credentials');
+    }
+    return body as PrintableCredentialsResponse;
+  },
+
   clearSessionOnly(): void {
     sessionUser = null;
     inMemorySessionToken = null;
     isSuperAdminSession = false;
     preferences.clear();
+    schoolSettingsByTenant.clear();
   },
 };
 

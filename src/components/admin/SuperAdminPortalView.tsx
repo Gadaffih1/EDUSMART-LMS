@@ -72,7 +72,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
     const stored = ClientDataStore.getPreference<string>('edusmart_super_admin_tab', 'overview');
-    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'grades_streams', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'pwa_analytics', 'settings'];
+    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'grades_streams', 'branding', 'school_settings', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'pwa_analytics', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
@@ -89,6 +89,9 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   });
 
   useEffect(() => {
+    ClientDataStore.apiFetchUsers({ schoolId: 'all' }).catch(() => {});
+    ClientDataStore.loadAllSchoolSettings().catch(() => {});
+
     const handleUsersUpdated = () => {
       setAllUsersState(Storage.getUsers());
     };
@@ -320,6 +323,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                   {activeConsoleTab === 'schools' && 'Schools & Tenancy'}
                   {activeConsoleTab === 'grades_streams' && 'Grades & Streams Management'}
                   {activeConsoleTab === 'branding' && 'Logo & Background'}
+                  {activeConsoleTab === 'school_settings' && 'Tenant School Settings'}
                   {activeConsoleTab === 'users' && 'Users & Staff'}
                   {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
                   {activeConsoleTab === 'categories' && 'Categories'}

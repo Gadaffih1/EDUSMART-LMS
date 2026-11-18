@@ -337,6 +337,19 @@ export function initDatabase(rootDir: string = process.cwd()): DbContext {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_webauthn_challenge_exp ON webauthn_challenges(expires_at);
+
+    CREATE TABLE IF NOT EXISTS user_credential_vault (
+      account_key TEXT PRIMARY KEY,
+      source_table TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      encrypted_password TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_cred_vault_school ON user_credential_vault(school_id);
+    CREATE INDEX IF NOT EXISTS idx_cred_vault_record ON user_credential_vault(record_id);
+    CREATE INDEX IF NOT EXISTS idx_cred_vault_email ON user_credential_vault(lower(email));
   `);
 
   initTimetableSchema(db);
@@ -391,6 +404,99 @@ export function stripSecrets<T extends Record<string, any>>(record: T): T {
   delete clone.passwordHash;
   delete clone.password_hash;
   return clone;
+}
+
+// ---------------------------------------------------------------------------
+// Encrypted Credential Vault (AES-256-GCM) for Super Admin Printable Rosters
+// Passwords remain hashed (scrypt$) for auth and stripped from normal APIs;
+// only Super Admin printable credential exports decrypt this vault.
+// ---------------------------------------------------------------------------
+let cachedVaultKey: Buffer | null = null;
+
+function getCredentialVaultKey(): Buffer {
+  if (cachedVaultKey) return cachedVaultKey;
+  const envSecret = process.env.CREDENTIAL_VAULT_SECRET;
+  if (envSecret && envSecret.trim().length >= 16) {
+    cachedVaultKey = crypto.createHash('sha256').update(envSecret.trim()).digest();
+    return cachedVaultKey;
+  }
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT value FROM migration_meta WHERE key = 'credential_vault_secret_v1'`)
+    .get() as { value: string } | undefined;
+  let secretHex = row?.value;
+  if (!secretHex) {
+    secretHex = crypto.randomBytes(32).toString('hex');
+    db.prepare(
+      `INSERT OR IGNORE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+    ).run('credential_vault_secret_v1', secretHex, new Date().toISOString());
+    const stored = db
+      .prepare(`SELECT value FROM migration_meta WHERE key = 'credential_vault_secret_v1'`)
+      .get() as { value: string } | undefined;
+    secretHex = stored?.value || secretHex;
+  }
+  cachedVaultKey = crypto.createHash('sha256').update(secretHex).digest();
+  return cachedVaultKey;
+}
+
+export function encryptVaultPassword(plaintext: string): string {
+  const key = getCredentialVaultKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+}
+
+export function decryptVaultPassword(cipherText: string | null | undefined): string | null {
+  if (!cipherText || typeof cipherText !== 'string') return null;
+  const parts = cipherText.split(':');
+  if (parts.length !== 3) return null;
+  try {
+    const key = getCredentialVaultKey();
+    const iv = Buffer.from(parts[0], 'hex');
+    const tag = Buffer.from(parts[1], 'hex');
+    const enc = Buffer.from(parts[2], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+export function upsertCredentialVault(
+  db: DatabaseSync,
+  params: {
+    sourceTable: 'users' | 'students' | 'student_parents' | 'provisioned_accounts' | 'school_accounts';
+    recordId: string;
+    schoolId: string;
+    email: string;
+    plaintextPassword: string;
+  }
+): void {
+  if (!params.plaintextPassword || isHashedPassword(params.plaintextPassword)) return;
+  const accountKey = `${params.sourceTable}:${params.recordId}`;
+  const encrypted = encryptVaultPassword(params.plaintextPassword);
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO user_credential_vault (account_key, source_table, record_id, school_id, email, encrypted_password, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(account_key)
+     DO UPDATE SET school_id = excluded.school_id, email = excluded.email, encrypted_password = excluded.encrypted_password, updated_at = excluded.updated_at`
+  ).run(
+    accountKey,
+    params.sourceTable,
+    String(params.recordId),
+    String(params.schoolId || 'tenant-riara'),
+    String(params.email || '').trim().toLowerCase(),
+    encrypted,
+    now
+  );
+}
+
+export function deleteCredentialVault(db: DatabaseSync, recordId: string): void {
+  db.prepare(`DELETE FROM user_credential_vault WHERE record_id = ?`).run(String(recordId));
 }
 
 let mySqlWriteNotifier: ((tables?: string[]) => void) | null = null;

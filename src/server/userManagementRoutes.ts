@@ -11,16 +11,21 @@ import {
   upsertCredentialVault,
   writeSecurityAudit,
 } from './db.ts';
-import { AuthSession, requireAuth, requireSuperAdmin } from './authRoutes.ts';
+import {
+  AuthSession,
+  normalizeAssignedRoles,
+  requireAuth,
+  requireSuperAdmin,
+  sessionHasAnyRole,
+  sessionHasRole,
+} from './authRoutes.ts';
 import { upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
 
 function canManageUsers(session: AuthSession): boolean {
   return (
     session.isSuperAdmin ||
-    session.role === 'admin' ||
-    session.role === 'head_teacher' ||
-    session.role === 'school_admin_staff'
+    sessionHasAnyRole(session, ['admin', 'head_teacher', 'school_admin_staff'])
   );
 }
 
@@ -73,12 +78,19 @@ function parseJsonSafe(raw: string | null | undefined, fallback: any = {}): any 
 
 function normalizeUserRecord(row: any): Record<string, any> {
   const extra = parseJsonSafe(row.payload_json, {});
+  const primaryRole = String(row.role || extra.role || 'student').trim().toLowerCase();
+  const assignedRoles = normalizeAssignedRoles(
+    primaryRole,
+    extra.assignedRoles,
+    extra.doubleAccessConfig
+  );
   return stripSecrets({
     ...extra,
     id: row.id,
     name: row.name || extra.name || 'User',
     email: String(row.email || extra.email || '').trim().toLowerCase(),
-    role: row.role || extra.role || 'student',
+    role: primaryRole,
+    assignedRoles,
     schoolId: row.school_id || extra.schoolId || 'tenant-riara',
     admissionNumber: row.admission_number ?? extra.admissionNumber ?? undefined,
     staffNumber: row.staff_number ?? extra.staffNumber ?? undefined,
@@ -132,10 +144,6 @@ export function registerUserManagementRoutes(app: Express): void {
         whereParts.push(`school_id = ?`);
         params.push(targetSchoolId);
       }
-      if (roleFilter && roleFilter !== 'all') {
-        whereParts.push(`lower(role) = ?`);
-        params.push(roleFilter);
-      }
       if (statusFilter === 'active') {
         whereParts.push(`is_active = 1`);
       } else if (statusFilter === 'inactive') {
@@ -154,6 +162,10 @@ export function registerUserManagementRoutes(app: Express): void {
       const userMap = new Map<string, Record<string, any>>();
       for (const r of rows) {
         const u = normalizeUserRecord(r);
+        if (roleFilter && roleFilter !== 'all') {
+          const rolesHeld = Array.isArray(u.assignedRoles) ? u.assignedRoles : [u.role];
+          if (!rolesHeld.includes(roleFilter)) continue;
+        }
         userMap.set(u.id, u);
       }
 
@@ -237,7 +249,10 @@ export function registerUserManagementRoutes(app: Express): void {
           if (!item.email) continue;
           const emailKey = `${item.schoolId}::${item.email}`;
           if (userMap.has(item.id) || seenEmails.has(emailKey)) continue;
-          if (roleFilter && roleFilter !== 'all' && String(item.role).toLowerCase() !== roleFilter) continue;
+          if (roleFilter && roleFilter !== 'all') {
+            const rolesHeld = Array.isArray(item.assignedRoles) ? item.assignedRoles : [String(item.role || '').toLowerCase()];
+            if (!rolesHeld.includes(roleFilter)) continue;
+          }
           if (statusFilter === 'active' && !item.isActive) continue;
           if (statusFilter === 'inactive' && item.isActive) continue;
           userMap.set(item.id, item);
@@ -252,6 +267,7 @@ export function registerUserManagementRoutes(app: Express): void {
             u.name,
             u.email,
             u.role,
+            ...(Array.isArray(u.assignedRoles) ? u.assignedRoles : []),
             u.admissionNumber,
             u.staffNumber,
             u.tscNumber,
@@ -642,7 +658,7 @@ export function registerUserManagementRoutes(app: Express): void {
         return res.status(409).json({ error: 'An institutional account with this email already exists.' });
       }
 
-      if (!session.isSuperAdmin && role === 'admin' && session.role !== 'admin') {
+      if (!session.isSuperAdmin && role === 'admin' && !sessionHasRole(session, 'admin')) {
         return res.status(403).json({ error: 'Only a School Administrator or Super Admin can create administrator accounts.' });
       }
 
@@ -654,6 +670,7 @@ export function registerUserManagementRoutes(app: Express): void {
 
       const now = new Date().toISOString();
       const userId = String(body.id || `usr-${role}-${Date.now()}-${crypto.randomBytes(2).toString('hex')}`);
+      const assignedRoles = normalizeAssignedRoles(role, body.assignedRoles, body.doubleAccessConfig);
 
       const cleanPayload: Record<string, any> = {
         ...body,
@@ -661,6 +678,7 @@ export function registerUserManagementRoutes(app: Express): void {
         name,
         email: cleanEmail,
         role,
+        assignedRoles,
         schoolId,
         isActive: body.isActive !== false,
         registeredAt: body.registeredAt || now,
@@ -853,7 +871,7 @@ export function registerUserManagementRoutes(app: Express): void {
 
       const currentExtra = parseJsonSafe(sourceRow.payload_json, {});
       const currentRole = String(sourceRow.role || currentExtra.role || (existingStu ? 'student' : existingParent ? 'parent' : 'student'));
-      if (!session.isSuperAdmin && currentRole === 'admin' && session.role !== 'admin') {
+      if (!session.isSuperAdmin && currentRole === 'admin' && !sessionHasRole(session, 'admin')) {
         return res.status(403).json({ error: 'Only a School Administrator or Super Admin can modify administrator accounts.' });
       }
 
@@ -884,6 +902,11 @@ export function registerUserManagementRoutes(app: Express): void {
 
       const nextName = String(body.name !== undefined ? body.name : sourceRow.name || currentExtra.name || 'User').trim();
       const nextRole = String(body.role !== undefined ? body.role : currentRole).trim().toLowerCase();
+      const rawAdditionalRoles =
+        body.assignedRoles !== undefined ? body.assignedRoles : currentExtra.assignedRoles;
+      const nextDoubleAccess =
+        body.doubleAccessConfig !== undefined ? body.doubleAccessConfig : currentExtra.doubleAccessConfig;
+      const assignedRoles = normalizeAssignedRoles(nextRole, rawAdditionalRoles, nextDoubleAccess);
       const nextIsActive = body.isActive !== undefined ? Boolean(body.isActive) : (sourceRow.is_active !== undefined ? Boolean(sourceRow.is_active) : true);
       const nextPassPlain = body.password && String(body.password).trim().length > 0 ? String(body.password).trim() : '';
       if (nextPassPlain && nextPassPlain.length < 4) {
@@ -903,6 +926,7 @@ export function registerUserManagementRoutes(app: Express): void {
         name: nextName,
         email: nextEmail,
         role: nextRole,
+        assignedRoles,
         schoolId: nextSchoolId,
         isActive: nextIsActive,
         updatedAt: now,
@@ -1012,6 +1036,12 @@ export function registerUserManagementRoutes(app: Express): void {
 
         if (!nextIsActive) {
           db.prepare(`DELETE FROM auth_sessions WHERE user_id = ?`).run(id);
+        } else {
+          db.prepare(
+            `UPDATE auth_sessions
+             SET user_role = ?, school_id = ?, user_json = ?
+             WHERE user_id = ? AND access_scope = 'tenant'`
+          ).run(nextRole, nextSchoolId, JSON.stringify(stripSecrets(updatedPayload)), id);
         }
 
         db.exec('COMMIT');
@@ -1093,7 +1123,7 @@ export function registerUserManagementRoutes(app: Express): void {
         return res.status(403).json({ error: 'Cross-tenant password reset forbidden.' });
       }
 
-      if (!session.isSuperAdmin && target.role === 'admin' && session.role !== 'admin') {
+      if (!session.isSuperAdmin && target.role === 'admin' && !sessionHasRole(session, 'admin')) {
         return res.status(403).json({ error: 'Only a School Administrator or Super Admin can reset an admin password.' });
       }
 
@@ -1265,7 +1295,7 @@ export function registerUserManagementRoutes(app: Express): void {
         return res.status(403).json({ error: 'Cross-tenant deletion forbidden.' });
       }
 
-      if (!session.isSuperAdmin && target.role === 'admin' && session.role !== 'admin') {
+      if (!session.isSuperAdmin && target.role === 'admin' && !sessionHasRole(session, 'admin')) {
         return res.status(403).json({ error: 'Only a School Administrator or Super Admin can remove an admin account.' });
       }
 

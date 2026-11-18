@@ -144,6 +144,7 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
+  assignedRoles?: UserRole[]; // Multi-role assignment: user can hold >1 institutional role simultaneously
   grade?: GradeLevel; // Exactly 1 grade for student
   stream?: StreamName; // Exactly 1 stream for student, or assigned stream for class teacher
   className?: string;

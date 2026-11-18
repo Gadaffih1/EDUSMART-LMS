@@ -34,18 +34,25 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
-import { 
+import {
   HeartPulse,
   Bus,
   Trophy,
-  Menu
+  Menu,
+  UserCheck
 } from 'lucide-react';
 
 interface HODWorkspaceProps {
   currentUser: User;
+  onSwitchToClassTeacher?: () => void;
+  onSwitchToSubjectTeacher?: () => void;
 }
 
-export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
+export const HODWorkspace: React.FC<HODWorkspaceProps> = ({
+  currentUser,
+  onSwitchToClassTeacher,
+  onSwitchToSubjectTeacher,
+}) => {
   const deptName = currentUser.department || 'Sciences & Mathematics';
 
   // Map subjects belonging to this department
@@ -173,9 +180,33 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
           </div>
         </div>
 
-        <div className="text-right text-xs hidden md:block">
-          <div className="font-bold text-white">{currentUser.name}</div>
-          <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/31204/ED'}</div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onSwitchToClassTeacher && (
+            <button
+              type="button"
+              onClick={onSwitchToClassTeacher}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs border border-emerald-400/40 transition-colors cursor-pointer whitespace-nowrap"
+              title="Switch to Class Teacher workspace with full rights to your assigned class"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Switch as Class Teacher</span>
+            </button>
+          )}
+          {onSwitchToSubjectTeacher && (
+            <button
+              type="button"
+              onClick={onSwitchToSubjectTeacher}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs border border-indigo-400/40 transition-colors cursor-pointer whitespace-nowrap"
+              title="Switch to Subject Teacher workspace"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Subject Teacher</span>
+            </button>
+          )}
+          <div className="text-right text-xs hidden md:block">
+            <div className="font-bold text-white">{currentUser.name}</div>
+            <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/31204/ED'}</div>
+          </div>
         </div>
       </header>
 

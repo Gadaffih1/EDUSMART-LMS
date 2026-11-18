@@ -3,7 +3,13 @@ import type { Express, Request, Response } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
 import { getDb, notifyMySqlTablesChanged, writeSecurityAudit } from './db.ts';
 import { VIRTUAL_CLASSROOM_TABLES } from './virtualClassroomSchema.ts';
-import { requireAuth, resolveAuthorizedTenantId, type AuthSession } from './authRoutes.ts';
+import {
+  requireAuth,
+  resolveAuthorizedTenantId,
+  sessionHasAnyRole,
+  sessionHasRole,
+  type AuthSession,
+} from './authRoutes.ts';
 import { readCollectionForTenant } from './dataRoutes.ts';
 import { broadcastChange } from './realtimeBus.ts';
 import {
@@ -32,7 +38,7 @@ const ADMIN_ROLES = new Set([
 ]);
 
 function isSchoolAdmin(session: AuthSession): boolean {
-  return Boolean(session.isSuperAdmin || ADMIN_ROLES.has(session.role));
+  return Boolean(session.isSuperAdmin || sessionHasAnyRole(session, ADMIN_ROLES));
 }
 
 function nowIso(): string {
@@ -1274,7 +1280,7 @@ function resolveUserTeacherPrivilegesForLesson(
     return { canModerate: true, canView: true, isAssignedCoordinator: false, isCoTeacher: false };
   }
 
-  if (session.role === 'senior_teacher') {
+  if (sessionHasRole(session, 'senior_teacher')) {
     const myGradeIds = getSeniorGradeIds(db, schoolId, session.userId);
     const managesGrade = myGradeIds.includes(lesson.grade_id) || lesson.coordinator_id === session.userId;
     if (managesGrade) {
@@ -1369,7 +1375,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       .all(schoolId) as any[];
 
     let scopedGrades = allGrades;
-    if (session.role === 'senior_teacher' && !isSchoolAdmin(session)) {
+    if (sessionHasRole(session, 'senior_teacher') && !isSchoolAdmin(session)) {
       const assignedIds = new Set(getSeniorGradeIds(db, schoolId, session.userId));
       scopedGrades = allGrades.filter((g) => assignedIds.has(g.id));
     } else if (session.role === 'student') {
@@ -1504,7 +1510,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
            ORDER BY scheduled_start_at DESC`
         )
         .all(schoolId, statusFilter, statusFilter, gradeIdFilter, gradeIdFilter) as any[];
-    } else if (session.role === 'senior_teacher' && !viewAsTeacher) {
+    } else if (sessionHasRole(session, 'senior_teacher') && !viewAsTeacher) {
       const assignedIds = getSeniorGradeIds(db, schoolId, session.userId);
       if (gradeIdFilter && !assignedIds.includes(gradeIdFilter)) {
         return res.status(403).json({ error: 'Access denied: you are only authorized for your assigned grade.' });
@@ -1656,7 +1662,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
         return { ...bundle, childrenProgress: childRecords };
       }
 
-      if (viewAsTeacher || (!isSchoolAdmin(session) && session.role !== 'senior_teacher')) {
+      if (viewAsTeacher || (!isSchoolAdmin(session) && !sessionHasRole(session, 'senior_teacher'))) {
         const priv = resolveUserTeacherPrivilegesForLesson(db, session, schoolId, r);
         const myAssignments = bundle.teacherAssignments.filter((t) => t.teacherId === session.userId);
         return {
@@ -1997,7 +2003,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
     if (!schoolId) return;
 
-    if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
+    if (!isSchoolAdmin(session) && !sessionHasRole(session, 'senior_teacher')) {
       return res.status(403).json({
         error: 'Only Grade Senior Teachers (for their assigned grade) or School Administrators can schedule virtual lessons.',
       });
@@ -2045,7 +2051,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       return res.status(404).json({ error: 'Selected grade not found in this school.' });
     }
 
-    if (session.role === 'senior_teacher' && !isSchoolAdmin(session)) {
+    if (sessionHasRole(session, 'senior_teacher') && !isSchoolAdmin(session)) {
       const assignedIds = getSeniorGradeIds(db, schoolId, session.userId);
       if (!assignedIds.includes(gradeId)) {
         return res.status(403).json({

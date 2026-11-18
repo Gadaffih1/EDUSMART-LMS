@@ -8,7 +8,15 @@ import {
   writeSecurityAudit,
 } from './db.ts';
 import { ACADEMIC_HIERARCHY_TABLES } from './academicHierarchySchema.ts';
-import { requireAuth, resolveAuthorizedTenantId, type AuthSession } from './authRoutes.ts';
+import {
+  getSessionRoles,
+  normalizeAssignedRoles,
+  requireAuth,
+  resolveAuthorizedTenantId,
+  sessionHasAnyRole,
+  sessionHasRole,
+  type AuthSession,
+} from './authRoutes.ts';
 import { readCollectionForTenant } from './dataRoutes.ts';
 import { upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
@@ -22,7 +30,11 @@ const ADMIN_ROLES = new Set([
 ]);
 
 function isSchoolAdmin(session: AuthSession): boolean {
-  return Boolean(session.isSuperAdmin || ADMIN_ROLES.has(session.role));
+  return Boolean(session.isSuperAdmin || sessionHasAnyRole(session, ADMIN_ROLES));
+}
+
+function hasClassTeacherPrivilege(session: AuthSession): boolean {
+  return sessionHasAnyRole(session, ['class_teacher', 'hod']);
 }
 
 function nowIso(): string {
@@ -97,7 +109,7 @@ function getStudentOrParentPlacements(
   schoolId: string
 ): Array<{ gradeId: string; streamId: string }> {
   const results: Array<{ gradeId: string; streamId: string }> = [];
-  if (session.role === 'student') {
+  if (sessionHasRole(session, 'student')) {
     const row = db
       .prepare(
         `SELECT grade_id, stream_id FROM student_stream_assignments
@@ -114,7 +126,7 @@ function getStudentOrParentPlacements(
         results.push({ gradeId: stu.grade_id, streamId: stu.stream_id });
       }
     }
-  } else if (session.role === 'parent') {
+  } else if (sessionHasRole(session, 'parent')) {
     const childIds = new Set<string>(
       Array.isArray(session.user?.childrenIds) ? session.user.childrenIds.map(String) : []
     );
@@ -164,16 +176,18 @@ function assertGradeScope(
   }
   if (isSchoolAdmin(session)) return true;
 
-  if (session.role === 'senior_teacher') {
+  if (sessionHasRole(session, 'senior_teacher')) {
     const allowedGrades = getSeniorGradeIds(db, schoolId, session.userId);
     if (allowedGrades.includes(gradeId)) return true;
-    res.status(403).json({
-      error: 'Access denied. You are only authorized to access your explicitly assigned grade(s).',
-    });
-    return false;
+    if (requireCoordinatorOrAdmin) {
+      res.status(403).json({
+        error: 'Access denied. You are only authorized to access your explicitly assigned grade(s).',
+      });
+      return false;
+    }
   }
 
-  if (!requireCoordinatorOrAdmin && session.role === 'class_teacher') {
+  if (!requireCoordinatorOrAdmin && hasClassTeacherPrivilege(session)) {
     const streamRows = getClassTeacherStreamRows(db, schoolId, session.userId);
     if (streamRows.some((r) => r.grade_id === gradeId)) return true;
   }
@@ -203,18 +217,24 @@ function assertStreamScope(
 
   if (isSchoolAdmin(session)) return stream;
 
-  if (session.role === 'senior_teacher') {
+  if (sessionHasRole(session, 'senior_teacher')) {
     const allowedGrades = getSeniorGradeIds(db, schoolId, session.userId);
     if (allowedGrades.includes(stream.grade_id)) return stream;
+  }
+
+  if (hasClassTeacherPrivilege(session)) {
+    const ctStreams = getClassTeacherStreamRows(db, schoolId, session.userId);
+    if (ctStreams.some((r) => r.stream_id === streamId)) return stream;
+  }
+
+  if (sessionHasRole(session, 'senior_teacher') && !hasClassTeacherPrivilege(session)) {
     res.status(403).json({
       error: 'Access denied. This stream belongs to a grade outside your Senior Teacher assignment.',
     });
     return null;
   }
 
-  if (session.role === 'class_teacher') {
-    const ctStreams = getClassTeacherStreamRows(db, schoolId, session.userId);
-    if (ctStreams.some((r) => r.stream_id === streamId)) return stream;
+  if (hasClassTeacherPrivilege(session)) {
     res.status(403).json({
       error: 'Access denied. You are only authorized to manage your explicitly assigned stream.',
     });
@@ -677,10 +697,10 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
 
       const visibleGrades = allGrades.filter((g) => {
         if (admin) return true;
-        if (session.role === 'senior_teacher') return seniorGradeIds.includes(g.id);
-        if (session.role === 'class_teacher') return classParentGradeIds.includes(g.id);
-        if (session.role === 'student' || session.role === 'parent') {
-          return studentPlacements.some((p) => p.gradeId === g.id);
+        if (sessionHasRole(session, 'senior_teacher') && seniorGradeIds.includes(g.id)) return true;
+        if (hasClassTeacherPrivilege(session) && classParentGradeIds.includes(g.id)) return true;
+        if (sessionHasAnyRole(session, ['student', 'parent'])) {
+          if (studentPlacements.some((p) => p.gradeId === g.id)) return true;
         }
         return false;
       });
@@ -691,10 +711,10 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
 
       const visibleStreams = allStreams.filter((s) => {
         if (admin) return true;
-        if (session.role === 'senior_teacher') return seniorGradeIds.includes(s.grade_id);
-        if (session.role === 'class_teacher') return classStreamIds.includes(s.id);
-        if (session.role === 'student' || session.role === 'parent') {
-          return studentPlacements.some((p) => p.streamId === s.id);
+        if (sessionHasRole(session, 'senior_teacher') && seniorGradeIds.includes(s.grade_id)) return true;
+        if (hasClassTeacherPrivilege(session) && classStreamIds.includes(s.id)) return true;
+        if (sessionHasAnyRole(session, ['student', 'parent'])) {
+          if (studentPlacements.some((p) => p.streamId === s.id)) return true;
         }
         return false;
       });
@@ -764,7 +784,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
 
       // Eligible teaching staff for Admin & Senior Teacher dropdowns
       let staffDirectory: any[] = [];
-      if (admin || session.role === 'senior_teacher') {
+      if (admin || sessionHasRole(session, 'senior_teacher')) {
         const staffRows = db
           .prepare(
             `SELECT id, name, email, role, staff_number, tsc_number, payload_json
@@ -780,6 +800,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
             name: u.name,
             email: u.email,
             role: u.role,
+            assignedRoles: normalizeAssignedRoles(u.role, p.assignedRoles, p.doubleAccessConfig),
             staffNumber: u.staff_number || p.staffNumber || null,
             tscNumber: u.tsc_number || p.tscNumber || null,
             department: p.department || null,
@@ -803,22 +824,26 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
           .all(schoolId) as any[]
       ).filter((a) => visibleGradeIdSet.has(a.grade_id));
 
-      // Unread notifications count for current user
+      // Unread notifications count for current user across all assigned roles
+      const heldRoles = getSessionRoles(session);
+      const rolePlaceholders = heldRoles.map(() => '?').join(',') || '?';
+      const roleArgs = heldRoles.length > 0 ? heldRoles : [session.role];
       const unreadNotifications = db
         .prepare(
           `SELECT COUNT(*) as c FROM grade_notifications
            WHERE school_id = ? AND is_read = 0 AND (
              recipient_user_id = ? OR
-             (recipient_user_id IS NULL AND recipient_role = ?)
+             (recipient_user_id IS NULL AND recipient_role IN (${rolePlaceholders}))
            )`
         )
-        .get(schoolId, session.userId, session.role) as { c: number };
+        .get(schoolId, session.userId, ...roleArgs) as { c: number };
 
       return res.json({
         success: true,
         schoolId,
         scope: {
           role: session.role,
+          assignedRoles: heldRoles,
           isAdmin: admin,
           assignedGradeIds: seniorGradeIds,
           assignedStreamIds: classStreamIds,
@@ -1704,9 +1729,16 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       if (!stream) return res.status(404).json({ error: 'Stream not found in this school.' });
 
       const teacher = db
-        .prepare(`SELECT id, name, email, role FROM users WHERE id = ? AND school_id = ?`)
-        .get(teacherId, schoolId) as { id: string; name: string; email: string; role: string } | undefined;
+        .prepare(`SELECT id, name, email, role, payload_json FROM users WHERE id = ? AND school_id = ?`)
+        .get(teacherId, schoolId) as { id: string; name: string; email: string; role: string; payload_json?: string } | undefined;
       if (!teacher) return res.status(404).json({ error: 'Selected teacher account not found in this school.' });
+
+      const teacherExtra = safeParseJson<Record<string, any>>(teacher.payload_json, {});
+      const updatedAssignedRoles = normalizeAssignedRoles(
+        teacher.role,
+        [...(Array.isArray(teacherExtra.assignedRoles) ? teacherExtra.assignedRoles : []), 'class_teacher'],
+        teacherExtra.doubleAccessConfig
+      );
 
       const now = nowIso();
       const assignmentId = `sct-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
@@ -1740,6 +1772,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         );
 
         updateUserPayloadMetadata(db, schoolId, teacher.id, {
+          assignedRoles: updatedAssignedRoles,
           assignedGradeId: stream.grade_id,
           assignedStreamId: streamId,
           stream: stream.name,
@@ -1954,7 +1987,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       `;
       const args: any[] = [schoolId];
 
-      if (session.role === 'senior_teacher' && !isSchoolAdmin(session)) {
+      if (sessionHasRole(session, 'senior_teacher') && !isSchoolAdmin(session)) {
         const allowedGrades = getSeniorGradeIds(db, schoolId, session.userId);
         if (allowedGrades.length === 0) {
           return res.json({ success: true, assignments: [] });
@@ -2124,7 +2157,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
   app.put('/api/academic/teacher-assignments/sync-teacher', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
+      if (!isSchoolAdmin(session) && !sessionHasRole(session, 'senior_teacher')) {
         return res.status(403).json({ error: 'Only Academic Leadership or School Administrators can assign teacher lessons.' });
       }
       const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
@@ -2153,7 +2186,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         .all(schoolId) as Array<{ id: string; grade_id: string; name: string; display_name: string }>;
 
       const seniorAllowedGrades =
-        session.role === 'senior_teacher' && !isSchoolAdmin(session)
+        sessionHasRole(session, 'senior_teacher') && !isSchoolAdmin(session)
           ? new Set(getSeniorGradeIds(db, schoolId, session.userId))
           : null;
 
@@ -3176,8 +3209,8 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
           now
         );
 
-        // If Senior Teacher or Admin initiates a remedial intervention, notify the stream's Class Teacher
-        if (session.role !== 'class_teacher' && ct?.teacher_id) {
+        // If non-Class-Teacher initiates a remedial intervention, notify the stream's Class Teacher
+        if (!hasClassTeacherPrivilege(session) && ct?.teacher_id) {
           createNotification(db, {
             schoolId,
             gradeId: stream.grade_id,
@@ -3192,8 +3225,8 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
             relatedEntityId: id,
           });
         }
-        // If Class Teacher logs high-severity intervention, notify Senior Teacher
-        if (session.role === 'class_teacher') {
+        // If Class Teacher (or HOD acting as Class Teacher) logs high-severity intervention, notify Senior Teacher
+        if (hasClassTeacherPrivilege(session)) {
           const st = db
             .prepare(`SELECT teacher_id FROM grade_senior_teachers WHERE grade_id = ? AND is_active = 1`)
             .get(stream.grade_id) as { teacher_id: string } | undefined;
@@ -3277,7 +3310,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         if (!assertStreamScope(db, session, schoolId, streamId, res)) return;
       } else if (gradeId) {
         if (!assertGradeScope(db, session, schoolId, gradeId, res, true)) return;
-      } else if (!admin && session.role !== 'senior_teacher' && session.role !== 'class_teacher') {
+      } else if (!admin && !sessionHasRole(session, 'senior_teacher') && !hasClassTeacherPrivilege(session)) {
         return res.status(403).json({ error: 'Insufficient permissions to view class reports.' });
       }
 
@@ -3300,8 +3333,8 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       const allRows = db.prepare(sql).all(...params) as any[];
       const scopedRows = allRows.filter((r) => {
         if (admin) return true;
-        if (session.role === 'senior_teacher') return seniorGradeIds.includes(r.grade_id);
-        if (session.role === 'class_teacher') return classStreamIds.includes(r.stream_id);
+        if (sessionHasRole(session, 'senior_teacher') && seniorGradeIds.includes(r.grade_id)) return true;
+        if (hasClassTeacherPrivilege(session) && classStreamIds.includes(r.stream_id)) return true;
         return false;
       });
 
@@ -3327,8 +3360,8 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
       if (!schoolId) return;
 
-      if (!isSchoolAdmin(session) && session.role !== 'class_teacher') {
-        return res.status(403).json({ error: 'Only Class Teachers or Administrators can create class reports.' });
+      if (!isSchoolAdmin(session) && !hasClassTeacherPrivilege(session)) {
+        return res.status(403).json({ error: 'Only Class Teachers, Heads of Department, or Administrators can create class reports.' });
       }
 
       const streamId = String(req.body?.streamId || '').trim();
@@ -3612,7 +3645,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
       if (!schoolId) return;
 
-      if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
+      if (!isSchoolAdmin(session) && !sessionHasRole(session, 'senior_teacher')) {
         return res.status(403).json({ error: 'Only an assigned Senior Teacher or Administrator can review reports.' });
       }
 
@@ -3734,7 +3767,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
 
       const admin = isSchoolAdmin(session);
       const seniorGradeIds = getSeniorGradeIds(db, schoolId, session.userId);
-      if (!admin && session.role !== 'senior_teacher') {
+      if (!admin && !sessionHasRole(session, 'senior_teacher')) {
         return res.status(403).json({ error: 'Access restricted to Senior Teachers and School Administrators.' });
       }
       if (gradeId && !assertGradeScope(db, session, schoolId, gradeId, res, true)) return;
@@ -3770,7 +3803,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
       if (!schoolId) return;
 
-      if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
+      if (!isSchoolAdmin(session) && !sessionHasRole(session, 'senior_teacher')) {
         return res.status(403).json({ error: 'Only assigned Senior Teachers or Administrators can compile consolidated grade reports.' });
       }
 
@@ -4008,19 +4041,17 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       const visible = rows.filter((a) => {
         if (admin) return true;
         if (!a.grade_id && !a.stream_id) return true; // school-wide
-        if (session.role === 'senior_teacher') {
-          return a.grade_id ? seniorGradeIds.includes(a.grade_id) : false;
+        if (sessionHasRole(session, 'senior_teacher')) {
+          if (a.grade_id && seniorGradeIds.includes(a.grade_id)) return true;
         }
-        if (session.role === 'class_teacher') {
-          if (a.stream_id) return classStreamRows.some((r) => r.stream_id === a.stream_id);
-          if (a.grade_id) return classStreamRows.some((r) => r.grade_id === a.grade_id);
-          return false;
+        if (hasClassTeacherPrivilege(session)) {
+          if (a.stream_id && classStreamRows.some((r) => r.stream_id === a.stream_id)) return true;
+          if (a.grade_id && classStreamRows.some((r) => r.grade_id === a.grade_id)) return true;
         }
-        if (session.role === 'student' || session.role === 'parent') {
+        if (sessionHasAnyRole(session, ['student', 'parent'])) {
           if (a.target_audience === 'teachers_only') return false;
-          if (a.stream_id) return studentPlacements.some((p) => p.streamId === a.stream_id);
-          if (a.grade_id) return studentPlacements.some((p) => p.gradeId === a.grade_id);
-          return false;
+          if (a.stream_id && studentPlacements.some((p) => p.streamId === a.stream_id)) return true;
+          if (a.grade_id && studentPlacements.some((p) => p.gradeId === a.grade_id)) return true;
         }
         return false;
       });
@@ -4037,7 +4068,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
       if (!schoolId) return;
 
-      if (!isSchoolAdmin(session) && session.role !== 'senior_teacher' && session.role !== 'class_teacher') {
+      if (!isSchoolAdmin(session) && !sessionHasRole(session, 'senior_teacher') && !hasClassTeacherPrivilege(session)) {
         return res.status(403).json({ error: 'Only educators and administrators can publish announcements.' });
       }
 
@@ -4117,13 +4148,14 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         )
         .all(schoolId) as any[];
 
+      const heldRoles = new Set(getSessionRoles(session));
       const filtered = rows.filter((n) => {
         if (n.recipient_user_id) return n.recipient_user_id === session.userId;
-        if (n.recipient_role !== session.role) return false;
-        if (session.role === 'senior_teacher' && n.grade_id) {
+        if (!heldRoles.has(String(n.recipient_role || '').toLowerCase())) return false;
+        if (n.recipient_role === 'senior_teacher' && n.grade_id) {
           return seniorGradeIds.includes(n.grade_id);
         }
-        if (session.role === 'class_teacher' && n.stream_id) {
+        if (n.recipient_role === 'class_teacher' && n.stream_id) {
           return classStreamIds.includes(n.stream_id);
         }
         return true;

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { getDb, notifyMySqlTablesChanged, stripSecrets, writeSecurityAudit } from './db.ts';
-import { AuthSession, requireAuth } from './authRoutes.ts';
+import { AuthSession, requireAuth, sessionHasAnyRole } from './authRoutes.ts';
 import { upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
 
@@ -169,8 +169,7 @@ function parseJsonSafe<T = any>(raw: string | null | undefined, fallback: T): T 
 function canManageExecutiveReports(session: AuthSession): boolean {
   return (
     session.isSuperAdmin ||
-    session.role === 'head_teacher' ||
-    session.role === 'admin'
+    sessionHasAnyRole(session, ['head_teacher', 'admin'])
   );
 }
 

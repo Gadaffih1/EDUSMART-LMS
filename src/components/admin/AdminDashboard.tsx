@@ -12,6 +12,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ClientDataStore } from '../../utils/clientDataStore';
+import { getUserRoles, normalizeAssignedRoleList } from '../../utils/subjectTeacherSwitch';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { GradeStreamManagementConsole, type AdminAcademicMode } from '../academic-hierarchy/GradeStreamManagementConsole';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
@@ -181,6 +182,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('student');
+  const [editAdditionalRoles, setEditAdditionalRoles] = useState<UserRole[]>([]);
   const [editGrade, setEditGrade] = useState<GradeLevel>(4);
   const [editStream, setEditStream] = useState<StreamName>('Dove');
   const [editIdNumber, setEditIdNumber] = useState('');
@@ -199,6 +201,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<UserRole | ''>('');
+  const [newAdditionalRoles, setNewAdditionalRoles] = useState<UserRole[]>([]);
   const [systemRoles] = useState(() => listSystemRoles());
   const [newGrade, setNewGrade] = useState<GradeLevel>(4);
   const [newStream, setNewStream] = useState<StreamName>('Dove');
@@ -232,7 +235,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         (u.staffNumber && u.staffNumber.toLowerCase().includes(q)) ||
         (u.tscNumber && u.tscNumber.toLowerCase().includes(q)) ||
         (u.phone && u.phone.toLowerCase().includes(q));
-      const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+      const matchesRole = userRoleFilter === 'all' || getUserRoles(u).includes(userRoleFilter as UserRole);
       const isUserActive = u.isActive !== false;
       const matchesStatus =
         userStatusFilter === 'all' ? true : userStatusFilter === 'active' ? isUserActive : !isUserActive;
@@ -247,6 +250,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     setEditEmail(user.email);
     setEditPassword('');
     setEditRole(user.role);
+    setEditAdditionalRoles((user.assignedRoles || []).filter((r) => r !== user.role));
     setEditGrade(user.grade || 4);
     setEditStream(user.stream || 'Dove');
     setEditIdNumber(user.admissionNumber || user.staffNumber || user.tscNumber || '');
@@ -272,18 +276,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     }
 
     const roleMeta = systemRoles.find((r) => r.slug === editRole);
+    const allAssignedRoles = normalizeAssignedRoleList(
+      editRole,
+      editAdditionalRoles,
+      editingUser.doubleAccessConfig
+    );
+    const hasClassRole =
+      allAssignedRoles.includes('student') || allAssignedRoles.includes('class_teacher');
+    const hasHodRole = allAssignedRoles.includes('hod');
+    const hasTeachingStaffRole = allAssignedRoles.some((r) =>
+      [
+        'teacher',
+        'class_teacher',
+        'hod',
+        'senior_teacher',
+        'dean_of_studies',
+        'deputy_head',
+        'librarian',
+        'head_teacher',
+        'nurse',
+      ].includes(r)
+    );
+
     const updates: Partial<User> & { password?: string } = {
       name: editName.trim(),
       email: editEmail.trim().toLowerCase(),
       role: editRole,
+      assignedRoles: allAssignedRoles,
       schoolId: editingUser.schoolId || currentTenant.id,
       designation: editDesignation.trim(),
-      grade: ['student', 'class_teacher'].includes(editRole) ? editGrade : undefined,
-      stream: ['student', 'class_teacher'].includes(editRole) ? editStream : undefined,
-      department: editRole === 'hod' ? editDepartment : undefined,
+      grade: hasClassRole ? editGrade : undefined,
+      stream: hasClassRole ? editStream : undefined,
+      department: hasHodRole ? editDepartment : undefined,
       admissionNumber: editRole === 'student' || roleMeta?.numberKind === 'admission' ? editIdNumber.trim() || undefined : undefined,
       staffNumber: roleMeta?.numberKind === 'staff' ? editIdNumber.trim() || undefined : editingUser.staffNumber,
-      tscNumber: ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'deputy_head', 'librarian', 'head_teacher', 'nurse'].includes(editRole) ? (editIdNumber.trim() || undefined) : undefined,
+      tscNumber: hasTeachingStaffRole ? (editIdNumber.trim() || undefined) : undefined,
       customPermissions: Object.keys(editCustomPermissions).length > 0 ? editCustomPermissions : undefined
     };
     if (trimmedPassword.length > 0) {
@@ -303,7 +330,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       }
       saveProvisionedAccount({ ...updated, ...(trimmedPassword ? { password: trimmedPassword } : {}) });
       setAllUsers(Storage.getUsers());
-      showToast(`User ${updated.name} successfully updated! Role assigned as ${editRole.replace('_', ' ').toUpperCase()}.`, 'success');
+      showToast(
+        `User ${updated.name} successfully updated! Assigned roles: ${allAssignedRoles
+          .map((r) => r.replace(/_/g, ' ').toUpperCase())
+          .join(' + ')}.`,
+        'success'
+      );
       setEditingUser(null);
     } catch (err: any) {
       showToast(err?.message || 'Failed saving user details.', 'error');
@@ -379,6 +411,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     const effective = Storage.getUserEffectivePermissions({
       ...editingUser,
       role: editRole,
+      assignedRoles: normalizeAssignedRoleList(editRole, editAdditionalRoles, editingUser.doubleAccessConfig),
       customPermissions: editCustomPermissions
     });
     setEditCustomPermissions(prev => ({
@@ -441,22 +474,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     }
 
     const targetSchoolId = currentTenant?.id || 'tenant-riara';
+    const allAssignedRoles = normalizeAssignedRoleList(newRole as UserRole, newAdditionalRoles);
+    const hasClassRole =
+      allAssignedRoles.includes('student') || allAssignedRoles.includes('class_teacher');
+    const hasHodRole = allAssignedRoles.includes('hod');
+    const hasSubjectTeacherRole = allAssignedRoles.includes('teacher');
     const newUser: User = {
       id: `usr-${newRole}-${Date.now()}`,
       name: newName.trim(),
       email: newEmail.trim().toLowerCase(),
       password: newPassword,
       role: newRole as UserRole,
+      assignedRoles: allAssignedRoles,
       schoolId: targetSchoolId,
       isActive: true,
-      grade: newRole === 'student' || newRole === 'class_teacher' ? newGrade : undefined,
-      stream: newRole === 'student' || newRole === 'class_teacher' ? newStream : undefined,
-      department: newRole === 'hod' ? newDepartment : undefined,
+      grade: hasClassRole ? newGrade : undefined,
+      stream: hasClassRole ? newStream : undefined,
+      department: hasHodRole ? newDepartment : undefined,
       childrenIds: newRole === 'parent' ? [newSelectedChildId] : undefined,
       admissionNumber: selectedRole.numberKind === 'admission' ? newIdNumber.trim() : undefined,
       staffNumber: selectedRole.numberKind === 'staff' ? newIdNumber.trim() : undefined,
       designation: selectedRole.name,
-      assignedSubjects: newRole === 'teacher' ? ['Mathematics', 'Integrated Science'] : undefined
+      assignedSubjects: hasSubjectTeacherRole ? ['Mathematics', 'Integrated Science'] : undefined
     };
 
     setCreateUserBusy(true);
@@ -536,6 +575,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       setNewEmail('');
       setNewPassword('');
       setNewRole('');
+      setNewAdditionalRoles([]);
       setNewIdNumber('');
       setNewStudentParentName('');
       setNewStudentParentPhone('');
@@ -1053,9 +1093,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                             <div className="text-[11px] font-mono text-slate-500">{u.email}</div>
                           </td>
                           <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 capitalize">
-                              {u.role.replace(/_/g, ' ')}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {getUserRoles(u).map((roleSlug, idx) => (
+                                <span
+                                  key={`${u.id}-${roleSlug}`}
+                                  className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                                    idx === 0
+                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}
+                                >
+                                  {roleSlug.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
                             {u.grade && (
                               <div className="text-[10px] text-slate-500 mt-0.5">
                                 Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
@@ -1192,7 +1243,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Account Role
+                Primary Account Role
               </label>
               <select
                 required
@@ -1200,6 +1251,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 onChange={(e) => {
                   const slug = e.target.value as UserRole;
                   setNewRole(slug);
+                  setNewAdditionalRoles((prev) => prev.filter((r) => r !== slug));
                   const role = systemRoles.find((item) => item.slug === slug);
                   if (!role) {
                     setNewPassword('');
@@ -1226,6 +1278,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 ))}
               </select>
             </div>
+
+            {newRole !== '' && (
+              <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Additional Assigned Roles (Optional Multi-Role Assignment)
+                  </span>
+                  <span className="text-[10px] font-mono text-indigo-700">
+                    {1 + newAdditionalRoles.length} role(s) selected
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {systemRoles
+                    .filter((role) => role.slug !== newRole)
+                    .map((role) => {
+                      const slug = role.slug as UserRole;
+                      const checked = newAdditionalRoles.includes(slug);
+                      return (
+                        <label
+                          key={role.id}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                            checked
+                              ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setNewAdditionalRoles((prev) =>
+                                prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug]
+                              )
+                            }
+                            className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                          />
+                          <span className="truncate">{role.name}</span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -1256,8 +1351,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               )}
             </div>
 
-            {/* If Student or Class Teacher: select exactly 1 grade and 1 stream */}
-            {['student', 'class_teacher'].includes(newRole) && (
+            {/* If Student or Class Teacher (primary or additional): select 1 grade and 1 stream */}
+            {Boolean(newRole && normalizeAssignedRoleList(newRole, newAdditionalRoles).some((r) => r === 'student' || r === 'class_teacher')) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1353,8 +1448,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               </div>
             )}
 
-            {/* If HOD: Department selection */}
-            {newRole === 'hod' && (
+            {/* If HOD (primary or additional): Department selection */}
+            {Boolean(newRole && normalizeAssignedRoleList(newRole, newAdditionalRoles).includes('hod')) && (
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Department Assigned
@@ -2065,7 +2160,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     />
                   </div>
 
-                  {editRole === 'hod' && (
+                  {normalizeAssignedRoleList(editRole, editAdditionalRoles).includes('hod') && (
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
                       <select
@@ -2080,7 +2175,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     </div>
                   )}
 
-                  {['student', 'class_teacher'].includes(editRole) && (
+                  {normalizeAssignedRoleList(editRole, editAdditionalRoles).some((r) => r === 'student' || r === 'class_teacher') && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">Grade</label>
@@ -2114,33 +2209,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               {/* Role Assignment */}
               <div className="space-y-3 pt-4 border-t border-slate-200">
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between">
-                  <span>2. Assign Institutional Role (Authoritative Admin Control)</span>
-                  <span className="text-[10px] text-indigo-700 font-mono">15 Standard School Roles</span>
+                  <span>2. Assign Institutional Roles (Primary + Multi-Role Support)</span>
+                  <span className="text-[10px] text-indigo-700 font-mono">
+                    {1 + editAdditionalRoles.length} Role(s) Assigned
+                  </span>
                 </h4>
 
-                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-2">
-                  <select
-                    value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2 text-xs font-bold border border-indigo-300 rounded-lg bg-white text-indigo-950 focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="admin">System Administrator (Full Control over All Systems & Roles)</option>
-                    <option value="head_teacher">Head Teacher / Principal (School-Wide Management)</option>
-                    <option value="deputy_head">Deputy Head Teacher (Operations, Discipline & Full Report Moderation)</option>
-                    <option value="dean_of_studies">Dean of Studies (Academics, Curriculum & Full Report Moderation)</option>
-                    <option value="curriculum_coordinator">Curriculum Coordinator (Executive Leadership: CBC Curriculum, CBA & Syllabi)</option>
-                    <option value="senior_teacher">Senior Teacher (Supervision & Mentorship)</option>
-                    <option value="hod">Head of Department (Curriculum Moderation)</option>
-                    <option value="class_teacher">Class Teacher (Stream & Learner Dossiers)</option>
-                    <option value="teacher">Subject Teacher (Instruction & Grading)</option>
-                    <option value="nurse">School Sanatorium Nurse (Strictly Sanatorium Portal Only)</option>
-                    <option value="school_admin_staff">School Admin Staff (Front Office & Gate Passes)</option>
-                    <option value="librarian">School Librarian (Library Collections & Circulation)</option>
-                    <option value="transport_team">Transport Team (Fleet, Routes & Bus Chaperones)</option>
-                    <option value="cocurricular_team">Co-Curricular Team (Sports, Games & Club Patrons)</option>
-                    <option value="parent">Parent / Guardian (Children Records)</option>
-                    <option value="student">Learner / Student (Academic Materials & Tests)</option>
-                  </select>
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Primary Institutional Role
+                    </label>
+                    <select
+                      value={editRole}
+                      onChange={(e) => {
+                        const nextRole = e.target.value as UserRole;
+                        setEditRole(nextRole);
+                        setEditAdditionalRoles((prev) => prev.filter((r) => r !== nextRole));
+                      }}
+                      className="w-full px-3 py-2 text-xs font-bold border border-indigo-300 rounded-lg bg-white text-indigo-950 focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="admin">System Administrator (Full Control over All Systems & Roles)</option>
+                      <option value="head_teacher">Head Teacher / Principal (School-Wide Management)</option>
+                      <option value="deputy_head">Deputy Head Teacher (Operations, Discipline & Full Report Moderation)</option>
+                      <option value="dean_of_studies">Dean of Studies (Academics, Curriculum & Full Report Moderation)</option>
+                      <option value="curriculum_coordinator">Curriculum Coordinator (Executive Leadership: CBC Curriculum, CBA & Syllabi)</option>
+                      <option value="senior_teacher">Senior Teacher (Supervision & Mentorship)</option>
+                      <option value="hod">Head of Department (Curriculum Moderation)</option>
+                      <option value="class_teacher">Class Teacher (Stream & Learner Dossiers)</option>
+                      <option value="teacher">Subject Teacher (Instruction & Grading)</option>
+                      <option value="nurse">School Sanatorium Nurse (Strictly Sanatorium Portal Only)</option>
+                      <option value="school_admin_staff">School Admin Staff (Front Office & Gate Passes)</option>
+                      <option value="librarian">School Librarian (Library Collections & Circulation)</option>
+                      <option value="transport_team">Transport Team (Fleet, Routes & Bus Chaperones)</option>
+                      <option value="cocurricular_team">Co-Curricular Team (Sports, Games & Club Patrons)</option>
+                      <option value="parent">Parent / Guardian (Children Records)</option>
+                      <option value="student">Learner / Student (Academic Materials & Tests)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-700 mb-1.5">
+                      Additional Assigned Roles (Hold more than 1 role)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                      {systemRoles
+                        .filter((role) => role.slug !== editRole)
+                        .map((role) => {
+                          const slug = role.slug as UserRole;
+                          const checked = editAdditionalRoles.includes(slug);
+                          return (
+                            <label
+                              key={role.id}
+                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                                checked
+                                  ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setEditAdditionalRoles((prev) =>
+                                    prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug]
+                                  )
+                                }
+                                className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                              />
+                              <span className="truncate">{role.name}</span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </div>
 
                   {/* Context notice based on chosen role */}
                   {editRole === 'nurse' && (
@@ -2205,6 +2347,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     const effective = Storage.getUserEffectivePermissions({
                       ...editingUser,
                       role: editRole,
+                      assignedRoles: normalizeAssignedRoleList(editRole, editAdditionalRoles, editingUser.doubleAccessConfig),
                       customPermissions: editCustomPermissions
                     });
                     const isChecked = effective[key];

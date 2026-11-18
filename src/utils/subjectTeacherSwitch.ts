@@ -15,9 +15,67 @@ export const SUBJECT_TEACHER_ELIGIBLE_ROLES: readonly UserRole[] = [
 
 const ELIGIBLE_ROLE_SET = new Set<UserRole>(SUBJECT_TEACHER_ELIGIBLE_ROLES);
 
+export function normalizeAssignedRoleList(
+  primaryRole: UserRole | string,
+  additionalRoles?: readonly (UserRole | string)[] | null,
+  doubleAccessConfig?: User['doubleAccessConfig']
+): UserRole[] {
+  const seen = new Set<UserRole>();
+  if (primaryRole) {
+    seen.add(String(primaryRole).trim().toLowerCase() as UserRole);
+  }
+  if (Array.isArray(additionalRoles)) {
+    for (const r of additionalRoles) {
+      const clean = String(r || '').trim().toLowerCase() as UserRole;
+      if (clean) seen.add(clean);
+    }
+  }
+  if (doubleAccessConfig?.enabled && doubleAccessConfig.secondaryRole) {
+    seen.add(String(doubleAccessConfig.secondaryRole).trim().toLowerCase() as UserRole);
+  }
+  return Array.from(seen);
+}
+
+export function getUserRoles(user: User | null | undefined): UserRole[] {
+  if (!user) return [];
+  return normalizeAssignedRoleList(user.role, user.assignedRoles, user.doubleAccessConfig);
+}
+
+export function userHasRole(user: User | null | undefined, targetRole: UserRole): boolean {
+  if (!user) return false;
+  return getUserRoles(user).includes(targetRole);
+}
+
 export function canSwitchToSubjectTeacher(user: User | null | undefined): boolean {
   if (!user) return false;
-  return ELIGIBLE_ROLE_SET.has(user.role);
+  return getUserRoles(user).some((r) => ELIGIBLE_ROLE_SET.has(r));
+}
+
+/**
+ * All Heads of Department (HOD) must be able to switch to the Class Teacher role
+ * with full Class Teacher rights for their assigned class, plus any multi-role
+ * user holding `class_teacher` alongside another primary role.
+ */
+export function canSwitchToClassTeacher(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (userHasRole(user, 'hod')) return true;
+  return user.role !== 'class_teacher' && userHasRole(user, 'class_teacher');
+}
+
+/**
+ * Returns additional workspace roles this user can switch to (excluding primary role).
+ * Dedicated quick-buttons exist for `teacher` (Subject Teacher) and `class_teacher` (Class Teacher).
+ */
+export function getSwitchableWorkspaceRoles(user: User | null | undefined): UserRole[] {
+  if (!user) return [];
+  const roles = getUserRoles(user).filter((r) => r !== user.role);
+  if (userHasRole(user, 'hod') && user.role !== 'class_teacher' && !roles.includes('class_teacher')) {
+    roles.push('class_teacher');
+  }
+  if (canSwitchToSubjectTeacher(user) && user.role !== 'teacher' && !roles.includes('teacher')) {
+    roles.push('teacher');
+  }
+  return roles;
 }
 
 export function getAdministrativeRoleDisplayName(role: UserRole | string): string {
@@ -36,6 +94,28 @@ export function getAdministrativeRoleDisplayName(role: UserRole | string): strin
       return 'Class Teacher';
     case 'teacher':
       return 'Subject Teacher';
+    case 'head_teacher':
+      return 'Head Teacher';
+    case 'admin':
+      return 'System Administrator';
+    case 'school_admin_staff':
+      return 'School Admin Staff';
+    case 'librarian':
+      return 'School Librarian';
+    case 'nurse':
+      return 'School Nurse';
+    case 'transport_team':
+      return 'Transport Team';
+    case 'cocurricular_team':
+      return 'Co-Curricular Team';
+    case 'finance_officer':
+      return 'Finance Officer';
+    case 'procurement_officer':
+      return 'Procurement Officer';
+    case 'storekeeper':
+      return 'Storekeeper';
+    case 'hr_manager':
+      return 'HR Manager';
     default:
       return String(role || '').replace(/_/g, ' ');
   }
@@ -55,9 +135,21 @@ export function getAdministrativeRoleShortName(role: UserRole | string): string 
       return 'Senior Teacher';
     case 'class_teacher':
       return 'Class Teacher';
+    case 'head_teacher':
+      return 'Head Teacher';
+    case 'admin':
+      return 'Admin';
     default:
       return getAdministrativeRoleDisplayName(role);
   }
+}
+
+export function createRoleProxyUser(user: User, targetRole: UserRole): User {
+  return {
+    ...user,
+    role: targetRole,
+    assignedRoles: getUserRoles(user),
+  };
 }
 
 /**
@@ -65,8 +157,14 @@ export function getAdministrativeRoleShortName(role: UserRole | string): string 
  * real user's identity, tenant membership, teaching allocations, and metadata.
  */
 export function createSubjectTeacherProxyUser(user: User): User {
-  return {
-    ...user,
-    role: 'teacher',
-  };
+  return createRoleProxyUser(user, 'teacher');
 }
+
+/**
+ * Creates a proxy User object with `role: 'class_teacher'` while preserving all of the
+ * real user's identity, tenant membership, assigned stream/grade metadata, and permissions.
+ */
+export function createClassTeacherProxyUser(user: User): User {
+  return createRoleProxyUser(user, 'class_teacher');
+}
+

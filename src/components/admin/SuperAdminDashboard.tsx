@@ -71,6 +71,7 @@ import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
 import { saveProvisionedAccount } from '../../utils/provisionedAccounts';
 import { ensureDepartments } from '../../utils/departmentStore';
 import { ClientDataStore } from '../../utils/clientDataStore';
+import { getUserRoles, normalizeAssignedRoleList } from '../../utils/subjectTeacherSwitch';
 import { PrintableCredentialsModal } from './PrintableCredentialsModal';
 import { SchoolSettingsPanel } from './SchoolSettingsPanel';
 
@@ -482,6 +483,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     password: '',
     phone: '',
     role: 'teacher' as UserRole,
+    assignedRoles: [] as UserRole[],
     schoolId: targetSchool.id,
     grade: 1 as GradeLevel,
     stream: 'Dove' as StreamName,
@@ -537,7 +539,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         (u.staffNumber && u.staffNumber.toLowerCase().includes(userSearch.toLowerCase())) ||
         (u.phone && u.phone.includes(userSearch));
 
-      const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+      const matchesRole = userRoleFilter === 'all' || getUserRoles(u).includes(userRoleFilter as UserRole);
       const matchesSchool = userSchoolFilter === 'all' || (u.schoolId ? u.schoolId === userSchoolFilter : userSchoolFilter === currentTenant.id);
       
       const isUserActive = u.isActive !== false;
@@ -569,6 +571,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       password: '',
       phone: '+254 7',
       role: '' as UserRole,
+      assignedRoles: [] as UserRole[],
       schoolId: targetSchool.id,
       grade: 4,
       stream: 'Dove',
@@ -592,6 +595,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       password: '',
       phone: user.phone || '',
       role: user.role,
+      assignedRoles: (user.assignedRoles || []).filter((r) => r !== user.role),
       schoolId: user.schoolId || currentTenant.id,
       grade: user.grade || 1,
       stream: user.stream || 'Dove',
@@ -642,6 +646,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         ? userForm.staffNumber.trim()
         : '';
 
+    const allAssignedRoles = normalizeAssignedRoleList(userForm.role, userForm.assignedRoles);
+    const hasClassRole =
+      allAssignedRoles.includes('student') || allAssignedRoles.includes('class_teacher');
+    const hasHodRole = allAssignedRoles.includes('hod');
+
     setUserSaving(true);
     try {
       if (editingUserId) {
@@ -650,14 +659,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           email: userForm.email.toLowerCase().trim(),
           phone: userForm.phone,
           role: userForm.role,
+          assignedRoles: allAssignedRoles,
           schoolId: userForm.schoolId,
-          grade: ['student', 'class_teacher'].includes(userForm.role) ? userForm.grade : undefined,
-          stream: ['student', 'class_teacher'].includes(userForm.role) ? userForm.stream : undefined,
+          grade: hasClassRole ? userForm.grade : undefined,
+          stream: hasClassRole ? userForm.stream : undefined,
           admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
           staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
           tscNumber: userForm.tscNumber,
           designation: userForm.designation,
-          department: userForm.department,
+          department: hasHodRole ? userForm.department : userForm.department,
           isActive: userForm.isActive
         };
         if (trimmedPassword.length > 0) {
@@ -677,13 +687,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           password: trimmedPassword,
           phone: userForm.phone,
           role: userForm.role,
+          assignedRoles: allAssignedRoles,
           schoolId: userForm.schoolId,
-          grade: ['student', 'class_teacher'].includes(userForm.role) ? userForm.grade : undefined,
-          stream: ['student', 'class_teacher'].includes(userForm.role) ? userForm.stream : undefined,
+          grade: hasClassRole ? userForm.grade : undefined,
+          stream: hasClassRole ? userForm.stream : undefined,
           admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
           staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
           designation: role?.name || userForm.designation,
-          department: userForm.department,
+          department: hasHodRole ? (userForm.department || 'Sciences & Mathematics') : userForm.department,
           isActive: userForm.isActive
         };
         const created = await ClientDataStore.apiCreateUser(newUser);
@@ -1815,9 +1826,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           </td>
 
                           <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 capitalize">
-                              {u.role.replace('_', ' ')}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {getUserRoles(u).map((roleSlug, idx) => (
+                                <span
+                                  key={`${u.id}-${roleSlug}`}
+                                  className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                                    idx === 0
+                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}
+                                >
+                                  {roleSlug.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
                             {u.grade && (
                               <div className="text-[10px] text-slate-500 mt-0.5">
                                 Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
@@ -2477,10 +2499,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">System Role *</label>
+                  <label className="font-bold text-slate-700 block mb-1">Primary System Role *</label>
                   <select
                     value={userForm.role}
-                    onChange={(e) => setUserForm(buildUserDraft({ ...userForm, role: e.target.value as UserRole }, numberEdited))}
+                    onChange={(e) => {
+                      const nextPrimary = e.target.value as UserRole;
+                      setUserForm(
+                        buildUserDraft(
+                          {
+                            ...userForm,
+                            role: nextPrimary,
+                            assignedRoles: userForm.assignedRoles.filter((r) => r !== nextPrimary),
+                          },
+                          numberEdited
+                        )
+                      );
+                    }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold bg-white"
                   >
                     <option value="">Choose an account role</option>
@@ -2503,6 +2537,50 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </select>
                 </div>
               </div>
+
+              {userForm.role && (
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800">Additional Assigned Roles (Multi-Role)</span>
+                    <span className="text-[10px] font-mono text-indigo-700">
+                      {1 + userForm.assignedRoles.filter((r) => r !== userForm.role).length} role(s)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    {systemRoles
+                      .filter((role) => role.slug !== userForm.role)
+                      .map((role) => {
+                        const slug = role.slug as UserRole;
+                        const checked = userForm.assignedRoles.includes(slug);
+                        return (
+                          <label
+                            key={role.id}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                              checked
+                                ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setUserForm((prev) => ({
+                                  ...prev,
+                                  assignedRoles: prev.assignedRoles.includes(slug)
+                                    ? prev.assignedRoles.filter((r) => r !== slug)
+                                    : [...prev.assignedRoles, slug],
+                                }))
+                              }
+                              className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                            />
+                            <span className="truncate">{role.name}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
@@ -2555,7 +2633,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 )}
               </div>
 
-              {userForm.role === 'student' && (
+              {Boolean(userForm.role && normalizeAssignedRoleList(userForm.role, userForm.assignedRoles).some((r) => r === 'student' || r === 'class_teacher')) && (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Grade</label>
@@ -2578,6 +2656,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white"
                     />
                   </div>
+                </div>
+              )}
+
+              {Boolean(userForm.role && normalizeAssignedRoleList(userForm.role, userForm.assignedRoles).includes('hod')) && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="font-bold text-slate-700 block mb-1">Department</label>
+                  <select
+                    value={userForm.department || 'Sciences & Mathematics'}
+                    onChange={(e) => setUserForm({ ...userForm, department: e.target.value })}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold"
+                  >
+                    <option value="Sciences & Mathematics">Sciences & Mathematics</option>
+                    <option value="Languages & Humanities">Languages & Humanities</option>
+                    <option value="Creative Arts & Applied Technical">Creative Arts & Applied Technical</option>
+                  </select>
                 </div>
               )}
 

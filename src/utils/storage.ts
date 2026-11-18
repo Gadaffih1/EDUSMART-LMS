@@ -792,8 +792,30 @@ export const Storage = {
     }
 
     const allRolePerms = this.getRolePermissions();
-    const basePerms = allRolePerms[user.role] || DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.student;
-    
+    const roleSet = new Set<UserRole>([user.role]);
+    if (Array.isArray(user.assignedRoles)) {
+      user.assignedRoles.forEach((r) => {
+        if (r) roleSet.add(r);
+      });
+    }
+    if (user.doubleAccessConfig?.enabled && user.doubleAccessConfig.secondaryRole) {
+      roleSet.add(user.doubleAccessConfig.secondaryRole);
+    }
+
+    const basePerms: RoleAccessRights = {
+      ...(allRolePerms[user.role] || DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.student),
+    };
+    roleSet.forEach((r) => {
+      if (r === user.role) return;
+      const rolePerms = allRolePerms[r] || DEFAULT_ROLE_PERMISSIONS[r];
+      if (!rolePerms) return;
+      (Object.keys(rolePerms) as (keyof RoleAccessRights)[]).forEach((permKey) => {
+        if (rolePerms[permKey]) {
+          (basePerms as any)[permKey] = true;
+        }
+      });
+    });
+
     // Apply user-level custom overrides if defined
     const effective: RoleAccessRights = { ...basePerms, ...(user.customPermissions || {}) };
 

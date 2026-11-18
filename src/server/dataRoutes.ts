@@ -23,9 +23,103 @@ import {
   requireAuth,
   requireSuperAdmin,
   resolveAuthorizedTenantId,
+  sessionHasAnyRole,
+  sessionHasRole,
 } from './authRoutes.ts';
 import { generateMySqlDump, getMySqlExportSummary } from './mysqlExport.ts';
 import { forceFullMySqlSync, getMySqlStatus } from './mysqlAdapter.ts';
+
+function normalizeAssignmentField(val: unknown): string {
+  return String(val ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function parseGradeNumberValue(val: unknown): number | null {
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
+  const match = String(val ?? '').match(/\d+/);
+  if (!match) return null;
+  const num = Number(match[0]);
+  return Number.isFinite(num) ? num : null;
+}
+
+function getTeacherAssignedTuplesServer(
+  db: ReturnType<typeof getDb>,
+  schoolId: string,
+  teacherId: string
+): Array<{ grade: number; stream: string; subject: string }> {
+  const tuples: Array<{ grade: number; stream: string; subject: string }> = [];
+  const seen = new Set<string>();
+  const pushTuple = (grade: unknown, stream: unknown, subject: unknown) => {
+    const g = parseGradeNumberValue(grade);
+    const st = normalizeAssignmentField(stream);
+    const sub = normalizeAssignmentField(subject);
+    if (!g || !st || !sub) return;
+    const key = `${g}::${st}::${sub}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    tuples.push({ grade: g, stream: st, subject: sub });
+  };
+
+  try {
+    const rows = db
+      .prepare(
+        `SELECT gta.subject_name, g.grade_number, g.name as grade_name, s.name as stream_name
+         FROM grade_teacher_assignments gta
+         JOIN grades g ON g.id = gta.grade_id
+         JOIN streams s ON s.id = gta.stream_id
+         WHERE gta.school_id = ? AND gta.teacher_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL`
+      )
+      .all(schoolId, teacherId) as Array<{
+      subject_name: string;
+      grade_number: number | null;
+      grade_name: string;
+      stream_name: string;
+    }>;
+
+    for (const r of rows) {
+      pushTuple(r.grade_number || r.grade_name, r.stream_name, r.subject_name);
+    }
+    if (tuples.length > 0) return tuples;
+  } catch {
+    // Fall back to user payload if academic hierarchy tables aren't populated yet
+  }
+
+  const userRow = db
+    .prepare(`SELECT payload_json FROM users WHERE id = ? LIMIT 1`)
+    .get(teacherId) as { payload_json?: string } | undefined;
+
+  if (!userRow?.payload_json) return tuples;
+
+  try {
+    const payload = JSON.parse(userRow.payload_json) as Record<string, any>;
+    if (Array.isArray(payload.assignedSubjectAllocations)) {
+      for (const item of payload.assignedSubjectAllocations) {
+        if (item) pushTuple(item.grade, item.stream, item.subject);
+      }
+      return tuples;
+    }
+
+    const subjects: string[] = Array.isArray(payload.assignedSubjects) ? payload.assignedSubjects : [];
+    const streams: Array<{ grade: number; stream: string }> =
+      Array.isArray(payload.assignedStreams) && payload.assignedStreams.length > 0
+        ? payload.assignedStreams
+        : payload.grade && payload.stream
+        ? [{ grade: Number(payload.grade), stream: String(payload.stream) }]
+        : [];
+
+    for (const st of streams) {
+      for (const sub of subjects) {
+        pushTuple(st.grade, st.stream, sub);
+      }
+    }
+  } catch {
+    // Ignore malformed payload
+  }
+
+  return tuples;
+}
 
 const VLAB_PASS_COOKIE_NAME = 'edusmart_vlab_pass';
 const VLAB_COOKIE_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (bound by ticket expiresAt)
@@ -528,7 +622,7 @@ export function registerDataRoutes(app: Express): void {
         (collection === 'edusmart_all_tenants_registry' ||
           collection === 'edusmart_school_registry_v1') &&
         !session.isSuperAdmin &&
-        session.role !== 'admin'
+        !sessionHasRole(session, 'admin')
       ) {
         return res.status(403).json({ error: 'Administrator privileges required to modify school registry.' });
       }
@@ -538,14 +632,14 @@ export function registerDataRoutes(app: Express): void {
           collection === 'edusmart_provisioned_accounts_v1' ||
           collection === 'edusmart_school_accounts_v1') &&
         !session.isSuperAdmin &&
-        !['admin', 'head_teacher', 'school_admin_staff'].includes(session.role)
+        !sessionHasAnyRole(session, ['admin', 'head_teacher', 'school_admin_staff'])
       ) {
         return res.status(403).json({
           error: 'Administrator privileges required to synchronize institutional user accounts.',
         });
       }
 
-      if (collection === 'edusmart_school_accounts_v1' && !session.isSuperAdmin && session.role !== 'admin') {
+      if (collection === 'edusmart_school_accounts_v1' && !session.isSuperAdmin && !sessionHasRole(session, 'admin')) {
         return res.status(403).json({
           error: 'Administrator privileges required to modify school login accounts.',
         });
@@ -553,6 +647,72 @@ export function registerDataRoutes(app: Express): void {
 
       const db = getDb();
       const now = new Date().toISOString();
+
+      // Strict subject-teacher scoping for homework & assignments:
+      // Non-admin teaching users may only create/modify assignments for (grade, stream, subject) assigned to them.
+      if (
+        collection === 'edusmart_assignments_v1' &&
+        Array.isArray(records) &&
+        !session.isSuperAdmin &&
+        !sessionHasAnyRole(session, ['admin', 'head_teacher'])
+      ) {
+        const existingRows = db
+          .prepare(
+            `SELECT record_id, payload_json FROM collections_store
+             WHERE collection_key = 'edusmart_assignments_v1' AND tenant_id = ? AND deleted_at IS NULL`
+          )
+          .all(authorizedTenantId) as Array<{ record_id: string; payload_json: string }>;
+
+        const existingMap = new Map<string, string>();
+        for (const r of existingRows) {
+          existingMap.set(r.record_id, r.payload_json);
+        }
+
+        const teacherTuples = getTeacherAssignedTuplesServer(db, authorizedTenantId, session.userId);
+
+        for (let i = 0; i < records.length; i++) {
+          const item = records[i];
+          if (!item || typeof item !== 'object') continue;
+          const recordId = resolveRecordId(item, i);
+          const existingRaw = existingMap.get(recordId);
+          if (existingRaw) {
+            try {
+              const existingObj = JSON.parse(existingRaw);
+              if (
+                parseGradeNumberValue(existingObj?.grade) === parseGradeNumberValue(item.grade) &&
+                normalizeAssignmentField(existingObj?.stream) === normalizeAssignmentField(item.stream) &&
+                normalizeAssignmentField(existingObj?.subject) === normalizeAssignmentField(item.subject) &&
+                String(existingObj?.title || '') === String(item.title || '') &&
+                String(existingObj?.instructions || '') === String(item.instructions || '')
+              ) {
+                // Unchanged historical or peer record during a collection replace push
+                continue;
+              }
+            } catch {
+              // Validate below if parse fails
+            }
+          }
+
+          const g = parseGradeNumberValue(item.grade);
+          const st = normalizeAssignmentField(item.stream);
+          const sub = normalizeAssignmentField(item.subject);
+          const isAllowed =
+            Boolean(g) &&
+            Boolean(st) &&
+            Boolean(sub) &&
+            st !== 'all streams' &&
+            st !== 'all' &&
+            teacherTuples.some(
+              (t) => t.grade === g && t.stream === st && t.subject === sub
+            );
+
+          if (!isAllowed) {
+            return res.status(403).json({
+              error: `Access Restricted: You can only assign homework or assignments to classes (grade & stream) and subjects explicitly assigned to you (rejected Grade ${item.grade} ${item.stream} — ${item.subject}).`,
+            });
+          }
+        }
+      }
 
       db.exec('BEGIN IMMEDIATE');
       try {
@@ -1012,8 +1172,8 @@ export function registerDataRoutes(app: Express): void {
   app.post('/api/students', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      const allowedRoles = new Set(['admin', 'head_teacher', 'deputy_head', 'dean_of_studies', 'school_admin_staff', 'class_teacher']);
-      if (!session.isSuperAdmin && !allowedRoles.has(session.role)) {
+      const allowedRoles = ['admin', 'head_teacher', 'deputy_head', 'dean_of_studies', 'school_admin_staff', 'class_teacher'];
+      if (!session.isSuperAdmin && !sessionHasAnyRole(session, allowedRoles)) {
         return res.status(403).json({ error: 'Insufficient permissions to enroll students.' });
       }
 
@@ -1063,8 +1223,8 @@ export function registerDataRoutes(app: Express): void {
   app.delete('/api/students/:id', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      const allowedRoles = new Set(['admin', 'head_teacher', 'deputy_head', 'school_admin_staff']);
-      if (!session.isSuperAdmin && !allowedRoles.has(session.role)) {
+      const allowedRoles = ['admin', 'head_teacher', 'deputy_head', 'school_admin_staff'];
+      if (!session.isSuperAdmin && !sessionHasAnyRole(session, allowedRoles)) {
         return res.status(403).json({ error: 'Insufficient permissions to delete student records.' });
       }
 
@@ -1203,8 +1363,8 @@ export function registerDataRoutes(app: Express): void {
   app.put('/api/settings/school', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      const allowedRoles = new Set(['admin', 'head_teacher', 'deputy_head', 'dean_of_studies']);
-      if (!session.isSuperAdmin && !allowedRoles.has(session.role)) {
+      const allowedRoles = ['admin', 'head_teacher', 'deputy_head', 'dean_of_studies'];
+      if (!session.isSuperAdmin && !sessionHasAnyRole(session, allowedRoles)) {
         return res.status(403).json({ error: 'Administrator privileges required to update school settings.' });
       }
 
@@ -1716,8 +1876,8 @@ export function registerDataRoutes(app: Express): void {
   app.get('/api/pwa/analytics', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      const allowedRoles = new Set(['admin', 'head_teacher', 'deputy_head']);
-      if (!session.isSuperAdmin && !allowedRoles.has(session.role)) {
+      const allowedRoles = ['admin', 'head_teacher', 'deputy_head'];
+      if (!session.isSuperAdmin && !sessionHasAnyRole(session, allowedRoles)) {
         return res.status(403).json({ error: 'Administrator privileges required to view PWA statistics.' });
       }
 

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { User } from './types';
+import { User, UserRole } from './types';
 import { Storage } from './utils/storage';
 import { NotificationLayoutProvider, useNotificationLayout } from './context/NotificationLayoutContext';
 import { TenantProvider, useTenant } from './context/TenantContext';
@@ -46,9 +46,11 @@ import { PWAInstallInvitation, PWAUpdateAndOfflineBanner } from './components/pw
 import { InactivityTimeoutModal } from './components/auth/InactivityTimeoutModal';
 import {
   SUBJECT_TEACHER_ELIGIBLE_ROLES,
+  canSwitchToClassTeacher,
   canSwitchToSubjectTeacher,
-  createSubjectTeacherProxyUser,
+  createRoleProxyUser,
   getAdministrativeRoleDisplayName,
+  getSwitchableWorkspaceRoles,
 } from './utils/subjectTeacherSwitch';
 
 type PortalView = 'public_landing' | 'unified_login' | 'super_admin' | 'school_lms';
@@ -111,18 +113,47 @@ function AppContent({
   const [portalView, setPortalView] = useState<PortalView>(() => getPortalRoute(window.location.pathname).view);
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
-  const [workspaceMode, setWorkspaceMode] = useState<'default' | 'subject_teacher'>('default');
+  const [switchedWorkspaceRole, setSwitchedWorkspaceRole] = useState<UserRole | null>(null);
 
   React.useEffect(() => {
-    setWorkspaceMode('default');
+    setSwitchedWorkspaceRole(null);
   }, [currentUser?.id, currentUser?.role]);
 
   const canSwitchSubjectTeacher = Boolean(currentUser && canSwitchToSubjectTeacher(currentUser));
-  const isSubjectTeacherMode = canSwitchSubjectTeacher && workspaceMode === 'subject_teacher';
+  const canSwitchClassTeacher = Boolean(currentUser && canSwitchToClassTeacher(currentUser));
+  const switchableRoles = React.useMemo(
+    () => (currentUser ? getSwitchableWorkspaceRoles(currentUser) : []),
+    [currentUser]
+  );
+
+  const effectiveRole: UserRole = switchedWorkspaceRole || currentUser?.role || 'student';
+  const isSubjectTeacherMode = effectiveRole === 'teacher' && currentUser?.role !== 'teacher';
+  const isClassTeacherMode = effectiveRole === 'class_teacher' && currentUser?.role !== 'class_teacher';
+  const effectiveUser = React.useMemo(() => {
+    if (!currentUser) return null;
+    return switchedWorkspaceRole ? createRoleProxyUser(currentUser, switchedWorkspaceRole) : currentUser;
+  }, [currentUser, switchedWorkspaceRole]);
+
+  const handleSwitchWorkspaceRole = React.useCallback(
+    (targetRole: UserRole | null) => {
+      setViewingOperationsHub(false);
+      if (!currentUser || !targetRole || targetRole === currentUser.role) {
+        setSwitchedWorkspaceRole(null);
+        return;
+      }
+      setSwitchedWorkspaceRole((prev) => (prev === targetRole ? null : targetRole));
+    },
+    [currentUser]
+  );
 
   const handleToggleSubjectTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
-    setWorkspaceMode((prev) => (prev === 'subject_teacher' ? 'default' : 'subject_teacher'));
+    setSwitchedWorkspaceRole((prev) => (prev === 'teacher' ? null : 'teacher'));
+  }, []);
+
+  const handleToggleClassTeacherMode = React.useCallback(() => {
+    setViewingOperationsHub(false);
+    setSwitchedWorkspaceRole((prev) => (prev === 'class_teacher' ? null : 'class_teacher'));
   }, []);
 
   const navigateToPortal = (view: PortalView, schoolId = currentTenant.id, replace = false) => {
@@ -205,20 +236,23 @@ function AppContent({
 
   React.useEffect(() => {
     const handleOpenOps = () => {
-      setWorkspaceMode('default');
+      setSwitchedWorkspaceRole(null);
       setViewingOperationsHub(true);
     };
     const handleCloseOps = () => setViewingOperationsHub(false);
     const handleToggleSubjectTeacher = () => handleToggleSubjectTeacherMode();
+    const handleToggleClassTeacher = () => handleToggleClassTeacherMode();
     window.addEventListener('open-operations-hub', handleOpenOps);
     window.addEventListener('close-operations-hub', handleCloseOps);
     window.addEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
+    window.addEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     return () => {
       window.removeEventListener('open-operations-hub', handleOpenOps);
       window.removeEventListener('close-operations-hub', handleCloseOps);
       window.removeEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
+      window.removeEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     };
-  }, [handleToggleSubjectTeacherMode]);
+  }, [handleToggleSubjectTeacherMode, handleToggleClassTeacherMode]);
 
   // Public landing stays available, including while the platform admin is signed in.
   if (portalView === 'public_landing' && (!currentUser || isPlatformSuperAdmin(currentUser))) {
@@ -326,7 +360,7 @@ function AppContent({
         currentUser={currentUser}
         onLogout={() => {
           setIsPlatformAdminSession(false);
-          setWorkspaceMode('default');
+          setSwitchedWorkspaceRole(null);
           onLogout();
           navigateToPortal('public_landing');
         }}
@@ -335,6 +369,12 @@ function AppContent({
         canSwitchToSubjectTeacher={canSwitchSubjectTeacher}
         isSubjectTeacherMode={isSubjectTeacherMode}
         onToggleSubjectTeacherMode={handleToggleSubjectTeacherMode}
+        canSwitchToClassTeacher={canSwitchClassTeacher}
+        isClassTeacherMode={isClassTeacherMode}
+        onToggleClassTeacherMode={handleToggleClassTeacherMode}
+        switchedWorkspaceRole={switchedWorkspaceRole}
+        switchableRoles={switchableRoles}
+        onSwitchWorkspaceRole={handleSwitchWorkspaceRole}
         onReturnToSuperAdmin={() => {
           setIsPlatformAdminSession(true);
           if (!platformAdminSession) {
@@ -412,12 +452,12 @@ function AppContent({
           )}
 
           <main id="main-content" className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 sm:pb-8' : ''}`}>
-            {!currentUser ? (
+            {!currentUser || !effectiveUser ? (
               <LandingPage 
                 onLoginSuccess={onLoginSuccess} 
                 onReturnToSuperAdmin={effectivePlatformAdminSession ? () => navigateToPortal('super_admin') : undefined}
               />
-            ) : !isWorkspaceEnabled(isSubjectTeacherMode ? 'teacher' : currentUser.role === 'admin' ? 'admin' : currentUser.role, currentTenant.id) ? (
+            ) : !isWorkspaceEnabled(effectiveRole === 'admin' ? 'admin' : effectiveRole, currentTenant.id) ? (
               /* Informative notice if Super Admin deactivated this workspace for this tenant */
               <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-inner">
@@ -436,282 +476,287 @@ function AppContent({
                   </button>
                 )}
               </div>
-            ) : findSystemRole(currentUser.role)?.builtIn === false ? (
+            ) : findSystemRole(effectiveRole)?.builtIn === false ? (
               <div className="max-w-xl mx-auto my-16 p-8 bg-white rounded-3xl border border-slate-200 shadow-xl text-center space-y-3">
                 <h3 className="text-xl font-black font-serif text-slate-900">
-                  {findSystemRole(currentUser.role)?.name || 'School account'}
+                  {findSystemRole(effectiveRole)?.name || 'School account'}
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
                   {currentUser.name} is signed in at {currentTenant.name}. This role was added by the platform administrator and is ready for assignment.
                 </p>
               </div>
-            ) : currentUser.role === 'student' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['student']}
-                workspaceName="Learner Academic Portal"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <StudentWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'parent' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['parent']}
-                workspaceName="Parent & Guardian Portal"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <ParentWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : isSubjectTeacherMode ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={[...SUBJECT_TEACHER_ELIGIBLE_ROLES, 'teacher']}
-                workspaceName="Subject Teacher Portal"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-emerald-950 text-white border-b border-indigo-500/30 px-4 sm:px-6 py-2">
-                  <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-bold uppercase tracking-wider text-[10px]">
-                        Subject Teacher Mode Active
-                      </span>
-                      <span className="text-slate-200">
-                        Full Subject Teacher workspace &amp; teaching rights active · Primary Role:{' '}
-                        <strong className="text-white">{getAdministrativeRoleDisplayName(currentUser.role)}</strong>
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setWorkspaceMode('default')}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white text-slate-900 hover:bg-amber-100 font-bold text-xs transition-colors shadow-xs cursor-pointer"
-                    >
-                      <span>&larr; Return to {getAdministrativeRoleDisplayName(currentUser.role)}</span>
-                    </button>
-                  </div>
-                </div>
-                <TeacherWorkspace
-                  currentUser={createSubjectTeacherProxyUser(currentUser)}
-                  switchedFromRole={currentUser.role}
-                  onReturnToAdminWorkspace={() => setWorkspaceMode('default')}
-                />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'class_teacher' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['class_teacher']}
-                workspaceName="Class Teacher Command Desk"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <ClassTeacherWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'teacher' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['teacher']}
-                workspaceName="Subject Teacher Portal"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <TeacherWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'hod' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['hod']}
-                workspaceName="Head of Department (HOD) Portal"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <HODWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'senior_teacher' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['senior_teacher']}
-                workspaceName="Senior Teacher Supervision Desk"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <SeniorTeacherWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'deputy_head' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['deputy_head']}
-                workspaceName="Deputy Head Operations Hub"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <DeputyHeadWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'dean_of_studies' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['dean_of_studies']}
-                workspaceName="Dean of Studies Academic Hub"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <DeanOfStudiesWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'curriculum_coordinator' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['curriculum_coordinator']}
-                workspaceName="Curriculum Coordinator Executive Suite"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <CurriculumCoordinatorWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'librarian' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['librarian']}
-                workspaceName="School Library Information System"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <LibrarianWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'head_teacher' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['head_teacher']}
-                workspaceName="Head Teacher & Principal Executive Office"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <HeadTeacherWorkspace currentUser={currentUser} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'nurse' || currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.role === 'school_admin_staff' && currentUser.designation?.toLowerCase().includes('nurse')) ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['nurse', 'school_admin_staff']}
-                workspaceName="School Sanatorium & Clinic Bay"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <SanatoriumWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'school_admin_staff' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['school_admin_staff']}
-                workspaceName="Academic Registrar & School Secretariat"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <SchoolAdminStaffWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'transport_team' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['transport_team']}
-                workspaceName="Campus Fleet & Student Transport Desk"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <TransportWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'cocurricular_team' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['cocurricular_team']}
-                workspaceName="Co-Curricular & Sports Academy Command"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <CoCurricularWorkspace currentUser={currentUser} onLogout={onLogout} />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'finance_officer' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['finance_officer', 'admin', 'head_teacher', 'deputy_head']}
-                workspaceName="Finance & Bursary Workspace"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'procurement_officer' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['procurement_officer', 'admin', 'head_teacher', 'deputy_head']}
-                workspaceName="Procurement & Purchasing Workspace"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <IntegratedOperationsHub currentUser={currentUser} initialPortal="procurement" />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'storekeeper' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['storekeeper', 'admin', 'head_teacher', 'deputy_head']}
-                workspaceName="Central Stores & Inventory Hub"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <IntegratedOperationsHub currentUser={currentUser} initialPortal="stores" />
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'hr_manager' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['hr_manager', 'admin', 'head_teacher']}
-                workspaceName="HR & Kenyan CBC Payroll Engine"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <IntegratedOperationsHub currentUser={currentUser} initialPortal="hr_payroll" />
-              </WorkspaceRoleGuard>
-            ) : viewingOperationsHub ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['admin', 'head_teacher', 'deputy_head']}
-                workspaceName="Integrated Operations Management Hub"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <div className="space-y-4">
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between">
-                    <button
-                      onClick={() => setViewingOperationsHub(false)}
-                      className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
-                    >
-                      <span>&larr; Return to System Administrator Console</span>
-                    </button>
-                    <span className="text-xs font-medium text-slate-500">
-                      Integrated Operations &bull; {currentTenant.name}
-                    </span>
-                  </div>
-                  <IntegratedOperationsHub currentUser={currentUser} initialPortal="finance" />
-                </div>
-              </WorkspaceRoleGuard>
-            ) : currentUser.role === 'admin' ? (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={['admin']}
-                workspaceName="School Administrator Management Console"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <AdminDashboard currentUser={currentUser} />
-              </WorkspaceRoleGuard>
             ) : (
-              <WorkspaceRoleGuard
-                currentUser={currentUser}
-                allowedRoles={[]}
-                workspaceName="Protected Campus Workspace"
-                onLogout={onLogout}
-                onSwitchUser={onSwitchUser}
-              >
-                <div />
-              </WorkspaceRoleGuard>
+              <>
+                {switchedWorkspaceRole && (
+                  <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-emerald-950 text-white border-b border-indigo-500/30 px-4 sm:px-6 py-2">
+                    <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-bold uppercase tracking-wider text-[10px]">
+                          {getAdministrativeRoleDisplayName(effectiveRole)} Mode Active
+                        </span>
+                        <span className="text-slate-200">
+                          Full {getAdministrativeRoleDisplayName(effectiveRole)} workspace &amp; rights active · Primary Role:{' '}
+                          <strong className="text-white">{getAdministrativeRoleDisplayName(currentUser.role)}</strong>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSwitchedWorkspaceRole(null)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white text-slate-900 hover:bg-amber-100 font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                      >
+                        <span>&larr; Return to {getAdministrativeRoleDisplayName(currentUser.role)}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {effectiveRole === 'student' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['student']}
+                    workspaceName="Learner Academic Portal"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <StudentWorkspace currentUser={effectiveUser} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'parent' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['parent']}
+                    workspaceName="Parent & Guardian Portal"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <ParentWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'class_teacher' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['class_teacher', 'hod']}
+                    workspaceName="Class Teacher Command Desk"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <ClassTeacherWorkspace
+                      currentUser={effectiveUser}
+                      switchedFromRole={isClassTeacherMode ? currentUser.role : undefined}
+                      onReturnToPrimaryWorkspace={isClassTeacherMode ? () => setSwitchedWorkspaceRole(null) : undefined}
+                    />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'teacher' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={[...SUBJECT_TEACHER_ELIGIBLE_ROLES, 'teacher']}
+                    workspaceName="Subject Teacher Portal"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <TeacherWorkspace
+                      currentUser={effectiveUser}
+                      switchedFromRole={isSubjectTeacherMode ? currentUser.role : undefined}
+                      onReturnToAdminWorkspace={isSubjectTeacherMode ? () => setSwitchedWorkspaceRole(null) : undefined}
+                    />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'hod' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['hod']}
+                    workspaceName="Head of Department (HOD) Portal"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <HODWorkspace
+                      currentUser={effectiveUser}
+                      onSwitchToClassTeacher={canSwitchClassTeacher ? () => handleSwitchWorkspaceRole('class_teacher') : undefined}
+                      onSwitchToSubjectTeacher={canSwitchSubjectTeacher ? () => handleSwitchWorkspaceRole('teacher') : undefined}
+                    />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'senior_teacher' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['senior_teacher']}
+                    workspaceName="Senior Teacher Supervision Desk"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <SeniorTeacherWorkspace currentUser={effectiveUser} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'deputy_head' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['deputy_head']}
+                    workspaceName="Deputy Head Operations Hub"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <DeputyHeadWorkspace currentUser={effectiveUser} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'dean_of_studies' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['dean_of_studies']}
+                    workspaceName="Dean of Studies Academic Hub"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <DeanOfStudiesWorkspace currentUser={effectiveUser} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'curriculum_coordinator' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['curriculum_coordinator']}
+                    workspaceName="Curriculum Coordinator Executive Suite"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <CurriculumCoordinatorWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'librarian' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['librarian']}
+                    workspaceName="School Library Information System"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <LibrarianWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'head_teacher' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['head_teacher']}
+                    workspaceName="Head Teacher & Principal Executive Office"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <HeadTeacherWorkspace currentUser={effectiveUser} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'nurse' || effectiveUser.email === 'nurse@edusmart.ac.ke' || (effectiveRole === 'school_admin_staff' && effectiveUser.designation?.toLowerCase().includes('nurse')) ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['nurse', 'school_admin_staff']}
+                    workspaceName="School Sanatorium & Clinic Bay"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <SanatoriumWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'school_admin_staff' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['school_admin_staff']}
+                    workspaceName="Academic Registrar & School Secretariat"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <SchoolAdminStaffWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'transport_team' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['transport_team']}
+                    workspaceName="Campus Fleet & Student Transport Desk"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <TransportWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'cocurricular_team' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['cocurricular_team']}
+                    workspaceName="Co-Curricular & Sports Academy Command"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <CoCurricularWorkspace currentUser={effectiveUser} onLogout={onLogout} />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'finance_officer' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['finance_officer', 'admin', 'head_teacher', 'deputy_head']}
+                    workspaceName="Finance & Bursary Workspace"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <IntegratedOperationsHub currentUser={effectiveUser} initialPortal="finance" />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'procurement_officer' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['procurement_officer', 'admin', 'head_teacher', 'deputy_head']}
+                    workspaceName="Procurement & Purchasing Workspace"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <IntegratedOperationsHub currentUser={effectiveUser} initialPortal="procurement" />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'storekeeper' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['storekeeper', 'admin', 'head_teacher', 'deputy_head']}
+                    workspaceName="Central Stores & Inventory Hub"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <IntegratedOperationsHub currentUser={effectiveUser} initialPortal="stores" />
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'hr_manager' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['hr_manager', 'admin', 'head_teacher']}
+                    workspaceName="HR & Kenyan CBC Payroll Engine"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <IntegratedOperationsHub currentUser={effectiveUser} initialPortal="hr_payroll" />
+                  </WorkspaceRoleGuard>
+                ) : viewingOperationsHub ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['admin', 'head_teacher', 'deputy_head']}
+                    workspaceName="Integrated Operations Management Hub"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <div className="space-y-4">
+                      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center justify-between">
+                        <button
+                          onClick={() => setViewingOperationsHub(false)}
+                          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                        >
+                          <span>&larr; Return to System Administrator Console</span>
+                        </button>
+                        <span className="text-xs font-medium text-slate-500">
+                          Integrated Operations &bull; {currentTenant.name}
+                        </span>
+                      </div>
+                      <IntegratedOperationsHub currentUser={effectiveUser} initialPortal="finance" />
+                    </div>
+                  </WorkspaceRoleGuard>
+                ) : effectiveRole === 'admin' ? (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={['admin']}
+                    workspaceName="School Administrator Management Console"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <AdminDashboard currentUser={effectiveUser} />
+                  </WorkspaceRoleGuard>
+                ) : (
+                  <WorkspaceRoleGuard
+                    currentUser={effectiveUser}
+                    allowedRoles={[]}
+                    workspaceName="Protected Campus Workspace"
+                    onLogout={onLogout}
+                    onSwitchUser={onSwitchUser}
+                  >
+                    <div />
+                  </WorkspaceRoleGuard>
+                )}
+              </>
             )}
           </main>
         </div>
@@ -730,6 +775,12 @@ function AppContent({
           canSwitchToSubjectTeacher={canSwitchSubjectTeacher}
           isSubjectTeacherMode={isSubjectTeacherMode}
           onToggleSubjectTeacherMode={handleToggleSubjectTeacherMode}
+          canSwitchToClassTeacher={canSwitchClassTeacher}
+          isClassTeacherMode={isClassTeacherMode}
+          onToggleClassTeacherMode={handleToggleClassTeacherMode}
+          switchedWorkspaceRole={switchedWorkspaceRole}
+          switchableRoles={switchableRoles}
+          onSwitchWorkspaceRole={handleSwitchWorkspaceRole}
         />
       )}
 

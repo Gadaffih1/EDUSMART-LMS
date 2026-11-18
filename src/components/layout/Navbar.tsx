@@ -41,7 +41,10 @@ import { useAccessibility } from '../../context/AccessibilityContext';
 import { AccessibilityModal } from '../common/AccessibilityModal';
 import { GeminiChatbotModal } from '../ai/GeminiChatbotModal';
 import { PWAInstallButton } from '../pwa/PWAInstallExperience';
-import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
+import {
+  getAdministrativeRoleDisplayName,
+  getAdministrativeRoleShortName,
+} from '../../utils/subjectTeacherSwitch';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -53,6 +56,12 @@ interface NavbarProps {
   canSwitchToSubjectTeacher?: boolean;
   isSubjectTeacherMode?: boolean;
   onToggleSubjectTeacherMode?: () => void;
+  canSwitchToClassTeacher?: boolean;
+  isClassTeacherMode?: boolean;
+  onToggleClassTeacherMode?: () => void;
+  switchedWorkspaceRole?: UserRole | null;
+  switchableRoles?: UserRole[];
+  onSwitchWorkspaceRole?: (role: UserRole | null) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -64,7 +73,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onReturnToSuperAdmin,
   canSwitchToSubjectTeacher = false,
   isSubjectTeacherMode = false,
-  onToggleSubjectTeacherMode
+  onToggleSubjectTeacherMode,
+  canSwitchToClassTeacher = false,
+  isClassTeacherMode = false,
+  onToggleClassTeacherMode,
+  switchedWorkspaceRole = null,
+  switchableRoles = [],
+  onSwitchWorkspaceRole
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const { isMobileOverlapProtectionEnabled, toggleMobileOverlapProtection } = useMobileLayout();
@@ -213,11 +228,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="font-medium text-slate-900">{currentUser.name}</span>
               <span aria-hidden="true" className="text-slate-300">·</span>
               <span className="text-emerald-700 font-semibold">{getRoleLabel(currentUser.role)}</span>
-              {isSubjectTeacherMode && (
+              {switchedWorkspaceRole && (
                 <>
                   <span aria-hidden="true" className="text-slate-300">&rarr;</span>
                   <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">
-                    Subject Teacher Workspace
+                    {getAdministrativeRoleShortName(switchedWorkspaceRole)} Workspace
                   </span>
                 </>
               )}
@@ -346,6 +361,37 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Settings className="w-4 h-4" />
           </button>
 
+          {/* Switch to Class Teacher Workspace Button (All HODs & Multi-Role Class Teachers) */}
+          {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
+            <button
+              type="button"
+              onClick={onToggleClassTeacherMode}
+              className={`px-2.5 py-1.5 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer flex items-center gap-1.5 text-xs font-bold whitespace-nowrap ${
+                isClassTeacherMode
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                  : 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700 shadow-xs'
+              }`}
+              title={
+                isClassTeacherMode
+                  ? `Return to your primary ${getRoleLabel(currentUser.role)} workspace`
+                  : 'Switch to Class Teacher workspace with full Class Teacher rights for your assigned class'
+              }
+              aria-pressed={isClassTeacherMode}
+            >
+              {isClassTeacherMode ? (
+                <>
+                  <ArrowLeft className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-100" />
+                  <span>Switch as Class Teacher</span>
+                </>
+              )}
+            </button>
+          )}
+
           {/* Switch to Subject Teacher Workspace Button (Authorized Admin/Leadership Roles) */}
           {currentUser && canSwitchToSubjectTeacher && onToggleSubjectTeacherMode && (
             <button
@@ -375,6 +421,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </>
               )}
             </button>
+          )}
+
+          {/* Multi-Role Workspace Switcher (when user holds >1 roles beyond primary + teacher/class_teacher shortcuts) */}
+          {currentUser && onSwitchWorkspaceRole && switchableRoles.filter((r) => r !== 'teacher' && r !== 'class_teacher').length > 0 && (
+            <select
+              aria-label="Switch assigned workspace role"
+              value={switchedWorkspaceRole || currentUser.role}
+              onChange={(e) => {
+                const chosen = e.target.value as UserRole;
+                onSwitchWorkspaceRole(chosen === currentUser.role ? null : chosen);
+              }}
+              className="px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-bold cursor-pointer max-w-[165px]"
+              title="Switch between your multiple assigned roles"
+            >
+              <option value={currentUser.role}>
+                Primary: {getAdministrativeRoleShortName(currentUser.role)}
+              </option>
+              {switchableRoles
+                .filter((r) => r !== currentUser.role)
+                .map((r) => (
+                  <option key={r} value={r}>
+                    Switch: {getAdministrativeRoleDisplayName(r)}
+                  </option>
+                ))}
+            </select>
           )}
 
           {/* Integrated Operations & Architecture Quick Launcher */}
@@ -479,6 +550,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         <div className="flex items-center gap-2 xl:hidden">
+          {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
+            <button
+              type="button"
+              onClick={onToggleClassTeacherMode}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
+                isClassTeacherMode
+                  ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                  : 'border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
+              aria-pressed={isClassTeacherMode}
+            >
+              {isClassTeacherMode ? (
+                <>
+                  <ArrowLeft className="h-3.5 w-3.5 text-amber-700" />
+                  <span className="hidden sm:inline">Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
+                  <span className="sm:hidden">HOD View</span>
+                </>
+              ) : (
+                <>
+                  <UserCheck className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Switch as Class Teacher</span>
+                  <span className="sm:hidden">Class Teacher</span>
+                </>
+              )}
+            </button>
+          )}
           {currentUser && canSwitchToSubjectTeacher && onToggleSubjectTeacherMode && (
             <button
               type="button"
@@ -589,6 +686,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Settings className="h-4 w-4" /> Settings and storage
               </button>
+              {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
+                <button
+                  type="button"
+                  onClick={() => { onToggleClassTeacherMode(); setIsMobileActionsOpen(false); }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
+                    isClassTeacherMode
+                      ? 'text-amber-900 bg-amber-50 hover:bg-amber-100'
+                      : 'text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100'
+                  }`}
+                  role="menuitem"
+                >
+                  {isClassTeacherMode ? (
+                    <>
+                      <ArrowLeft className="h-4 w-4 text-amber-700" /> Return to {getAdministrativeRoleShortName(currentUser.role)}
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="h-4 w-4 text-emerald-700" /> Switch as Class Teacher
+                    </>
+                  )}
+                </button>
+              )}
               {currentUser && canSwitchToSubjectTeacher && onToggleSubjectTeacherMode && (
                 <button
                   type="button"
@@ -611,6 +730,29 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
                 </button>
               )}
+              {currentUser && onSwitchWorkspaceRole && switchableRoles
+                .filter((r) => r !== currentUser.role && r !== 'teacher' && r !== 'class_teacher')
+                .map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      onSwitchWorkspaceRole(switchedWorkspaceRole === r ? null : r);
+                      setIsMobileActionsOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
+                      switchedWorkspaceRole === r
+                        ? 'text-amber-900 bg-amber-50 hover:bg-amber-100'
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                    role="menuitem"
+                  >
+                    <RefreshCw className="h-4 w-4 text-indigo-600" />
+                    {switchedWorkspaceRole === r
+                      ? `Return to ${getAdministrativeRoleShortName(currentUser.role)}`
+                      : `Switch as ${getAdministrativeRoleShortName(r)}`}
+                  </button>
+                ))}
               {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
                 <button
                   type="button"

@@ -20,10 +20,59 @@ export interface AuthSession {
   tokenHash: string;
   userId: string;
   role: string;
+  assignedRoles: string[];
   schoolId: string;
   accessScope: 'super_admin_only' | 'tenant';
   isSuperAdmin: boolean;
   user: Record<string, any>;
+}
+
+export function normalizeAssignedRoles(
+  primaryRole: string,
+  extraRoles?: unknown,
+  doubleAccessConfig?: { enabled?: boolean; secondaryRole?: string } | null
+): string[] {
+  const seen = new Set<string>();
+  const primary = String(primaryRole || '').trim().toLowerCase();
+  if (primary) seen.add(primary);
+  if (Array.isArray(extraRoles)) {
+    for (const r of extraRoles) {
+      const clean = String(r || '').trim().toLowerCase();
+      if (clean) seen.add(clean);
+    }
+  }
+  if (doubleAccessConfig?.enabled && doubleAccessConfig.secondaryRole) {
+    const sec = String(doubleAccessConfig.secondaryRole).trim().toLowerCase();
+    if (sec) seen.add(sec);
+  }
+  return Array.from(seen);
+}
+
+export function getSessionRoles(session?: AuthSession | null): string[] {
+  if (!session) return [];
+  return normalizeAssignedRoles(
+    session.role,
+    session.assignedRoles || session.user?.assignedRoles,
+    session.user?.doubleAccessConfig
+  );
+}
+
+export function sessionHasRole(session: AuthSession | null | undefined, role: string): boolean {
+  if (!session) return false;
+  const needle = String(role || '').trim().toLowerCase();
+  return getSessionRoles(session).includes(needle);
+}
+
+export function sessionHasAnyRole(
+  session: AuthSession | null | undefined,
+  roles: Iterable<string>
+): boolean {
+  if (!session) return false;
+  const held = new Set(getSessionRoles(session));
+  for (const r of roles) {
+    if (held.has(String(r || '').trim().toLowerCase())) return true;
+  }
+  return false;
 }
 
 declare global {
@@ -123,6 +172,14 @@ export function createAuthSession(
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
   const safeUser = stripSecrets(user);
+  const primaryRole = String(safeUser.role || 'student').trim().toLowerCase();
+  const normalizedRoles = normalizeAssignedRoles(
+    primaryRole,
+    safeUser.assignedRoles,
+    safeUser.doubleAccessConfig
+  );
+  safeUser.role = primaryRole;
+  safeUser.assignedRoles = normalizedRoles;
 
   db.prepare(
     `INSERT INTO auth_sessions (token_hash, user_id, user_role, school_id, access_scope, user_json, created_at, expires_at, last_seen_at)
@@ -130,7 +187,7 @@ export function createAuthSession(
   ).run(
     tokenHash,
     String(safeUser.id),
-    String(safeUser.role || 'student'),
+    primaryRole,
     String(safeUser.schoolId || 'tenant-riara'),
     accessScope,
     JSON.stringify(safeUser),
@@ -177,14 +234,25 @@ export function resolveSessionFromRequest(req: Request): AuthSession | null {
 
     const parsedUser = JSON.parse(row.user_json);
     const isSuperAdmin = row.access_scope === 'super_admin_only';
+    const assignedRoles = normalizeAssignedRoles(
+      row.user_role,
+      parsedUser.assignedRoles,
+      parsedUser.doubleAccessConfig
+    );
     return {
       tokenHash: row.token_hash,
       userId: row.user_id,
       role: row.user_role,
+      assignedRoles,
       schoolId: row.school_id,
       accessScope: row.access_scope,
       isSuperAdmin,
-      user: { ...parsedUser, schoolId: row.school_id, ...(isSuperAdmin ? { accessScope: 'super_admin_only' } : {}) },
+      user: {
+        ...parsedUser,
+        assignedRoles,
+        schoolId: row.school_id,
+        ...(isSuperAdmin ? { accessScope: 'super_admin_only' } : {}),
+      },
     };
   } catch {
     return null;
@@ -689,7 +757,7 @@ export function registerAuthRoutes(app: Express): void {
       const session = req.authSession!;
       const canProvisionUsers =
         session.isSuperAdmin ||
-        ['admin', 'head_teacher', 'school_admin_staff'].includes(session.role);
+        sessionHasAnyRole(session, ['admin', 'head_teacher', 'school_admin_staff']);
       if (!canProvisionUsers) {
         return res.status(403).json({
           error: 'Public account creation is disabled. Contact your School Administrator to issue credentials.',
@@ -732,11 +800,13 @@ export function registerAuthRoutes(app: Express): void {
         });
       }
 
-      const role = payload.role || 'student';
+      const role = String(payload.role || 'student').trim().toLowerCase();
+      const assignedRoles = normalizeAssignedRoles(role, payload.assignedRoles, payload.doubleAccessConfig);
       const registeredUser = {
         ...payload,
         email: cleanEmail,
         role,
+        assignedRoles,
         id: existing?.id || payload.id || `usr-${role}-${Date.now()}`,
         schoolId,
         isActive: payload.isActive !== false,

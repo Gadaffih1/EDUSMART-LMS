@@ -39,6 +39,13 @@ import {
 } from 'lucide-react';
 import { User, GradeLevel, StreamName, Assignment, Announcement, CodingChallenge, CodingChallengeCriteria } from '../../types';
 import { Storage } from '../../utils/storage';
+import {
+  canAccessTeacherLabs,
+  getTeacherAssignedAllocations,
+  isComputerStudiesSubject,
+  isTeacherAssignedToTarget,
+  parseClassTargetLabel,
+} from '../../utils/teacherAssignmentScope';
 
 interface ComputerLabModuleProps {
   currentUser: User;
@@ -49,18 +56,51 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
   currentUser,
   onNavigateToTab 
 }) => {
-  // --- 1. Faculty Clearance & Access Control ---
-  // Must be teacher, class_teacher, hod, dean_of_studies or admin, and have CS faculty clearance
-  const isTeacherRole = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'admin', 'head_teacher'].includes(currentUser.role);
-  
-  // Faculty clearance check: check assigned subjects or designation, with quick faculty clearance authentication bypass
-  const assignedSubjects = currentUser.assignedSubjects || [];
-  const hasCsInSubjects = assignedSubjects.some(s => s.toLowerCase().includes('computer') || s.toLowerCase().includes('science'));
-  const [facultyClearanceGranted, setFacultyClearanceGranted] = useState<boolean>(() => {
-    return isTeacherRole && (hasCsInSubjects || ['hod', 'dean_of_studies', 'deputy_head', 'curriculum_coordinator', 'senior_teacher', 'teacher'].includes(currentUser.role));
-  });
-  const [facultyPassCode, setFacultyPassCode] = useState('');
-  const [facultyAuthError, setFacultyAuthError] = useState(false);
+  const [allocationRevision, setAllocationRevision] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setAllocationRevision((v) => v + 1);
+    window.addEventListener('users-updated', bump);
+    window.addEventListener('edusmart:data-changed', bump);
+    return () => {
+      window.removeEventListener('users-updated', bump);
+      window.removeEventListener('edusmart:data-changed', bump);
+    };
+  }, []);
+
+  // --- 1. Strict Access Control ---
+  // ONLY subject teachers explicitly assigned Integrated Science or Computer Studies may access Computer Laboratory
+  const hasLabAccess = React.useMemo(
+    () => canAccessTeacherLabs(currentUser),
+    [currentUser, allocationRevision]
+  );
+
+  // Computer Studies assignments can ONLY target classes (grade + stream) assigned to this teacher for Computer Studies
+  const csClassTargets = React.useMemo(() => {
+    const allocations = getTeacherAssignedAllocations(currentUser);
+    const out: Array<{ grade: GradeLevel; stream: StreamName; label: string }> = [];
+    const seen = new Set<string>();
+    for (const a of allocations) {
+      if (!isComputerStudiesSubject(a.subject)) continue;
+      const label = `Grade ${a.grade} ${a.stream}`;
+      if (seen.has(label.toLowerCase())) continue;
+      seen.add(label.toLowerCase());
+      out.push({ grade: a.grade, stream: a.stream, label });
+    }
+    return out;
+  }, [currentUser, allocationRevision]);
+
+  const [selectedAssignTarget, setSelectedAssignTarget] = useState<string>(() => csClassTargets[0]?.label || '');
+
+  useEffect(() => {
+    if (csClassTargets.length === 0) {
+      setSelectedAssignTarget('');
+      return;
+    }
+    if (!csClassTargets.some((t) => t.label === selectedAssignTarget)) {
+      setSelectedAssignTarget(csClassTargets[0].label);
+    }
+  }, [csClassTargets, selectedAssignTarget]);
 
   // --- Module Tabs ---
   type LabTab = 'projector' | 'challenges' | 'assign_task' | 'submissions';
@@ -222,12 +262,20 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
     return `https://scratch.mit.edu/projects/${cleanId}/embed`;
   };
 
-  // Direct Assign to Class Handler
-  const handleAssignChallengeToClass = (challenge: CodingChallenge, targetClass: string = 'Grade 7 Dove') => {
+  // Direct Assign to Class Handler (Strictly scoped to assigned Computer Studies grade + stream)
+  const handleAssignChallengeToClass = (challenge: CodingChallenge, targetClassLabel?: string) => {
+    const resolvedLabel = targetClassLabel || selectedAssignTarget || csClassTargets[0]?.label || '';
+    const parsed = parseClassTargetLabel(resolvedLabel);
+
+    if (!parsed || !isTeacherAssignedToTarget(currentUser, parsed.grade, parsed.stream, 'Computer Studies')) {
+      showToast('Access Restricted: You can only assign Computer Studies tasks to classes explicitly assigned to you for Computer Studies.');
+      return;
+    }
+
     const newAssignment: Assignment = {
       id: `asg-cs-${Date.now()}`,
-      grade: challenge.grade,
-      stream: 'Dove',
+      grade: parsed.grade,
+      stream: parsed.stream,
       subject: 'Computer Studies',
       title: `[CS LAB] ${challenge.title}`,
       instructions: `CODING TASK DIRECTIVE:\n${challenge.description}\n\nCRITERIA TO MEET:\n${challenge.completionCriteria.map(c => `• ${c.label} (${c.points} pts)`).join('\n')}\n\nSTARTER PROJECT:\n${challenge.scratchEmbedUrl || `Scratch ID: ${challenge.scratchProjectId}`}\n\n${challenge.instructions.join('\n')}`,
@@ -247,22 +295,23 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
     const announcement: Announcement = {
       id: `ann-cs-${Date.now()}`,
       title: `💻 New Computer Lab Task: ${challenge.title}`,
-      content: `Your Computer Science instructor ${currentUser.name} has assigned a new Scratch challenge: "${challenge.title}". Due date is ${challenge.dueDate}. Visit your Homework or Lab Portal to launch the coding studio!`,
+      content: `Your Computer Studies instructor ${currentUser.name} has assigned a new Scratch challenge for Grade ${parsed.grade} ${parsed.stream}: "${challenge.title}". Due date is ${challenge.dueDate}. Visit your Homework or Lab Portal to launch the coding studio!`,
       type: 'general',
-      targetGrade: challenge.grade,
+      targetGrade: parsed.grade,
+      targetStream: parsed.stream,
       author: currentUser.name,
-      authorRole: 'Computer Science Faculty',
+      authorRole: 'Computer Studies Faculty',
       createdAt: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     };
     Storage.addAnnouncement(announcement);
 
-    // Update challenge status
+    const formattedTarget = `Grade ${parsed.grade} ${parsed.stream}`;
     Storage.updateCodingChallenge(challenge.id, {
-      assignedToClasses: Array.from(new Set([...challenge.assignedToClasses, targetClass])),
+      assignedToClasses: Array.from(new Set([...challenge.assignedToClasses, formattedTarget])),
       status: 'active'
     });
 
-    showToast(`✓ Challenge "${challenge.title}" pushed successfully to ${targetClass}!`);
+    showToast(`✓ Challenge "${challenge.title}" pushed successfully to ${formattedTarget}!`);
   };
 
   // Add Criterion to Form
@@ -341,57 +390,36 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
     showToast('Challenge removed from library.');
   };
 
-  // Faculty clearance verification fallback
-  if (!facultyClearanceGranted) {
+  // Strict access denial when user is not assigned Integrated Science or Computer Studies
+  if (!hasLabAccess) {
     return (
-      <div className="bg-white rounded-3xl p-8 border-2 border-indigo-100 shadow-md max-w-2xl mx-auto space-y-6 text-center animate-in fade-in duration-200">
-        <div className="w-16 h-16 bg-indigo-50 border-2 border-indigo-200 rounded-2xl flex items-center justify-center mx-auto text-indigo-700 shadow-inner">
-          <ShieldCheck className="w-9 h-9" />
+      <div className="bg-white rounded-3xl p-8 border-2 border-rose-200 shadow-md max-w-2xl mx-auto space-y-5 text-center animate-in fade-in duration-200">
+        <div className="w-16 h-16 bg-rose-50 border-2 border-rose-200 rounded-2xl flex items-center justify-center mx-auto text-rose-700 shadow-inner">
+          <Lock className="w-8 h-8" />
         </div>
         <div className="space-y-2">
-          <span className="text-[10px] font-black tracking-widest px-3 py-1 rounded-full uppercase bg-indigo-100 text-indigo-800">
-            Computer Science Department Clearance Required
+          <span className="text-[10px] font-black tracking-widest px-3 py-1 rounded-full uppercase bg-rose-100 text-rose-800">
+            Access Restricted · STEM / Computer Lab Policy
           </span>
           <h2 className="text-2xl font-black text-slate-900">
-            EduSmart Computer Lab & Scratch Presentation Console
+            Computer Laboratory Access Restricted
           </h2>
           <p className="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
-            This workspace provides direct classroom projection tools, Scratch runtime execution, and challenge assignment distribution. Access is restricted to Computer Science and STEM faculty members.
+            Access to the Computer Laboratory and Virtual Laboratory is strictly restricted to subject teachers assigned <strong>Integrated Science</strong> or <strong>Computer Studies</strong>.
           </p>
         </div>
 
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-3">
-          <div className="flex items-center justify-between text-xs">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left space-y-2 text-xs">
+          <div className="flex items-center justify-between">
             <span className="text-slate-500 font-medium">Educator Profile:</span>
             <span className="font-bold text-slate-800">{currentUser.name}</span>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500 font-medium">Designation / Role:</span>
-            <span className="font-mono font-bold text-indigo-600">{currentUser.role.toUpperCase()} ({currentUser.tscNumber || 'TSC/44120/ED'})</span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500 font-medium">Departmental Clearance:</span>
-            <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[11px]">
-              Pending CS Department Authorization
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500 font-medium">Assigned Subjects:</span>
+            <span className="font-bold text-slate-700">
+              {currentUser.assignedSubjects?.join(', ') || 'None assigned'}
             </span>
           </div>
-        </div>
-
-        <div className="space-y-3 pt-2">
-          <button
-            onClick={() => {
-              setFacultyClearanceGranted(true);
-              showToast('✓ Computer Science Faculty Clearance Verified!');
-            }}
-            className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Authorize CS Faculty Clearance Access</span>
-          </button>
-
-          <p className="text-[11px] text-slate-400">
-            Authorized for certified educators under the Kenya CBC Digital Literacy & Computer Studies framework.
-          </p>
         </div>
       </div>
     );
@@ -692,18 +720,37 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const challengeToAssign = challenges.find(c => c.scratchProjectId === activeProjectId) || challenges[0];
-                      if (challengeToAssign) {
-                        handleAssignChallengeToClass(challengeToAssign, 'Grade 7 Dove');
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Push to Class Homework</span>
-                  </button>
+                  {csClassTargets.length > 0 ? (
+                    <>
+                      <select
+                        value={selectedAssignTarget}
+                        onChange={(e) => setSelectedAssignTarget(e.target.value)}
+                        className="px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+                      >
+                        {csClassTargets.map((t) => (
+                          <option key={t.label} value={t.label}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => {
+                          const challengeToAssign = challenges.find(c => c.scratchProjectId === activeProjectId) || challenges[0];
+                          if (challengeToAssign) {
+                            handleAssignChallengeToClass(challengeToAssign, selectedAssignTarget);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Push to Assigned Class</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[11px] font-bold">
+                      Computer Studies class allocation required to push homework
+                    </span>
+                  )}
 
                   <a
                     href={`https://scratch.mit.edu/projects/${activeProjectId}`}
@@ -918,16 +965,18 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
                           <span className="text-[11px] font-mono text-slate-400">
                             {challenge.completionCriteria.length} criteria defined
                           </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAssignChallengeToClass(challenge, challenge.targetGroup);
-                            }}
-                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer"
-                          >
-                            <Send className="w-3 h-3" />
-                            <span>Distribute</span>
-                          </button>
+                          {csClassTargets.length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAssignChallengeToClass(challenge, selectedAssignTarget);
+                              }}
+                              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>Distribute to {selectedAssignTarget}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1004,15 +1053,34 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
                     </div>
                   )}
 
-                  {/* Actions: Distribute / Push to Group */}
+                  {/* Actions: Distribute / Push to Assigned Class */}
                   <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <button
-                      onClick={() => handleAssignChallengeToClass(selectedChallengeForPreview, selectedChallengeForPreview.targetGroup)}
-                      className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>Distribute to {selectedChallengeForPreview.targetGroup}</span>
-                    </button>
+                    {csClassTargets.length > 0 ? (
+                      <div className="space-y-2">
+                        <select
+                          value={selectedAssignTarget}
+                          onChange={(e) => setSelectedAssignTarget(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+                        >
+                          {csClassTargets.map((t) => (
+                            <option key={t.label} value={t.label}>
+                              Assigned Class: {t.label} (Computer Studies)
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleAssignChallengeToClass(selectedChallengeForPreview, selectedAssignTarget)}
+                          className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
+                        >
+                          <Send className="w-4 h-4" />
+                          <span>Distribute to {selectedAssignTarget}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] font-bold text-amber-800">
+                        Only teachers assigned Computer Studies for a specific grade & stream can assign Computer Lab homework.
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <button
@@ -1084,36 +1152,43 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Target Student Group / Stream
-                </label>
-                <select
-                  id="target-stream-select"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-medium text-slate-800"
-                >
-                  <option value="Grade 7 Dove">Grade 7 Dove (JSS)</option>
-                  <option value="Grade 7 Eagle">Grade 7 Eagle (JSS)</option>
-                  <option value="Grade 7 Hawk">Grade 7 Hawk (JSS)</option>
-                  <option value="Grade 8 Dove">Grade 8 Dove (JSS)</option>
-                  <option value="Grade 8 Eagle">Grade 8 Eagle (JSS)</option>
-                  <option value="CS Coding Club">After-School CS Innovators Club</option>
-                </select>
+            {csClassTargets.length === 0 ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-bold text-amber-900">
+                You do not have any Computer Studies class allocations assigned. Homework assignments can only be dispatched to classes and subjects assigned to your profile.
               </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Assigned Student Class / Stream (Computer Studies)
+                  </label>
+                  <select
+                    id="target-stream-select"
+                    value={selectedAssignTarget}
+                    onChange={(e) => setSelectedAssignTarget(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-bold text-slate-800"
+                  >
+                    {csClassTargets.map((t) => (
+                      <option key={t.label} value={t.label}>
+                        {t.label} (Computer Studies)
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Submission Deadline
-                </label>
-                <input
-                  type="date"
-                  defaultValue="2026-10-25"
-                  id="due-date-input"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-medium text-slate-800"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Submission Deadline
+                  </label>
+                  <input
+                    type="date"
+                    defaultValue="2026-10-25"
+                    id="due-date-input"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-medium text-slate-800"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {selectedChallengeForPreview && (
               <div className="bg-indigo-50/60 border border-indigo-200 rounded-2xl p-4 space-y-3">
@@ -1138,17 +1213,16 @@ export const ComputerLabModule: React.FC<ComputerLabModuleProps> = ({
             )}
 
             <button
+              disabled={csClassTargets.length === 0 || !selectedChallengeForPreview}
               onClick={() => {
                 if (selectedChallengeForPreview) {
-                  const selectEl = document.getElementById('target-stream-select') as HTMLSelectElement;
-                  const targetStream = selectEl?.value || 'Grade 7 Dove';
-                  handleAssignChallengeToClass(selectedChallengeForPreview, targetStream);
+                  handleAssignChallengeToClass(selectedChallengeForPreview, selectedAssignTarget);
                 }
               }}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
-              <span>Confirm & Dispatch Task to Class</span>
+              <span>Confirm & Dispatch Task to Assigned Class</span>
             </button>
           </div>
         </div>

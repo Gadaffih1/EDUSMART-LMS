@@ -1,7 +1,12 @@
 import crypto from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { getDb, notifyMySqlTablesChanged } from './db.ts';
-import { requireAuth, resolveAuthorizedTenantId } from './authRoutes.ts';
+import {
+  requireAuth,
+  resolveAuthorizedTenantId,
+  sessionHasAnyRole,
+  sessionHasRole,
+} from './authRoutes.ts';
 import { upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
 import {
@@ -35,7 +40,7 @@ function requireTimetableAdmin(req: Request, res: Response): boolean {
     res.status(401).json({ error: 'Authentication required.' });
     return false;
   }
-  if (session.isSuperAdmin || ADMIN_TIMETABLE_ROLES.has(String(session.role || '').toLowerCase())) {
+  if (session.isSuperAdmin || sessionHasAnyRole(session, ADMIN_TIMETABLE_ROLES)) {
     return true;
   }
   res.status(403).json({ error: 'Administrator, Dean, or Leadership privileges are required to modify school timetables.' });
@@ -2000,7 +2005,7 @@ export function registerTimetableRoutes(app: Express): void {
         }
       }
       filteredEntries = allEntries.filter((e) => allowedClasses.has(`${e.grade}|${String(e.stream).toLowerCase()}`));
-    } else if (role === 'teacher' || role === 'class_teacher' || (viewAsTeacher && TEACHER_VIEW_ELIGIBLE.has(role))) {
+    } else if (sessionHasRole(session, 'teacher') || sessionHasRole(session, 'class_teacher') || (viewAsTeacher && sessionHasAnyRole(session, TEACHER_VIEW_ELIGIBLE))) {
       const userId = String(session.userId);
       const userNameLower = String(session.user.name || '').toLowerCase();
       const tProf = db

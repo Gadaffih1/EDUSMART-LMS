@@ -20,9 +20,11 @@ import {
   Eye,
   ArrowRight,
   Laptop,
-  Code2
+  Code2,
+  Lock
 } from 'lucide-react';
 import { User } from '../../types';
+import { canAccessTeacherLabs } from '../../utils/teacherAssignmentScope';
 import { 
   CBC_VIRTUAL_EXPERIMENTS, 
   JSS_LAB_REQUIREMENTS,
@@ -79,7 +81,36 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
   const [isScienceViewerOpen, setIsScienceViewerOpen] = useState(false);
   const [isPrintReportOpen, setIsPrintReportOpen] = useState(false);
 
-  const isTeacher = !!currentUser && ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
+  const [allocationRevision, setAllocationRevision] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setAllocationRevision((v) => v + 1);
+    window.addEventListener('users-updated', bump);
+    window.addEventListener('edusmart:data-changed', bump);
+    return () => {
+      window.removeEventListener('users-updated', bump);
+      window.removeEventListener('edusmart:data-changed', bump);
+    };
+  }, []);
+
+  const isTeacherOrLeadership = !!currentUser && [
+    'teacher',
+    'class_teacher',
+    'hod',
+    'senior_teacher',
+    'deputy_head',
+    'dean_of_studies',
+    'curriculum_coordinator'
+  ].includes(currentUser.role);
+
+  const hasTeacherLabClearance = React.useMemo(
+    () => !isTeacherOrLeadership || Boolean(assignedExperimentId) || canAccessTeacherLabs(currentUser),
+    [isTeacherOrLeadership, assignedExperimentId, currentUser, allocationRevision]
+  );
+
+  const isTeacher = !!currentUser &&
+    ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role) &&
+    canAccessTeacherLabs(currentUser);
 
   // Sync if an assigned experiment/scratch is launched by learner
   useEffect(() => {
@@ -93,6 +124,27 @@ export const VirtualLabWorkspace: React.FC<VirtualLabWorkspaceProps> = ({
       }
     }
   }, [assignedExperimentId, assignedLabType]);
+
+  if (!hasTeacherLabClearance) {
+    return (
+      <div className="bg-white rounded-3xl p-8 border-2 border-rose-200 shadow-md max-w-2xl mx-auto space-y-5 text-center animate-in fade-in duration-200">
+        <div className="w-16 h-16 bg-rose-50 border-2 border-rose-200 rounded-2xl flex items-center justify-center mx-auto text-rose-700 shadow-inner">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <span className="text-[10px] font-black tracking-widest px-3 py-1 rounded-full uppercase bg-rose-100 text-rose-800">
+            Access Restricted · Virtual Laboratory Policy
+          </span>
+          <h2 className="text-2xl font-black text-slate-900">
+            Virtual Laboratory Access Restricted
+          </h2>
+          <p className="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
+            Access to the Virtual Laboratory and Computer Laboratory is strictly restricted to subject teachers assigned <strong>Integrated Science</strong> or <strong>Computer Studies</strong>.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const filteredExperiments = CBC_VIRTUAL_EXPERIMENTS.filter(exp => {
     const matchSearch = exp.title.toLowerCase().includes(searchExperimentQuery.toLowerCase()) ||

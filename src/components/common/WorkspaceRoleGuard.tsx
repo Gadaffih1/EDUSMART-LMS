@@ -2,6 +2,7 @@ import React from 'react';
 import { User, UserRole } from '../../types';
 import { useTenant } from '../../context/TenantContext';
 import { isPlatformSuperAdmin } from '../../utils/platformAdminAuth';
+import { getUserRoles } from '../../utils/subjectTeacherSwitch';
 import { 
   ShieldAlert, 
   Lock, 
@@ -171,8 +172,11 @@ export const WorkspaceRoleGuard: React.FC<WorkspaceRoleGuardProps> = ({
     );
   }
 
-  // 3. Check: Role-Based Access Control (RBAC)
-  const isAuthorizedRole = allowedRoles.includes(currentUser.role) || (currentUser.role === 'admin' && allowedRoles.includes('admin'));
+  // 3. Check: Role-Based Access Control (RBAC) across all assigned roles
+  const userRoles = getUserRoles(currentUser);
+  const isAuthorizedRole =
+    allowedRoles.some((r) => userRoles.includes(r)) ||
+    (userRoles.includes('admin') && allowedRoles.includes('admin'));
 
   if (!isAuthorizedRole) {
     return (

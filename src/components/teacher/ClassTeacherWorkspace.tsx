@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   User,
+  UserRole,
   GradeLevel,
   StreamName,
   getStreamsForGrade,
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { ClassTeacherModule } from './ClassTeacherModule';
@@ -88,6 +90,8 @@ export type ClassTeacherTab =
 
 interface ClassTeacherWorkspaceProps {
   currentUser: User;
+  switchedFromRole?: UserRole;
+  onReturnToPrimaryWorkspace?: () => void;
 }
 
 interface StreamWorkspaceResponse {
@@ -111,7 +115,11 @@ interface StreamWorkspaceResponse {
   monitoring: AcademicMonitoringItem[];
 }
 
-export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ currentUser }) => {
+export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
+  currentUser,
+  switchedFromRole,
+  onReturnToPrimaryWorkspace,
+}) => {
   const { currentTenant } = useTenant();
   const isSuperAdmin = currentUser.role === 'admin';
 
@@ -699,6 +707,16 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loadingHierarchy ? 'animate-spin' : ''}`} />
             </button>
+
+            {onReturnToPrimaryWorkspace && switchedFromRole && (
+              <button
+                type="button"
+                onClick={onReturnToPrimaryWorkspace}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 hover:bg-amber-100 rounded-lg cursor-pointer whitespace-nowrap"
+              >
+                <span>&larr; Return to {getAdministrativeRoleShortName(switchedFromRole)}</span>
+              </button>
+            )}
           </div>
         </header>
 

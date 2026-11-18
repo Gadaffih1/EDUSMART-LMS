@@ -83,6 +83,14 @@ import {
 } from 'lucide-react';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
+import {
+  canAccessTeacherLabs,
+  getAllowedGradesForTeacher,
+  getAllowedStreamsForGrade,
+  getAllowedSubjectsForGradeStream,
+  getTeacherAssignedSubjects,
+  isTeacherAssignedToTarget,
+} from '../../utils/teacherAssignmentScope';
 
 interface TeacherWorkspaceProps {
   currentUser: User;
@@ -125,6 +133,37 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
   );
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showAbsenceModal, setShowAbsenceModal] = useState(false);
+  const [allocationRevision, setAllocationRevision] = useState(0);
+
+  React.useEffect(() => {
+    const bumpRevision = () => setAllocationRevision((v) => v + 1);
+    window.addEventListener('users-updated', bumpRevision);
+    window.addEventListener('edusmart:data-changed', bumpRevision);
+    return () => {
+      window.removeEventListener('users-updated', bumpRevision);
+      window.removeEventListener('edusmart:data-changed', bumpRevision);
+    };
+  }, []);
+
+  const hasLabAccess = React.useMemo(
+    () => canAccessTeacherLabs(currentUser),
+    [currentUser, allocationRevision]
+  );
+  const teacherAssignedSubjects = React.useMemo(
+    () => getTeacherAssignedSubjects(currentUser),
+    [currentUser, allocationRevision]
+  );
+  const allowedAsgGrades = React.useMemo(
+    () => getAllowedGradesForTeacher(currentUser),
+    [currentUser, allocationRevision]
+  );
+
+  // If lab access is revoked or unavailable, never remain on a lab tab
+  React.useEffect(() => {
+    if (!hasLabAccess && (activeTab === 'computer_lab' || activeTab === 'virtual_lab')) {
+      setActiveTab(isClassTeacher ? 'class_register' : 'work_entry');
+    }
+  }, [hasLabAccess, activeTab, isClassTeacher]);
 
   // Handle direct tab navigation from notification items
   React.useEffect(() => {
@@ -132,12 +171,16 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'computer_lab', 'virtual_lab', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub', 'lunch_register'].includes(tab)) {
+        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub', 'lunch_register'].includes(tab)) {
           setActiveTab(tab as TeacherTab);
         } else if (tab === 'computer_lab' || tab === 'scratch' || tab === 'cs_lab' || tab === 'coding') {
-          setActiveTab('computer_lab');
+          if (canAccessTeacherLabs(currentUser)) {
+            setActiveTab('computer_lab');
+          }
         } else if (tab === 'virtual_lab' || tab === 'vlab' || tab === 'virtuallab' || tab === 'science_lab') {
-          setActiveTab('virtual_lab');
+          if (canAccessTeacherLabs(currentUser)) {
+            setActiveTab('virtual_lab');
+          }
         } else if (tab === 'results' || tab === 'assessments' || tab === 'gradebook' || tab === 'marks') {
           setActiveTab('cbc_results');
         } else if (tab === 'attendance' || tab === 'register' || tab === 'roll_call') {
@@ -153,20 +196,57 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     };
     window.addEventListener('workspace-nav-tab', handleNavEvent);
     return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
-  }, []);
+  }, [currentUser]);
 
   // CBC Science Explorer Modal State
   const [showScienceModal, setShowScienceModal] = useState(false);
 
-  // Assignment Creation Form State
+  // Assignment Creation Form State (strictly bounded to assigned grades/streams/subjects)
+  const initialAsgGrade = (allowedAsgGrades[0] || defaultGrade) as GradeLevel;
+  const initialAsgStreams = getAllowedStreamsForGrade(currentUser, initialAsgGrade);
+  const initialAsgStream = (initialAsgStreams[0] || defaultStream) as StreamName;
+  const initialAsgSubjects = getAllowedSubjectsForGradeStream(currentUser, initialAsgGrade, initialAsgStream);
+  const initialAsgSubject = (initialAsgSubjects[0] || teacherAssignedSubjects[0] || getSubjectsForGrade(initialAsgGrade)[0]) as SubjectName;
+
   const [asgTitle, setAsgTitle] = useState('');
-  const [asgGrade, setAsgGrade] = useState<GradeLevel>(defaultGrade);
-  const [asgStream, setAsgStream] = useState<StreamName>(defaultStream);
-  const [asgSubject, setAsgSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
+  const [asgGrade, setAsgGrade] = useState<GradeLevel>(initialAsgGrade);
+  const [asgStream, setAsgStream] = useState<StreamName>(initialAsgStream);
+  const [asgSubject, setAsgSubject] = useState<SubjectName>(initialAsgSubject);
   const [asgInstructions, setAsgInstructions] = useState('');
   const [asgDueDate, setAsgDueDate] = useState('2026-10-10');
   const [asgMaxScore, setAsgMaxScore] = useState<number>(20);
   const [asgSuccess, setAsgSuccess] = useState(false);
+  const [asgError, setAsgError] = useState<string | null>(null);
+
+  const allowedAsgStreams = React.useMemo(
+    () => getAllowedStreamsForGrade(currentUser, asgGrade),
+    [currentUser, asgGrade, allocationRevision]
+  );
+  const allowedAsgSubjects = React.useMemo(
+    () => getAllowedSubjectsForGradeStream(currentUser, asgGrade, asgStream),
+    [currentUser, asgGrade, asgStream, allocationRevision]
+  );
+
+  // Keep selected Grade / Stream / Subject locked inside teacher's assigned scope
+  React.useEffect(() => {
+    if (allowedAsgGrades.length === 0) return;
+    const nextGrade = allowedAsgGrades.includes(asgGrade) ? asgGrade : allowedAsgGrades[0];
+    if (nextGrade !== asgGrade) {
+      setAsgGrade(nextGrade);
+      return;
+    }
+    const streamsForGrade = getAllowedStreamsForGrade(currentUser, nextGrade);
+    if (streamsForGrade.length === 0) return;
+    const nextStream = streamsForGrade.includes(asgStream) ? asgStream : streamsForGrade[0];
+    if (nextStream !== asgStream) {
+      setAsgStream(nextStream);
+      return;
+    }
+    const subjectsForPair = getAllowedSubjectsForGradeStream(currentUser, nextGrade, nextStream);
+    if (subjectsForPair.length > 0 && !subjectsForPair.includes(asgSubject)) {
+      setAsgSubject(subjectsForPair[0]);
+    }
+  }, [currentUser, allocationRevision, allowedAsgGrades, asgGrade, asgStream, asgSubject]);
 
   // Resource Sub-Tab (Notes, Audios, Videos, Images, E-Links)
   const [resourceSubTab, setResourceSubTab] = useState<'notes' | 'audios' | 'videos' | 'images' | 'elinks'>('notes');
@@ -273,7 +353,15 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
   // Handlers
   const handleCreateAssignment = (e: React.FormEvent) => {
     e.preventDefault();
+    setAsgError(null);
     if (!asgTitle || !asgInstructions) return;
+
+    if (!isTeacherAssignedToTarget(currentUser, asgGrade, asgStream, asgSubject)) {
+      setAsgError(
+        `Access Restricted: You can only assign homework or assignments to classes and subjects assigned to your profile (attempted Grade ${asgGrade} ${asgStream} — ${asgSubject}).`
+      );
+      return;
+    }
 
     const newAsg: Assignment = {
       id: `asg-${Date.now()}`,
@@ -283,7 +371,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       title: asgTitle,
       instructions: asgInstructions,
       dueDate: asgDueDate,
-      maxScore: Number(asgMaxScore),
+      maxScore: Number(maxScoreSafe(asgMaxScore)),
       teacherName: currentUser.name,
       teacherId: currentUser.id,
       submissionsCount: 0
@@ -295,6 +383,11 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     setAsgInstructions('');
     setTimeout(() => setAsgSuccess(false), 2500);
   };
+
+  function maxScoreSafe(val: number): number {
+    const n = Number(val);
+    return Number.isFinite(n) && n > 0 ? n : 20;
+  }
 
   const handleCreateNote = (e: React.FormEvent) => {
     e.preventDefault();
@@ -507,8 +600,12 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
         { id: 'assignments', label: '6. Homework Assignments', icon: BookOpen },
         { id: 'lesson_files' as TeacherTab, label: '6b. CBC Lesson File Manager', icon: FolderTree, badge: 'PDFs & Images', badgeColor: 'bg-teal-600' },
         { id: 'subject_chats' as TeacherTab, label: '6c. Student Subject Inquiries', icon: MessageSquare, badge: 'Live Q&A', badgeColor: 'bg-indigo-600' },
-        { id: 'computer_lab', label: '7. CS Computer Lab & Scratch', icon: Laptop, badge: 'Projector & Challenges', badgeColor: 'bg-indigo-600' },
-        { id: 'virtual_lab', label: '7b. Science Virtual Lab', icon: FlaskConical, badge: 'Demonstrations', badgeColor: 'bg-emerald-600' },
+        ...(hasLabAccess
+          ? [
+              { id: 'computer_lab' as TeacherTab, label: '7. Computer Laboratory', icon: Laptop, badge: 'CS & Scratch', badgeColor: 'bg-indigo-600' },
+              { id: 'virtual_lab' as TeacherTab, label: '7b. Virtual Laboratory', icon: FlaskConical, badge: 'Integrated Science', badgeColor: 'bg-emerald-600' },
+            ]
+          : []),
         { id: 'quizzes', label: '8. CBC Topical Quizzes', icon: CheckSquare },
         { id: 'resources', label: '9. Curriculum Resources & Links', icon: FolderTree },
         { id: 'virtual_class', label: '10. Virtual Classrooms (LiveKit)', icon: Video }
@@ -558,7 +655,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
               )}
             </h1>
             <p className="text-[11px] text-slate-400 hidden sm:block">
-              Assigned: {currentUser.assignedSubjects?.join(', ') || 'CBC Curriculum'} · Lesson logs, registers & CBC marks
+              Assigned: {teacherAssignedSubjects.join(', ') || 'No Subjects Assigned'} · Lesson logs, registers & CBC marks
             </p>
           </div>
         </div>
@@ -797,141 +894,203 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             <h2 className="text-lg font-bold text-slate-900 mb-1">
               Create New Student Assignment
             </h2>
-            <p className="text-xs text-slate-500 mb-6">
-              Assign homework or practical projects to specific grades or streams with rubric scoring.
+            <p className="text-xs text-slate-500 mb-4">
+              Assign homework or practical projects strictly to students in the classes and subjects assigned to you.
             </p>
 
-            {asgSuccess && (
-              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
-                <Check className="w-4 h-4 text-emerald-600" />
-                <span>Assignment published! Students in Grade {asgGrade} ({asgStream}) can now submit solutions.</span>
+            {allowedAsgGrades.length === 0 ? (
+              <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1.5">
+                <div className="font-black flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                  <span>No Class & Subject Allocations Assigned</span>
+                </div>
+                <p className="text-amber-800 leading-relaxed">
+                  You do not currently have any Grade, Stream, and Subject lesson allocations assigned to your account. Ask your school administrator or Dean of Studies to assign your classes and subjects before publishing homework assignments.
+                </p>
               </div>
+            ) : (
+              <>
+                <div className="mb-4 p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-700 flex flex-wrap items-center gap-2">
+                  <span className="font-bold text-slate-900">Your Assigned Scope:</span>
+                  <span>
+                    Grades {allowedAsgGrades.map((g) => `Grade ${g}`).join(', ')} · Subjects: {teacherAssignedSubjects.join(', ')}
+                  </span>
+                </div>
+
+                {asgError && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{asgError}</span>
+                  </div>
+                )}
+
+                {asgSuccess && (
+                  <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Assignment published! Students in Grade {asgGrade} ({asgStream}) can now submit solutions.</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleCreateAssignment} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Target Grade</label>
+                      <select
+                        value={asgGrade}
+                        onChange={(e) => {
+                          const g = Number(e.target.value) as GradeLevel;
+                          const nextStreams = getAllowedStreamsForGrade(currentUser, g);
+                          const nextStream = (nextStreams[0] || '') as StreamName;
+                          const nextSubs = getAllowedSubjectsForGradeStream(currentUser, g, nextStream);
+                          setAsgGrade(g);
+                          setAsgStream(nextStream);
+                          if (nextSubs[0]) setAsgSubject(nextSubs[0]);
+                          setAsgError(null);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
+                      >
+                        {allowedAsgGrades.map(g => (
+                          <option key={g} value={g}>Grade {g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Target Stream</label>
+                      <select
+                        value={asgStream}
+                        onChange={(e) => {
+                          const st = e.target.value as StreamName;
+                          const nextSubs = getAllowedSubjectsForGradeStream(currentUser, asgGrade, st);
+                          setAsgStream(st);
+                          if (nextSubs[0]) setAsgSubject(nextSubs[0]);
+                          setAsgError(null);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
+                      >
+                        {allowedAsgStreams.map(s => (
+                          <option key={s} value={s}>{s} Stream</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                      <select
+                        value={asgSubject}
+                        onChange={(e) => {
+                          setAsgSubject(e.target.value as SubjectName);
+                          setAsgError(null);
+                        }}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
+                      >
+                        {allowedAsgSubjects.map(sub => (
+                          <option key={sub} value={sub}>{sub}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Assignment Title</label>
+                    <input
+                      type="text"
+                      required
+                      value={asgTitle}
+                      onChange={(e) => setAsgTitle(e.target.value)}
+                      placeholder="e.g. Fractions Word Problems Practice Set"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Task Instructions</label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={asgInstructions}
+                      onChange={(e) => setAsgInstructions(e.target.value)}
+                      placeholder="Describe step-by-step questions or practical requirements..."
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Due Date</label>
+                      <input
+                        type="date"
+                        value={asgDueDate}
+                        onChange={(e) => setAsgDueDate(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Maximum Marks</label>
+                      <input
+                        type="number"
+                        value={asgMaxScore}
+                        onChange={(e) => setAsgMaxScore(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={allowedAsgStreams.length === 0 || allowedAsgSubjects.length === 0}
+                    className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:bg-slate-400 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    Publish Assignment to Grade {asgGrade} ({asgStream})
+                  </button>
+                </form>
+              </>
             )}
-
-            <form onSubmit={handleCreateAssignment} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Target Grade</label>
-                  <select
-                    value={asgGrade}
-                    onChange={(e) => {
-                      const g = Number(e.target.value) as GradeLevel;
-                      setAsgGrade(g);
-                      setAsgStream(getStreamsForGrade(g)[0] as StreamName);
-                      setAsgSubject(getSubjectsForGrade(g)[0]);
-                    }}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                  >
-                    {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
-                      <option key={g} value={g}>Grade {g}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Target Stream</label>
-                  <select
-                    value={asgStream}
-                    onChange={(e) => setAsgStream(e.target.value as StreamName)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                  >
-                    {getStreamsForGrade(asgGrade).map(s => (
-                      <option key={s} value={s}>{s} Stream</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
-                  <select
-                    value={asgSubject}
-                    onChange={(e) => setAsgSubject(e.target.value as SubjectName)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                  >
-                    {getSubjectsForGrade(asgGrade).map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Assignment Title</label>
-                <input
-                  type="text"
-                  required
-                  value={asgTitle}
-                  onChange={(e) => setAsgTitle(e.target.value)}
-                  placeholder="e.g. Fractions Word Problems Practice Set"
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Task Instructions</label>
-                <textarea
-                  rows={3}
-                  required
-                  value={asgInstructions}
-                  onChange={(e) => setAsgInstructions(e.target.value)}
-                  placeholder="Describe step-by-step questions or practical requirements..."
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Due Date</label>
-                  <input
-                    type="date"
-                    value={asgDueDate}
-                    onChange={(e) => setAsgDueDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Maximum Marks</label>
-                  <input
-                    type="number"
-                    value={asgMaxScore}
-                    onChange={(e) => setAsgMaxScore(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
-              >
-                Publish Assignment to Grade {asgGrade}
-              </button>
-            </form>
           </div>
         </section>
       )}
 
       {/* ========================================================
-          TAB 3B: COMPUTER LAB MODULE (FOR CS TEACHERS & SCRATCH)
+          TAB 3B: COMPUTER LAB MODULE (ONLY INTEGRATED SCIENCE OR COMPUTER STUDIES TEACHERS)
           Dedicated live Scratch projector, Challenge Library & class push
           ======================================================== */}
       {activeTab === 'computer_lab' && (
         <section className="space-y-6">
-          <ComputerLabModule
-            currentUser={currentUser}
-            onNavigateToTab={(tab) => setActiveTab(tab as any)}
-          />
+          {hasLabAccess ? (
+            <ComputerLabModule
+              currentUser={currentUser}
+              onNavigateToTab={(tab) => setActiveTab(tab as any)}
+            />
+          ) : (
+            <div className="bg-white rounded-3xl p-8 border border-rose-200 shadow-xs text-center space-y-3 max-w-xl mx-auto">
+              <ShieldAlert className="w-10 h-10 text-rose-600 mx-auto" />
+              <h3 className="text-lg font-black text-slate-900">Computer Laboratory Access Restricted</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Only subject teachers assigned <strong>Integrated Science</strong> or <strong>Computer Studies</strong> may access the Computer Laboratory.
+              </p>
+            </div>
+          )}
         </section>
       )}
 
       {/* ========================================================
-          TAB 3C: SUBJECT TEACHER VIRTUAL LAB & SCIENCE EXPERIMENTS
+          TAB 3C: SUBJECT TEACHER VIRTUAL LAB (ONLY INTEGRATED SCIENCE OR COMPUTER STUDIES TEACHERS)
           ======================================================== */}
       {activeTab === 'virtual_lab' && (
         <section className="space-y-6">
-          <VirtualLabWorkspace
-            currentUser={currentUser}
-            initialTab="demonstrations"
-            isEmbedded={true}
-          />
+          {hasLabAccess ? (
+            <VirtualLabWorkspace
+              currentUser={currentUser}
+              initialTab="demonstrations"
+              isEmbedded={true}
+            />
+          ) : (
+            <div className="bg-white rounded-3xl p-8 border border-rose-200 shadow-xs text-center space-y-3 max-w-xl mx-auto">
+              <ShieldAlert className="w-10 h-10 text-rose-600 mx-auto" />
+              <h3 className="text-lg font-black text-slate-900">Virtual Laboratory Access Restricted</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Only subject teachers assigned <strong>Integrated Science</strong> or <strong>Computer Studies</strong> may access the Virtual Laboratory.
+              </p>
+            </div>
+          )}
         </section>
       )}
 

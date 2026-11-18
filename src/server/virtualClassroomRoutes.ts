@@ -39,6 +39,17 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function broadcastVirtualLessonChange(schoolId: string, recordId?: string, actorId?: string | null): void {
+  broadcastChange({
+    type: 'collection:updated',
+    collection: 'edusmart_virtual_lessons_v1',
+    tenantId: schoolId,
+    recordId,
+    actorId: actorId ?? null,
+    timestamp: nowIso(),
+  });
+}
+
 function safeParseJson<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
@@ -1013,7 +1024,7 @@ async function closeVirtualLessonOrRoom(params: {
   }
 
   notifyMySqlTablesChanged(VIRTUAL_CLASSROOM_TABLES);
-  broadcastChange(lesson.school_id, 'edusmart_virtual_lessons_v1', lessonId);
+  broadcastVirtualLessonChange(lesson.school_id, lessonId);
 }
 
 let schedulerHandle: ReturnType<typeof setInterval> | null = null;
@@ -1070,7 +1081,7 @@ export function startVirtualLessonScheduler(): void {
             minutesRemaining: 10,
             classroomId: room.id,
           });
-          broadcastChange(room.school_id, 'edusmart_virtual_lessons_v1', room.lesson_id);
+          broadcastVirtualLessonChange(room.school_id, room.lesson_id);
         }
 
         if (remainingMs <= 5 * 60 * 1000 && !room.warning_5_sent) {
@@ -1088,7 +1099,7 @@ export function startVirtualLessonScheduler(): void {
             minutesRemaining: 5,
             classroomId: room.id,
           });
-          broadcastChange(room.school_id, 'edusmart_virtual_lessons_v1', room.lesson_id);
+          broadcastVirtualLessonChange(room.school_id, room.lesson_id);
         }
       }
     } catch (err) {
@@ -1338,7 +1349,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.get('/api/virtual-lessons/meta', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session, req.query.schoolId as string | undefined);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.query.schoolId as string | undefined);
+    if (!schoolId) return;
     const livekit = getLiveKitConfig();
     const policy = getSchoolPolicy(db, schoolId);
 
@@ -1470,7 +1482,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.get('/api/virtual-lessons', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session, req.query.schoolId as string | undefined);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.query.schoolId as string | undefined);
+    if (!schoolId) return;
     const statusFilter = req.query.status ? String(req.query.status) : null;
     const gradeIdFilter = req.query.gradeId ? String(req.query.gradeId) : null;
 
@@ -1657,7 +1670,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.get('/api/virtual-lessons/notifications', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session, req.query.schoolId as string | undefined);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.query.schoolId as string | undefined);
+    if (!schoolId) return;
     const rows = db
       .prepare(
         `SELECT vln.*, g.name as grade_name
@@ -1683,7 +1697,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/notifications/:id/read', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     db.prepare(
       `UPDATE virtual_lesson_notifications
        SET read_at = COALESCE(read_at, ?)
@@ -1702,7 +1717,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     if (!isSchoolAdmin(session)) {
       return res.status(403).json({ error: 'Only School Administrators can access school-wide virtual classroom monitoring.' });
     }
-    const schoolId = resolveAuthorizedTenantId(session, req.query.schoolId as string | undefined);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.query.schoolId as string | undefined);
+    if (!schoolId) return;
     const policy = getSchoolPolicy(db, schoolId);
     const livekit = getLiveKitConfig();
 
@@ -1818,7 +1834,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     if (!isSchoolAdmin(session)) {
       return res.status(403).json({ error: 'Only School Administrators can update virtual classroom policies.' });
     }
-    const schoolId = resolveAuthorizedTenantId(session, req.body?.schoolId);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+    if (!schoolId) return;
     const current = getSchoolPolicy(db, schoolId);
 
     const maxCap = Math.max(5, Math.min(200, Number(req.body?.defaultMaxCapacity ?? current.defaultMaxCapacity)));
@@ -1880,7 +1897,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     if (!isSchoolAdmin(session)) {
       return res.status(403).json({ error: 'Only School Administrators can update student virtual subscriptions.' });
     }
-    const schoolId = resolveAuthorizedTenantId(session, req.body?.schoolId);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+    if (!schoolId) return;
     const { studentId } = req.params;
     const stu = db
       .prepare(`SELECT id, name, email FROM students WHERE school_id = ? AND id = ? LIMIT 1`)
@@ -1938,7 +1956,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(['student_digital_subscriptions']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', studentId);
+    broadcastVirtualLessonChange(schoolId, studentId, session.userId);
     res.json({ ok: true });
   });
 
@@ -1948,7 +1966,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   async function handleCreateLesson(req: Request, res: Response, isInstantStart: boolean) {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session, req.body?.schoolId);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+    if (!schoolId) return;
 
     if (!isSchoolAdmin(session) && session.role !== 'senior_teacher') {
       return res.status(403).json({
@@ -2437,7 +2456,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(VIRTUAL_CLASSROOM_TABLES);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lessonId);
+    broadcastVirtualLessonChange(schoolId, lessonId, session.userId);
 
     const createdRow = db.prepare(`SELECT * FROM virtual_lessons WHERE id = ?`).get(lessonId);
     res.status(201).json({
@@ -2470,7 +2489,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.get('/api/virtual-lessons/:id', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -2497,7 +2517,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.put('/api/virtual-lessons/:id', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -2623,7 +2644,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       details: { scheduledDate, startTime, durationMinutes, postponedReason: body.postponedReason },
     });
     notifyMySqlTablesChanged(VIRTUAL_CLASSROOM_TABLES);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
 
     const updated = db.prepare(`SELECT * FROM virtual_lessons WHERE id = ?`).get(lesson.id);
     res.json({ lesson: hydrateLessonBundle(db, updated), warnings: conflictCheck.warnings });
@@ -2632,7 +2653,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/:id/cancel', requireAuth, async (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -2671,7 +2693,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       details: { reason },
     });
     notifyMySqlTablesChanged(VIRTUAL_CLASSROOM_TABLES);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
 
     const updated = db.prepare(`SELECT * FROM virtual_lessons WHERE id = ?`).get(lesson.id);
     res.json({ lesson: hydrateLessonBundle(db, updated) });
@@ -2680,7 +2702,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/:id/create-rooms', requireAuth, async (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -2707,7 +2730,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/:id/start', requireAuth, async (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -2781,7 +2805,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       action: 'start_classroom',
     });
     notifyMySqlTablesChanged(VIRTUAL_CLASSROOM_TABLES);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
 
     const updated = db.prepare(`SELECT * FROM virtual_lessons WHERE id = ?`).get(lesson.id);
     res.json({ lesson: hydrateLessonBundle(db, updated) });
@@ -2790,7 +2814,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/:id/end', requireAuth, async (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -2829,7 +2854,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   async function handleJoinOrMintToken(req: Request, res: Response, forcedLessonId?: string) {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session, req.body?.schoolId);
+    const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+    if (!schoolId) return;
     const lessonId = forcedLessonId || String(req.body?.lessonId || '').trim();
     const requestedClassroomId = req.body?.classroomId ? String(req.body.classroomId).trim() : null;
 
@@ -2984,7 +3010,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
 
       classroom = db.prepare(`SELECT * FROM virtual_classrooms WHERE id = ?`).get(classroom.id);
       syncLessonNotifications(db, lesson.id, 'live');
-      broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+      broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
     }
 
     // Check participant record & permissions
@@ -3050,7 +3076,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       participant = db.prepare(`SELECT * FROM virtual_lesson_participants WHERE id = ?`).get(partId);
       if (initialAdmission === 'waiting') {
         notifyMySqlTablesChanged(['virtual_lesson_participants']);
-        broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+        broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
       }
     }
 
@@ -3170,7 +3196,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/:id/media-session-ack', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const classroomId = String(req.body?.classroomId || '').trim();
     const state = req.body?.state === 'disconnected' ? 'disconnected' : 'connected';
     const livekitConnected = Boolean(req.body?.livekitConnected);
@@ -3285,7 +3312,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   } | null {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return null;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -3316,7 +3344,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     await broadcastLiveKitRoomData(ctx.classroom.livekit_room_name, { type: 'ROOM_LOCKED', locked: true, classroomId: ctx.classroom.id });
     writeVirtualAudit(ctx.db, { schoolId: ctx.schoolId, lessonId: ctx.lesson.id, classroomId: ctx.classroom.id, session: ctx.session, action: 'lock_room' });
     notifyMySqlTablesChanged(['virtual_classrooms']);
-    broadcastChange(ctx.schoolId, 'edusmart_virtual_lessons_v1', ctx.lesson.id);
+    broadcastVirtualLessonChange(ctx.schoolId, ctx.lesson.id, ctx.session.userId);
     res.json({ ok: true, locked: true });
   });
 
@@ -3327,7 +3355,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     await broadcastLiveKitRoomData(ctx.classroom.livekit_room_name, { type: 'ROOM_LOCKED', locked: false, classroomId: ctx.classroom.id });
     writeVirtualAudit(ctx.db, { schoolId: ctx.schoolId, lessonId: ctx.lesson.id, classroomId: ctx.classroom.id, session: ctx.session, action: 'unlock_room' });
     notifyMySqlTablesChanged(['virtual_classrooms']);
-    broadcastChange(ctx.schoolId, 'edusmart_virtual_lessons_v1', ctx.lesson.id);
+    broadcastVirtualLessonChange(ctx.schoolId, ctx.lesson.id, ctx.session.userId);
     res.json({ ok: true, locked: false });
   });
 
@@ -3385,7 +3413,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(['virtual_lesson_participants']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
     res.json({ ok: true });
   });
 
@@ -3418,7 +3446,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       details: { targetUserId: p.user_id, targetName: p.user_name },
     });
     notifyMySqlTablesChanged(['virtual_lesson_participants']);
-    broadcastChange(ctx.schoolId, 'edusmart_virtual_lessons_v1', ctx.lesson.id);
+    broadcastVirtualLessonChange(ctx.schoolId, ctx.lesson.id, ctx.session.userId);
     res.json({ ok: true });
   });
 
@@ -3481,7 +3509,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       action: mute ? 'mute_all' : 'unmute_all',
     });
     notifyMySqlTablesChanged(['virtual_classrooms', 'virtual_lesson_participants']);
-    broadcastChange(ctx.schoolId, 'edusmart_virtual_lessons_v1', ctx.lesson.id);
+    broadcastVirtualLessonChange(ctx.schoolId, ctx.lesson.id, ctx.session.userId);
     res.json({ ok: true, mutedAll: mute });
   });
 
@@ -3634,14 +3662,15 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(['virtual_classrooms', 'virtual_lesson_participants']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
     res.json({ ok: true });
   });
 
   app.post('/api/virtual-lessons/:id/raise-hand', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const classroomId = String(req.body?.classroomId || '').trim();
     const raised = req.body?.raised !== false;
     const now = nowIso();
@@ -3653,14 +3682,15 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     ).run(raised ? 1 : 0, raised ? now : null, now, req.params.id, classroomId, session.userId, schoolId);
 
     notifyMySqlTablesChanged(['virtual_lesson_participants']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', req.params.id);
+    broadcastVirtualLessonChange(schoolId, req.params.id, session.userId);
     res.json({ ok: true, handRaised: raised });
   });
 
   app.get('/api/virtual-lessons/:id/chat', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const classroomId = String(req.query.classroomId || '').trim();
     const messages = classroomId
       ? (db
@@ -3677,7 +3707,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.post('/api/virtual-lessons/:id/chat', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const classroomId = String(req.body?.classroomId || '').trim();
     const message = String(req.body?.message || '').trim();
     if (!classroomId || !message) {
@@ -3699,7 +3730,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
     ).run(msgId, schoolId, req.params.id, classroomId, session.userId, String(session.user?.name || 'User'), session.role, message, now);
 
     notifyMySqlTablesChanged(['virtual_lesson_chat_messages']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', req.params.id);
+    broadcastVirtualLessonChange(schoolId, req.params.id, session.userId);
     res.status(201).json({
       message: {
         id: msgId,
@@ -3719,7 +3750,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.get('/api/virtual-lessons/:id/participants', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -3741,7 +3773,8 @@ export function registerVirtualClassroomRoutes(app: Express): void {
   app.get('/api/virtual-lessons/:id/attendance', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const lesson = db
       .prepare(`SELECT * FROM virtual_lessons WHERE id = ? AND school_id = ?`)
       .get(req.params.id, schoolId) as any;
@@ -3848,7 +3881,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       details: { recordingId, egressActive: egressRes.egressActive },
     });
     notifyMySqlTablesChanged(['virtual_lesson_recordings', 'virtual_classrooms']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
     res.status(201).json({
       recording: db.prepare(`SELECT * FROM virtual_lesson_recordings WHERE id = ?`).get(rowId),
       egressActive: egressRes.egressActive,
@@ -3891,14 +3924,15 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       action: 'stop_recording',
     });
     notifyMySqlTablesChanged(['virtual_lesson_recordings']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', lesson.id);
+    broadcastVirtualLessonChange(schoolId, lesson.id, session.userId);
     res.json({ ok: true });
   });
 
   app.delete('/api/virtual-lessons/recordings/:recordingId', requireAuth, (req: Request, res: Response) => {
     const db = getDb();
     const session = req.authSession!;
-    const schoolId = resolveAuthorizedTenantId(session);
+    const schoolId = resolveAuthorizedTenantId(req, res);
+    if (!schoolId) return;
     const rec = db
       .prepare(`SELECT * FROM virtual_lesson_recordings WHERE id = ? AND school_id = ?`)
       .get(req.params.recordingId, schoolId) as any;
@@ -3912,16 +3946,28 @@ export function registerVirtualClassroomRoutes(app: Express): void {
 
     db.prepare(`UPDATE virtual_lesson_recordings SET deleted_at = ?, updated_at = ? WHERE id = ?`).run(nowIso(), nowIso(), rec.id);
     notifyMySqlTablesChanged(['virtual_lesson_recordings']);
-    broadcastChange(schoolId, 'edusmart_virtual_lessons_v1', rec.lesson_id);
+    broadcastVirtualLessonChange(schoolId, rec.lesson_id, session.userId);
     res.json({ ok: true });
   });
 
   // -------------------------------------------------------------------------
-  // 11. LiveKit Verified Webhook Endpoint (Attendance, Disconnects, Egress)
+  // 11. LiveKit Verified Webhook Endpoint (Room Completion, Join/Leave, Egress)
   // -------------------------------------------------------------------------
   app.post('/api/livekit/webhook', async (req: Request, res: Response) => {
     try {
-      const rawBody = (req as any).rawBody || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}));
+      const cfg = getLiveKitConfig();
+      if (!cfg.apiKey || !(cfg.webhookSecret || cfg.apiSecret)) {
+        return res.status(503).json({
+          error: 'LiveKit webhook credentials (LIVEKIT_API_KEY / LIVEKIT_API_SECRET) are not configured on this server.',
+        });
+      }
+
+      const rawBody =
+        typeof (req as any).rawBody === 'string'
+          ? (req as any).rawBody
+          : typeof req.body === 'string'
+          ? req.body
+          : JSON.stringify(req.body || {});
       const authHeader = String(req.headers.authorization || req.headers['Authorization'] || '');
 
       let event: any;
@@ -3936,8 +3982,11 @@ export function registerVirtualClassroomRoutes(app: Express): void {
 
       const db = getDb();
       const now = nowIso();
+      const eventType = String(event.event || '');
+      const roomName = event.room?.name ? String(event.room.name) : null;
+      const participantIdentity = event.participant?.identity ? String(event.participant.identity) : null;
       const eventId = String(
-        event.id || `${event.event}:${event.room?.name || ''}:${event.participant?.identity || ''}:${event.createdAt || now}`
+        event.id || `${eventType}:${roomName || ''}:${participantIdentity || ''}:${event.createdAt || now}`
       );
 
       // Idempotent deduplication check
@@ -3946,83 +3995,142 @@ export function registerVirtualClassroomRoutes(app: Express): void {
           `INSERT OR IGNORE INTO livekit_webhook_events (event_id, event_type, room_name, participant_identity, received_at)
            VALUES (?, ?, ?, ?, ?)`
         )
-        .run(
-          eventId,
-          String(event.event || ''),
-          event.room?.name || null,
-          event.participant?.identity || null,
-          now
-        );
+        .run(eventId, eventType, roomName, participantIdentity, now);
 
       if (inserted.changes === 0) {
-        return res.status(200).json({ ok: true, duplicate: true });
+        return res.status(200).json({ ok: true, duplicate: true, event: eventType });
       }
 
-      const roomName = event.room?.name;
       const classroom = roomName
         ? (db.prepare(`SELECT * FROM virtual_classrooms WHERE livekit_room_name = ? LIMIT 1`).get(roomName) as any)
         : null;
 
       if (classroom) {
-        if (event.event === 'participant_joined' && event.participant?.identity) {
-          const identity = String(event.participant.identity);
-          const p = db
+        if (eventType === 'room_started') {
+          db.prepare(
+            `UPDATE virtual_classrooms
+             SET room_status = CASE WHEN room_status IN ('scheduled', 'postponed') THEN 'live' ELSE room_status END,
+                 actual_start_time = COALESCE(actual_start_time, ?),
+                 updated_at = ?
+             WHERE id = ?`
+          ).run(now, now, classroom.id);
+          db.prepare(
+            `UPDATE virtual_lessons
+             SET status = CASE WHEN status IN ('scheduled', 'postponed') THEN 'live' ELSE status END,
+                 actual_started_at = COALESCE(actual_started_at, ?),
+                 updated_at = ?
+             WHERE id = ?`
+          ).run(now, now, classroom.lesson_id);
+        } else if (eventType === 'participant_joined' && participantIdentity) {
+          const parsedMeta = safeParseJson<Record<string, any>>(event.participant?.metadata, {});
+          const fallbackUserId = participantIdentity.includes(':')
+            ? participantIdentity.split(':').slice(1).join(':')
+            : participantIdentity;
+          const resolvedUserId = String(parsedMeta.userId || fallbackUserId);
+
+          let p = db
             .prepare(`SELECT * FROM virtual_lesson_participants WHERE classroom_id = ? AND livekit_identity = ? LIMIT 1`)
-            .get(classroom.id, identity) as any;
+            .get(classroom.id, participantIdentity) as any;
+
+          if (!p && resolvedUserId) {
+            p = db
+              .prepare(`SELECT * FROM virtual_lesson_participants WHERE classroom_id = ? AND user_id = ? LIMIT 1`)
+              .get(classroom.id, resolvedUserId) as any;
+          }
 
           if (p) {
-            const isReconnect = p.join_time && p.is_connected === 0;
+            const isReconnect = Boolean(p.join_time && p.is_connected === 0);
             const nextReconnect = isReconnect ? Number(p.reconnect_count || 0) + 1 : Number(p.reconnect_count || 0);
             const existingStatus = p.attendance_status === 'present' ? 'present' : 'partial';
 
             db.prepare(
               `UPDATE virtual_lesson_participants
                SET is_connected = 1,
+                   livekit_identity = ?,
                    join_time = COALESCE(join_time, ?),
                    last_heartbeat_at = ?,
                    reconnect_count = ?,
                    attendance_status = ?,
                    updated_at = ?
                WHERE id = ?`
-            ).run(now, now, nextReconnect, existingStatus, now, p.id);
+            ).run(participantIdentity, now, now, nextReconnect, existingStatus, now, p.id);
+          } else {
+            // Upsert participant automatically if they joined via pre-issued LiveKit token
+            const userRow = db
+              .prepare(`SELECT id, name, role FROM users WHERE id = ? AND school_id = ? LIMIT 1`)
+              .get(resolvedUserId, classroom.school_id) as { id: string; name: string; role: string } | undefined;
 
-            if (p.user_role === 'student') {
-              const existingAtt = db
-                .prepare(`SELECT * FROM virtual_lesson_attendance WHERE lesson_id = ? AND student_id = ? LIMIT 1`)
-                .get(classroom.lesson_id, p.user_id) as any;
-              if (existingAtt) {
-                db.prepare(
-                  `UPDATE virtual_lesson_attendance
-                   SET reconnect_count = ?, verified_via = 'livekit_webhook', updated_at = ?
-                   WHERE id = ?`
-                ).run(nextReconnect, now, existingAtt.id);
-              } else {
-                db.prepare(
-                  `INSERT INTO virtual_lesson_attendance
-                     (id, school_id, lesson_id, classroom_id, student_id, student_name, stream_id,
-                      first_joined_at, total_attendance_minutes, reconnect_count, attendance_status, verified_via, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'partial', 'livekit_webhook', ?, ?)`
-                ).run(
-                  `vla-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-                  classroom.school_id,
-                  classroom.lesson_id,
-                  classroom.id,
-                  p.user_id,
-                  p.user_name,
-                  p.stream_id || null,
-                  now,
-                  nextReconnect,
-                  now,
-                  now
-                );
-              }
+            const userRole = String(parsedMeta.role || userRow?.role || 'student');
+            const userName = String(event.participant?.name || userRow?.name || 'Participant');
+            const isMod = Boolean(parsedMeta.isModerator || userRole !== 'student');
+            const partId = `vlp-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+
+            db.prepare(
+              `INSERT INTO virtual_lesson_participants
+                 (id, school_id, lesson_id, classroom_id, user_id, user_name, user_role, stream_id, livekit_identity,
+                  admission_status, is_co_host, mic_allowed, cam_allowed, screenshare_allowed, chat_allowed,
+                  hand_raised, join_time, last_heartbeat_at, reconnect_count, attendance_status, is_connected, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'admitted', ?, ?, ?, ?, ?, 0, ?, ?, 0, 'partial', 1, ?, ?)`
+            ).run(
+              partId,
+              classroom.school_id,
+              classroom.lesson_id,
+              classroom.id,
+              userRow?.id || resolvedUserId,
+              userName,
+              userRole,
+              parsedMeta.streamId ? String(parsedMeta.streamId) : null,
+              participantIdentity,
+              isMod ? 1 : 0,
+              isMod || classroom.student_mic_enabled ? 1 : 0,
+              isMod || classroom.student_camera_enabled ? 1 : 0,
+              isMod || classroom.student_screenshare_enabled ? 1 : 0,
+              isMod || classroom.student_chat_enabled ? 1 : 0,
+              now,
+              now,
+              now,
+              now
+            );
+
+            p = db.prepare(`SELECT * FROM virtual_lesson_participants WHERE id = ?`).get(partId) as any;
+          }
+
+          if (p && p.user_role === 'student') {
+            const nextReconnect = Number(p.reconnect_count || 0);
+            const existingAtt = db
+              .prepare(`SELECT * FROM virtual_lesson_attendance WHERE lesson_id = ? AND student_id = ? LIMIT 1`)
+              .get(classroom.lesson_id, p.user_id) as any;
+            if (existingAtt) {
+              db.prepare(
+                `UPDATE virtual_lesson_attendance
+                 SET reconnect_count = ?, verified_via = 'livekit_webhook', updated_at = ?
+                 WHERE id = ?`
+              ).run(nextReconnect, now, existingAtt.id);
+            } else {
+              db.prepare(
+                `INSERT INTO virtual_lesson_attendance
+                   (id, school_id, lesson_id, classroom_id, student_id, student_name, stream_id,
+                    first_joined_at, total_attendance_minutes, reconnect_count, attendance_status, verified_via, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'partial', 'livekit_webhook', ?, ?)`
+              ).run(
+                `vla-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+                classroom.school_id,
+                classroom.lesson_id,
+                classroom.id,
+                p.user_id,
+                p.user_name,
+                p.stream_id || null,
+                now,
+                nextReconnect,
+                now,
+                now
+              );
             }
           }
-        } else if (event.event === 'participant_left' && event.participant?.identity) {
-          const identity = String(event.participant.identity);
+        } else if (eventType === 'participant_left' && participantIdentity) {
           const p = db
             .prepare(`SELECT * FROM virtual_lesson_participants WHERE classroom_id = ? AND livekit_identity = ? LIMIT 1`)
-            .get(classroom.id, identity) as any;
+            .get(classroom.id, participantIdentity) as any;
 
           if (p) {
             const startAnchor = p.last_heartbeat_at || p.join_time || now;
@@ -4053,7 +4161,81 @@ export function registerVirtualClassroomRoutes(app: Express): void {
               ).run(now, totalMins, attStatus, now, classroom.lesson_id, p.user_id);
             }
           }
-        } else if (event.event === 'egress_ended' && event.egressInfo?.egressId) {
+        } else if (eventType === 'room_finished') {
+          // Disconnect all still-connected participants and roll up durations & attendance
+          const connectedParticipants = db
+            .prepare(`SELECT * FROM virtual_lesson_participants WHERE classroom_id = ? AND is_connected = 1`)
+            .all(classroom.id) as any[];
+
+          for (const p of connectedParticipants) {
+            const startAnchor = p.last_heartbeat_at || p.join_time || now;
+            const deltaSec = Math.max(0, Math.round((Date.now() - Date.parse(startAnchor)) / 1000));
+            const totalSec = Number(p.total_duration_seconds || 0) + deltaSec;
+            const totalMins = Number((totalSec / 60).toFixed(1));
+            const attStatus = totalMins >= 5 ? 'present' : p.join_time ? 'partial' : 'absent';
+
+            db.prepare(
+              `UPDATE virtual_lesson_participants
+               SET is_connected = 0,
+                   leave_time = COALESCE(leave_time, ?),
+                   total_duration_seconds = ?,
+                   attendance_status = ?,
+                   updated_at = ?
+               WHERE id = ?`
+            ).run(now, totalSec, attStatus, now, p.id);
+
+            if (p.user_role === 'student') {
+              db.prepare(
+                `UPDATE virtual_lesson_attendance
+                 SET last_left_at = COALESCE(last_left_at, ?),
+                     total_attendance_minutes = ?,
+                     attendance_status = ?,
+                     verified_via = 'livekit_webhook',
+                     updated_at = ?
+                 WHERE lesson_id = ? AND student_id = ?`
+              ).run(now, totalMins, attStatus, now, classroom.lesson_id, p.user_id);
+            }
+          }
+
+          // Finalize any still-open recordings for this classroom
+          db.prepare(
+            `UPDATE virtual_lesson_recordings
+             SET recording_status = 'completed',
+                 updated_at = ?
+             WHERE classroom_id = ? AND recording_status = 'recording' AND deleted_at IS NULL`
+          ).run(now, classroom.id);
+
+          // Mark classroom completed if not already cancelled/completed
+          if (classroom.room_status !== 'completed' && classroom.room_status !== 'cancelled') {
+            db.prepare(
+              `UPDATE virtual_classrooms
+               SET room_status = 'completed',
+                   actual_end_time = COALESCE(actual_end_time, ?),
+                   locked = 1,
+                   updated_at = ?
+               WHERE id = ?`
+            ).run(now, now, classroom.id);
+          }
+
+          // If all classrooms in this lesson are now completed/cancelled, close the parent lesson
+          const remainingActive = db
+            .prepare(
+              `SELECT COUNT(*) as c FROM virtual_classrooms
+               WHERE lesson_id = ? AND room_status IN ('scheduled', 'live', 'postponed')`
+            )
+            .get(classroom.lesson_id) as { c: number };
+
+          if (remainingActive.c === 0) {
+            db.prepare(
+              `UPDATE virtual_lessons
+               SET status = 'completed',
+                   actual_ended_at = COALESCE(actual_ended_at, ?),
+                   updated_at = ?
+               WHERE id = ? AND status != 'cancelled'`
+            ).run(now, now, classroom.lesson_id);
+            syncLessonNotifications(db, classroom.lesson_id, 'completed');
+          }
+        } else if (eventType === 'egress_ended' && event.egressInfo?.egressId) {
           const fileUrl = event.egressInfo?.fileResults?.[0]?.location || null;
           db.prepare(
             `UPDATE virtual_lesson_recordings
@@ -4065,10 +4247,10 @@ export function registerVirtualClassroomRoutes(app: Express): void {
         }
 
         notifyMySqlTablesChanged(VIRTUAL_CLASSROOM_TABLES);
-        broadcastChange(classroom.school_id, 'edusmart_virtual_lessons_v1', classroom.lesson_id);
+        broadcastVirtualLessonChange(classroom.school_id, classroom.lesson_id);
       }
 
-      res.status(200).json({ ok: true });
+      res.status(200).json({ ok: true, event: eventType, roomName, handled: Boolean(classroom) });
     } catch (err: any) {
       console.error('[livekit-webhook] handler error:', err);
       res.status(500).json({ error: err?.message || 'Webhook processing error' });

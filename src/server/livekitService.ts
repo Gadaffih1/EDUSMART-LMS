@@ -435,3 +435,95 @@ export async function verifyLiveKitWebhook(
   const receiver = new WebhookReceiver(key, secret);
   return await receiver.receive(rawBody, authHeader);
 }
+
+/**
+ * Class-based LiveKit Service encapsulating server-side token minting,
+ * programmatic room lifecycle, participant moderation, egress recording,
+ * and webhook verification for EduSmart Virtual Classrooms.
+ */
+export class LiveKitService {
+  getConfig(): LiveKitRuntimeConfig {
+    return getLiveKitConfig();
+  }
+
+  buildRoomName(params: {
+    schoolId: string;
+    gradeId: string;
+    lessonId: string;
+    streamId?: string | null;
+  }): string {
+    return buildCanonicalLiveKitRoomName(params);
+  }
+
+  buildIdentity(params: { schoolId: string; userId: string }): string {
+    return buildParticipantIdentity(params);
+  }
+
+  mintJoinToken(params: MintJoinTokenParams) {
+    return mintLiveKitJoinToken(params);
+  }
+
+  createRoomForLesson(params: {
+    roomName: string;
+    maxParticipants: number;
+    metadata?: Record<string, any>;
+  }) {
+    return ensureLiveKitRoom(params);
+  }
+
+  deleteRoom(roomName: string) {
+    return deleteLiveKitRoom(roomName);
+  }
+
+  updateParticipantPermissions(params: {
+    roomName: string;
+    identity: string;
+    micAllowed: boolean;
+    camAllowed: boolean;
+    screenShareAllowed: boolean;
+    chatAllowed: boolean;
+  }) {
+    return updateLiveKitParticipantPermissions(params);
+  }
+
+  muteParticipantTracks(params: {
+    roomName: string;
+    identity: string;
+    muteAudio?: boolean;
+    muteVideo?: boolean;
+  }) {
+    return muteLiveKitParticipantTracks(params);
+  }
+
+  muteAllStudents(params: {
+    roomName: string;
+    moderatorIdentities: Set<string>;
+    muteAudio: boolean;
+    muteVideo?: boolean;
+  }) {
+    return muteAllStudentsInLiveKitRoom(params);
+  }
+
+  removeParticipant(roomName: string, identity: string) {
+    return removeLiveKitParticipant(roomName, identity);
+  }
+
+  broadcastRoomData(roomName: string, payload: Record<string, any>) {
+    return broadcastLiveKitRoomData(roomName, payload);
+  }
+
+  startRecording(params: { roomName: string; recordingId: string }) {
+    return startLiveKitEgressRecording(params);
+  }
+
+  stopRecording(egressId: string | null | undefined) {
+    return stopLiveKitEgressRecording(egressId);
+  }
+
+  verifyWebhook(rawBody: string, authHeader?: string) {
+    return verifyLiveKitWebhook(rawBody, authHeader);
+  }
+}
+
+export const liveKitService = new LiveKitService();
+

@@ -366,7 +366,6 @@ export const LiveClassroomRoomModal: React.FC<LiveClassroomRoomModalProps> = ({
       adaptiveStream: true,
       dynacast: true,
       videoCaptureDefaults: { resolution: VideoPresets.h720.resolution },
-      rtcConfig: joinData.iceServers ? { iceServers: joinData.iceServers } : undefined,
     });
     roomRef.current = room;
 
@@ -449,7 +448,11 @@ export const LiveClassroomRoomModal: React.FC<LiveClassroomRoomModalProps> = ({
 
     setLkConnecting(true);
     room
-      .connect(joinData.livekitUrl, joinData.token)
+      .connect(
+        joinData.livekitUrl,
+        joinData.token,
+        joinData.iceServers ? { rtcConfig: { iceServers: joinData.iceServers } } : undefined
+      )
       .catch((err: any) => {
         if (cancelled) return;
         setLkConnecting(false);

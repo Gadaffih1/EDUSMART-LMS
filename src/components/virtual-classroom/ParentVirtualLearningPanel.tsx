@@ -459,7 +459,7 @@ export const ParentVirtualLearningPanel: React.FC<ParentVirtualLearningPanelProp
       <VirtualLabSubscriptionModal
         isOpen={showPassModal}
         onClose={() => setShowPassModal(false)}
-        onAccessGranted={() => {
+        onSubscriptionSuccess={() => {
           setShowPassModal(false);
           void loadData();
         }}

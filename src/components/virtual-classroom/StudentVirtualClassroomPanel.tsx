@@ -198,7 +198,7 @@ export const StudentVirtualClassroomPanel: React.FC<StudentVirtualClassroomPanel
         <VirtualLabSubscriptionModal
           isOpen={showSubscriptionModal}
           onClose={() => setShowSubscriptionModal(false)}
-          onAccessGranted={() => {
+          onSubscriptionSuccess={() => {
             setShowSubscriptionModal(false);
             setSubscriptionNotice(null);
             void loadLessons();
@@ -500,7 +500,7 @@ export const StudentVirtualClassroomPanel: React.FC<StudentVirtualClassroomPanel
       <VirtualLabSubscriptionModal
         isOpen={showSubscriptionModal}
         onClose={() => setShowSubscriptionModal(false)}
-        onAccessGranted={() => {
+        onSubscriptionSuccess={() => {
           setShowSubscriptionModal(false);
           setSubscriptionNotice(null);
           void loadLessons();

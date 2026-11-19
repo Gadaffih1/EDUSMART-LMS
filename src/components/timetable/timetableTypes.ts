@@ -60,6 +60,8 @@ export interface TTClassroomItem {
   roomCode: string;
   roomType: string;
   capacity: number;
+  maxConcurrentClasses?: number;
+  responsibleStaff?: string;
   location: string;
   assignedGrade: number | null;
   assignedStream: string | null;
@@ -91,6 +93,7 @@ export interface TTTeacherProfileItem {
   maxWeeklyPeriods: number;
   maxConsecutiveLessons: number;
   preferredFreePeriods: Array<{ day: string; period: number }>;
+  offDutySlots?: Array<{ day: string; period: number }>;
   activeInTimetable: boolean;
   archivedAt: string | null;
 }
@@ -315,6 +318,7 @@ export const ROOM_TYPE_LABELS: Record<string, string> = {
   workshop: 'Pre-Tech Workshop',
   art_room: 'Creative Arts & Music Studio',
   library: 'School Library / Reading Hall',
+  swimming_pool: 'Swimming Pool',
   field: 'Sports Field',
   hall: 'Assembly Hall',
 };

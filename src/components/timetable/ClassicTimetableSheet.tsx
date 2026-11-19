@@ -156,12 +156,14 @@ export interface ClassicTimetableSheetProps {
   stream?: StreamName | string;
   teacherName?: string;
   classTeacherName?: string;
+  offDutySlots?: Array<{ day: string; period: number }>;
   termLabel?: string;
   themeText?: string;
   canEdit?: boolean;
   onSelectSlot?: (slot: TimetableSlot) => void;
   onAddSlot?: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday', academicPeriod: number) => void;
   hideToolbar?: boolean;
+  printPageSize?: 'A4' | 'A3';
 }
 
 export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
@@ -171,15 +173,30 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
   stream = 'Dove',
   teacherName = '',
   classTeacherName,
+  offDutySlots = [],
   termLabel,
   themeText,
   canEdit = false,
   onSelectSlot,
   onAddSlot,
   hideToolbar = false,
+  printPageSize: initialPrintSize = 'A4',
 }) => {
   const { currentTenant } = useTenant();
   const [useShortCodes, setUseShortCodes] = useState(true);
+  const [pageSize, setPageSize] = useState<'A4' | 'A3'>(initialPrintSize);
+  const [mobileDay, setMobileDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('Monday');
+  const [mobileForceMatrix, setMobileForceMatrix] = useState(false);
+
+  const offDutyKeySet = useMemo(() => {
+    const s = new Set<string>();
+    for (const item of offDutySlots || []) {
+      if (item?.day && item?.period) {
+        s.add(`${String(item.day).toLowerCase()}|${Number(item.period)}`);
+      }
+    }
+    return s;
+  }, [offDutySlots]);
 
   // Determine whether this sheet uses Junior School (Break L4, Lunch L8) or Primary (Break L5, Lunch L9)
   const isJuniorBand = useMemo(() => {
@@ -273,8 +290,15 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
         }
 
         const slot = colSlotMap.get(col);
+        const mappedAcademicPeriod = mapLessonColToAcademicPeriod(col, isJuniorBand);
+        const isConfiguredOffDuty =
+          mode === 'teacher' &&
+          mappedAcademicPeriod !== null &&
+          offDutyKeySet.has(`${dayName.toLowerCase()}|${mappedAcademicPeriod}`);
+
         if (slot) {
           const isOffDuty =
+            isConfiguredOffDuty ||
             String(slot.subject || '').toLowerCase().includes('off duty') ||
             String(slot.notes || '').toLowerCase().includes('off duty');
           rawCells.push({
@@ -291,6 +315,13 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
               slot.isReliefCover && slot.reliefTeacherName ? slot.reliefTeacherName : slot.teacherName
             ),
             classTag: formatStreamShortTag(Number(slot.grade), String(slot.stream)),
+          });
+        } else if (isConfiguredOffDuty) {
+          rawCells.push({
+            kind: 'off_duty',
+            colStart: col,
+            colSpan: 1,
+            title: 'OFF DUTY',
           });
         } else {
           rawCells.push({
@@ -339,6 +370,7 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
     resolvedClassTeacher,
     teacherHomeroomTag,
     useShortCodes,
+    offDutyKeySet,
   ]);
 
   const schoolHeading = (currentTenant.name || 'SCHOOL').toUpperCase();
@@ -352,8 +384,12 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
     ? `@${currentTenant.shortName.replace(/\s+/g, '').toUpperCase().slice(0, 6)}`
     : '@SCHOOL';
 
+  const activeMobileRow = rowsByDay.find((r) => r.dayName === mobileDay) || rowsByDay[0];
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs print:border-none print:rounded-none print:shadow-none">
+      <style>{`@media print { @page { size: ${pageSize} landscape; margin: 8mm; } }`}</style>
+
       {/* Compact Action Toolbar (hidden on print) */}
       {!hideToolbar && (
         <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 print:hidden">
@@ -367,7 +403,7 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] font-bold">
               <button
                 type="button"
@@ -389,20 +425,142 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
               </button>
             </div>
 
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setPageSize('A4')}
+                className={`px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                  pageSize === 'A4' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Print in A4 Landscape"
+              >
+                A4
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageSize('A3')}
+                className={`px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                  pageSize === 'A3' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Print in A3 Landscape"
+              >
+                A3
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setMobileForceMatrix((v) => !v)}
+              className="md:hidden px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-[11px] font-bold cursor-pointer"
+            >
+              {mobileForceMatrix ? 'Daily Cards' : 'Full Matrix'}
+            </button>
+
             <button
               type="button"
               onClick={() => window.print()}
               className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Sheet</span>
+              <span>Print {pageSize}</span>
             </button>
           </div>
         </div>
       )}
 
+      {/* Mobile-Friendly Daily Card View (visible on small screens unless toggled to full matrix; hidden on print) */}
+      {!mobileForceMatrix && (
+        <div className="md:hidden p-3 space-y-3 print:hidden">
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <TenantSchoolLogo variant="emblem" size="sm" />
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold text-slate-900 uppercase truncate">{schoolHeading}</div>
+                <div className="text-[11px] font-bold text-slate-600 truncate">
+                  {mode === 'class' ? `Grade ${grade} ${stream}` : teacherName || 'Faculty Timetable'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-5 gap-1">
+            {DAYS_ROWS.map((d) => (
+              <button
+                key={d.full}
+                type="button"
+                onClick={() => setMobileDay(d.full)}
+                className={`py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
+                  mobileDay === d.full ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {d.short}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            {activeMobileRow?.cells.map((cell) => {
+              const startDef = CLASSIC_11_LESSONS[cell.colStart - 1];
+              const endDef = CLASSIC_11_LESSONS[Math.min(CLASSIC_11_LESSONS.length - 1, cell.colStart + cell.colSpan - 2)];
+              const timeSpan =
+                startDef && endDef
+                  ? cell.colSpan > 1
+                    ? `${startDef.startTime} – ${endDef.endTime} (${cell.colSpan}p)`
+                    : startDef.timeRange
+                  : `L${cell.colStart}`;
+              if (cell.kind === 'empty') {
+                return (
+                  <div key={`${mobileDay}-${cell.colStart}`} className="flex items-center justify-between px-3 py-2 rounded-lg border border-dashed border-slate-200 text-[11px] text-slate-400">
+                    <span className="font-mono">{timeSpan}</span>
+                    <span>Free Period</span>
+                  </div>
+                );
+              }
+              if (cell.kind === 'break' || cell.kind === 'lunch') {
+                return (
+                  <div key={`${mobileDay}-${cell.colStart}`} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700">
+                    <span className="font-mono text-[11px]">{timeSpan}</span>
+                    <span>{cell.title}</span>
+                  </div>
+                );
+              }
+              if (cell.kind === 'off_duty') {
+                return (
+                  <div key={`${mobileDay}-${cell.colStart}`} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-slate-900 text-white text-xs font-extrabold tracking-widest">
+                    <span className="font-mono text-[11px] tracking-normal text-slate-300">{timeSpan}</span>
+                    <span>OFF DUTY</span>
+                  </div>
+                );
+              }
+              const slot = cell.slot!;
+              return (
+                <button
+                  key={`${mobileDay}-${cell.colStart}`}
+                  type="button"
+                  onClick={() => onSelectSlot?.(slot)}
+                  className="w-full text-left px-3 py-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-between gap-3 cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-mono text-slate-500">{timeSpan}</div>
+                    <div className="text-sm font-extrabold text-slate-900 truncate">{slot.subject}</div>
+                    <div className="text-[11px] text-slate-600 truncate">
+                      {mode === 'class' ? slot.teacherName : `Grade ${slot.grade} ${slot.stream}`} · {slot.roomName || 'Classroom'}
+                    </div>
+                  </div>
+                  {cell.colSpan > 1 && (
+                    <span className="shrink-0 px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-bold">
+                      {cell.colSpan}× Block
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Printable Official Timetable Document */}
-      <div className="p-3 sm:p-5 bg-white overflow-x-auto print:p-0">
+      <div className={`${mobileForceMatrix ? 'block' : 'hidden md:block'} print:block p-3 sm:p-5 bg-white overflow-x-auto print:p-0`}>
         <div className="min-w-[1040px] max-w-full mx-auto bg-white text-black font-sans">
           {/* OFFICIAL TOP HEADER (Tenant Logo Left + Centered Institutional Header + Class Teacher Right) */}
           <div className="relative flex items-start justify-between gap-4 pb-2">

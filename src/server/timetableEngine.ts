@@ -408,7 +408,7 @@ export function ensureTenantTimetableSeeded(
     ['Music', 'MUS', 'Creative Arts & Music', 1, 'art_room', 'pink'],
     ['Nutrition', 'NUT', 'Agriculture & Nutrition', 1, 'general', 'lime'],
     ['French', 'FRE', 'Languages & Literature', 0, 'general', 'sky'],
-    ['Swimming', 'SWM', 'Creative Arts & Sports', 1, 'field', 'cyan'],
+    ['Swimming', 'SWM', 'Creative Arts & Sports', 1, 'swimming_pool', 'cyan'],
   ];
   for (const [subName, subCode, subDept, isPrac, rType, cTok] of additionalSubjects) {
     insSub.run(uid('ttsub'), tenantId, subName, subCode, subDept, isPrac, rType, cTok, now);
@@ -497,6 +497,7 @@ export function ensureTenantTimetableSeeded(
       ['Main Sports Field', 'FLD-SPT-01', 'field', 140, 'Sports Complex'],
       ['Main Assembly & Multi-Purpose Hall', 'HALL-MAIN-01', 'hall', 320, 'Administration Block'],
       ['Main Library Reading Hall', 'LIB-MAIN-01', 'library', 60, 'Ground Floor · Central Wing'],
+      ['School Swimming Pool', 'POOL-SWM-01', 'swimming_pool', 45, 'Aquatics Complex'],
     ];
     for (const [name, code, rtype, cap, loc] of specialized) {
       insRoom.run(uid('ttrm'), tenantId, name, code, rtype, cap, loc, null, null, now);
@@ -512,7 +513,7 @@ export function ensureTenantTimetableSeeded(
     }
     changedTables.push('tt_classrooms');
   } else {
-    // Ensure a dedicated School Library facility exists for Library Lesson scheduling
+    // Ensure dedicated School Library and School Swimming Pool facilities exist
     const libRoomCount = (
       db.prepare(`SELECT COUNT(*) as c FROM tt_classrooms WHERE tenant_id = ? AND room_type = 'library'`).get(tenantId) as any
     ).c;
@@ -521,6 +522,16 @@ export function ensureTenantTimetableSeeded(
         `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
          VALUES (?, ?, ?, ?, 'library', 60, 'Ground Floor · Central Wing', NULL, NULL, '{}', 1, ?)`
       ).run(uid('ttrm'), tenantId, 'Main Library Reading Hall', 'LIB-MAIN-01', now);
+      changedTables.push('tt_classrooms');
+    }
+    const poolRoomCount = (
+      db.prepare(`SELECT COUNT(*) as c FROM tt_classrooms WHERE tenant_id = ? AND room_type = 'swimming_pool'`).get(tenantId) as any
+    ).c;
+    if (poolRoomCount === 0) {
+      db.prepare(
+        `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
+         VALUES (?, ?, ?, ?, 'swimming_pool', 45, 'Aquatics Complex', NULL, NULL, '{}', 1, ?)`
+      ).run(uid('ttrm'), tenantId, 'School Swimming Pool', 'POOL-SWM-01', now);
       changedTables.push('tt_classrooms');
     }
   }
@@ -1191,6 +1202,7 @@ export function validateTimetableVersion(
       ...t,
       availability: safeJsonParse<Record<string, Record<string, boolean>>>(t.availability_json, {}),
       preferredFree: safeJsonParse<Array<{ day: string; period: number }>>(t.preferred_free_periods_json, []),
+      offDutySlots: safeJsonParse<Array<{ day: string; period: number }>>(t.off_duty_slots_json, []),
     });
   }
 
@@ -1198,6 +1210,7 @@ export function validateTimetableVersion(
   for (const r of db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ?`).all(tenantId) as any[]) {
     roomMap.set(String(r.id), {
       ...r,
+      maxConcurrentClasses: Math.max(1, Number(r.max_concurrent_classes || 1)),
       availability: safeJsonParse<Record<string, Record<string, boolean>>>(r.availability_json, {}),
     });
   }
@@ -1356,6 +1369,16 @@ export function validateTimetableVersion(
             { teacherId: tid, entryId: e.id }
           );
         }
+        if (Array.isArray(tProf.offDutySlots) && tProf.offDutySlots.some((od: any) => od.day === day && Number(od.period) === period)) {
+          pushConflict(
+            'error',
+            'TEACHER_OFF_DUTY',
+            `${tProf.teacher_name} is scheduled OFF DUTY on ${day} Period ${period} (${e.subject_name} for Grade ${grade} ${stream}).`,
+            day,
+            period,
+            { teacherId: tid, entryId: e.id }
+          );
+        }
         if (Number(tProf.active_in_timetable) === 0 && ['draft', 'generated', 'review'].includes(String(version.status))) {
           pushConflict(
             'warning',
@@ -1458,19 +1481,21 @@ export function validateTimetableVersion(
     }
   }
 
-  // D. Classroom Double-Bookings
+  // D. Classroom & Shared Facility Capacity / Double-Bookings
   for (const [key, eventMap] of roomSlotEvents.entries()) {
-    if (eventMap.size > 1) {
-      const [rid, day, periodStr] = key.split('|');
-      const rName = roomMap.get(rid)?.name || rid;
+    const [rid, day, periodStr] = key.split('|');
+    const rObj = roomMap.get(rid);
+    const maxConcurrent = Math.max(1, Number(rObj?.maxConcurrentClasses || 1));
+    if (eventMap.size > maxConcurrent) {
+      const rName = rObj?.name || rid;
       const evs = Array.from(eventMap.values()).map((x) => `Grade ${x.grade} ${x.stream} (${x.subject_name})`);
       pushConflict(
         'error',
         'CLASSROOM_CLASH',
-        `Classroom clash: "${rName}" is double-booked for ${evs.join(' AND ')} on ${day} Period ${periodStr}.`,
+        `Facility capacity exceeded: "${rName}" allows ${maxConcurrent} class(es) at once but is booked for ${evs.join(' AND ')} on ${day} Period ${periodStr}.`,
         day,
         Number(periodStr),
-        { roomId: rid, events: evs }
+        { roomId: rid, maxConcurrent, events: evs }
       );
     }
   }
@@ -1870,15 +1895,19 @@ export function validateSingleMoveCandidate(
   const teacherIds = safeJsonParse<string[]>(blockEntries[0].teacher_ids_json, []);
   const roomId = targetRoomId !== undefined ? targetRoomId : (blockEntries[0].room_id ? String(blockEntries[0].room_id) : null);
 
-  // Teacher clashes & availability
+  // Teacher clashes, availability & off-duty enforcement
   for (const tid of teacherIds) {
     const tProf = db
-      .prepare(`SELECT teacher_name, availability_json FROM tt_teacher_profiles WHERE id = ?`)
+      .prepare(`SELECT teacher_name, availability_json, off_duty_slots_json FROM tt_teacher_profiles WHERE id = ?`)
       .get(tid) as any;
     const avail = safeJsonParse<Record<string, Record<string, boolean>>>(tProf?.availability_json, {});
+    const offDuty = safeJsonParse<Array<{ day: string; period: number }>>(tProf?.off_duty_slots_json, []);
     for (const p of matchingWindow) {
       if (avail?.[targetDay]?.[String(p)] === false) {
         hardConflicts.push(`${tProf?.teacher_name || 'Teacher'} is unavailable on ${targetDay} Period ${p}.`);
+      }
+      if (offDuty.some((od) => od.day === targetDay && Number(od.period) === p)) {
+        hardConflicts.push(`${tProf?.teacher_name || 'Teacher'} is OFF DUTY on ${targetDay} Period ${p}.`);
       }
       const clash = otherEntries.find((oe) => {
         if (Number(oe.period_number) !== p) return false;
@@ -1918,18 +1947,24 @@ export function validateSingleMoveCandidate(
     }
   }
 
-  // Room clashes & availability
+  // Room clashes, availability & concurrent capacity
   if (roomId) {
     const rObj = db.prepare(`SELECT * FROM tt_classrooms WHERE id = ?`).get(roomId) as any;
     const avail = safeJsonParse<Record<string, Record<string, boolean>>>(rObj?.availability_json, {});
+    const maxConcurrent = Math.max(1, Number(rObj?.max_concurrent_classes || 1));
     for (const p of matchingWindow) {
       if (avail?.[targetDay]?.[String(p)] === false) {
         hardConflicts.push(`Room "${rObj?.name || roomId}" is marked unavailable on ${targetDay} Period ${p}.`);
       }
-      const rClash = otherEntries.find((oe) => Number(oe.period_number) === p && String(oe.room_id || '') === roomId);
-      if (rClash) {
+      const overlappingBlocks = new Set(
+        otherEntries
+          .filter((oe) => Number(oe.period_number) === p && String(oe.room_id || '') === roomId)
+          .map((oe) => String(oe.session_block_id || oe.id))
+      );
+      if (overlappingBlocks.size >= maxConcurrent) {
+        const rClash = otherEntries.find((oe) => Number(oe.period_number) === p && String(oe.room_id || '') === roomId);
         hardConflicts.push(
-          `Classroom clash: "${rObj?.name || roomId}" is booked by Grade ${rClash.grade} ${rClash.stream} (${rClash.subject_name}) on ${targetDay} Period ${p}.`
+          `Facility clash: "${rObj?.name || roomId}" is at full capacity (${maxConcurrent} class/session) — booked by Grade ${rClash?.grade} ${rClash?.stream} (${rClash?.subject_name}) on ${targetDay} Period ${p}.`
         );
       }
     }
@@ -1948,20 +1983,28 @@ export function validateSingleMoveCandidate(
 // =========================================================================
 const activeJobs = new Set<string>();
 
+export interface TTGenerationScope {
+  mode: 'all' | 'grades' | 'stream';
+  grades?: number[];
+  grade?: number;
+  stream?: string;
+}
+
 export function enqueueTimetableGenerationJob(
   db: DatabaseSync,
   tenantId: string,
   versionId: string,
   actorId: string,
-  preserveLocked = true
+  preserveLocked = true,
+  scope: TTGenerationScope = { mode: 'all' }
 ): { jobId: string } {
   const now = new Date().toISOString();
   const jobId = uid('ttjob');
   db.prepare(
     `INSERT INTO tt_generation_jobs
-       (id, tenant_id, version_id, status, progress_pct, stage_message, preserve_locked, retries, cancel_requested, diagnostics_json, created_by, created_at)
-     VALUES (?, ?, ?, 'queued', 0, 'Queued for automatic timetable constraint solver', ?, 0, 0, '{}', ?, ?)`
-  ).run(jobId, tenantId, versionId, preserveLocked ? 1 : 0, actorId, now);
+       (id, tenant_id, version_id, status, progress_pct, stage_message, preserve_locked, retries, cancel_requested, diagnostics_json, scope_json, created_by, created_at)
+     VALUES (?, ?, ?, 'queued', 0, 'Queued for automatic timetable constraint solver', ?, 0, 0, '{}', ?, ?, ?)`
+  ).run(jobId, tenantId, versionId, preserveLocked ? 1 : 0, JSON.stringify(scope || { mode: 'all' }), actorId, now);
 
   notifyMySqlTablesChanged(['tt_generation_jobs']);
   scheduleJobExecution(jobId);
@@ -1982,14 +2025,33 @@ async function yieldEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function runTimetableGenerationWorker(jobId: string): Promise<void> {
-  const db = getDb();
+export async function runTimetableGenerationDirect(db: DatabaseSync, jobId: string): Promise<void> {
+  await runTimetableGenerationWorker(jobId, db);
+}
+
+async function runTimetableGenerationWorker(jobId: string, injectedDb?: DatabaseSync): Promise<void> {
+  const db = injectedDb || getDb();
   const job = db.prepare(`SELECT * FROM tt_generation_jobs WHERE id = ?`).get(jobId) as any;
   if (!job) return;
 
   const tenantId = String(job.tenant_id);
   const versionId = String(job.version_id);
   const preserveLocked = Number(job.preserve_locked) === 1;
+  const scope = safeJsonParse<TTGenerationScope>(job.scope_json, { mode: 'all' });
+  const isEntryInScope = (grade: number, stream: string): boolean => {
+    if (!scope || scope.mode === 'all') return true;
+    if (scope.mode === 'grades') {
+      const targetGrades = Array.isArray(scope.grades) ? scope.grades.map(Number) : [];
+      return targetGrades.length === 0 || targetGrades.includes(Number(grade));
+    }
+    if (scope.mode === 'stream') {
+      return (
+        Number(grade) === Number(scope.grade) &&
+        String(stream || '').trim().toLowerCase() === String(scope.stream || '').trim().toLowerCase()
+      );
+    }
+    return true;
+  };
 
   const updateJob = (fields: {
     status?: string;
@@ -2072,16 +2134,20 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
 
     const teachersList = (
       db.prepare(`SELECT * FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]
-    ).map((t) => ({
-      id: String(t.id),
-      name: String(t.teacher_name),
-      availability: safeJsonParse<Record<string, Record<string, boolean>>>(t.availability_json, {}),
-      preferredFree: safeJsonParse<Array<{ day: string; period: number }>>(t.preferred_free_periods_json, []),
-      maxDaily: Number(t.max_daily_periods || 6),
-      maxWeekly: Number(t.max_weekly_periods || 28),
-      maxConsecutive: Number(t.max_consecutive_lessons || 3),
-      active: Number(t.active_in_timetable) === 1,
-    }));
+    ).map((t) => {
+      const offDutyArr = safeJsonParse<Array<{ day: string; period: number }>>(t.off_duty_slots_json, []);
+      return {
+        id: String(t.id),
+        name: String(t.teacher_name),
+        availability: safeJsonParse<Record<string, Record<string, boolean>>>(t.availability_json, {}),
+        preferredFree: safeJsonParse<Array<{ day: string; period: number }>>(t.preferred_free_periods_json, []),
+        offDutySet: new Set(offDutyArr.map((od) => `${od.day}|${Number(od.period)}`)),
+        maxDaily: Number(t.max_daily_periods || 6),
+        maxWeekly: Number(t.max_weekly_periods || 28),
+        maxConsecutive: Number(t.max_consecutive_lessons || 3),
+        active: Number(t.active_in_timetable) === 1,
+      };
+    });
     const teacherMap = new Map(teachersList.map((t) => [t.id, t]));
 
     const roomsList = (
@@ -2091,16 +2157,21 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
       name: String(r.name),
       roomType: String(r.room_type),
       capacity: Number(r.capacity || 45),
+      maxConcurrentClasses: Math.max(1, Number(r.max_concurrent_classes || 1)),
       assignedGrade: r.assigned_grade ? Number(r.assigned_grade) : null,
       assignedStream: r.assigned_stream ? String(r.assigned_stream) : null,
       availability: safeJsonParse<Record<string, Record<string, boolean>>>(r.availability_json, {}),
     }));
     const roomMap = new Map(roomsList.map((r) => [r.id, r]));
 
-    // Locked entries to preserve if preserveLocked=true (filtered strictly against active allocations & exact weekly quotas)
-    const rawLockedEntries = preserveLocked
-      ? (db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND is_locked = 1`).all(versionId) as any[])
-      : [];
+    // Preserve locked entries (if preserveLocked=true) AND all entries outside the requested generation scope
+    const existingVersionEntries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
+    const rawLockedEntries = existingVersionEntries.filter((e) => {
+      const outOfScope = !isEntryInScope(Number(e.grade), String(e.stream));
+      if (outOfScope) return true;
+      return preserveLocked && Number(e.is_locked) === 1;
+    });
+    const preservedEntryIds = new Set<string>();
 
     const { units: allUnits, allocationIssues } = expandRequirementUnits(db, tenantId, configId);
 
@@ -2156,10 +2227,14 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
       return;
     }
 
-    // Track state occupied by locked entries
+    // Track state occupied by locked & out-of-scope preserved entries
+    for (const le of lockedEntries) {
+      preservedEntryIds.add(String(le.id));
+    }
+
     interface OccupiedState {
       teacherBusy: Set<string>; // `${teacherId}|${day}|${period}`
-      roomBusy: Set<string>; // `${roomId}|${day}|${period}`
+      roomBusyCount: Map<string, number>; // `${roomId}|${day}|${period}` -> concurrent class count
       classWholeBusy: Set<string>; // `${grade}|${stream}|${day}|${period}`
       classGroupBusy: Set<string>; // `${grade}|${stream}|${groupKey}|${day}|${period}`
       classAnyBusy: Set<string>; // `${grade}|${stream}|${day}|${period}` (to block Whole Class against split)
@@ -2170,7 +2245,7 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
 
     const state: OccupiedState = {
       teacherBusy: new Set(),
-      roomBusy: new Set(),
+      roomBusyCount: new Map(),
       classWholeBusy: new Set(),
       classGroupBusy: new Set(),
       classAnyBusy: new Set(),
@@ -2214,7 +2289,10 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
         : le.room_name
         ? roomByNameLower.get(String(le.room_name).trim().toLowerCase()) || null
         : null;
-      if (lockedRoomId) state.roomBusy.add(`${lockedRoomId}|${day}|${period}`);
+      if (lockedRoomId) {
+        const rk = `${lockedRoomId}|${day}|${period}`;
+        state.roomBusyCount.set(rk, (state.roomBusyCount.get(rk) || 0) + 1);
+      }
       state.classAnyBusy.add(`${grade}|${stream}|${day}|${period}`);
       if (!le.group_id || le.group_name === 'Whole Class') {
         state.classWholeBusy.add(`${grade}|${stream}|${day}|${period}`);
@@ -2268,7 +2346,10 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
           : fl.roomName || fl.facilityName
           ? roomByNameLower.get(String(fl.roomName || fl.facilityName).trim().toLowerCase()) || null
           : null;
-        if (fRoomId) state.roomBusy.add(`${fRoomId}|${day}|${period}`);
+        if (fRoomId) {
+          const rk = `${fRoomId}|${day}|${period}`;
+          state.roomBusyCount.set(rk, (state.roomBusyCount.get(rk) || 0) + 1);
+        }
         if (fl.grade && fl.stream) {
           const g = Number(fl.grade);
           const s = String(fl.stream);
@@ -2280,10 +2361,12 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
       // ignore if collections_store has no fixed lessons
     }
 
-    // Filter out units already covered by locked entries
+    // Filter out units outside target scope OR already covered by locked/preserved entries
     const remainingUnits: TTSessionUnit[] = [];
     const consumedLocked = new Map<string, number>(lockedCountsByAllocOrJoint);
     for (const u of allUnits) {
+      const unitTouchesScope = u.classTargets.some((ct) => isEntryInScope(ct.grade, ct.stream));
+      if (!unitTouchesScope) continue;
       const k = u.jointLessonId
         ? `jl:${u.jointLessonId}:${u.classTargets[0].grade}:${u.classTargets[0].stream}`
         : `sa:${u.allocationId}:${u.blockLength}`;
@@ -2335,7 +2418,7 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
         if (r.capacity < unit.studentCount) return false;
         for (const p of windowPeriods) {
           if (r.availability?.[day]?.[String(p)] === false) return false;
-          if (state.roomBusy.has(`${r.id}|${day}|${p}`)) return false;
+          if ((state.roomBusyCount.get(`${r.id}|${day}|${p}`) || 0) >= r.maxConcurrentClasses) return false;
         }
         return true;
       };
@@ -2397,12 +2480,13 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
         }
       }
 
-      // Check Teacher Clashes & Availability (HARD)
+      // Check Teacher Clashes, Availability & Off-Duty Periods (HARD)
       for (const tid of unit.teacherIds) {
         const t = teacherMap.get(tid);
         if (t && !t.active) return null;
         for (const p of windowPeriods) {
           if (t?.availability?.[day]?.[String(p)] === false) return null;
+          if (t?.offDutySet?.has(`${day}|${p}`)) return null;
           if (state.teacherBusy.has(`${tid}|${day}|${p}`)) return null;
         }
       }
@@ -2500,7 +2584,10 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
             state.teacherWeekTotal.set(tid, (state.teacherWeekTotal.get(tid) || 0) + 1);
           }
         }
-        if (room.id) state.roomBusy.add(`${room.id}|${day}|${p}`);
+        if (room.id) {
+          const rk = `${room.id}|${day}|${p}`;
+          state.roomBusyCount.set(rk, (state.roomBusyCount.get(rk) || 0) + 1);
+        }
         for (const ct of unit.classTargets) {
           state.classAnyBusy.add(`${ct.grade}|${ct.stream}|${day}|${p}`);
           if (unit.isWholeClass) {
@@ -2604,8 +2691,14 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
     const now = new Date().toISOString();
     db.exec('BEGIN IMMEDIATE');
     try {
-      if (preserveLocked) {
-        db.prepare(`DELETE FROM tt_entries WHERE version_id = ? AND is_locked = 0`).run(versionId);
+      if (preservedEntryIds.size > 0) {
+        const toDeleteIds = existingVersionEntries
+          .map((e) => String(e.id))
+          .filter((id) => !preservedEntryIds.has(id));
+        const delStmt = db.prepare(`DELETE FROM tt_entries WHERE id = ?`);
+        for (const delId of toDeleteIds) {
+          delStmt.run(delId);
+        }
       } else {
         db.prepare(`DELETE FROM tt_entries WHERE version_id = ?`).run(versionId);
       }

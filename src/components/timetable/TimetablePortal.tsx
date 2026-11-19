@@ -252,6 +252,66 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     }
   }, [currentUser.id, currentUser.schoolId, currentUser.role]);
 
+  // Live Shared Facility Weekly Schedules (Swimming Pool, Computer Lab, Library, Science Lab, Sports Field)
+  const [facilitySchedules, setFacilitySchedules] = useState<{
+    versionName: string | null;
+    workingDays: string[];
+    periods: Array<{ periodNumber: number; label: string; startTime: string; endTime: string }>;
+    facilities: Array<{
+      id: string;
+      name: string;
+      roomCode: string;
+      roomType: string;
+      capacity: number;
+      maxConcurrentClasses: number;
+      responsibleStaff: string;
+      location: string;
+      isSharedFacility: boolean;
+      bookedSlots: number;
+      freeSlots: number;
+      utilizationPct: number;
+      clashCount: number;
+      bookings: Array<{
+        dayOfWeek: string;
+        periodNumber: number;
+        periodLabel: string;
+        timeRange: string;
+        streams: string[];
+        streamLabel: string;
+        isCombined: boolean;
+        subjects: string[];
+        subjectLabel: string;
+        teachers: string[];
+        responsibleTeacher: string;
+        blockLength: number;
+        occupancy: number;
+        maxConcurrentClasses: number;
+        hasClash: boolean;
+      }>;
+    }>;
+  } | null>(null);
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string>('');
+
+  useEffect(() => {
+    if (perspective !== 'rooms') return;
+    let cancelled = false;
+    ttApiFetch<any>('/api/timetable/facilities/schedules')
+      .then((data) => {
+        if (cancelled) return;
+        setFacilitySchedules(data);
+        const sharedFirst = (data?.facilities || []).find((f: any) => f.isSharedFacility) || data?.facilities?.[0];
+        if (sharedFirst && !selectedFacilityId) {
+          setSelectedFacilityId(sharedFirst.id);
+        }
+      })
+      .catch(() => {
+        // Fallback to local roomSlots if backend schedule unavailable
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [perspective, ttWorkspace?.activeVersion?.id]);
+
   const [catalogRevision, setCatalogRevision] = useState(0);
 
   // Listen for storage updates
@@ -2718,6 +2778,11 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   mode="teacher"
                   slots={teacherSlots}
                   teacherName={selectedTeacher || currentUser.name}
+                  offDutySlots={
+                    ttWorkspace?.teachers?.find(
+                      (t) => t.teacherName.toLowerCase() === String(selectedTeacher || currentUser.name || '').toLowerCase()
+                    )?.offDutySlots || []
+                  }
                   onSelectSlot={(slot) => setSelectedSlotForDetail(slot)}
                 />
 
@@ -2996,79 +3061,304 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       )}
 
       {/* ========================================================
-          PERSPECTIVE 4: ROOMS & SPECIALIST LABS UTILIZATION
+          PERSPECTIVE 4: SHARED FACILITIES & SPECIALIST LABS WEEKLY TIMETABLE
           ======================================================== */}
       {perspective === 'rooms' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Specialist Labs, Studios & Sports Facilities Utilization
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Real-time space occupancy across Science Labs, Computer Labs, Art Studios, and Outdoor Pitches.
-                </p>
-              </div>
+          {facilitySchedules && facilitySchedules.facilities.length > 0 ? (() => {
+            const sharedFacilities = facilitySchedules.facilities.filter((f) => f.isSharedFacility);
+            const allFacs = facilitySchedules.facilities;
+            const activeFac =
+              allFacs.find((f) => f.id === selectedFacilityId) || sharedFacilities[0] || allFacs[0];
+            const facDays = facilitySchedules.workingDays?.length
+              ? facilitySchedules.workingDays
+              : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            const facPeriods = facilitySchedules.periods?.length
+              ? facilitySchedules.periods
+              : [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ periodNumber: n, label: `Period ${n}`, startTime: '', endTime: '' }));
 
-              {/* Room Selector */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-600">Select Facility:</span>
-                <select
-                  value={selectedRoom}
-                  onChange={(e) => setSelectedRoom(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-                >
-                  {distinctRooms.map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Room Schedule Table */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl mt-6">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="py-2.5 px-4">Day</th>
-                    <th className="py-2.5 px-4 text-center">Period</th>
-                    <th className="py-2.5 px-4">Time</th>
-                    <th className="py-2.5 px-4">Occupant Class</th>
-                    <th className="py-2.5 px-4">Learning Area</th>
-                    <th className="py-2.5 px-4">Supervising Instructor</th>
-                    <th className="py-2.5 px-4 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {roomSlots.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 italic">
-                        {selectedRoom} has open availability with no allocated periods yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    roomSlots.map(slot => (
-                      <tr key={slot.id} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-4 font-bold text-slate-900">{slot.dayOfWeek}</td>
-                        <td className="py-2.5 px-4 text-center font-mono font-semibold">Period {slot.period}</td>
-                        <td className="py-2.5 px-4 font-mono text-slate-600">{slot.startTime} – {slot.endTime}</td>
-                        <td className="py-2.5 px-4 font-bold text-slate-800">Grade {slot.grade} {slot.stream}</td>
-                        <td className="py-2.5 px-4 font-bold text-emerald-800">{slot.subject}</td>
-                        <td className="py-2.5 px-4 text-slate-700">{slot.teacherName}</td>
-                        <td className="py-2.5 px-4 text-right">
-                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[10px] font-bold">
-                            Booked
+            return (
+              <div className="space-y-4">
+                {/* Shared Facilities Quick Selector Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {(sharedFacilities.length > 0 ? sharedFacilities : allFacs.slice(0, 8)).map((fac) => {
+                    const isSelected = activeFac?.id === fac.id;
+                    return (
+                      <button
+                        key={fac.id}
+                        type="button"
+                        onClick={() => setSelectedFacilityId(fac.id)}
+                        className={`text-left p-4 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                            : 'bg-white hover:bg-slate-50 text-slate-900 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-extrabold truncate">{fac.name}</span>
+                          <span
+                            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              fac.clashCount > 0
+                                ? 'bg-rose-500 text-white'
+                                : isSelected
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : 'bg-emerald-50 text-emerald-700'
+                            }`}
+                          >
+                            {fac.clashCount > 0 ? `${fac.clashCount} Clash` : `${fac.utilizationPct}%`}
                           </span>
+                        </div>
+                        <div className={`text-[11px] mt-1 font-mono ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {fac.roomCode} · Max {fac.maxConcurrentClasses} class{fac.maxConcurrentClasses === 1 ? '' : 'es'}/slot · {fac.bookedSlots} booked
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selected Facility Detailed Weekly Matrix & Bookings */}
+                {activeFac && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                      <div className="flex items-center gap-3">
+                        <TenantSchoolLogo variant="emblem" size="sm" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base font-extrabold text-slate-900">
+                              {activeFac.name} · Shared Facility Weekly Schedule
+                            </h3>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {activeFac.roomCode}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Capacity: {activeFac.capacity} seats · Simultaneous limit: {activeFac.maxConcurrentClasses} class{activeFac.maxConcurrentClasses === 1 ? '' : 'es'} · {activeFac.bookedSlots} booked / {activeFac.freeSlots} free slots
+                            {activeFac.responsibleStaff ? ` · Supervisor: ${activeFac.responsibleStaff}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={activeFac.id}
+                          onChange={(e) => setSelectedFacilityId(e.target.value)}
+                          className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900"
+                        >
+                          {allFacs.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.name} ({f.roomCode})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer print:hidden"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Print Schedule</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Weekly Facility Grid (Days × Periods) */}
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs border-collapse min-w-[780px]">
+                        <thead className="bg-slate-900 text-white">
+                          <tr>
+                            <th className="py-2.5 px-3 w-28">Day</th>
+                            {facPeriods.map((p) => (
+                              <th key={p.periodNumber} className="py-2 px-2 text-center border-l border-slate-700">
+                                <div className="font-bold">P{p.periodNumber}</div>
+                                {p.startTime && (
+                                  <div className="text-[10px] font-mono text-slate-300">{p.startTime}–{p.endTime}</div>
+                                )}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {facDays.map((day) => (
+                            <tr key={day} className="hover:bg-slate-50/50">
+                              <td className="py-3 px-3 font-extrabold text-slate-900 bg-slate-50 border-r border-slate-200">
+                                {day}
+                              </td>
+                              {facPeriods.map((p) => {
+                                const booking = activeFac.bookings.find(
+                                  (b) => b.dayOfWeek === day && b.periodNumber === p.periodNumber
+                                );
+                                if (!booking) {
+                                  return (
+                                    <td key={`${day}-${p.periodNumber}`} className="p-2 text-center text-[10px] text-slate-400 border-l border-slate-200">
+                                      Available
+                                    </td>
+                                  );
+                                }
+                                return (
+                                  <td
+                                    key={`${day}-${p.periodNumber}`}
+                                    className={`p-2 border-l border-slate-200 align-top ${
+                                      booking.hasClash ? 'bg-rose-50' : 'bg-emerald-50/60'
+                                    }`}
+                                  >
+                                    <div className="font-extrabold text-[11px] text-slate-900 leading-tight">
+                                      {booking.subjectLabel}
+                                    </div>
+                                    <div className="text-[10px] font-bold text-emerald-900 mt-0.5 leading-tight">
+                                      {booking.streamLabel}
+                                    </div>
+                                    <div className="text-[10px] text-slate-600 truncate mt-0.5">
+                                      {booking.responsibleTeacher}
+                                    </div>
+                                    <div className="flex items-center justify-between mt-1 text-[9px] font-mono">
+                                      <span className={booking.hasClash ? 'text-rose-700 font-bold' : 'text-slate-500'}>
+                                        {booking.occupancy}/{booking.maxConcurrentClasses} cls
+                                      </span>
+                                      {booking.blockLength > 1 && (
+                                        <span className="px-1 rounded bg-slate-900 text-white font-bold">
+                                          {booking.blockLength}P
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Structured Facility Allocations Table */}
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                          <tr>
+                            <th className="py-2.5 px-4">Day</th>
+                            <th className="py-2.5 px-4">Time / Period</th>
+                            <th className="py-2.5 px-4">Grade &amp; Stream(s)</th>
+                            <th className="py-2.5 px-4">Activity / Subject</th>
+                            <th className="py-2.5 px-4">Responsible Teacher</th>
+                            <th className="py-2.5 px-4 text-center">Duration</th>
+                            <th className="py-2.5 px-4 text-right">Occupancy</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {activeFac.bookings.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-6 text-center text-slate-400 italic">
+                                {activeFac.name} currently has 100% open weekly availability.
+                              </td>
+                            </tr>
+                          ) : (
+                            activeFac.bookings.map((b, idx) => (
+                              <tr key={`${b.dayOfWeek}-${b.periodNumber}-${idx}`} className="hover:bg-slate-50">
+                                <td className="py-2.5 px-4 font-bold text-slate-900">{b.dayOfWeek}</td>
+                                <td className="py-2.5 px-4 font-mono text-slate-700">
+                                  P{b.periodNumber} · {b.timeRange}
+                                </td>
+                                <td className="py-2.5 px-4 font-bold text-slate-800">
+                                  {b.streamLabel}
+                                  {b.isCombined && (
+                                    <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800">
+                                      Combined
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-4 font-bold text-emerald-800">{b.subjectLabel}</td>
+                                <td className="py-2.5 px-4 text-slate-700">{b.responsibleTeacher}</td>
+                                <td className="py-2.5 px-4 text-center font-mono">{b.blockLength} period{b.blockLength > 1 ? 's' : ''}</td>
+                                <td className="py-2.5 px-4 text-right">
+                                  <span
+                                    className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold border ${
+                                      b.hasClash
+                                        ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    }`}
+                                  >
+                                    {b.hasClash ? `CLASH (${b.occupancy}/${b.maxConcurrentClasses})` : `${b.occupancy}/${b.maxConcurrentClasses} OK`}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })() : (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Specialist Labs, Studios &amp; Sports Facilities Utilization
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Real-time space occupancy across Swimming Pool, Science Labs, Computer Labs, Library, Art Studios, and Outdoor Pitches.
+                  </p>
+                </div>
+
+                {/* Room Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-600">Select Facility:</span>
+                  <select
+                    value={selectedRoom}
+                    onChange={(e) => setSelectedRoom(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                  >
+                    {distinctRooms.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Room Schedule Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl mt-6">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="py-2.5 px-4">Day</th>
+                      <th className="py-2.5 px-4 text-center">Period</th>
+                      <th className="py-2.5 px-4">Time</th>
+                      <th className="py-2.5 px-4">Occupant Class</th>
+                      <th className="py-2.5 px-4">Learning Area</th>
+                      <th className="py-2.5 px-4">Supervising Instructor</th>
+                      <th className="py-2.5 px-4 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {roomSlots.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-slate-400 italic">
+                          {selectedRoom} has open availability with no allocated periods yet.
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      roomSlots.map(slot => (
+                        <tr key={slot.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 px-4 font-bold text-slate-900">{slot.dayOfWeek}</td>
+                          <td className="py-2.5 px-4 text-center font-mono font-semibold">Period {slot.period}</td>
+                          <td className="py-2.5 px-4 font-mono text-slate-600">{slot.startTime} – {slot.endTime}</td>
+                          <td className="py-2.5 px-4 font-bold text-slate-800">Grade {slot.grade} {slot.stream}</td>
+                          <td className="py-2.5 px-4 font-bold text-emerald-800">{slot.subject}</td>
+                          <td className="py-2.5 px-4 text-slate-700">{slot.teacherName}</td>
+                          <td className="py-2.5 px-4 text-right">
+                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[10px] font-bold">
+                              Booked
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-
-          </div>
+          )}
         </div>
       )}
 

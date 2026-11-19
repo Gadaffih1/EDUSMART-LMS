@@ -78,11 +78,13 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
   const [rightVersionId, setRightVersionId] = useState<string>(versions[1]?.id || versions[0]?.id || '');
   const [compareResult, setCompareResult] = useState<any>(null);
 
-  // Report Selection
+  // Report Selection & Bulk Print Mode
   const [selectedReport, setSelectedReport] = useState<ReportTypeId>('master');
   const [reportClassKey, setReportClassKey] = useState<string>('ALL');
   const [reportTeacherId, setReportTeacherId] = useState<string>('ALL');
   const [reportRoomId, setReportRoomId] = useState<string>('ALL');
+  const [bulkPrintPack, setBulkPrintPack] = useState<'none' | 'all_classes' | 'all_teachers'>('none');
+  const [bulkPageSize, setBulkPageSize] = useState<'A4' | 'A3'>('A4');
 
   const canApproveOrPublish =
     currentUser.accessScope === 'super_admin_only' || APPROVER_ROLES.has(String(currentUser.role || '').toLowerCase());
@@ -765,6 +767,30 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={() => setBulkPrintPack((p) => (p === 'all_classes' ? 'none' : 'all_classes'))}
+              className={`px-3 py-2 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer border ${
+                bulkPrintPack === 'all_classes'
+                  ? 'bg-indigo-700 text-white border-indigo-700'
+                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+              }`}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Bulk Print All Classes ({classOptions.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkPrintPack((p) => (p === 'all_teachers' ? 'none' : 'all_teachers'))}
+              className={`px-3 py-2 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer border ${
+                bulkPrintPack === 'all_teachers'
+                  ? 'bg-indigo-700 text-white border-indigo-700'
+                  : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-300'
+              }`}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Bulk Print All Teachers ({teachers.filter((t) => t.activeInTimetable).length})</span>
+            </button>
+            <button
+              type="button"
               onClick={handleExportExcel}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
             >
@@ -781,6 +807,120 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
             </button>
           </div>
         </div>
+
+        {/* BULK PRINT PACK PREVIEW (All Classes or All Teachers — 1 sheet per page) */}
+        {bulkPrintPack !== 'none' && (
+          <div className="space-y-4 border border-indigo-200 bg-indigo-50/30 rounded-xl p-4 print:border-none print:bg-white print:p-0">
+            <style>{`@media print { @page { size: ${bulkPageSize} landscape; margin: 8mm; } }`}</style>
+            <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+              <div>
+                <h4 className="text-sm font-extrabold text-slate-900">
+                  {bulkPrintPack === 'all_classes'
+                    ? `Bulk Print Pack: All ${classOptions.length} Class & Stream Timetables`
+                    : `Bulk Print Pack: All ${teachers.filter((t) => t.activeInTimetable).length} Teacher Timetables`}
+                </h4>
+                <p className="text-xs text-slate-600">
+                  Each timetable prints on its own dedicated landscape page with school crest, merged multi-period blocks, and off-duty slots.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={bulkPageSize}
+                  onChange={(e) => setBulkPageSize(e.target.value as 'A4' | 'A3')}
+                  className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-xs font-bold"
+                >
+                  <option value="A4">A4 Landscape</option>
+                  <option value="A3">A3 Landscape</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Entire Pack ({bulkPageSize})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkPrintPack('none')}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  Close Pack
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-6 max-h-[680px] overflow-y-auto pr-1 print:max-h-none print:overflow-visible print:space-y-0">
+              {bulkPrintPack === 'all_classes' &&
+                classOptions.map((cls, idx) => {
+                  const sheetSlots: TimetableSlot[] = (activeVersion?.entries || [])
+                    .filter((e) => e.grade === cls.grade && e.stream === cls.stream)
+                    .map((e) => ({
+                      id: e.id,
+                      grade: e.grade as GradeLevel,
+                      stream: e.stream as StreamName,
+                      dayOfWeek: e.dayOfWeek as TimetableSlot['dayOfWeek'],
+                      period: e.periodNumber,
+                      startTime: '08:20',
+                      endTime: '09:00',
+                      subject: e.subjectName as SubjectName,
+                      teacherName: (e.teacherNames || []).join(' / ') || 'Faculty',
+                      roomName: e.roomName || 'Classroom',
+                    }));
+                  return (
+                    <div key={`${cls.grade}-${cls.stream}`} className={idx < classOptions.length - 1 ? 'print:break-after-page' : ''}>
+                      <ClassicTimetableSheet
+                        mode="class"
+                        slots={sheetSlots}
+                        grade={cls.grade as GradeLevel}
+                        stream={cls.stream}
+                        termLabel={`${config.term} ${config.academicYear}`}
+                        hideToolbar
+                        printPageSize={bulkPageSize}
+                      />
+                    </div>
+                  );
+                })}
+
+              {bulkPrintPack === 'all_teachers' &&
+                teachers
+                  .filter((t) => t.activeInTimetable)
+                  .map((t, idx, arr) => {
+                    const sheetSlots: TimetableSlot[] = (activeVersion?.entries || [])
+                      .filter(
+                        (e) =>
+                          e.teacherIds.includes(t.id) ||
+                          e.teacherNames.some((n) => n.toLowerCase() === t.teacherName.toLowerCase())
+                      )
+                      .map((e) => ({
+                        id: e.id,
+                        grade: e.grade as GradeLevel,
+                        stream: e.stream as StreamName,
+                        dayOfWeek: e.dayOfWeek as TimetableSlot['dayOfWeek'],
+                        period: e.periodNumber,
+                        startTime: '08:20',
+                        endTime: '09:00',
+                        subject: e.subjectName as SubjectName,
+                        teacherName: (e.teacherNames || []).join(' / ') || t.teacherName,
+                        roomName: e.roomName || 'Classroom',
+                      }));
+                    return (
+                      <div key={t.id} className={idx < arr.length - 1 ? 'print:break-after-page' : ''}>
+                        <ClassicTimetableSheet
+                          mode="teacher"
+                          slots={sheetSlots}
+                          teacherName={t.teacherName}
+                          offDutySlots={t.offDutySlots || []}
+                          termLabel={`${config.term} ${config.academicYear}`}
+                          hideToolbar
+                          printPageSize={bulkPageSize}
+                        />
+                      </div>
+                    );
+                  })}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <div className="lg:col-span-4 space-y-1.5">
@@ -911,6 +1051,7 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
                   mode="teacher"
                   slots={sheetSlots}
                   teacherName={targetTeacher.teacherName}
+                  offDutySlots={targetTeacher.offDutySlots || []}
                   termLabel={`${config.term} ${config.academicYear}`}
                 />
               );

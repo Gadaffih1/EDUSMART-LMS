@@ -71,24 +71,31 @@ export const TimetableTeachersPanel: React.FC<TimetableTeachersPanelProps> = ({
     const isPrefFree = activeDraft.preferredFreePeriods.some(
       (pf) => pf.day === day && pf.period === periodNum
     );
+    const currentOffDuty = activeDraft.offDutySlots || [];
+    const isOffDuty = currentOffDuty.some((od) => od.day === day && od.period === periodNum);
 
     const nextAvail = { ...(activeDraft.availability || {}) };
     nextAvail[day] = { ...(nextAvail[day] || {}) };
     let nextPrefFree = [...activeDraft.preferredFreePeriods];
+    let nextOffDuty = [...currentOffDuty];
 
-    if (!isUnavail && !isPrefFree) {
+    if (!isUnavail && !isPrefFree && !isOffDuty) {
       // Available -> Preferred Free
       nextPrefFree.push({ day, period: periodNum });
     } else if (isPrefFree) {
       // Preferred Free -> Unavailable
       nextPrefFree = nextPrefFree.filter((pf) => !(pf.day === day && pf.period === periodNum));
       nextAvail[day][String(periodNum)] = false;
-    } else {
-      // Unavailable -> Available
+    } else if (isUnavail) {
+      // Unavailable -> Off-Duty (hard block rendered as OFF DUTY on teacher timetable)
       delete nextAvail[day][String(periodNum)];
+      nextOffDuty.push({ day, period: periodNum });
+    } else {
+      // Off-Duty -> Available
+      nextOffDuty = nextOffDuty.filter((od) => !(od.day === day && od.period === periodNum));
     }
 
-    patchDraft({ availability: nextAvail, preferredFreePeriods: nextPrefFree });
+    patchDraft({ availability: nextAvail, preferredFreePeriods: nextPrefFree, offDutySlots: nextOffDuty });
   };
 
   const handleSaveTeacher = async () => {
@@ -279,14 +286,14 @@ export const TimetableTeachersPanel: React.FC<TimetableTeachersPanelProps> = ({
             </div>
           </div>
 
-          {/* Interactive Teacher Availability & Preferred Free Matrix */}
+          {/* Interactive Teacher Availability, Preferred Free & Off-Duty Matrix */}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-semibold text-slate-700">
-                Weekly Availability &amp; Preferred Free Matrix (click cell to cycle):
+                Weekly Availability, Preferred Free &amp; Off-Duty Matrix (click cell to cycle):
               </span>
               <span className="text-[11px] text-slate-500">
-                White = Available · Amber = Preferred Free · Dark Rose = Unavailable
+                White = Available · Amber = Preferred Free · Rose = Unavailable · Slate = OFF DUTY
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -310,20 +317,25 @@ export const TimetableTeachersPanel: React.FC<TimetableTeachersPanelProps> = ({
                         const isPrefFree = activeDraft.preferredFreePeriods.some(
                           (pf) => pf.day === d && pf.period === p.periodNumber
                         );
+                        const isOffDuty = (activeDraft.offDutySlots || []).some(
+                          (od) => od.day === d && od.period === p.periodNumber
+                        );
                         return (
                           <td key={`${d}-${p.periodNumber}`} className="p-1">
                             <button
                               type="button"
                               onClick={() => cycleSlotState(d, p.periodNumber)}
                               className={`w-full py-1.5 px-2 rounded text-[11px] font-semibold border cursor-pointer transition-colors ${
-                                isUnavail
+                                isOffDuty
+                                  ? 'bg-slate-900 border-slate-900 text-white tracking-wider'
+                                  : isUnavail
                                   ? 'bg-rose-100 border-rose-300 text-rose-900'
                                   : isPrefFree
                                   ? 'bg-amber-100 border-amber-300 text-amber-900'
                                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                               }`}
                             >
-                              {isUnavail ? 'Unavailable' : isPrefFree ? 'Pref. Free' : 'Available'}
+                              {isOffDuty ? 'OFF DUTY' : isUnavail ? 'Unavailable' : isPrefFree ? 'Pref. Free' : 'Available'}
                             </button>
                           </td>
                         );

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Copy, Layers, Plus, RotateCcw, Save, Trash2, Users } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
+import { AlertTriangle, CheckCircle2, Copy, Layers, Plus, RotateCcw, Save, Trash2, Upload, Users } from 'lucide-react';
 import {
   ROOM_TYPE_LABELS,
   TTClassroomItem,
@@ -100,6 +101,74 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
   const [addTplTeacherId, setAddTplTeacherId] = useState('');
   const [confirmRemoveGradeAllocId, setConfirmRemoveGradeAllocId] = useState<string | null>(null);
   const [confirmRemoveStreamAllocId, setConfirmRemoveStreamAllocId] = useState<string | null>(null);
+  const [copySourceGrade, setCopySourceGrade] = useState<number>(() => (grades.find((g) => g !== selectedGrade) || grades[0] || 4));
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCopyFromGrade = async () => {
+    if (!copySourceGrade || copySourceGrade === selectedGrade) {
+      setStatusMsg({ type: 'err', text: 'Select a different source grade to copy subject allocations from.' });
+      return;
+    }
+    setBusyId('copy-grade');
+    setStatusMsg(null);
+    try {
+      const res = await ttApiFetch<{ ok: boolean; copiedCount: number }>('/api/timetable/allocations/copy-grade', {
+        method: 'POST',
+        body: JSON.stringify({
+          sourceGrade: copySourceGrade,
+          targetGrades: activeTargetGrades.filter((g) => g !== copySourceGrade),
+          applyToStreams: true,
+        }),
+      });
+      await onRefresh();
+      setStatusMsg({
+        type: 'ok',
+        text: `Copied ${res.copiedCount} subject allocations from Grade ${copySourceGrade} to Grade ${selectedGrade} and synced streams.`,
+      });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Failed to copy grade allocations.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleImportSpreadsheet = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusyId('import-xlsx');
+    setStatusMsg(null);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const firstSheet = wb.SheetNames[0];
+      if (!firstSheet) {
+        setStatusMsg({ type: 'err', text: 'Uploaded spreadsheet contains no sheets.' });
+        return;
+      }
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(wb.Sheets[firstSheet]);
+      if (rows.length === 0) {
+        setStatusMsg({ type: 'err', text: 'No allocation rows found. Expected columns: Grade, Subject, Lessons (optional: Doubles, Triples, RoomType, Teacher).' });
+        return;
+      }
+      const res = await ttApiFetch<{ ok: boolean; importedCount: number; errors?: string[] }>(
+        '/api/timetable/allocations/import',
+        {
+          method: 'POST',
+          body: JSON.stringify({ rows, applyToStreams: true }),
+        }
+      );
+      await onRefresh();
+      setStatusMsg({
+        type: res.errors && res.errors.length > 0 && res.importedCount === 0 ? 'err' : 'ok',
+        text: `Imported ${res.importedCount} weekly subject allocation(s) from "${file.name}"${res.errors?.length ? ` (${res.errors.length} row(s) skipped)` : ''}.`,
+      });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Failed to import allocations spreadsheet.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const gradeTemplateRows = useMemo(
     () => gradeAllocations.filter((a) => a.grade === selectedGrade),
@@ -534,6 +603,47 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
 
         {subTab === 'grade_template' && (
           <div className="flex flex-wrap items-center gap-2">
+            {/* Copy From Another Grade */}
+            <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs">
+              <span className="text-[11px] font-semibold text-slate-500">Copy from:</span>
+              <select
+                value={copySourceGrade}
+                onChange={(e) => setCopySourceGrade(Number(e.target.value))}
+                className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-bold"
+              >
+                {grades.filter((g) => g !== selectedGrade).map((g) => (
+                  <option key={g} value={g}>Grade {g}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={busyId === 'copy-grade'}
+                onClick={handleCopyFromGrade}
+                className="px-2 py-0.5 rounded bg-white hover:bg-slate-200 border border-slate-200 text-slate-800 font-bold cursor-pointer"
+              >
+                {busyId === 'copy-grade' ? '...' : 'Copy'}
+              </button>
+            </div>
+
+            {/* Bulk Import CSV / Excel */}
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleImportSpreadsheet}
+              className="hidden"
+            />
+            <button
+              type="button"
+              disabled={busyId === 'import-xlsx'}
+              onClick={() => importFileInputRef.current?.click()}
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+              title="Import columns: Grade, Subject, Lessons, Doubles, Triples, RoomType, Teacher"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{busyId === 'import-xlsx' ? 'Importing...' : 'Import CSV / Excel'}</span>
+            </button>
+
             {selectedGradeBand && selectedGradeBand.grades.length > 1 && (
               <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer select-none">
                 <input

@@ -48,11 +48,13 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
   const [savingConfig, setSavingConfig] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // New Classroom State
+  // New Classroom / Shared Facility State
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomCode, setNewRoomCode] = useState('');
   const [newRoomType, setNewRoomType] = useState('general');
   const [newRoomCapacity, setNewRoomCapacity] = useState(45);
+  const [newRoomMaxConcurrent, setNewRoomMaxConcurrent] = useState(1);
+  const [newRoomResponsibleStaff, setNewRoomResponsibleStaff] = useState('');
   const [newRoomLocation, setNewRoomLocation] = useState('Main Block');
   const [savingRoom, setSavingRoom] = useState(false);
 
@@ -203,18 +205,42 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
           roomCode: newRoomCode.trim(),
           roomType: newRoomType,
           capacity: newRoomCapacity,
+          maxConcurrentClasses: newRoomMaxConcurrent,
+          responsibleStaff: newRoomResponsibleStaff.trim(),
           location: newRoomLocation.trim(),
         }),
       });
       setNewRoomName('');
       setNewRoomCode('');
       setNewRoomCapacity(45);
+      setNewRoomMaxConcurrent(1);
+      setNewRoomResponsibleStaff('');
       await onRefresh();
-      setStatusMsg({ type: 'ok', text: 'Classroom / facility registered.' });
+      setStatusMsg({ type: 'ok', text: 'Classroom / shared facility registered.' });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Could not add room.' });
     } finally {
       setSavingRoom(false);
+    }
+  };
+
+  const handleUpdateRoomConcurrentCap = async (rm: TTClassroomItem, nextCap: number) => {
+    try {
+      await ttApiFetch(`/api/timetable/classrooms/${rm.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          maxConcurrentClasses: nextCap,
+          assignedGrade: rm.assignedGrade,
+          assignedStream: rm.assignedStream,
+        }),
+      });
+      await onRefresh();
+      setStatusMsg({
+        type: 'ok',
+        text: `${rm.name}: simultaneous class limit updated to ${nextCap} class${nextCap === 1 ? '' : 'es'} per slot.`,
+      });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not update facility capacity.' });
     }
   };
 
@@ -756,10 +782,10 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
           </p>
         </div>
 
-        <form onSubmit={handleCreateClassroom} className="grid grid-cols-1 sm:grid-cols-6 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+        <form onSubmit={handleCreateClassroom} className="grid grid-cols-1 sm:grid-cols-8 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
           <input
             type="text"
-            placeholder="Room Name (e.g. Biology Lab)"
+            placeholder="Facility Name (e.g. Swimming Pool)"
             value={newRoomName}
             onChange={(e) => setNewRoomName(e.target.value)}
             required
@@ -767,7 +793,7 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
           />
           <input
             type="text"
-            placeholder="Code (LAB-03)"
+            placeholder="Code (POOL-01)"
             value={newRoomCode}
             onChange={(e) => setNewRoomCode(e.target.value)}
             required
@@ -787,16 +813,35 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
             min={5}
             max={600}
             placeholder="Seats"
+            title="Student Seat Capacity"
             value={newRoomCapacity}
             onChange={(e) => setNewRoomCapacity(Number(e.target.value || 45))}
             className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white font-mono tabular-nums"
+          />
+          <select
+            value={newRoomMaxConcurrent}
+            onChange={(e) => setNewRoomMaxConcurrent(Number(e.target.value || 1))}
+            title="Simultaneous Classes Allowed"
+            className="px-2 py-2 border border-slate-200 rounded-lg bg-white font-mono"
+          >
+            <option value={1}>1 Class / Slot</option>
+            <option value={2}>2 Classes / Slot</option>
+            <option value={3}>3 Classes / Slot</option>
+            <option value={4}>4 Classes / Slot</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Supervisor / Staff"
+            value={newRoomResponsibleStaff}
+            onChange={(e) => setNewRoomResponsibleStaff(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
           />
           <button
             type="submit"
             disabled={savingRoom}
             className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer"
           >
-            {savingRoom ? 'Adding...' : 'Add Room'}
+            {savingRoom ? 'Adding...' : 'Add Facility'}
           </button>
         </form>
 
@@ -807,8 +852,9 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                 <th className="py-2 pr-3">Code</th>
                 <th className="py-2 pr-3">Facility Name</th>
                 <th className="py-2 pr-3">Type</th>
-                <th className="py-2 pr-3">Capacity</th>
-                <th className="py-2 pr-3">Home Assignment</th>
+                <th className="py-2 pr-3">Seats</th>
+                <th className="py-2 pr-3">Max Classes/Slot</th>
+                <th className="py-2 pr-3">Supervisor / Home</th>
                 <th className="py-2 text-right">Action</th>
               </tr>
             </thead>
@@ -818,9 +864,22 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                   <td className="py-2 pr-3 font-mono text-slate-600">{rm.roomCode}</td>
                   <td className="py-2 pr-3 font-semibold text-slate-900">{rm.name}</td>
                   <td className="py-2 pr-3 text-slate-600">{ROOM_TYPE_LABELS[rm.roomType] || rm.roomType}</td>
-                  <td className="py-2 pr-3 font-mono tabular-nums">{rm.capacity} seats</td>
+                  <td className="py-2 pr-3 font-mono tabular-nums">{rm.capacity}</td>
+                  <td className="py-2 pr-3">
+                    <select
+                      value={rm.maxConcurrentClasses || 1}
+                      onChange={(e) => handleUpdateRoomConcurrentCap(rm, Number(e.target.value))}
+                      className="px-2 py-1 border border-slate-200 rounded bg-white font-mono text-[11px]"
+                      title="Simultaneous classes permitted in this facility"
+                    >
+                      <option value={1}>1 class</option>
+                      <option value={2}>2 classes</option>
+                      <option value={3}>3 classes</option>
+                      <option value={4}>4 classes</option>
+                    </select>
+                  </td>
                   <td className="py-2 pr-3 text-slate-500">
-                    {rm.assignedGrade ? `Grade ${rm.assignedGrade} ${rm.assignedStream}` : rm.location}
+                    {rm.responsibleStaff || (rm.assignedGrade ? `Grade ${rm.assignedGrade} ${rm.assignedStream}` : rm.location)}
                   </td>
                   <td className="py-2 text-right">
                     <button

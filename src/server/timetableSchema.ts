@@ -350,9 +350,17 @@ export function initTimetableSchema(db: DatabaseSync): void {
       ON tt_audit_logs(tenant_id, created_at);
   `);
 
-  // Safe migration for existing databases missing hod_user_id on tt_departments
-  const deptCols = db.prepare(`PRAGMA table_info(tt_departments)`).all() as Array<{ name: string }>;
-  if (!deptCols.some((c) => c.name === 'hod_user_id')) {
-    db.exec(`ALTER TABLE tt_departments ADD COLUMN hod_user_id TEXT DEFAULT ''`);
-  }
+  // Safe additive migrations for existing databases (zero data loss)
+  const ensureColumn = (table: string, column: string, definition: string) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  };
+
+  ensureColumn('tt_departments', 'hod_user_id', `TEXT DEFAULT ''`);
+  ensureColumn('tt_teacher_profiles', 'off_duty_slots_json', `TEXT NOT NULL DEFAULT '[]'`);
+  ensureColumn('tt_classrooms', 'max_concurrent_classes', `INTEGER NOT NULL DEFAULT 1`);
+  ensureColumn('tt_classrooms', 'responsible_staff', `TEXT DEFAULT ''`);
+  ensureColumn('tt_generation_jobs', 'scope_json', `TEXT NOT NULL DEFAULT '{}'`);
 }

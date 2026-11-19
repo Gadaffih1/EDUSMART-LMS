@@ -84,6 +84,7 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
     return null;
   });
   const [busyAction, setBusyAction] = useState(false);
+  const [generationScopeMode, setGenerationScopeMode] = useState<'all' | 'grades' | 'stream'>('all');
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err' | 'warn'; title: string; details?: string[] } | null>(null);
 
   useEffect(() => {
@@ -206,17 +207,33 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
     if (!activeVersion) return;
     setBusyAction(true);
     setFeedback(null);
+    const [selGradeStr, selStreamName] = selectedClassKey.split('|');
+    const selGradeNum = Number(selGradeStr);
+    const scope =
+      generationScopeMode === 'grades' && selGradeNum
+        ? { mode: 'grades' as const, grades: [selGradeNum] }
+        : generationScopeMode === 'stream' && selGradeNum && selStreamName
+        ? { mode: 'stream' as const, grade: selGradeNum, stream: selStreamName }
+        : { mode: 'all' as const };
+    const scopeText =
+      scope.mode === 'stream'
+        ? `Grade ${scope.grade} ${scope.stream}`
+        : scope.mode === 'grades'
+        ? `Grade ${scope.grades?.[0]}`
+        : 'Whole School';
     try {
       const res = await ttApiFetch<{ jobId: string; status: string }>(`/api/timetable/versions/${activeVersion.id}/generate`, {
         method: 'POST',
-        body: JSON.stringify({ preserveLocked }),
+        body: JSON.stringify({ preserveLocked, scope }),
       });
       setActiveJob({
         id: res.jobId,
         versionId: activeVersion.id,
         status: 'queued',
         progressPct: 5,
-        stageMessage: preserveLocked ? 'Queuing regeneration (preserving locked lessons)...' : 'Queuing fresh full timetable generation...',
+        stageMessage: preserveLocked
+          ? `Queuing ${scopeText} regeneration (preserving locked lessons)...`
+          : `Queuing fresh ${scopeText} timetable generation...`,
         preserveLocked,
         retries: 0,
         diagnostics: {},
@@ -539,6 +556,19 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
                 <span>Unlock Editable Draft</span>
               </button>
             )}
+
+            <select
+              value={generationScopeMode}
+              onChange={(e) => setGenerationScopeMode(e.target.value as 'all' | 'grades' | 'stream')}
+              disabled={isLockedVersion}
+              className="px-2.5 py-2 border border-slate-300 rounded-lg text-xs font-bold bg-white text-slate-800 disabled:opacity-50"
+              title="Choose Auto-Solver Scope"
+            >
+              <option value="all">Scope: Whole School</option>
+              <option value="grades">Scope: Grade {selectedClassKey.split('|')[0] || 4} Only</option>
+              <option value="stream">Scope: Grade {selectedClassKey.replace('|', ' ')} Only</option>
+            </select>
+
             <button
               type="button"
               disabled={busyAction || isLockedVersion || (activeJob?.status === 'running' || activeJob?.status === 'queued')}

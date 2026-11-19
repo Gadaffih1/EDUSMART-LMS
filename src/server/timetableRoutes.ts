@@ -19,6 +19,7 @@ import {
   uid,
   validateSingleMoveCandidate,
   validateTimetableVersion,
+  type TTGenerationScope,
 } from './timetableEngine.ts';
 
 const ADMIN_TIMETABLE_ROLES = new Set([
@@ -291,6 +292,8 @@ export function registerTimetableRoutes(app: Express): void {
       roomCode: String(r.room_code),
       roomType: String(r.room_type),
       capacity: Number(r.capacity),
+      maxConcurrentClasses: Math.max(1, Number(r.max_concurrent_classes || 1)),
+      responsibleStaff: String(r.responsible_staff || ''),
       location: String(r.location || 'Main Block'),
       assignedGrade: r.assigned_grade !== null ? Number(r.assigned_grade) : null,
       assignedStream: r.assigned_stream || null,
@@ -326,6 +329,7 @@ export function registerTimetableRoutes(app: Express): void {
       maxWeeklyPeriods: Number(t.max_weekly_periods || 28),
       maxConsecutiveLessons: Number(t.max_consecutive_lessons || 3),
       preferredFreePeriods: safeJsonParse<Array<{ day: string; period: number }>>(t.preferred_free_periods_json, []),
+      offDutySlots: safeJsonParse<Array<{ day: string; period: number }>>(t.off_duty_slots_json, []),
       activeInTimetable: Number(t.active_in_timetable) === 1,
       archivedAt: t.archived_at || null,
     }));
@@ -676,8 +680,8 @@ export function registerTimetableRoutes(app: Express): void {
     const id = uid('ttrm');
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, max_concurrent_classes, responsible_staff, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       tenantId,
@@ -685,6 +689,8 @@ export function registerTimetableRoutes(app: Express): void {
       String(b.roomCode).trim(),
       String(b.roomType || 'general'),
       Math.max(5, Number(b.capacity || 45)),
+      Math.max(1, Math.min(10, Number(b.maxConcurrentClasses || 1))),
+      String(b.responsibleStaff || '').trim(),
       String(b.location || 'Main Block'),
       b.assignedGrade ? Number(b.assignedGrade) : null,
       b.assignedStream ? String(b.assignedStream) : null,
@@ -709,6 +715,8 @@ export function registerTimetableRoutes(app: Express): void {
            room_code = COALESCE(?, room_code),
            room_type = COALESCE(?, room_type),
            capacity = COALESCE(?, capacity),
+           max_concurrent_classes = COALESCE(?, max_concurrent_classes),
+           responsible_staff = COALESCE(?, responsible_staff),
            location = COALESCE(?, location),
            assigned_grade = ?,
            assigned_stream = ?,
@@ -721,6 +729,8 @@ export function registerTimetableRoutes(app: Express): void {
       b.roomCode ?? null,
       b.roomType ?? null,
       b.capacity !== undefined ? Number(b.capacity) : null,
+      b.maxConcurrentClasses !== undefined ? Math.max(1, Math.min(10, Number(b.maxConcurrentClasses))) : null,
+      b.responsibleStaff !== undefined ? String(b.responsibleStaff || '').trim() : null,
       b.location ?? null,
       b.assignedGrade ? Number(b.assignedGrade) : null,
       b.assignedStream || null,
@@ -1143,6 +1153,7 @@ export function registerTimetableRoutes(app: Express): void {
            max_weekly_periods = COALESCE(?, max_weekly_periods),
            max_consecutive_lessons = COALESCE(?, max_consecutive_lessons),
            preferred_free_periods_json = COALESCE(?, preferred_free_periods_json),
+           off_duty_slots_json = COALESCE(?, off_duty_slots_json),
            active_in_timetable = COALESCE(?, active_in_timetable),
            archived_at = CASE WHEN ? IS NOT NULL THEN ? ELSE archived_at END,
            updated_at = ?
@@ -1155,6 +1166,7 @@ export function registerTimetableRoutes(app: Express): void {
       b.maxWeeklyPeriods !== undefined ? Number(b.maxWeeklyPeriods) : null,
       b.maxConsecutiveLessons !== undefined ? Number(b.maxConsecutiveLessons) : null,
       b.preferredFreePeriods ? JSON.stringify(b.preferredFreePeriods) : null,
+      Array.isArray(b.offDutySlots) ? JSON.stringify(b.offDutySlots) : null,
       activeVal,
       archivedVal !== undefined ? (archivedVal || '') : null,
       archivedVal || null,
@@ -2127,7 +2139,17 @@ export function registerTimetableRoutes(app: Express): void {
     }
 
     const preserveLocked = req.body?.preserveLocked !== false;
-    const { jobId } = enqueueTimetableGenerationJob(db, tenantId, String(version.id), req.authSession!.userId, preserveLocked);
+    const rawScope = req.body?.scope;
+    const scope: TTGenerationScope | undefined =
+      rawScope && typeof rawScope === 'object' && ['all', 'grades', 'stream'].includes(String(rawScope.mode || 'all'))
+        ? {
+            mode: String(rawScope.mode || 'all') as 'all' | 'grades' | 'stream',
+            grades: Array.isArray(rawScope.grades) ? rawScope.grades.map((g: any) => Number(g)).filter(Number.isFinite) : undefined,
+            grade: rawScope.grade !== undefined && rawScope.grade !== null ? Number(rawScope.grade) : undefined,
+            stream: rawScope.stream ? String(rawScope.stream).trim() : undefined,
+          }
+        : undefined;
+    const { jobId } = enqueueTimetableGenerationJob(db, tenantId, String(version.id), req.authSession!.userId, preserveLocked, scope);
     writeAudit(
       tenantId,
       String(version.id),
@@ -2135,9 +2157,9 @@ export function registerTimetableRoutes(app: Express): void {
       req.authSession!.userId,
       String(req.authSession!.user.name || 'Admin'),
       String(req.authSession!.role),
-      { jobId, preserveLocked }
+      { jobId, preserveLocked, scope: scope || { mode: 'all' } }
     );
-    res.status(202).json({ jobId, versionId: version.id, status: 'queued' });
+    res.status(202).json({ jobId, versionId: version.id, status: 'queued', scope: scope || { mode: 'all' } });
   });
 
   app.get('/api/timetable/jobs/:jobId', requireAuth, (req: Request, res: Response) => {
@@ -2899,6 +2921,564 @@ export function registerTimetableRoutes(app: Express): void {
         roomName: String(e.room_name || 'Classroom'),
         blockLength: Number(e.block_length || 1),
         isJointLesson: Boolean(e.joint_lesson_id),
+      })),
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // 9. COPY GRADE ALLOCATIONS & BULK IMPORT (CSV/EXCEL)
+  // ------------------------------------------------------------------
+  app.post('/api/timetable/allocations/copy-grade', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const { configId } = ensureTenantTimetableSeeded(db, tenantId, req.authSession!.userId);
+    const sourceGrade = Number(req.body?.sourceGrade || 0);
+    const targetGrades: number[] = Array.isArray(req.body?.targetGrades)
+      ? Array.from(new Set<number>(req.body.targetGrades.map((g: any) => Number(g)).filter((g: number) => Number.isFinite(g) && g >= 1 && g <= 12 && g !== sourceGrade)))
+      : req.body?.targetGrade
+      ? [Number(req.body.targetGrade)].filter((g) => g >= 1 && g <= 12 && g !== sourceGrade)
+      : [];
+    const applyToStreams = req.body?.applyToStreams !== false;
+
+    if (!sourceGrade || targetGrades.length === 0) {
+      res.status(400).json({ error: 'Select a valid source grade and at least one different target grade.' });
+      return;
+    }
+
+    const srcRows = db
+      .prepare(`SELECT * FROM tt_grade_subject_allocations WHERE config_id = ? AND tenant_id = ? AND grade = ? AND is_active = 1`)
+      .all(configId, tenantId, sourceGrade) as any[];
+    if (srcRows.length === 0) {
+      res.status(404).json({ error: `No active subject allocations found on Grade ${sourceGrade} to copy.` });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    let copiedCount = 0;
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const tg of targetGrades) {
+        const streamsForGrade = (
+          db.prepare(`SELECT DISTINCT stream FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND is_whole_class = 1`).all(tenantId, tg) as any[]
+        ).map((s) => String(s.stream));
+
+        for (const r of srcRows) {
+          const existing = db
+            .prepare(`SELECT id FROM tt_grade_subject_allocations WHERE config_id = ? AND grade = ? AND lower(subject_name) = lower(?)`)
+            .get(configId, tg, r.subject_name) as any;
+          const allocId = existing ? String(existing.id) : uid('ttga');
+          db.prepare(
+            `INSERT INTO tt_grade_subject_allocations
+               (id, tenant_id, config_id, grade, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, default_room_id, teacher_ids_json, student_group_label, is_active, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+             ON CONFLICT(config_id, grade, subject_name) DO UPDATE SET
+               required_weekly_periods = excluded.required_weekly_periods,
+               single_lessons = excluded.single_lessons,
+               double_lessons = excluded.double_lessons,
+               triple_lessons = excluded.triple_lessons,
+               pattern_preference = excluded.pattern_preference,
+               max_per_day = excluded.max_per_day,
+               min_spacing_days = excluded.min_spacing_days,
+               preferred_days_json = excluded.preferred_days_json,
+               preferred_periods_json = excluded.preferred_periods_json,
+               required_room_type = excluded.required_room_type,
+               default_room_id = excluded.default_room_id,
+               is_active = 1,
+               updated_at = excluded.updated_at`
+          ).run(
+            allocId,
+            tenantId,
+            configId,
+            tg,
+            r.subject_name,
+            r.required_weekly_periods,
+            r.single_lessons,
+            r.double_lessons,
+            r.triple_lessons,
+            r.pattern_preference,
+            r.max_per_day,
+            r.min_spacing_days,
+            r.preferred_days_json,
+            r.preferred_periods_json,
+            r.required_room_type,
+            r.default_room_id,
+            r.teacher_ids_json,
+            r.student_group_label,
+            now
+          );
+          copiedCount++;
+
+          if (applyToStreams) {
+            for (const st of streamsForGrade) {
+              db.prepare(
+                `INSERT INTO tt_stream_subject_allocations
+                   (id, tenant_id, config_id, grade, stream, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                 ON CONFLICT(config_id, grade, stream, subject_name) DO UPDATE SET
+                   required_weekly_periods = CASE WHEN is_overridden = 0 THEN excluded.required_weekly_periods ELSE required_weekly_periods END,
+                   single_lessons = CASE WHEN is_overridden = 0 THEN excluded.single_lessons ELSE single_lessons END,
+                   double_lessons = CASE WHEN is_overridden = 0 THEN excluded.double_lessons ELSE double_lessons END,
+                   triple_lessons = CASE WHEN is_overridden = 0 THEN excluded.triple_lessons ELSE triple_lessons END,
+                   required_room_type = CASE WHEN is_overridden = 0 THEN excluded.required_room_type ELSE required_room_type END,
+                   updated_at = excluded.updated_at`
+              ).run(
+                uid('ttsa'),
+                tenantId,
+                configId,
+                tg,
+                st,
+                r.subject_name,
+                allocId,
+                r.required_weekly_periods,
+                r.single_lessons,
+                r.double_lessons,
+                r.triple_lessons,
+                r.pattern_preference,
+                r.max_per_day,
+                r.min_spacing_days,
+                r.preferred_days_json,
+                r.preferred_periods_json,
+                r.required_room_type,
+                r.default_room_id,
+                r.teacher_ids_json,
+                now
+              );
+            }
+          }
+        }
+      }
+      writeAudit(tenantId, null, 'ALLOCATIONS_COPIED_GRADE', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), String(req.authSession!.role), {
+        sourceGrade,
+        targetGrades,
+        copiedCount,
+      });
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+
+    notifyMySqlTablesChanged(['tt_grade_subject_allocations', 'tt_stream_subject_allocations', 'tt_audit_logs']);
+    res.json({ ok: true, copiedCount, sourceGrade, targetGrades });
+  });
+
+  app.post('/api/timetable/allocations/import', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const applyToStreams = req.body?.applyToStreams !== false;
+    if (rows.length === 0) {
+      res.status(400).json({ error: 'Provide at least one allocation row to import.' });
+      return;
+    }
+
+    const db = getDb();
+    const { configId } = ensureTenantTimetableSeeded(db, tenantId, req.authSession!.userId);
+    const teachers = db.prepare(`SELECT id, teacher_name FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[];
+    const teacherByName = new Map(teachers.map((t) => [String(t.teacher_name).trim().toLowerCase(), String(t.id)]));
+
+    const now = new Date().toISOString();
+    let importedCount = 0;
+    const errors: string[] = [];
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        const raw = rows[i] || {};
+        const gradeNum = Number(String(raw.grade ?? raw.Grade ?? '').replace(/[^0-9]/g, ''));
+        const subjectName = String(raw.subjectName ?? raw.subject ?? raw.Subject ?? '').trim();
+        const weekly = Number(raw.requiredWeeklyPeriods ?? raw.weeklyLessons ?? raw.lessons ?? raw.Lessons ?? 0);
+
+        if (!Number.isFinite(gradeNum) || gradeNum < 1 || gradeNum > 12 || !subjectName || !Number.isFinite(weekly) || weekly < 1 || weekly > 15) {
+          errors.push(`Row ${i + 1}: invalid grade (${raw.grade}), subject (${subjectName}), or weekly count (${weekly}).`);
+          continue;
+        }
+
+        let singles = Number(raw.singleLessons ?? raw.singles ?? 0);
+        let doubles = Number(raw.doubleLessons ?? raw.doubles ?? 0);
+        let triples = Number(raw.tripleLessons ?? raw.triples ?? 0);
+        if (singles + doubles * 2 + triples * 3 !== weekly) {
+          singles = weekly;
+          doubles = 0;
+          triples = 0;
+        }
+        const requiredRoomType = String(raw.requiredRoomType ?? raw.roomType ?? 'general').trim() || 'general';
+        const teacherNameRaw = String(raw.teacherName ?? raw.teacher ?? raw.Teacher ?? '').trim();
+        const matchedTeacherId = teacherNameRaw ? teacherByName.get(teacherNameRaw.toLowerCase()) : undefined;
+        const teacherIds = matchedTeacherId ? [matchedTeacherId] : [];
+        const maxPerDay = Math.max(1, Number(raw.maxPerDay || (triples > 0 ? 3 : doubles > 0 ? 2 : 1)));
+
+        const allocId = uid('ttga');
+        db.prepare(
+          `INSERT INTO tt_grade_subject_allocations
+             (id, tenant_id, config_id, grade, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, teacher_ids_json, student_group_label, is_active, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'spread', ?, 0, '[]', '[]', ?, ?, 'Whole Class', 1, ?)
+           ON CONFLICT(config_id, grade, subject_name) DO UPDATE SET
+             required_weekly_periods = excluded.required_weekly_periods,
+             single_lessons = excluded.single_lessons,
+             double_lessons = excluded.double_lessons,
+             triple_lessons = excluded.triple_lessons,
+             max_per_day = excluded.max_per_day,
+             required_room_type = excluded.required_room_type,
+             teacher_ids_json = CASE WHEN excluded.teacher_ids_json != '[]' THEN excluded.teacher_ids_json ELSE teacher_ids_json END,
+             is_active = 1,
+             updated_at = excluded.updated_at`
+        ).run(allocId, tenantId, configId, gradeNum, subjectName, weekly, singles, doubles, triples, maxPerDay, requiredRoomType, JSON.stringify(teacherIds), now);
+
+        // Ensure subject exists in tt_subjects
+        db.prepare(
+          `INSERT OR IGNORE INTO tt_subjects (id, tenant_id, name, code, department, requires_room_type, is_core, color_token, updated_at)
+           VALUES (?, ?, ?, ?, 'Core Academic', ?, 1, 'indigo', ?)`
+        ).run(uid('ttsub'), tenantId, subjectName, subjectName.slice(0, 4).toUpperCase(), requiredRoomType, now);
+
+        if (applyToStreams) {
+          const streams = (
+            db.prepare(`SELECT DISTINCT stream FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND is_whole_class = 1`).all(tenantId, gradeNum) as any[]
+          ).map((s) => String(s.stream));
+          for (const st of streams) {
+            db.prepare(
+              `INSERT INTO tt_stream_subject_allocations
+                 (id, tenant_id, config_id, grade, stream, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, teacher_ids_json, is_active, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'spread', ?, 0, '[]', '[]', ?, ?, 1, ?)
+               ON CONFLICT(config_id, grade, stream, subject_name) DO UPDATE SET
+                 required_weekly_periods = excluded.required_weekly_periods,
+                 single_lessons = excluded.single_lessons,
+                 double_lessons = excluded.double_lessons,
+                 triple_lessons = excluded.triple_lessons,
+                 max_per_day = excluded.max_per_day,
+                 required_room_type = excluded.required_room_type,
+                 teacher_ids_json = CASE WHEN excluded.teacher_ids_json != '[]' THEN excluded.teacher_ids_json ELSE teacher_ids_json END,
+                 updated_at = excluded.updated_at`
+            ).run(uid('ttsa'), tenantId, configId, gradeNum, st, subjectName, allocId, weekly, singles, doubles, triples, maxPerDay, requiredRoomType, JSON.stringify(teacherIds), now);
+          }
+        }
+        importedCount++;
+      }
+
+      writeAudit(tenantId, null, 'ALLOCATIONS_IMPORTED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), String(req.authSession!.role), {
+        importedCount,
+        errorCount: errors.length,
+      });
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+
+    notifyMySqlTablesChanged(['tt_subjects', 'tt_grade_subject_allocations', 'tt_stream_subject_allocations', 'tt_audit_logs']);
+    res.json({ ok: true, importedCount, errors });
+  });
+
+  // ------------------------------------------------------------------
+  // 10. SHARED FACILITY SCHEDULES & SCOPED READ ENDPOINTS (Part 2D & Part 6)
+  // ------------------------------------------------------------------
+  function resolveReadableVersion(db: any, tenantId: string, req: Request): any | null {
+    const requestedVersionId = String(req.query.versionId || '').trim();
+    const isAdmin = req.authSession?.isSuperAdmin || sessionHasAnyRole(req.authSession, ADMIN_TIMETABLE_ROLES);
+    if (requestedVersionId && isAdmin) {
+      const v = db.prepare(`SELECT * FROM tt_versions WHERE id = ? AND tenant_id = ?`).get(requestedVersionId, tenantId) as any;
+      if (v) return v;
+    }
+    const pub = db
+      .prepare(`SELECT * FROM tt_versions WHERE tenant_id = ? AND status = 'published' ORDER BY published_at DESC LIMIT 1`)
+      .get(tenantId) as any;
+    if (pub) return pub;
+    if (isAdmin) {
+      return (
+        db.prepare(`SELECT * FROM tt_versions WHERE tenant_id = ? ORDER BY version_number DESC LIMIT 1`).get(tenantId) as any
+      ) || null;
+    }
+    return null;
+  }
+
+  function buildFacilitySchedulePayload(db: any, tenantId: string, version: any, filterResourceId?: string) {
+    const cfg = version ? (db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(String(version.config_id)) as any) : null;
+    const workingDays = safeJsonParse<string[]>(cfg?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+    const periods = version
+      ? (db.prepare(`SELECT * FROM tt_periods WHERE config_id = ? ORDER BY sort_order ASC`).all(String(version.config_id)) as any[])
+      : [];
+    const lessonPeriods = periods.filter((p) => p.kind === 'lesson');
+    const periodTimeByNum = new Map<number, { label: string; startTime: string; endTime: string }>(
+      lessonPeriods.map((p) => [Number(p.period_number), { label: String(p.label), startTime: String(p.start_time), endTime: String(p.end_time) }])
+    );
+
+    const roomsQuery = filterResourceId
+      ? db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ? AND id = ? AND is_active = 1`).all(tenantId, filterResourceId)
+      : db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ? AND is_active = 1 ORDER BY CASE WHEN room_type = 'general' THEN 1 ELSE 0 END, room_type, name`).all(tenantId);
+    const rooms = roomsQuery as any[];
+    const entries = version
+      ? (db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? ORDER BY day_of_week, period_number`).all(String(version.id)) as any[])
+      : [];
+
+    const facilities = rooms.map((r) => {
+      const roomId = String(r.id);
+      const maxConcurrent = Math.max(1, Number(r.max_concurrent_classes || 1));
+      const roomEntries = entries.filter((e) => String(e.room_id || '') === roomId);
+
+      // Group entries by day|period to calculate occupancy & combined streams
+      const slotMap = new Map<string, any[]>();
+      for (const e of roomEntries) {
+        const k = `${e.day_of_week}|${e.period_number}`;
+        if (!slotMap.has(k)) slotMap.set(k, []);
+        slotMap.get(k)!.push(e);
+      }
+
+      const bookings: any[] = [];
+      let clashCount = 0;
+
+      for (const [slotKey, list] of slotMap.entries()) {
+        const [dayOfWeek, pStr] = slotKey.split('|');
+        const periodNumber = Number(pStr);
+        const timeMeta = periodTimeByNum.get(periodNumber);
+
+        // Distinct classes (joint lessons count as 1 combined booking)
+        const distinctSessionKeys = new Set<string>();
+        const combinedStreams: string[] = [];
+        const teachersSet = new Set<string>();
+        const subjectsSet = new Set<string>();
+        let maxBlockLength = 1;
+
+        for (const e of list) {
+          distinctSessionKeys.add(e.joint_lesson_id ? `joint:${e.joint_lesson_id}` : `cls:${e.grade}|${e.stream}|${e.group_name}`);
+          combinedStreams.push(`Grade ${e.grade} ${e.stream}`);
+          subjectsSet.add(String(e.subject_name));
+          for (const tn of safeJsonParse<string[]>(e.teacher_names_json, [])) teachersSet.add(tn);
+          maxBlockLength = Math.max(maxBlockLength, Number(e.block_length || 1));
+        }
+
+        const occupancy = distinctSessionKeys.size;
+        const hasClash = occupancy > maxConcurrent;
+        if (hasClash) clashCount++;
+
+        bookings.push({
+          dayOfWeek,
+          periodNumber,
+          periodLabel: timeMeta?.label || `Period ${periodNumber}`,
+          timeRange: timeMeta ? `${timeMeta.startTime} - ${timeMeta.endTime}` : `P${periodNumber}`,
+          streams: Array.from(new Set(combinedStreams)),
+          streamLabel: Array.from(new Set(combinedStreams)).join(' + '),
+          isCombined: combinedStreams.length > 1 && distinctSessionKeys.size === 1,
+          subjects: Array.from(subjectsSet),
+          subjectLabel: Array.from(subjectsSet).join(' / '),
+          teachers: Array.from(teachersSet),
+          responsibleTeacher: Array.from(teachersSet).join(', ') || String(r.responsible_staff || 'TBA'),
+          blockLength: maxBlockLength,
+          occupancy,
+          maxConcurrentClasses: maxConcurrent,
+          hasClash,
+        });
+      }
+
+      const totalSlotsPerWeek = Math.max(1, workingDays.length * Math.max(1, lessonPeriods.length));
+      const bookedSlots = slotMap.size;
+      return {
+        id: roomId,
+        name: String(r.name),
+        roomCode: String(r.room_code),
+        roomType: String(r.room_type),
+        capacity: Number(r.capacity || 45),
+        maxConcurrentClasses: maxConcurrent,
+        responsibleStaff: String(r.responsible_staff || ''),
+        location: String(r.location || 'Main Block'),
+        isSharedFacility: String(r.room_type) !== 'general',
+        bookedSlots,
+        freeSlots: Math.max(0, totalSlotsPerWeek - bookedSlots),
+        utilizationPct: Math.round((bookedSlots / totalSlotsPerWeek) * 100),
+        clashCount,
+        bookings,
+      };
+    });
+
+    return {
+      versionId: version ? String(version.id) : null,
+      versionName: version ? String(version.name) : null,
+      versionStatus: version ? String(version.status) : null,
+      workingDays,
+      periods: lessonPeriods.map((p) => ({
+        periodNumber: Number(p.period_number),
+        label: String(p.label),
+        startTime: String(p.start_time),
+        endTime: String(p.end_time),
+      })),
+      facilities,
+    };
+  }
+
+  app.get('/api/timetable/facilities/schedules', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    const db = getDb();
+    const version = resolveReadableVersion(db, tenantId, req);
+    res.json(buildFacilitySchedulePayload(db, tenantId, version));
+  });
+
+  app.get('/api/timetable/resource/:resourceId', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    const db = getDb();
+    const version = resolveReadableVersion(db, tenantId, req);
+    const payload = buildFacilitySchedulePayload(db, tenantId, version, String(req.params.resourceId));
+    if (payload.facilities.length === 0) {
+      res.status(404).json({ error: 'Shared facility / resource not found for this school.' });
+      return;
+    }
+    res.json({
+      ...payload,
+      facility: payload.facilities[0],
+    });
+  });
+
+  app.get('/api/timetable/master', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const version = resolveReadableVersion(db, tenantId, req);
+    if (!version) {
+      res.json({ version: null, entries: [] });
+      return;
+    }
+    const detail = hydrateVersionDetail(db, String(version.id));
+    res.json(detail);
+  });
+
+  app.get('/api/timetable/teacher/:teacherId', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+
+    const db = getDb();
+    const session = req.authSession!;
+    const targetId = String(req.params.teacherId);
+    const tProf = db
+      .prepare(`SELECT * FROM tt_teacher_profiles WHERE tenant_id = ? AND (id = ? OR user_id = ?) LIMIT 1`)
+      .get(tenantId, targetId, targetId) as any;
+
+    if (!tProf) {
+      res.status(404).json({ error: 'Teacher timetable profile not found.' });
+      return;
+    }
+
+    const isAdmin = session.isSuperAdmin || sessionHasAnyRole(session, ADMIN_TIMETABLE_ROLES);
+    const isSelf = String(tProf.user_id) === String(session.userId) || String(tProf.teacher_email || '').toLowerCase() === String(session.user.email || '').toLowerCase();
+    if (!isAdmin && !isSelf) {
+      res.status(403).json({ error: 'You may only view your own personal teacher timetable.' });
+      return;
+    }
+
+    const version = resolveReadableVersion(db, tenantId, req);
+    if (!version) {
+      res.json({ version: null, teacher: tProf, entries: [], offDutySlots: safeJsonParse(tProf.off_duty_slots_json, []) });
+      return;
+    }
+
+    const allEntries = db
+      .prepare(`SELECT * FROM tt_entries WHERE version_id = ? ORDER BY day_of_week, period_number`)
+      .all(String(version.id)) as any[];
+    const entries = allEntries.filter((e) => {
+      const tIds = safeJsonParse<string[]>(e.teacher_ids_json, []);
+      const tNames = safeJsonParse<string[]>(e.teacher_names_json, []).map((n) => n.toLowerCase());
+      return tIds.includes(String(tProf.id)) || tNames.includes(String(tProf.teacher_name || '').toLowerCase());
+    });
+
+    res.json({
+      version: { id: String(version.id), name: String(version.name), status: String(version.status) },
+      teacher: {
+        id: String(tProf.id),
+        userId: String(tProf.user_id),
+        teacherName: String(tProf.teacher_name),
+        department: String(tProf.department),
+        maxDailyPeriods: Number(tProf.max_daily_periods || 6),
+        maxWeeklyPeriods: Number(tProf.max_weekly_periods || 28),
+        offDutySlots: safeJsonParse<Array<{ day: string; period: number }>>(tProf.off_duty_slots_json, []),
+        preferredFreePeriods: safeJsonParse<Array<{ day: string; period: number }>>(tProf.preferred_free_periods_json, []),
+      },
+      entries: entries.map((e) => ({
+        id: String(e.id),
+        dayOfWeek: String(e.day_of_week),
+        periodNumber: Number(e.period_number),
+        grade: Number(e.grade),
+        stream: String(e.stream),
+        subjectName: String(e.subject_name),
+        teacherNames: safeJsonParse<string[]>(e.teacher_names_json, []),
+        roomName: String(e.room_name || 'Classroom'),
+        blockLength: Number(e.block_length || 1),
+      })),
+    });
+  });
+
+  app.get('/api/timetable/grade/:gradeId', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    const grade = Number(String(req.params.gradeId || '').replace(/[^0-9]/g, ''));
+    if (!Number.isFinite(grade) || grade < 1 || grade > 12) {
+      res.status(400).json({ error: 'Valid grade number is required.' });
+      return;
+    }
+    const db = getDb();
+    const version = resolveReadableVersion(db, tenantId, req);
+    if (!version) {
+      res.json({ version: null, grade, entries: [] });
+      return;
+    }
+    const entries = db
+      .prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND grade = ? ORDER BY stream, day_of_week, period_number`)
+      .all(String(version.id), grade) as any[];
+    res.json({
+      version: { id: String(version.id), name: String(version.name), status: String(version.status) },
+      grade,
+      entries: entries.map((e) => ({
+        id: String(e.id),
+        dayOfWeek: String(e.day_of_week),
+        periodNumber: Number(e.period_number),
+        grade: Number(e.grade),
+        stream: String(e.stream),
+        subjectName: String(e.subject_name),
+        teacherNames: safeJsonParse<string[]>(e.teacher_names_json, []),
+        roomName: String(e.room_name || 'Classroom'),
+        blockLength: Number(e.block_length || 1),
+      })),
+    });
+  });
+
+  app.get('/api/timetable/stream/:grade/:stream', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    const grade = Number(req.params.grade);
+    const stream = String(req.params.stream || '').trim();
+    if (!Number.isFinite(grade) || !stream) {
+      res.status(400).json({ error: 'Valid grade and stream are required.' });
+      return;
+    }
+    const db = getDb();
+    const version = resolveReadableVersion(db, tenantId, req);
+    if (!version) {
+      res.json({ version: null, grade, stream, entries: [] });
+      return;
+    }
+    const entries = db
+      .prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND grade = ? AND lower(stream) = lower(?) ORDER BY day_of_week, period_number`)
+      .all(String(version.id), grade, stream) as any[];
+    res.json({
+      version: { id: String(version.id), name: String(version.name), status: String(version.status) },
+      grade,
+      stream,
+      entries: entries.map((e) => ({
+        id: String(e.id),
+        dayOfWeek: String(e.day_of_week),
+        periodNumber: Number(e.period_number),
+        grade: Number(e.grade),
+        stream: String(e.stream),
+        subjectName: String(e.subject_name),
+        teacherNames: safeJsonParse<string[]>(e.teacher_names_json, []),
+        roomName: String(e.room_name || 'Classroom'),
+        blockLength: Number(e.block_length || 1),
       })),
     });
   });

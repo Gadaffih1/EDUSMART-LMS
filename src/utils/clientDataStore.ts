@@ -34,6 +34,49 @@ let hydrated = false;
 let hydratingPromise: Promise<void> | null = null;
 let sseSource: EventSource | null = null;
 
+export const ACTIVE_SWITCHED_ROLE_PREF_KEY = 'edusmart_active_switched_role_v1';
+const SWITCHED_ROLE_SESSION_PREFIX = 'edusmart_active_switched_role_user_';
+
+function readSessionSwitchedRole(userId?: string | null): string | null {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    const val = window.sessionStorage.getItem(`${SWITCHED_ROLE_SESSION_PREFIX}${userId}`);
+    return val && val.trim() ? val.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionSwitchedRole(userId: string | null | undefined, role: string | null): void {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    const storageKey = `${SWITCHED_ROLE_SESSION_PREFIX}${userId}`;
+    if (role && role.trim()) {
+      window.sessionStorage.setItem(storageKey, role.trim());
+    } else {
+      window.sessionStorage.removeItem(storageKey);
+    }
+  } catch {
+    // ignore storage quota or private mode errors
+  }
+}
+
+function clearAllSessionSwitchedRoles(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (k && k.startsWith(SWITCHED_ROLE_SESSION_PREFIX)) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => window.sessionStorage.removeItem(k));
+  } catch {
+    // ignore
+  }
+}
+
 export interface PrintableCredentialUser {
   id: string;
   name: string;
@@ -262,6 +305,14 @@ export const ClientDataStore = {
         }
 
         sessionUser = body.user || null;
+        if (sessionUser?.id) {
+          const prefRole = preferences.get(ACTIVE_SWITCHED_ROLE_PREF_KEY);
+          if (typeof prefRole === 'string' && prefRole.trim()) {
+            writeSessionSwitchedRole(sessionUser.id, prefRole.trim());
+          } else if (prefRole === null) {
+            writeSessionSwitchedRole(sessionUser.id, null);
+          }
+        }
         isSuperAdminSession = Boolean(body.isSuperAdmin);
         activeVlabPass = body.activeVlabPass || null;
         if (body.activeTenantId) {
@@ -399,6 +450,27 @@ export const ClientDataStore = {
     }).catch((err) => {
       console.warn('[ClientDataStore] failed saving preference', key, err);
     });
+  },
+
+  getActiveSwitchedRole(userId?: string | null): string | null {
+    const targetUserId = userId || sessionUser?.id || null;
+    if (preferences.has(ACTIVE_SWITCHED_ROLE_PREF_KEY)) {
+      const prefVal = preferences.get(ACTIVE_SWITCHED_ROLE_PREF_KEY);
+      if (typeof prefVal === 'string' && prefVal.trim()) {
+        return prefVal.trim();
+      }
+      if (prefVal === null) {
+        return null;
+      }
+    }
+    return readSessionSwitchedRole(targetUserId);
+  },
+
+  setActiveSwitchedRole(role: string | null, userId?: string | null): void {
+    const targetUserId = userId || sessionUser?.id || null;
+    const normalized = role && role.trim() ? role.trim() : null;
+    writeSessionSwitchedRole(targetUserId, normalized);
+    this.setPreference(ACTIVE_SWITCHED_ROLE_PREF_KEY, normalized);
   },
 
   subscribe(listener: ChangeListener): () => void {
@@ -962,6 +1034,10 @@ export const ClientDataStore = {
   },
 
   clearSessionOnly(): void {
+    if (sessionUser?.id) {
+      writeSessionSwitchedRole(sessionUser.id, null);
+    }
+    clearAllSessionSwitchedRoles();
     sessionUser = null;
     inMemorySessionToken = null;
     isSuperAdminSession = false;

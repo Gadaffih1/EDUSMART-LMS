@@ -289,12 +289,14 @@ export interface Quiz {
   id: string;
   topicId: string;
   grade: GradeLevel;
+  stream?: StreamName;
   subject: SubjectName;
   title: string;
   passPercentage: number;
   timeLimitMinutes: number;
   questions: QuizQuestion[];
   teacherName: string;
+  teacherId?: string;
   createdAt: string;
 }
 

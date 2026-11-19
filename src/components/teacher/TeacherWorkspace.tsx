@@ -307,12 +307,14 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     return () => window.removeEventListener('lesson-resources-updated', refreshResources);
   }, []);
 
-  // Quiz Builder State
+  // Quiz Builder State (strictly bounded to assigned grades/streams/subjects)
   const [quizTitle, setQuizTitle] = useState('');
-  const [quizGrade, setQuizGrade] = useState<GradeLevel>(defaultGrade);
-  const [quizSubject, setQuizSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
+  const [quizGrade, setQuizGrade] = useState<GradeLevel>(initialAsgGrade);
+  const [quizStream, setQuizStream] = useState<StreamName>(initialAsgStream);
+  const [quizSubject, setQuizSubject] = useState<SubjectName>(initialAsgSubject);
   const [quizPassPct, setQuizPassPct] = useState<number>(70);
   const [quizTimeLimit, setQuizTimeLimit] = useState<number>(10);
+  const [quizError, setQuizError] = useState<string | null>(null);
   const [questionsList, setQuestionsList] = useState<QuizQuestion[]>([
     {
       id: 'q-new-1',
@@ -331,6 +333,36 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
   const [newExplanation, setNewExplanation] = useState('');
   const [quizSuccess, setQuizSuccess] = useState(false);
 
+  const allowedQuizStreams = React.useMemo(
+    () => getAllowedStreamsForGrade(currentUser, quizGrade),
+    [currentUser, quizGrade, allocationRevision]
+  );
+  const allowedQuizSubjects = React.useMemo(
+    () => getAllowedSubjectsForGradeStream(currentUser, quizGrade, quizStream),
+    [currentUser, quizGrade, quizStream, allocationRevision]
+  );
+
+  // Keep Topical Quiz Grade / Stream / Subject locked strictly inside teacher's assigned scope
+  React.useEffect(() => {
+    if (allowedAsgGrades.length === 0) return;
+    const nextGrade = allowedAsgGrades.includes(quizGrade) ? quizGrade : allowedAsgGrades[0];
+    if (nextGrade !== quizGrade) {
+      setQuizGrade(nextGrade);
+      return;
+    }
+    const streamsForGrade = getAllowedStreamsForGrade(currentUser, nextGrade);
+    if (streamsForGrade.length === 0) return;
+    const nextStream = streamsForGrade.includes(quizStream) ? quizStream : streamsForGrade[0];
+    if (nextStream !== quizStream) {
+      setQuizStream(nextStream);
+      return;
+    }
+    const subjectsForPair = getAllowedSubjectsForGradeStream(currentUser, nextGrade, nextStream);
+    if (subjectsForPair.length > 0 && !subjectsForPair.includes(quizSubject)) {
+      setQuizSubject(subjectsForPair[0]);
+    }
+  }, [currentUser, allocationRevision, allowedAsgGrades, quizGrade, quizStream, quizSubject]);
+
   // Lesson Reminder State
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderContent, setReminderContent] = useState('');
@@ -343,12 +375,18 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
   const [meetTopicInput, setMeetTopicInput] = useState('Fractions Live Interactive Workshop');
   const [meetLiveActive, setMeetLiveActive] = useState(false);
 
-  // Load existing records
+  // Load existing records (strictly scoped to this teacher's assigned classes & subjects)
   const [workLogs, setWorkLogs] = useState<WorkEntryLog[]>(() => Storage.getWorkEntryLogs(currentUser.id));
   const gatePasses = Storage.getGatePasses();
-  const assignments = Storage.getAssignments();
-  const quizzes = Storage.getQuizzes();
-  const quizAttempts = Storage.getQuizAttempts();
+  const assignments = Storage.getAssignments().filter((a) =>
+    isTeacherAssignedToTarget(currentUser, a.grade, a.stream, a.subject)
+  );
+  const quizzes = Storage.getQuizzes().filter((q) =>
+    isTeacherAssignedToTarget(currentUser, q.grade, q.stream, q.subject)
+  );
+  const quizAttempts = Storage.getQuizAttempts().filter((att) =>
+    isTeacherAssignedToTarget(currentUser, att.grade, att.stream, att.subject)
+  );
 
   // Handlers
   const handleCreateAssignment = (e: React.FormEvent) => {
@@ -537,17 +575,27 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
   const handleSaveQuiz = (e: React.FormEvent) => {
     e.preventDefault();
+    setQuizError(null);
     if (!quizTitle || questionsList.length === 0) return;
+
+    if (!isTeacherAssignedToTarget(currentUser, quizGrade, quizStream, quizSubject)) {
+      setQuizError(
+        `Access Restricted: You can only assign topical quizzes to classes, streams, and subjects assigned to your profile (attempted Grade ${quizGrade} ${quizStream} — ${quizSubject}).`
+      );
+      return;
+    }
 
     const newQuiz: Quiz = {
       id: `quiz-${Date.now()}`,
       topicId: `top-custom-${Date.now()}`,
       grade: quizGrade,
+      stream: quizStream,
       subject: quizSubject,
       title: quizTitle,
       passPercentage: Number(quizPassPct),
       timeLimitMinutes: Number(quizTimeLimit),
       teacherName: currentUser.name,
+      teacherId: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0],
       questions: questionsList
     };
@@ -1862,36 +1910,68 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             {quizSuccess && (
               <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600" />
-                <span>Quiz published with automatic marking enabled!</span>
+                <span>Quiz published strictly to Grade {quizGrade} ({quizStream}) — {quizSubject} with automatic marking enabled!</span>
               </div>
             )}
 
+            {quizError && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800">
+                {quizError}
+              </div>
+            )}
+
+            {allowedAsgGrades.length === 0 ? (
+              <div className="p-4 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-900 font-semibold">
+                No classes or subjects are currently allocated to your teaching profile. Please contact the Dean of Studies or School Administrator to assign your classes and learning areas before publishing topical quizzes.
+              </div>
+            ) : (
             <form onSubmit={handleSaveQuiz} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Grade</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Grade</label>
                   <select
                     value={quizGrade}
                     onChange={(e) => {
                       const g = Number(e.target.value) as GradeLevel;
                       setQuizGrade(g);
-                      setQuizSubject(getSubjectsForGrade(g)[0]);
+                      const streams = getAllowedStreamsForGrade(currentUser, g);
+                      const nextStream = (streams[0] || quizStream) as StreamName;
+                      setQuizStream(nextStream);
+                      const subs = getAllowedSubjectsForGradeStream(currentUser, g, nextStream);
+                      if (subs[0]) setQuizSubject(subs[0]);
                     }}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    className="w-full min-h-[42px] px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
                   >
-                    {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map(g => (
+                    {allowedAsgGrades.map((g) => (
                       <option key={g} value={g}>Grade {g}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Stream</label>
+                  <select
+                    value={quizStream}
+                    onChange={(e) => {
+                      const st = e.target.value as StreamName;
+                      setQuizStream(st);
+                      const subs = getAllowedSubjectsForGradeStream(currentUser, quizGrade, st);
+                      if (subs[0]) setQuizSubject(subs[0]);
+                    }}
+                    className="w-full min-h-[42px] px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
+                  >
+                    {allowedQuizStreams.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Subject</label>
                   <select
                     value={quizSubject}
                     onChange={(e) => setQuizSubject(e.target.value as SubjectName)}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
+                    className="w-full min-h-[42px] px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold bg-white"
                   >
-                    {getSubjectsForGrade(quizGrade).map(sub => (
+                    {allowedQuizSubjects.map((sub) => (
                       <option key={sub} value={sub}>{sub}</option>
                     ))}
                   </select>
@@ -1900,18 +1980,22 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Pass Mark %</label>
                   <input
                     type="number"
+                    min={10}
+                    max={100}
                     value={quizPassPct}
                     onChange={(e) => setQuizPassPct(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
+                    className="w-full min-h-[42px] px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Time Limit (Mins)</label>
                   <input
                     type="number"
+                    min={1}
+                    max={180}
                     value={quizTimeLimit}
                     onChange={(e) => setQuizTimeLimit(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
+                    className="w-full min-h-[42px] px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono font-bold"
                   />
                 </div>
               </div>
@@ -2019,20 +2103,55 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
               >
                 Save & Publish Quiz
               </button>
             </form>
+            )}
           </div>
 
           {/* Student attempts overview */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900">
-              Student Quiz Performance Log ({quizAttempts.length} Total Submissions)
+              Student Quiz Performance Log ({quizAttempts.length} Scoped Submissions)
             </h3>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+
+            {/* Mobile Stacked Cards */}
+            <div className="md:hidden space-y-2.5">
+              {quizAttempts.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400 border border-slate-200 rounded-xl">
+                  No quiz submissions recorded for your assigned classes yet.
+                </div>
+              ) : (
+                quizAttempts.map((att) => (
+                  <div key={att.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1.5 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 truncate">{att.studentName}</div>
+                        <div className="text-[11px] text-slate-500">Grade {att.grade} ({att.stream})</div>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase shrink-0 ${
+                          att.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {att.passed ? 'PASS' : 'FAIL'} · {att.percentage}%
+                      </span>
+                    </div>
+                    <div className="text-slate-700 font-medium">{att.quizTitle}</div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/70">
+                      <span className="font-mono font-bold text-slate-800">Score: {att.score} / {att.totalQuestions}</span>
+                      <span className="font-mono">{att.completedAt}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-xs">
                 <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Student Name</th>

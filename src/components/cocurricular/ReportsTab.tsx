@@ -131,7 +131,8 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
             <h4 className="font-black text-xs text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1">
               Activities & Academy Summary
             </h4>
-            <table className="w-full text-left text-xs border border-slate-200">
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full min-w-[540px] text-left text-xs">
               <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
                 <tr>
                   <th className="p-2">Activity Name</th>
@@ -155,6 +156,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

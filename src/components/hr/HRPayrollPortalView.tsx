@@ -348,7 +348,72 @@ export const HRPayrollPortalView: React.FC<HRPayrollPortalViewProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Stacked Staff Payroll Cards */}
+          <div className="md:hidden space-y-3">
+            {filteredEmployees.map((emp) => {
+              const allowances = emp.houseAllowance + emp.commuterAllowance + emp.responsibilityAllowance;
+              const calc = calculateKenyanPayrollDeductions(emp.grossPay);
+              return (
+                <div key={`mob-emp-${emp.id}`} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-slate-950 font-serif truncate">{emp.name}</div>
+                      <div className="text-[11px] text-slate-600">{emp.designation} · {emp.department}</div>
+                      <div className="text-[10px] font-mono text-slate-500">{emp.employeeNumber} · PIN: {emp.kraPin}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPayslip({
+                          id: `slip-${emp.id}`,
+                          payrollRunId: 'run-active',
+                          tenantId: currentTenant.id,
+                          employeeId: emp.id,
+                          employeeName: emp.name,
+                          employeeNumber: emp.employeeNumber,
+                          kraPin: emp.kraPin,
+                          month: 'Term 1, 2026',
+                          academicYear: '2026',
+                          basicSalary: emp.basicSalary,
+                          houseAllowance: emp.houseAllowance,
+                          commuterAllowance: emp.commuterAllowance,
+                          responsibilityAllowance: emp.responsibilityAllowance,
+                          grossEarnings: emp.grossPay,
+                          payeTax: calc.paye,
+                          nssfDeduction: calc.nssf,
+                          nhifShifDeduction: calc.nhifShif,
+                          housingLevyDeduction: calc.housingLevy,
+                          otherDeductions: 0,
+                          totalDeductions: calc.totalDeductions,
+                          netPayable: calc.netPay,
+                          disbursementStatus: 'Disbursed via Bank Batch'
+                        });
+                      }}
+                      className="min-h-[38px] px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer"
+                    >
+                      Payslip
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/70 font-mono">
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Basic</div>
+                      <div className="text-slate-800">KES {emp.basicSalary.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Allowances</div>
+                      <div className="text-slate-600">KES {allowances.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Gross</div>
+                      <div className="font-black text-slate-950">KES {emp.grossPay.toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 uppercase font-mono font-bold text-[10px] border-y border-slate-200">
                 <tr>

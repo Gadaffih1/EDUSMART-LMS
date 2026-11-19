@@ -385,11 +385,11 @@ export const StudentVirtualClassroomPanel: React.FC<StudentVirtualClassroomPanel
 
       {/* Completed Section */}
       {sectionTab === 'completed' && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
           {completedLessons.length === 0 ? (
             <div className="p-8 text-center text-xs text-slate-500">No completed lessons yet.</div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full min-w-[540px] text-left border-collapse text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase text-slate-500">
                 <tr>
                   <th className="py-3 px-4">Subject & Topic</th>

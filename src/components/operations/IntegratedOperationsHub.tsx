@@ -152,62 +152,65 @@ export const IntegratedOperationsHub: React.FC<IntegratedOperationsHubProps> = (
           The "Shared Architecture & Starter Package" tab has been completely removed.
       */}
       {isExecutiveRole ? (
-        /* Executive Navigation Bar: 4 Operational Portals Only (Shared Architecture Removed) */
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-2 sm:p-3 flex items-center justify-between gap-2 overflow-x-auto">
-          <div className="flex items-center gap-1.5 min-w-0">
+        /* Executive Navigation Bar: 4 Operational Portals Only */
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs p-2.5 sm:p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 min-w-0">
             <button
+              type="button"
               onClick={() => setActivePortal('finance')}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                 activePortal === 'finance'
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400'
+                  ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-400'
                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Wallet className="w-4 h-4" />
-              <span>1. Finance Portal</span>
+              <Wallet className="w-4 h-4 shrink-0" />
+              <span className="truncate">Finance</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActivePortal('procurement')}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                 activePortal === 'procurement'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-2 ring-blue-400'
+                  ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <ShoppingCart className="w-4 h-4" />
-              <span>2. Procurement Portal</span>
+              <ShoppingCart className="w-4 h-4 shrink-0" />
+              <span className="truncate">Procurement</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActivePortal('stores')}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                 activePortal === 'stores'
-                  ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 ring-2 ring-amber-300'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-sm ring-1 ring-amber-300'
                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Package className="w-4 h-4" />
-              <span>3. Stores & Inventory</span>
+              <Package className="w-4 h-4 shrink-0" />
+              <span className="truncate">Stores & Inventory</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActivePortal('hr_payroll')}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex items-center justify-center sm:justify-start gap-2 px-3 py-2 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer ${
                 activePortal === 'hr_payroll'
-                  ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30 ring-2 ring-purple-400'
+                  ? 'bg-purple-600 text-white shadow-sm ring-1 ring-purple-400'
                   : 'text-slate-700 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <Users className="w-4 h-4" />
-              <span>4. HR & Payroll</span>
+              <Users className="w-4 h-4 shrink-0" />
+              <span className="truncate">HR & Payroll</span>
             </button>
           </div>
 
           {/* School Isolation & Executive Badge */}
           <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs shrink-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-slate-700">Campus: {currentTenant.name}</span>
+            <span className="font-semibold text-slate-700 truncate max-w-[180px]">Campus: {currentTenant.name}</span>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold uppercase">
               Executive Oversight
             </span>
@@ -215,18 +218,18 @@ export const IntegratedOperationsHub: React.FC<IntegratedOperationsHubProps> = (
         </div>
       ) : (
         /* Dedicated Officer Role-Scoped Header (Strictly Scoped: No access to other officers' workspaces) */
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl ${currentMeta.bgHeader} ${currentMeta.textAccent} flex items-center justify-center shrink-0 border ${currentMeta.borderHeader} shadow-inner`}>
-              <IconComponent className="w-6 h-6" />
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl ${currentMeta.bgHeader} ${currentMeta.textAccent} flex items-center justify-center shrink-0 border ${currentMeta.borderHeader} shadow-inner`}>
+              <IconComponent className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${currentMeta.badgeBg} flex items-center gap-1`}>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${currentMeta.badgeBg} inline-flex items-center gap-1`}>
                   <Lock className="w-3 h-3" />
                   <span>Role-Scoped Access</span>
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 font-mono truncate">
                   {currentMeta.officerTitle}
                 </span>
               </div>
@@ -240,10 +243,9 @@ export const IntegratedOperationsHub: React.FC<IntegratedOperationsHubProps> = (
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <div className="px-3.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex flex-wrap items-center gap-2">
               <span className="font-bold text-slate-700">{currentTenant.name}</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200 text-slate-800 font-bold uppercase">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 font-bold uppercase">
                 Tenant Isolated
               </span>
             </div>

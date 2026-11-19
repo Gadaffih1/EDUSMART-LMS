@@ -1230,7 +1230,8 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                   <div className="text-xs font-black uppercase tracking-wider text-slate-800">
                     Formative Strand Assessment Summary:
                   </div>
-                  <table className="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[480px] text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-left">
                       <tr>
                         <th className="p-2.5">Learning Area / Subject</th>
@@ -1266,6 +1267,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                       </tr>
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
                 {/* 2. OFFICIAL FOOTER WITH PRINCIPAL ENDORSEMENT & INSTITUTIONAL SEAL */}

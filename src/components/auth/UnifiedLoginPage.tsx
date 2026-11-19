@@ -188,47 +188,46 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-sky-50/30 to-slate-100 flex flex-col justify-between selection:bg-blue-600 selection:text-white">
       {/* Top Header Navigation */}
-      <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-2">
+      <header className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4 flex flex-wrap items-center justify-between gap-2">
         <button
+          type="button"
           onClick={onBackToLanding}
-          className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-blue-700 bg-white/80 hover:bg-white px-3.5 py-2 rounded-xl border border-slate-200 transition-all shadow-2xs cursor-pointer"
+          className="min-h-[40px] flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white/90 hover:bg-white px-3.5 py-2 rounded-xl border border-slate-200 transition-all shadow-2xs cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4 text-slate-500" />
-          <span>Back to Public Website</span>
+          <ArrowLeft className="w-4 h-4 text-slate-500 shrink-0" />
+          <span>Back to Website</span>
         </button>
 
         <div className="flex items-center gap-2">
           <PWAInstallButton variant="compact" label="Install App" />
-          <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 bg-white/80 px-3 py-1.5 rounded-xl border border-slate-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <Database className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">Institution Sync:</span>
-            <span className="text-emerald-700 font-bold">Strict Tenant Isolation</span>
+          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-600 bg-white/90 px-3 py-1.5 rounded-xl border border-slate-200">
+            <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="text-emerald-700 font-bold">Tenant Isolated</span>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200/90 p-6 sm:p-8 space-y-6">
+      <main className="flex-1 flex items-center justify-center px-3 sm:px-4 py-6 sm:py-8">
+        <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200/90 p-5 sm:p-8 space-y-5 sm:space-y-6">
           {/* Brand Logo & Title */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center gap-2.5 p-2 px-3 bg-white rounded-2xl border border-slate-200 shadow-xs mb-1">
+            <div className="inline-flex items-center justify-center gap-2.5 p-2 px-3 bg-white rounded-2xl border border-slate-200 shadow-xs mb-1 max-w-full">
               <img
                 src="/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg"
                 alt="Edu-Smart PORTAL By Gadsa Systems"
-                className="w-10 h-10 object-contain"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/edusmart-portal-logo.jpeg';
                 }}
               />
-              <div className="text-left leading-tight">
-                <span className="font-sans font-black text-blue-950 text-base block">
+              <div className="text-left leading-tight min-w-0">
+                <span className="font-sans font-black text-blue-950 text-base block truncate">
                   <span className="text-[#0B3075]">Edu-</span>
                   <span className="text-[#F5A623]">Smart</span>{' '}
                   <span className="text-[#0B3075] text-xs uppercase font-extrabold ml-1">PORTAL</span>
                 </span>
-                <span className="text-[10px] font-mono font-bold text-slate-500 tracking-wider block">
+                <span className="text-[11px] font-mono font-bold text-slate-500 tracking-wider block truncate">
                   By Gadsa Systems · Multi-Tenant
                 </span>
               </div>
@@ -237,10 +236,10 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 font-serif tracking-tight">
               {adminOnly ? 'Platform Admin Console Sign In' : 'User Login'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500">
+            <p className="text-sm text-slate-600 leading-relaxed">
               {adminOnly
                 ? 'Sign in with your platform super administrator email and password.'
-                : 'Sign in with your school-assigned email and password, or use an enrolled FaceID/TouchID passkey. Access is strictly confined to your institution.'}
+                : 'Sign in with your school-assigned email and password, or use an enrolled FaceID/TouchID passkey.'}
             </p>
           </div>
 
@@ -255,24 +254,25 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
                   </div>
                   <input
                     type="email"
+                    inputMode="email"
                     required
                     autoComplete="username"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     placeholder="name@school.ac.ke"
-                    className="w-full pl-10 pr-4 py-3 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50/90 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400 font-mono"
+                    className="w-full min-h-[46px] pl-10 pr-4 py-3 text-sm font-medium text-slate-900 bg-slate-50/90 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400 font-mono"
                   />
                 </div>
               </div>
 
               {/* Password Input */}
               <div className="space-y-1.5 text-left">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="block text-xs font-bold text-slate-700">Password</label>
                   <button
                     type="button"
                     onClick={() => void handlePasswordRecovery()}
-                    className="text-[11px] font-bold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer"
+                    className="text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline cursor-pointer"
                   >
                     Forgot password?
                   </button>
@@ -288,12 +288,13 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-10 py-3 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50/90 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
+                    className="w-full min-h-[46px] pl-10 pr-11 py-3 text-sm font-medium text-slate-900 bg-slate-50/90 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all placeholder:text-slate-400"
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    className="absolute inset-y-0 right-0 px-3.5 flex items-center text-slate-500 hover:text-slate-700 cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

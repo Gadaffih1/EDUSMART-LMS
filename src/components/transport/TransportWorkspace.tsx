@@ -2299,8 +2299,8 @@ export const TransportWorkspace: React.FC<TransportWorkspaceProps> = ({
               </div>
 
               {/* Passenger List */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-                <table className="w-full text-left border-collapse">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto text-xs">
+                <table className="w-full text-left border-collapse min-w-[580px]">
                   <thead>
                     <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-bold uppercase text-slate-600">
                       <th className="py-2.5 px-3">#</th>

@@ -1193,8 +1193,8 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
-                <table className="w-full text-left">
+              <div className="border border-slate-200 rounded-lg overflow-x-auto text-xs">
+                <table className="w-full text-left min-w-[560px]">
                   <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                     <tr>
                       <th className="py-2.5 px-3">Pass Code</th>

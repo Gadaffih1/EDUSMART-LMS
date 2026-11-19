@@ -1318,8 +1318,8 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
               </div>
 
               {/* Subject Breakdown Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[540px]">
                   <thead>
                     <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-700">
                       <th className="py-2.5 px-3">Learning Area / Subject</th>

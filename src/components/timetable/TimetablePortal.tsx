@@ -26,6 +26,7 @@ import { TimetableAllocationsPanel } from './TimetableAllocationsPanel';
 import { TimetableTeachersPanel } from './TimetableTeachersPanel';
 import { TimetableDragDropEditor } from './TimetableDragDropEditor';
 import { TimetableVersionsAndReportsPanel } from './TimetableVersionsAndReportsPanel';
+import { ScrollableMatrixTableWrapper } from '../common/ResponsiveUIKit';
 import { 
   Calendar, 
   Clock, 
@@ -1522,7 +1523,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <ScrollableMatrixTableWrapper hint="Swipe horizontally to view Monday–Friday periods" className="border-0">
             <table className="w-full text-left border-collapse min-w-[850px]">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 text-xs font-bold">
@@ -1703,7 +1704,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableMatrixTableWrapper>
         </div>
       )}
 
@@ -3234,7 +3235,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </div>
 
               {/* High-Contrast Print Grid */}
-              <table className="w-full text-left text-xs border border-slate-900 border-collapse">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border border-slate-900 border-collapse min-w-[680px]">
                 <thead>
                   <tr className="bg-slate-200 border-b border-slate-900 font-black text-slate-900">
                     <th className="p-2 border-r border-slate-900 w-28 text-center">Period / Time</th>
@@ -3306,6 +3308,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   })}
                 </tbody>
               </table>
+              </div>
 
               {/* Signatures & Seal */}
               <div className="pt-6 border-t border-slate-200 grid grid-cols-3 gap-6 text-xs text-slate-700">
@@ -3444,8 +3447,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </div>
 
               {/* Editable Periods List */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[620px]">
                   <thead>
                     <tr className="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">Session Type</th>

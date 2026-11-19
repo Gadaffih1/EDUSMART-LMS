@@ -598,39 +598,43 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
         </div>
 
         {/* Child Selector & Quick Actions */}
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0">
+          <div className="relative min-w-0">
             <select
+              aria-label="Select child"
               value={selectedChildId}
               onChange={(e) => setSelectedChildId(e.target.value)}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 text-emerald-300 border border-slate-700 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+              className="max-w-[135px] sm:max-w-[220px] truncate px-2.5 sm:px-3 py-1.5 min-h-[38px] rounded-xl bg-slate-800 text-emerald-300 border border-slate-700 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
             >
-              <option value="all">👨‍👩‍👧 All Children ({myChildren.length})</option>
+              <option value="all">All Children ({myChildren.length})</option>
               {myChildren.map((child) => (
                 <option key={child.id} value={child.id}>
-                  👤 {child.name} (Gr {child.grade} {child.stream})
+                  {child.name} (Gr {child.grade} {child.stream})
                 </option>
               ))}
             </select>
           </div>
 
           <button
+            type="button"
             onClick={() => {
               setPayChildId(selectedChild?.id || myChildren[0]?.id || '');
               setShowPaymentModal(true);
             }}
-            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="min-h-[38px] px-2.5 sm:px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
+            aria-label="Pay Fees"
           >
             <CreditCard className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Pay Fees</span>
           </button>
 
           <button
+            type="button"
             onClick={() => {
               setAbsenceChildId(selectedChild?.id || myChildren[0]?.id || '');
               setShowAbsenceModal(true);
             }}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer hidden sm:flex"
+            className="min-h-[38px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition-all items-center gap-1.5 cursor-pointer hidden sm:flex shrink-0"
           >
             <ClipboardCheck className="w-3.5 h-3.5 text-emerald-400" />
             <span>Absence</span>
@@ -671,11 +675,21 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
                 </div>
               )}
             </div>
-            {!isSidebarCollapsed && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
-                Active
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isSidebarCollapsed && (
+                <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  Active
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                aria-label="Close parent navigation menu"
+                className="lg:hidden min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Groups */}
@@ -749,8 +763,54 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
           </div>
         </aside>
 
+        {/* Mobile Bottom Navigation Bar */}
+        <nav
+          aria-label="Parent quick navigation"
+          className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] pb-safe"
+        >
+          <div className="grid grid-cols-5 h-14 max-w-screen-md mx-auto">
+            {([
+              { id: 'dashboard' as ParentNavigationTab, label: 'Home', icon: Home },
+              { id: 'my_children' as ParentNavigationTab, label: 'Children', icon: Users },
+              { id: 'fees' as ParentNavigationTab, label: 'Fees', icon: CreditCard },
+              { id: 'attendance' as ParentNavigationTab, label: 'Attendance', icon: ClipboardCheck },
+            ]).map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-bold transition-colors cursor-pointer min-w-0 ${
+                    isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate max-w-full leading-tight">{item.label}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              aria-label="Open all parent portal modules"
+              className={`flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-bold transition-colors cursor-pointer ${
+                isMobileSidebarOpen ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Menu className="w-4 h-4 shrink-0" />
+              <span className="leading-tight">Modules</span>
+            </button>
+          </div>
+        </nav>
+
         {/* Content View Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+        <main className="flex-1 min-w-0 p-3.5 sm:p-6 lg:p-8 overflow-y-auto space-y-5 sm:space-y-6">
 
           {/* ========================================================
               TOP HEADER & MULTIPLE CHILDREN SELECTOR (ALL CHILDREN ▼)
@@ -1514,47 +1574,75 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
             </div>
           </div>
 
-          {/* Roll Call Table */}
+          {/* Roll Call Table (Mobile Stacked Cards + Desktop Table) */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
             <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-xs text-slate-800">
               Verified Daily Roll Call Ledger
             </div>
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-4">Date</th>
-                  <th className="py-2.5 px-4">Learner</th>
-                  <th className="py-2.5 px-4">Class</th>
-                  <th className="py-2.5 px-4">Roll Call Status</th>
-                  <th className="py-2.5 px-4">Class Teacher Remarks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {relevantChildren.flatMap(c => {
-                  const summary = Storage.getStudentAttendanceSummary(c.id);
-                  return summary.history.slice(0, 5).map(h => ({
-                    childName: c.name,
-                    grade: c.grade,
-                    stream: c.stream,
-                    ...h
-                  }));
-                }).map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="py-2 px-4 font-mono text-slate-500">{item.date}</td>
-                    <td className="py-2 px-4 font-bold text-slate-900">{item.childName}</td>
-                    <td className="py-2 px-4 text-slate-600">Grade {item.grade} ({item.stream})</td>
-                    <td className="py-2 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
-                        item.status === 'present' ? 'bg-emerald-100 text-emerald-800' : item.status === 'excused' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="py-2 px-4 text-slate-500">{item.remarks || 'Present on time for morning assembly'}</td>
+            <div className="md:hidden divide-y divide-slate-200">
+              {relevantChildren.flatMap(c => {
+                const summary = Storage.getStudentAttendanceSummary(c.id);
+                return summary.history.slice(0, 5).map(h => ({
+                  childName: c.name,
+                  grade: c.grade,
+                  stream: c.stream,
+                  ...h
+                }));
+              }).map((item, idx) => (
+                <div key={idx} className="p-3.5 space-y-1.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900 truncate">{item.childName}</div>
+                      <div className="text-[11px] text-slate-500">Grade {item.grade} ({item.stream}) · <span className="font-mono">{item.date}</span></div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0 ${
+                      item.status === 'present' ? 'bg-emerald-100 text-emerald-800' : item.status === 'excused' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-[11px]">{item.remarks || 'Present on time for morning assembly'}</p>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full min-w-[600px] text-left text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-4">Date</th>
+                    <th className="py-2.5 px-4">Learner</th>
+                    <th className="py-2.5 px-4">Class</th>
+                    <th className="py-2.5 px-4">Roll Call Status</th>
+                    <th className="py-2.5 px-4">Class Teacher Remarks</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {relevantChildren.flatMap(c => {
+                    const summary = Storage.getStudentAttendanceSummary(c.id);
+                    return summary.history.slice(0, 5).map(h => ({
+                      childName: c.name,
+                      grade: c.grade,
+                      stream: c.stream,
+                      ...h
+                    }));
+                  }).map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50">
+                      <td className="py-2 px-4 font-mono text-slate-500">{item.date}</td>
+                      <td className="py-2 px-4 font-bold text-slate-900">{item.childName}</td>
+                      <td className="py-2 px-4 text-slate-600">Grade {item.grade} ({item.stream})</td>
+                      <td className="py-2 px-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                          item.status === 'present' ? 'bg-emerald-100 text-emerald-800' : item.status === 'excused' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="py-2 px-4 text-slate-500">{item.remarks || 'Present on time for morning assembly'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       )}
@@ -1573,7 +1661,7 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {relevantChildren.flatMap(c => {
-              const list = Storage.getAssignments(c.grade);
+              const list = Storage.getAssignments(c.grade, c.stream);
               return list.map(a => ({ ...a, childName: c.name }));
             }).map((assign) => (
               <div key={assign.id} className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3 flex flex-col justify-between">
@@ -1697,50 +1785,81 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
             ))}
           </div>
 
-          {/* Payment Receipts Ledger */}
+          {/* Payment Receipts Ledger (Mobile Stacked Cards + Desktop Table) */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-xs text-slate-800 flex items-center justify-between">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-xs text-slate-800 flex flex-wrap items-center justify-between gap-2">
               <span>Verified Payment Receipts Ledger</span>
               <span className="text-slate-500 font-normal">Official digital receipts</span>
             </div>
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-4">Date</th>
-                  <th className="py-2.5 px-4">Reference</th>
-                  <th className="py-2.5 px-4">Term</th>
-                  <th className="py-2.5 px-4">Amount</th>
-                  <th className="py-2.5 px-4">Payment Method</th>
-                  <th className="py-2.5 px-4">Status</th>
-                  <th className="py-2.5 px-4 text-center">Receipt</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {feeTransactions.map((txn) => (
-                  <tr key={txn.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-4 font-mono text-slate-500">{txn.date}</td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{txn.reference}</td>
-                    <td className="py-2.5 px-4 text-slate-600">{txn.term}</td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-emerald-800">KES {txn.amount.toLocaleString()}</td>
-                    <td className="py-2.5 px-4 text-slate-600">{txn.method}</td>
-                    <td className="py-2.5 px-4">
+            <div className="md:hidden divide-y divide-slate-200">
+              {feeTransactions.map((txn) => (
+                <div key={txn.id} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-mono font-bold text-slate-900">{txn.reference}</div>
+                      <div className="text-[11px] text-slate-500">{txn.term} · {txn.date}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono font-bold text-emerald-800">KES {txn.amount.toLocaleString()}</div>
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-100 text-emerald-800">
                         {txn.status}
                       </span>
-                    </td>
-                    <td className="py-2.5 px-4 text-center">
-                      <button
-                        onClick={() => setReceiptToPrint(txn)}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs"
-                      >
-                        <Printer className="w-3 h-3 text-slate-600" />
-                        <span>Receipt</span>
-                      </button>
-                    </td>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <span className="text-slate-600">{txn.method}</span>
+                    <button
+                      type="button"
+                      onClick={() => setReceiptToPrint(txn)}
+                      className="min-h-[36px] px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Receipt</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full min-w-[660px] text-left text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-4">Date</th>
+                    <th className="py-2.5 px-4">Reference</th>
+                    <th className="py-2.5 px-4">Term</th>
+                    <th className="py-2.5 px-4">Amount</th>
+                    <th className="py-2.5 px-4">Payment Method</th>
+                    <th className="py-2.5 px-4">Status</th>
+                    <th className="py-2.5 px-4 text-center">Receipt</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {feeTransactions.map((txn) => (
+                    <tr key={txn.id} className="hover:bg-slate-50">
+                      <td className="py-2.5 px-4 font-mono text-slate-500">{txn.date}</td>
+                      <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{txn.reference}</td>
+                      <td className="py-2.5 px-4 text-slate-600">{txn.term}</td>
+                      <td className="py-2.5 px-4 font-mono font-bold text-emerald-800">KES {txn.amount.toLocaleString()}</td>
+                      <td className="py-2.5 px-4 text-slate-600">{txn.method}</td>
+                      <td className="py-2.5 px-4">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-100 text-emerald-800">
+                          {txn.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        <button
+                          onClick={() => setReceiptToPrint(txn)}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs"
+                        >
+                          <Printer className="w-3 h-3 text-slate-600" />
+                          <span>Receipt</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       )}
@@ -2169,51 +2288,81 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
             </div>
           )}
 
-          {/* Gate Logs Table */}
+          {/* Gate Logs Table (Mobile Stacked Cards + Desktop Table) */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
             <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-xs text-slate-800">
               Compound Exit Security Passes
             </div>
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-4">Date</th>
-                  <th className="py-2.5 px-4">Learner</th>
-                  <th className="py-2.5 px-4">Security Code</th>
-                  <th className="py-2.5 px-4">Reason</th>
-                  <th className="py-2.5 px-4">Departure</th>
-                  <th className="py-2.5 px-4">Status</th>
-                  <th className="py-2.5 px-4 text-center">Pass Slip</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {relevantGatePasses.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 px-4 font-mono text-slate-500">{p.departureTime.split(' ')[0] || '2026-09-29'}</td>
-                    <td className="py-2.5 px-4 font-bold text-slate-900">{p.studentName}</td>
-                    <td className="py-2.5 px-4 font-mono font-bold text-amber-700">{p.gatePassCode}</td>
-                    <td className="py-2.5 px-4 text-slate-700">{p.reason}</td>
-                    <td className="py-2.5 px-4 font-mono text-slate-600">{p.departureTime}</td>
-                    <td className="py-2.5 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
-                        p.status === 'returned' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-4 text-center">
-                      <button
-                        onClick={() => setPassToPrint(p)}
-                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs"
-                      >
-                        <Printer className="w-3 h-3 text-slate-600" />
-                        <span>Pass</span>
-                      </button>
-                    </td>
+            <div className="md:hidden divide-y divide-slate-200">
+              {relevantGatePasses.map((p) => (
+                <div key={p.id} className="p-3.5 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-900 truncate">{p.studentName}</div>
+                      <div className="font-mono text-[11px] font-bold text-amber-700">{p.gatePassCode} · {p.departureTime}</div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0 ${
+                      p.status === 'returned' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {p.status}
+                    </span>
+                  </div>
+                  <p className="text-slate-600">{p.reason}</p>
+                  <div className="pt-1.5 border-t border-slate-100 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setPassToPrint(p)}
+                      className="min-h-[36px] px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Pass Slip</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full min-w-[660px] text-left text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-4">Date</th>
+                    <th className="py-2.5 px-4">Learner</th>
+                    <th className="py-2.5 px-4">Security Code</th>
+                    <th className="py-2.5 px-4">Reason</th>
+                    <th className="py-2.5 px-4">Departure</th>
+                    <th className="py-2.5 px-4">Status</th>
+                    <th className="py-2.5 px-4 text-center">Pass Slip</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {relevantGatePasses.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="py-2.5 px-4 font-mono text-slate-500">{p.departureTime.split(' ')[0] || '2026-09-29'}</td>
+                      <td className="py-2.5 px-4 font-bold text-slate-900">{p.studentName}</td>
+                      <td className="py-2.5 px-4 font-mono font-bold text-amber-700">{p.gatePassCode}</td>
+                      <td className="py-2.5 px-4 text-slate-700">{p.reason}</td>
+                      <td className="py-2.5 px-4 font-mono text-slate-600">{p.departureTime}</td>
+                      <td className="py-2.5 px-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                          p.status === 'returned' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-4 text-center">
+                        <button
+                          onClick={() => setPassToPrint(p)}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold inline-flex items-center gap-1 shadow-2xs"
+                        >
+                          <Printer className="w-3 h-3 text-slate-600" />
+                          <span>Pass</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
       )}

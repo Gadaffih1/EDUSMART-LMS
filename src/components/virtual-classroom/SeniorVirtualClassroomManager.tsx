@@ -1297,11 +1297,11 @@ export const SeniorVirtualClassroomManager: React.FC<SeniorVirtualClassroomManag
                 </button>
               </div>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 text-xs">
+            <div className="p-4 sm:p-6 overflow-y-auto overflow-x-auto flex-1 text-xs">
               {!attendanceRegister ? (
                 <div className="text-center py-8 text-slate-500">Loading verified register...</div>
               ) : (
-                <table className="w-full text-left border-collapse">
+                <table className="w-full min-w-[480px] text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-500 uppercase text-[10px]">
                       <th className="py-2 pr-3">Student</th>

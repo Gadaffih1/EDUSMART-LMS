@@ -196,11 +196,15 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
     window.addEventListener('subject-teacher-chats-updated', handleUpdate);
     window.addEventListener('teacher-lesson-files-updated', handleUpdate);
     window.addEventListener('announcements-updated', handleUpdate);
+    window.addEventListener('quizzes-updated', handleUpdate);
+    window.addEventListener('assignments-updated', handleUpdate);
     return () => {
       window.removeEventListener('users-updated', handleUpdate);
       window.removeEventListener('subject-teacher-chats-updated', handleUpdate);
       window.removeEventListener('teacher-lesson-files-updated', handleUpdate);
       window.removeEventListener('announcements-updated', handleUpdate);
+      window.removeEventListener('quizzes-updated', handleUpdate);
+      window.removeEventListener('assignments-updated', handleUpdate);
     };
   }, []);
 
@@ -221,7 +225,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const gradeVideos = Storage.getVideos(studentGrade);
   const gradeAudios = Storage.getAudios(studentGrade);
   const gradeImages = Storage.getLessonImages(studentGrade);
-  const gradeQuizzes = Storage.getQuizzes(studentGrade);
+  const gradeQuizzes = Storage.getQuizzes(studentGrade, studentStream);
   // Strictly stream-filtered announcements (Local + Grade-Based Hierarchy Backend)
   const gradeAnnouncements = Storage.getAnnouncements(studentGrade, studentStream);
   const [scopedDbAnnouncements, setScopedDbAnnouncements] = useState<GradeAnnouncementItem[]>([]);
@@ -431,11 +435,21 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
               )}
             </div>
-            {!isSidebarCollapsed && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
-                Active
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isSidebarCollapsed && (
+                <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  Active
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                aria-label="Close student navigation menu"
+                className="lg:hidden min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Groups */}
@@ -505,8 +519,54 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           </div>
         </aside>
 
+        {/* Mobile Bottom Navigation Bar */}
+        <nav
+          aria-label="Student quick navigation"
+          className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] pb-safe"
+        >
+          <div className="grid grid-cols-5 h-14 max-w-screen-md mx-auto">
+            {([
+              { id: 'resources' as const, label: 'Resources', icon: BookOpen },
+              { id: 'assignments' as const, label: 'Homework', icon: FileText },
+              { id: 'quiz_results' as const, label: 'Quizzes', icon: CheckSquare },
+              { id: 'reports' as const, label: 'Reports', icon: Award },
+            ]).map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-bold transition-colors cursor-pointer min-w-0 ${
+                    isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate max-w-full leading-tight">{item.label}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              aria-label="Open all student modules"
+              className={`flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-bold transition-colors cursor-pointer ${
+                isMobileSidebarOpen ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Menu className="w-4 h-4 shrink-0" />
+              <span className="leading-tight">Modules</span>
+            </button>
+          </div>
+        </nav>
+
         {/* Content View Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+        <main className="flex-1 min-w-0 p-3.5 sm:p-6 lg:p-8 overflow-y-auto space-y-5 sm:space-y-6">
 
       {activeTab !== 'virtual_class' && (
         <StudentVirtualClassroomPanel
@@ -1279,9 +1339,30 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   </div>
                 </div>
 
-                {/* Multi-subject Scores Table */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                {/* Mobile Stacked Subject Score Cards */}
+                <div className="md:hidden space-y-2.5">
+                  {rc.subjects.map((sub, sIdx) => (
+                    <div key={sIdx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-bold text-slate-900 text-sm">{sub.subject}</div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono font-bold text-xs shrink-0">
+                          {sub.total}% · {sub.gradeLetter}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[11px] font-mono bg-white p-2 rounded-lg border border-slate-200/80">
+                        <div><span className="text-slate-400 block font-sans text-[10px]">Opener</span>{sub.openerScore}/30</div>
+                        <div><span className="text-slate-400 block font-sans text-[10px]">Mid-Term</span>{sub.midTermScore}/30</div>
+                        <div><span className="text-slate-400 block font-sans text-[10px]">End-Term</span>{sub.endTermScore}/40</div>
+                      </div>
+                      <div className="text-[11px] text-slate-700 font-semibold">{sub.rubricLevel}</div>
+                      <p className="text-[11px] text-slate-600 italic">"{sub.remarks}"</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Multi-subject Scores Table */}
+                <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-left text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                       <tr>
                         <th className="py-2.5 px-3">Subject / Learning Area</th>
@@ -1383,40 +1464,66 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
 
                 {attSummary.history.length > 0 && (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                        <tr>
-                          <th className="py-2 px-3">Date</th>
-                          <th className="py-2 px-3 text-center">Status</th>
-                          <th className="py-2 px-3">Class Teacher Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 font-mono">
-                        {attSummary.history.map((h, hIdx) => (
-                          <tr key={hIdx} className="hover:bg-slate-50">
-                            <td className="py-2 px-3 font-bold text-slate-800">{h.date}</td>
-                            <td className="py-2 px-3 text-center">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                                  h.status === 'present'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : h.status === 'absent'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {h.status}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 font-sans text-slate-600 italic">
-                              {h.remarks ? `"${h.remarks}"` : 'Regular attendance recorded'}
-                            </td>
+                  <>
+                    <div className="md:hidden space-y-2">
+                      {attSummary.history.map((h, hIdx) => (
+                        <div key={hIdx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono font-bold text-slate-900">{h.date}</span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                h.status === 'present'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : h.status === 'absent'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {h.status}
+                            </span>
+                          </div>
+                          <p className="text-slate-600 italic text-[11px]">
+                            {h.remarks ? `"${h.remarks}"` : 'Regular attendance recorded'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+                      <table className="w-full min-w-[480px] text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                          <tr>
+                            <th className="py-2 px-3">Date</th>
+                            <th className="py-2 px-3 text-center">Status</th>
+                            <th className="py-2 px-3">Class Teacher Remarks</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 font-mono">
+                          {attSummary.history.map((h, hIdx) => (
+                            <tr key={hIdx} className="hover:bg-slate-50">
+                              <td className="py-2 px-3 font-bold text-slate-800">{h.date}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                    h.status === 'present'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : h.status === 'absent'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {h.status}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 font-sans text-slate-600 italic">
+                                {h.remarks ? `"${h.remarks}"` : 'Regular attendance recorded'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             );
@@ -1462,58 +1569,93 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
               </button>
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">Quiz Title</th>
-                    <th className="py-3 px-4">Subject</th>
-                    <th className="py-3 px-4 text-center">Score</th>
-                    <th className="py-3 px-4 text-center">Percentage</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4">Completed On</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {studentAttempts.map((att) => (
-                    <tr key={att.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4 font-bold text-slate-900">{att.quizTitle}</td>
-                      <td className="py-3 px-4 text-slate-600 font-medium">{att.subject}</td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
-                        {att.score} / {att.totalQuestions}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-emerald-700">
-                        {att.percentage}%
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded font-mono uppercase ${
-                            att.passed
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {att.passed ? 'PASS' : 'FAIL'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{att.completedAt}</td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => {
-                            const quiz = gradeQuizzes.find(q => q.id === att.quizId);
-                            if (quiz) setActiveQuiz(quiz);
-                          }}
-                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs transition-colors"
-                        >
-                          Review / Retake
-                        </button>
-                      </td>
+            <>
+              <div className="md:hidden space-y-2.5">
+                {studentAttempts.map((att) => (
+                  <div key={att.id} className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-xs space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-sm">{att.quizTitle}</div>
+                        <div className="text-[11px] text-slate-500">{att.subject} · {att.completedAt}</div>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase shrink-0 ${
+                          att.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {att.passed ? 'PASS' : 'FAIL'} · {att.percentage}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <span className="font-mono font-bold text-slate-800">Score: {att.score} / {att.totalQuestions}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const quiz = gradeQuizzes.find(q => q.id === att.quizId);
+                          if (quiz) setActiveQuiz(quiz);
+                        }}
+                        className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-xs cursor-pointer"
+                      >
+                        Review / Retake
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">Quiz Title</th>
+                      <th className="py-3 px-4">Subject</th>
+                      <th className="py-3 px-4 text-center">Score</th>
+                      <th className="py-3 px-4 text-center">Percentage</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4">Completed On</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {studentAttempts.map((att) => (
+                      <tr key={att.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-bold text-slate-900">{att.quizTitle}</td>
+                        <td className="py-3 px-4 text-slate-600 font-medium">{att.subject}</td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
+                          {att.score} / {att.totalQuestions}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-emerald-700">
+                          {att.percentage}%
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded font-mono uppercase ${
+                              att.passed
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {att.passed ? 'PASS' : 'FAIL'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{att.completedAt}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => {
+                              const quiz = gradeQuizzes.find(q => q.id === att.quizId);
+                              if (quiz) setActiveQuiz(quiz);
+                            }}
+                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs transition-colors"
+                          >
+                            Review / Retake
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}

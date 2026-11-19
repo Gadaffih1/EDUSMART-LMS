@@ -1240,8 +1240,8 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
               Learning Area Performance Distribution
             </h4>
-            <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-              <table className="w-full text-left">
+            <div className="border border-slate-200 rounded-xl overflow-x-auto text-xs">
+              <table className="w-full text-left min-w-[540px]">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Subject</th>

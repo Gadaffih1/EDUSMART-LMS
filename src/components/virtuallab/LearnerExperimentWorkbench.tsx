@@ -366,8 +366,8 @@ export const LearnerExperimentWorkbench: React.FC<LearnerExperimentWorkbenchProp
               Laboratory Notebook Data Table
             </h3>
 
-            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4">
-              <table className="w-full text-xs text-left">
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 overflow-x-auto">
+              <table className="w-full min-w-[360px] text-xs text-left">
                 <thead className="border-b border-slate-200 text-slate-500 font-bold text-[10px] uppercase">
                   <tr>
                     <th className="py-2">Reading #</th>

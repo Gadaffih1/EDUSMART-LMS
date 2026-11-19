@@ -1355,21 +1355,18 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
   return (
     <>
-      {/* ACTION TRIGGER BUTTON (BOTTOM-RIGHT MAIN VIEWPORT OR DOCKED BOTTOM STRIP) */}
+      {/* ACTION TRIGGER BUTTON (CLEARS MOBILE BOTTOM NAV ON < lg) */}
       <aside 
         aria-label="Quick Actions Floating Menu" 
-        className={`fixed z-40 print:hidden flex items-center gap-1.5 transition-all duration-300 ${
-          isMinimizedOnMobile
-            ? 'bottom-3 right-3 sm:bottom-6 sm:right-6'
-            : 'bottom-4 right-4 sm:bottom-6 sm:right-6'
-        }`}
+        className="fixed z-40 print:hidden flex items-center gap-1.5 transition-all duration-300 bottom-16 right-3 sm:bottom-20 sm:right-4 lg:bottom-6 lg:right-6"
       >
         {/* Floating Quick Actions Trigger Pill */}
         <button
+          type="button"
           onClick={() => setIsOpen(prev => !prev)}
           className={`group flex items-center gap-2 rounded-2xl shadow-xl transition-all duration-300 cursor-pointer ${
             isMinimizedOnMobile
-              ? 'p-2 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl bg-slate-900/90 backdrop-blur-xs text-white border border-indigo-400/40 shadow-lg hover:scale-105 active:scale-95'
+              ? 'min-w-[44px] min-h-[44px] p-2.5 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl bg-slate-900/95 backdrop-blur-xs text-white border border-indigo-400/40 shadow-lg hover:scale-105 active:scale-95'
               : isOpen 
               ? 'px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-900 text-white ring-2 ring-indigo-500 shadow-indigo-500/25' 
               : 'px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 text-white hover:from-indigo-900 hover:to-slate-900 shadow-slate-900/40 hover:shadow-2xl hover:scale-105 active:scale-95 border border-indigo-500/30'
@@ -1382,10 +1379,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
           aria-expanded={isOpen}
         >
           <div className="relative">
-            <span className="flex h-2.5 w-2.5 absolute -top-0.5 -right-0.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
             <div className="w-6 h-6 rounded-lg bg-indigo-500/30 flex items-center justify-center text-amber-400">
               <Zap className="w-4 h-4 fill-amber-400 text-amber-400 transition-transform group-hover:rotate-12" />
             </div>
@@ -1430,7 +1423,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       {isOpen && (
         <div 
           ref={menuRef}
-          className="fixed bottom-20 right-4 sm:right-6 z-40 w-[calc(100vw-2rem)] sm:w-[440px] max-h-[82vh] flex flex-col bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:hidden"
+          className="fixed bottom-28 lg:bottom-20 right-3 sm:right-6 z-50 w-[calc(100vw-1.5rem)] sm:w-[440px] max-h-[75dvh] flex flex-col bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:hidden"
         >
           {/* HEADER: Role Badge & Identity */}
           <div className="p-4 sm:px-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shrink-0 border-b border-slate-800">

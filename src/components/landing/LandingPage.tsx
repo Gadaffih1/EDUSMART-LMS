@@ -3729,8 +3729,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <h4 className="font-bold text-slate-900 mb-2 uppercase text-[11px] tracking-wider">
                   Grade Passwords Directory (Grades 1 to 9)
                 </h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left">
+                <div className="border border-slate-200 rounded-lg overflow-x-auto">
+                  <table className="w-full min-w-[360px] text-left">
                     <thead className="bg-slate-100 text-slate-600 font-semibold text-[11px]">
                       <tr>
                         <th className="py-2 px-3">Grade Level</th>

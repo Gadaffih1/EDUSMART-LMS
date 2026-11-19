@@ -155,53 +155,120 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 
   return (
     <>
-      {/* Mobile Top/Bottom Drawer Controller Bar (< md) */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-600 shadow-2xl flex flex-col max-h-[65vh] animate-in slide-in-from-bottom duration-250">
-        <div className="p-3 bg-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs font-bold">Notifications ({notifications.length})</span>
-            {unreadCount > 0 && (
-              <span className="px-1.5 py-0.2 bg-rose-600 text-white rounded text-[10px] font-mono font-bold">
-                {unreadCount} unread
-              </span>
+      {/* Mobile Bottom Sheet Notification Center (< md) */}
+      <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+        <div
+          onClick={closeNotifications}
+          aria-hidden="true"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-[1px]"
+        />
+        <div className="relative z-10 bg-white rounded-t-3xl border-t border-slate-200 shadow-2xl flex flex-col max-h-[78dvh] pb-safe">
+          <div className="px-4 py-3 bg-slate-900 text-white rounded-t-3xl flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Bell className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="text-sm font-bold truncate">Notifications ({notifications.length})</span>
+              {unreadCount > 0 && (
+                <span className="px-1.5 py-0.5 bg-rose-600 text-white rounded-full text-[10px] font-mono font-bold shrink-0">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllAsRead}
+                  className="min-h-[36px] px-2.5 py-1 text-[11px] font-bold bg-slate-800 text-emerald-300 hover:bg-slate-700 rounded-lg cursor-pointer"
+                >
+                  Mark All Read
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={closeNotifications}
+                aria-label="Close notifications"
+                className="min-w-[36px] min-h-[36px] inline-flex items-center justify-center bg-slate-800 text-white hover:bg-slate-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile Category Filter Ribbon */}
+          <div className="px-3 py-2 bg-white border-b border-slate-200 flex items-center gap-1.5 overflow-x-auto text-xs">
+            {([
+              { id: 'all', label: 'All' },
+              { id: 'unread', label: `Unread (${unreadCount})` },
+              { id: 'assignment', label: 'Assignments' },
+              { id: 'grade', label: 'Grades' },
+              { id: 'announcement', label: 'Notices' },
+            ] as const).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFilter(tab.id)}
+                className={`min-h-[34px] px-3 py-1 rounded-lg font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                  filter === tab.id
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile Notification Cards (Urgent & Unread Prioritized) */}
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 bg-slate-50">
+            {filtered.length === 0 ? (
+              <div className="py-10 text-center text-slate-500 text-sm">
+                No notifications in this category.
+              </div>
+            ) : (
+              [...filtered]
+                .sort((a, b) => {
+                  const isUrgentNotif = (n: AppNotification) =>
+                    n.category === 'safety' || /urgent|emergency|alert|overdue|gate exit/i.test(n.title);
+                  const aUrgent = isUrgentNotif(a) ? 1 : 0;
+                  const bUrgent = isUrgentNotif(b) ? 1 : 0;
+                  return bUrgent - aUrgent;
+                })
+                .map((notif) => {
+                  const isUnread = !notif.readByUserIds?.includes(currentUser.id);
+                  const isUrgent =
+                    notif.category === 'safety' || /urgent|emergency|alert|overdue|gate exit/i.test(notif.title);
+                  return (
+                    <button
+                      type="button"
+                      key={notif.id}
+                      onClick={() => {
+                        handleClickItem(notif);
+                        closeNotifications();
+                      }}
+                      className={`w-full text-left p-3.5 rounded-xl border transition-colors cursor-pointer space-y-1.5 ${
+                        isUrgent
+                          ? 'bg-rose-50/70 border-rose-300 shadow-xs'
+                          : isUnread
+                          ? 'bg-white border-emerald-400 shadow-xs'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {getCategoryIcon(notif.category)}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getCategoryBadgeClass(notif.category)}`}>
+                            {isUrgent ? 'Urgent' : notif.category}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-mono shrink-0">{formatTime(notif.createdAt)}</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900 leading-snug">{notif.title}</h4>
+                      <p className="text-slate-600 text-xs leading-relaxed">{notif.message}</p>
+                    </button>
+                  );
+                })
             )}
           </div>
-          <button
-            onClick={closeNotifications}
-            className="px-2.5 py-1 text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-500 rounded-md transition-colors"
-          >
-            Return to Reading View
-          </button>
-        </div>
-
-        {/* Mobile Notification List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[50vh] bg-slate-50">
-          {filtered.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-xs">No notifications in this filter.</div>
-          ) : (
-            filtered.map((notif) => {
-              const isUnread = !notif.readByUserIds?.includes(currentUser.id);
-              return (
-                <div
-                  key={notif.id}
-                  onClick={() => handleClickItem(notif)}
-                  className={`p-3 rounded-lg border text-xs cursor-pointer ${
-                    isUnread ? 'bg-white border-emerald-400 shadow-xs' : 'bg-white border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border ${getCategoryBadgeClass(notif.category)}`}>
-                      {notif.category}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">{formatTime(notif.createdAt)}</span>
-                  </div>
-                  <h4 className="font-bold text-slate-900">{notif.title}</h4>
-                  <p className="text-slate-600 text-[11px] mt-0.5">{notif.message}</p>
-                </div>
-              );
-            })
-          )}
         </div>
       </div>
 

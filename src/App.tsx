@@ -113,11 +113,32 @@ function AppContent({
   const [portalView, setPortalView] = useState<PortalView>(() => getPortalRoute(window.location.pathname).view);
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
-  const [switchedWorkspaceRole, setSwitchedWorkspaceRole] = useState<UserRole | null>(null);
+  const resolvePersistedSwitchedRole = React.useCallback((user: User | null): UserRole | null => {
+    if (!user) return null;
+    const saved = Storage.getActiveSwitchedRole(user.id);
+    if (!saved || saved === user.role) return null;
+    const allowed = getSwitchableWorkspaceRoles(user);
+    return allowed.includes(saved) ? saved : null;
+  }, []);
+
+  const [switchedWorkspaceRole, setSwitchedWorkspaceRole] = useState<UserRole | null>(() =>
+    resolvePersistedSwitchedRole(currentUser)
+  );
 
   React.useEffect(() => {
-    setSwitchedWorkspaceRole(null);
-  }, [currentUser?.id, currentUser?.role]);
+    setSwitchedWorkspaceRole(resolvePersistedSwitchedRole(currentUser));
+  }, [currentUser, resolvePersistedSwitchedRole]);
+
+  const updateSwitchedWorkspaceRole = React.useCallback(
+    (nextRole: UserRole | null) => {
+      const normalized = currentUser && nextRole && nextRole !== currentUser.role ? nextRole : null;
+      setSwitchedWorkspaceRole(normalized);
+      if (currentUser?.id) {
+        Storage.setActiveSwitchedRole(normalized, currentUser.id);
+      }
+    },
+    [currentUser]
+  );
 
   const canSwitchSubjectTeacher = Boolean(currentUser && canSwitchToSubjectTeacher(currentUser));
   const canSwitchClassTeacher = Boolean(currentUser && canSwitchToClassTeacher(currentUser));
@@ -138,23 +159,24 @@ function AppContent({
     (targetRole: UserRole | null) => {
       setViewingOperationsHub(false);
       if (!currentUser || !targetRole || targetRole === currentUser.role) {
-        setSwitchedWorkspaceRole(null);
+        updateSwitchedWorkspaceRole(null);
         return;
       }
-      setSwitchedWorkspaceRole((prev) => (prev === targetRole ? null : targetRole));
+      const next = switchedWorkspaceRole === targetRole ? null : targetRole;
+      updateSwitchedWorkspaceRole(next);
     },
-    [currentUser]
+    [currentUser, switchedWorkspaceRole, updateSwitchedWorkspaceRole]
   );
 
   const handleToggleSubjectTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
-    setSwitchedWorkspaceRole((prev) => (prev === 'teacher' ? null : 'teacher'));
-  }, []);
+    updateSwitchedWorkspaceRole(switchedWorkspaceRole === 'teacher' ? null : 'teacher');
+  }, [switchedWorkspaceRole, updateSwitchedWorkspaceRole]);
 
   const handleToggleClassTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
-    setSwitchedWorkspaceRole((prev) => (prev === 'class_teacher' ? null : 'class_teacher'));
-  }, []);
+    updateSwitchedWorkspaceRole(switchedWorkspaceRole === 'class_teacher' ? null : 'class_teacher');
+  }, [switchedWorkspaceRole, updateSwitchedWorkspaceRole]);
 
   const navigateToPortal = (view: PortalView, schoolId = currentTenant.id, replace = false) => {
     const path = fromAppPath(view === 'public_landing'
@@ -236,7 +258,7 @@ function AppContent({
 
   React.useEffect(() => {
     const handleOpenOps = () => {
-      setSwitchedWorkspaceRole(null);
+      updateSwitchedWorkspaceRole(null);
       setViewingOperationsHub(true);
     };
     const handleCloseOps = () => setViewingOperationsHub(false);
@@ -252,7 +274,7 @@ function AppContent({
       window.removeEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
       window.removeEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     };
-  }, [handleToggleSubjectTeacherMode, handleToggleClassTeacherMode]);
+  }, [handleToggleSubjectTeacherMode, handleToggleClassTeacherMode, updateSwitchedWorkspaceRole]);
 
   // Public landing stays available, including while the platform admin is signed in.
   if (portalView === 'public_landing' && (!currentUser || isPlatformSuperAdmin(currentUser))) {
@@ -451,7 +473,7 @@ function AppContent({
             </div>
           )}
 
-          <main id="main-content" className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 sm:pb-8' : ''}`}>
+          <main id="main-content" className={`w-full flex-1 ${isMobileOverlapProtectionEnabled ? 'pb-24 lg:pb-8' : 'pb-16 lg:pb-0'}`}>
             {!currentUser || !effectiveUser ? (
               <LandingPage 
                 onLoginSuccess={onLoginSuccess} 
@@ -488,21 +510,21 @@ function AppContent({
             ) : (
               <>
                 {switchedWorkspaceRole && (
-                  <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-emerald-950 text-white border-b border-indigo-500/30 px-4 sm:px-6 py-2">
+                  <div className="bg-slate-900 text-white border-b border-slate-700/80 px-3 sm:px-6 py-2">
                     <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-bold uppercase tracking-wider text-[10px]">
-                          {getAdministrativeRoleDisplayName(effectiveRole)} Mode Active
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 font-bold uppercase tracking-wider text-[10px] shrink-0">
+                          {getAdministrativeRoleDisplayName(effectiveRole)}
                         </span>
-                        <span className="text-slate-200">
-                          Full {getAdministrativeRoleDisplayName(effectiveRole)} workspace &amp; rights active · Primary Role:{' '}
+                        <span className="text-slate-200 truncate hidden sm:inline">
+                          Full {getAdministrativeRoleDisplayName(effectiveRole)} workspace active · Primary:{' '}
                           <strong className="text-white">{getAdministrativeRoleDisplayName(currentUser.role)}</strong>
                         </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSwitchedWorkspaceRole(null)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white text-slate-900 hover:bg-amber-100 font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                        onClick={() => updateSwitchedWorkspaceRole(null)}
+                        className="inline-flex items-center gap-1.5 min-h-[34px] px-3 py-1 rounded-lg bg-white text-slate-900 hover:bg-amber-100 font-bold text-xs transition-colors shadow-xs cursor-pointer shrink-0"
                       >
                         <span>&larr; Return to {getAdministrativeRoleDisplayName(currentUser.role)}</span>
                       </button>
@@ -541,7 +563,7 @@ function AppContent({
                     <ClassTeacherWorkspace
                       currentUser={effectiveUser}
                       switchedFromRole={isClassTeacherMode ? currentUser.role : undefined}
-                      onReturnToPrimaryWorkspace={isClassTeacherMode ? () => setSwitchedWorkspaceRole(null) : undefined}
+                      onReturnToPrimaryWorkspace={isClassTeacherMode ? () => updateSwitchedWorkspaceRole(null) : undefined}
                     />
                   </WorkspaceRoleGuard>
                 ) : effectiveRole === 'teacher' ? (
@@ -555,7 +577,7 @@ function AppContent({
                     <TeacherWorkspace
                       currentUser={effectiveUser}
                       switchedFromRole={isSubjectTeacherMode ? currentUser.role : undefined}
-                      onReturnToAdminWorkspace={isSubjectTeacherMode ? () => setSwitchedWorkspaceRole(null) : undefined}
+                      onReturnToAdminWorkspace={isSubjectTeacherMode ? () => updateSwitchedWorkspaceRole(null) : undefined}
                     />
                   </WorkspaceRoleGuard>
                 ) : effectiveRole === 'hod' ? (

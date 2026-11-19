@@ -329,8 +329,8 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
               </div>
 
               {/* Chronological Table of Day Periods */}
-              <div className="border-2 border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="border-2 border-slate-200 rounded-2xl overflow-x-auto shadow-xs">
+                <table className="w-full text-left text-xs border-collapse min-w-[680px]">
                   <thead className="bg-slate-900 text-white font-extrabold text-[11px] uppercase tracking-wider">
                     <tr>
                       <th className="py-3 px-3.5 w-20 text-center">Period</th>

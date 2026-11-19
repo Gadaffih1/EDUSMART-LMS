@@ -593,8 +593,8 @@ export const StudentGateExit: React.FC<StudentGateExitProps> = ({ currentUser })
           </div>
 
           {/* Database Table with Status Tracking Column */}
-          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-            <table className="w-full text-left text-xs">
+          <div className="border border-slate-200 rounded-2xl overflow-x-auto bg-white">
+            <table className="w-full text-left text-xs min-w-[680px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-3">Pass Code</th>

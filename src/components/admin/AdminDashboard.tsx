@@ -89,6 +89,11 @@ import { GradeClassPages } from './GradeClassPages';
 import { DepartmentPages } from './DepartmentPages';
 import { RoleDirectory } from './RoleDirectory';
 import { SchoolSettingsPanel } from './SchoolSettingsPanel';
+import {
+  CollapsibleFilterBar,
+  MobileOverflowMenu,
+  ScrollableMatrixTableWrapper,
+} from '../common/ResponsiveUIKit';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -1032,39 +1037,131 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search name, email, Adm/Staff #..."
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-              <select
-                value={userRoleFilter}
-                onChange={(e) => setUserRoleFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">All School Roles</option>
-                {systemRoles.map((role) => (
-                  <option key={role.id} value={role.slug}>{role.name}</option>
-                ))}
-              </select>
-              <select
-                value={userStatusFilter}
-                onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'deactivated')}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="all">All Account Statuses</option>
-                <option value="active">Active Only</option>
-                <option value="deactivated">Deactivated Only</option>
-              </select>
+            <CollapsibleFilterBar
+              searchValue={userSearch}
+              onSearchChange={setUserSearch}
+              searchPlaceholder="Search name, email, Adm/Staff #..."
+              activeFilterCount={(userRoleFilter !== 'all' ? 1 : 0) + (userStatusFilter !== 'all' ? 1 : 0)}
+              onClearFilters={() => {
+                setUserRoleFilter('all');
+                setUserStatusFilter('all');
+              }}
+              filters={
+                <>
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                    aria-label="Filter users by role"
+                    className="w-full min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="all">All School Roles</option>
+                    {systemRoles.map((role) => (
+                      <option key={role.id} value={role.slug}>{role.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'deactivated')}
+                    aria-label="Filter users by status"
+                    className="w-full min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Account Statuses</option>
+                    <option value="active">Active Only</option>
+                    <option value="deactivated">Deactivated Only</option>
+                  </select>
+                </>
+              }
+            />
+
+            {/* Mobile stacked user cards */}
+            <div className="md:hidden space-y-3">
+              {filteredTenantUsers.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 border border-slate-200 rounded-xl">
+                  No school user accounts match your current filters.
+                </div>
+              ) : (
+                filteredTenantUsers.map((u) => {
+                  const active = u.isActive !== false;
+                  const isSelf = u.id === currentUser.id;
+                  return (
+                    <div
+                      key={`mob-${u.id}`}
+                      className={`p-3.5 rounded-xl border border-slate-200 space-y-2.5 ${!active ? 'bg-rose-50/40' : 'bg-white'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-slate-900 truncate">{u.name}</div>
+                          <div className="text-[11px] font-mono text-slate-500 truncate">{u.email}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {active ? 'Active' : 'Off'}
+                          </span>
+                          <MobileOverflowMenu
+                            label={`Actions for ${u.name}`}
+                            items={[
+                              {
+                                label: 'Edit User & Roles',
+                                icon: <Edit2 className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenEditUserModal(u),
+                              },
+                              {
+                                label: 'Reset Password',
+                                icon: <KeyRound className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenResetPassword(u),
+                              },
+                              ...(!isSelf
+                                ? [
+                                    {
+                                      label: active ? 'Deactivate Account' : 'Activate Account',
+                                      icon: active ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />,
+                                      onClick: () => handleToggleUserActivation(u),
+                                    },
+                                    {
+                                      label: 'Remove Account',
+                                      icon: <Trash2 className="w-3.5 h-3.5" />,
+                                      danger: true,
+                                      onClick: () => handleOpenDeleteUser(u),
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {getUserRoles(u).map((roleSlug, idx) => (
+                          <span
+                            key={`mob-${u.id}-${roleSlug}`}
+                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                              idx === 0
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {roleSlug.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-100">
+                        <span className="font-mono">{u.admissionNumber || u.staffNumber || u.tscNumber || '—'}</span>
+                        {u.grade && (
+                          <span className="font-medium text-slate-500">
+                            Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
@@ -1524,8 +1621,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </p>
           </div>
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden max-w-2xl">
-            <table className="w-full text-left text-xs">
+          <div className="border border-slate-200 rounded-xl overflow-x-auto max-w-2xl">
+            <table className="w-full text-left text-xs min-w-[460px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-4">Grade Level</th>
@@ -1675,12 +1772,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900">
               Recent Teacher Work Entry Ledger (All Staff)
             </h3>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="md:hidden space-y-2.5">
+              {workLogs.map((log) => (
+                <div key={`mob-log-${log.id}`} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-900">{log.teacherName}</span>
+                    <span className="font-mono text-[11px] text-slate-500">{log.date}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="font-semibold text-emerald-700">{log.subject}</span>
+                    <span className="text-slate-500">Grade {log.grade} ({log.stream})</span>
+                    <span className="ml-auto font-mono font-bold text-slate-800">{log.learnersPresent} learners</span>
+                  </div>
+                  <p className="text-slate-700">{log.topicTaught}</p>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[600px]">
                 <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Date</th>
@@ -1707,12 +1820,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900">
               Campus Security Gate Exit Passes (Audit Ledger)
             </h3>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="md:hidden space-y-2.5">
+              {gatePasses.map((gp) => (
+                <div key={`mob-gp-${gp.id}`} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900">{gp.studentName}</div>
+                      <div className="text-[11px] font-mono text-slate-500">{gp.gatePassCode} · Grade {gp.grade} ({gp.stream})</div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase ${
+                        gp.status === 'active'
+                          ? 'bg-amber-100 text-amber-800'
+                          : gp.status === 'departed'
+                          ? 'bg-purple-100 text-purple-800'
+                          : gp.status === 'returned'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {gp.status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-200/70">
+                    <span>Guardian: {gp.guardianName} ({gp.guardianPhone})</span>
+                    <span className="font-mono">Dep: {gp.departureTime}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[680px]">
                 <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Pass Code</th>
@@ -1828,7 +1970,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           </div>
 
           {/* Role Access Matrix Table */}
-          <div className="border border-slate-200 rounded-xl overflow-x-auto">
+          <ScrollableMatrixTableWrapper hint="Swipe horizontally to view all 14 role permission columns">
             <table className="w-full text-left text-xs min-w-[900px]">
               <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-200">
                 <tr>
@@ -2016,7 +2158,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableMatrixTableWrapper>
         </section>
       )}
 
@@ -2522,6 +2664,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         </div>
       )}
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav
+        aria-label="School admin mobile navigation"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 shadow-lg pb-safe"
+      >
+        <div className="grid grid-cols-5 h-14">
+          {[
+            { id: 'overview' as AdminActionTab, label: 'Overview', icon: BarChart3 },
+            { id: 'users' as AdminActionTab, label: 'Users', icon: Users },
+            { id: 'grades' as AdminActionTab, label: 'Grades', icon: GraduationCap },
+            { id: 'operations' as AdminActionTab, label: 'Operations', icon: Building2 },
+          ].map((item) => {
+            const Icon = item.icon;
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => openTab(item.id)}
+                className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors cursor-pointer ${
+                  active ? 'text-indigo-700 bg-indigo-50/70' : 'text-slate-600'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="truncate max-w-[60px]">{item.label}</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold text-slate-600 cursor-pointer"
+          >
+            <Menu className="w-4 h-4" />
+            <span>Modules</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };

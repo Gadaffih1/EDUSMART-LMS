@@ -340,8 +340,8 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[600px]">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <th className="py-3 px-4">Action Taken</th>

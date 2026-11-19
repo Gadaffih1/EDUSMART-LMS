@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ClientDataStore } from '../../utils/clientDataStore';
 import { useTenant } from '../../context/TenantContext';
+import { CollapsibleSection } from '../common/ResponsiveUIKit';
 
 interface SchoolSettingsPanelProps {
   schoolId: string;
@@ -238,13 +239,15 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
         </div>
       )}
 
-      <form onSubmit={handleSaveAll} className="space-y-6 text-xs">
+      <form onSubmit={handleSaveAll} className="space-y-4 text-xs">
         {/* 1. Profile & Branding */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-4">
-          <div className="flex items-center gap-2 font-black text-slate-900 uppercase tracking-wider">
-            <Building2 className="w-4 h-4 text-indigo-600" />
-            <span>1. School Profile & Branding</span>
-          </div>
+        <CollapsibleSection
+          title="1. School Profile & Branding"
+          subtitle="Campus name, code, motto, location, and brand color"
+          icon={<Building2 className="w-4 h-4 text-indigo-600" />}
+          defaultOpen={true}
+          defaultOpenDesktop={true}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">School Name</label>
@@ -332,14 +335,16 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* 2. Academic Calendar & Curriculum */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-4">
-          <div className="flex items-center gap-2 font-black text-slate-900 uppercase tracking-wider">
-            <CalendarDays className="w-4 h-4 text-emerald-600" />
-            <span>2. Academic Calendar & Grading Policy</span>
-          </div>
+        <CollapsibleSection
+          title="2. Academic Calendar & Grading Policy"
+          subtitle={`${settings.academic_calendar.termLabel} · ${settings.academic_calendar.curriculum}`}
+          icon={<CalendarDays className="w-4 h-4 text-emerald-600" />}
+          defaultOpen={false}
+          defaultOpenDesktop={true}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">Academic Year</label>
@@ -406,15 +411,18 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
               />
             </div>
           </div>
-        </div>
+        </CollapsibleSection>
 
         {/* 3. Portal & Virtual Lab + Finance & Attendance */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-            <div className="flex items-center gap-2 font-black text-slate-900 uppercase tracking-wider">
-              <FlaskConical className="w-4 h-4 text-blue-600" />
-              <span>3. Portal & Virtual Lab Access</span>
-            </div>
+          <CollapsibleSection
+            title="3. Portal & Virtual Lab Access"
+            subtitle="Student, parent, and Virtual STEM Lab policies"
+            icon={<FlaskConical className="w-4 h-4 text-blue-600" />}
+            defaultOpen={false}
+            defaultOpenDesktop={true}
+          >
+            <div className="space-y-2.5">
             {(
               [
                 ['virtualLabBundledForSchool', 'Bundle Virtual STEM Lab for Enrolled Campus Users'],
@@ -444,13 +452,17 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
                 />
               </label>
             ))}
-          </div>
-
-          <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-3">
-            <div className="flex items-center gap-2 font-black text-slate-900 uppercase tracking-wider">
-              <Wallet className="w-4 h-4 text-amber-600" />
-              <span>4. Operations, Finance & Attendance Alerts</span>
             </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="4. Operations, Finance & Attendance Alerts"
+            subtitle={`${settings.operations_and_finance.currency} · Roll call cutoff ${settings.notifications_and_attendance.morningRollCallDeadline}`}
+            icon={<Wallet className="w-4 h-4 text-amber-600" />}
+            defaultOpen={false}
+            defaultOpenDesktop={true}
+          >
+            <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Currency</label>
@@ -539,18 +551,19 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
                 className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
               />
             </label>
-          </div>
+            </div>
+          </CollapsibleSection>
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-200">
           <div className="flex items-center gap-2 text-[11px] text-slate-500">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>Persisted in central SQLite/MySQL database per tenant school across all browsers.</span>
           </div>
           <button
             type="submit"
             disabled={saving || loading}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
+            className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             <span>{saving ? 'Saving Settings to DB...' : 'Save School Settings'}</span>

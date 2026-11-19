@@ -371,8 +371,8 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-          <table className="w-full text-left text-xs border-collapse">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[640px]">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <th className="py-3 px-4">Title / Material</th>
@@ -1029,8 +1029,8 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                   </form>
                 </div>
 
-                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                  <table className="w-full text-left text-xs border-collapse">
+                <div className="border border-slate-200 rounded-2xl overflow-x-auto shadow-2xs">
+                  <table className="w-full text-left text-xs border-collapse min-w-[540px]">
                     <thead>
                       <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                         <th className="py-2.5 px-4 font-mono">Book Unique ID (Accession Tag)</th>

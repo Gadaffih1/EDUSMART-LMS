@@ -74,6 +74,7 @@ import { ClientDataStore } from '../../utils/clientDataStore';
 import { getUserRoles, normalizeAssignedRoleList } from '../../utils/subjectTeacherSwitch';
 import { PrintableCredentialsModal } from './PrintableCredentialsModal';
 import { SchoolSettingsPanel } from './SchoolSettingsPanel';
+import { MobileOverflowMenu } from '../common/ResponsiveUIKit';
 
 interface SuperAdminDashboardProps {
   currentUser: User;
@@ -1795,7 +1796,91 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
           {/* User Table */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
+            {/* Mobile Stacked User Cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredUsers.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No users matching your search filters.
+                </div>
+              ) : (
+                filteredUsers.slice(0, 50).map((u) => {
+                  const isActive = u.isActive !== false;
+                  const school = allTenants.find((t) => t.id === u.schoolId);
+                  return (
+                    <div
+                      key={`sa-mob-${u.id}`}
+                      className={`p-3.5 space-y-2 ${!isActive ? 'bg-rose-50/40' : 'bg-white'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-slate-900 truncate">{u.name}</div>
+                          <div className="text-[11px] font-mono text-slate-500 truncate">{u.email}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {isActive ? 'Active' : 'Off'}
+                          </span>
+                          <MobileOverflowMenu
+                            label={`Actions for ${u.name}`}
+                            items={[
+                              {
+                                label: 'Edit User',
+                                icon: <Edit3 className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenEditUser(u),
+                              },
+                              {
+                                label: 'Reset Password',
+                                icon: <KeyRound className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenResetPassword(u),
+                              },
+                              {
+                                label: isActive ? 'Deactivate Account' : 'Activate Account',
+                                icon: isActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />,
+                                onClick: () => handleToggleUserActivation(u),
+                              },
+                              {
+                                label: 'Delete User',
+                                icon: <Trash2 className="w-3.5 h-3.5" />,
+                                danger: true,
+                                onClick: () => handleDeleteUser(u),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {getUserRoles(u).map((roleSlug, idx) => (
+                          <span
+                            key={`sa-mob-${u.id}-${roleSlug}`}
+                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                              idx === 0
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {roleSlug.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-100">
+                        <span className="font-medium truncate">
+                          {school ? `${school.shortName} (${school.code})` : 'Universal · ROOT'}
+                        </span>
+                        <span className="font-mono text-slate-500">
+                          {u.admissionNumber || u.tscNumber || u.phone || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                   <tr>

@@ -373,7 +373,48 @@ export const StoresPortalView: React.FC<StoresPortalViewProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Stacked Inventory Cards */}
+          <div className="md:hidden space-y-2.5">
+            {filteredInventory.map((item) => {
+              const isLow = item.currentStock <= item.reorderLevel;
+              return (
+                <div key={`mob-inv-${item.id}`} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-slate-950 font-serif truncate">{item.name}</div>
+                      <div className="text-[11px] font-mono text-slate-500">{item.itemCode} · {item.category}</div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      isLow
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                        : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    }`}>
+                      {isLow ? 'Low Stock' : 'Optimal'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/70 font-mono">
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Stock</div>
+                      <div className={isLow ? 'font-black text-rose-600' : 'font-black text-slate-900'}>
+                        {item.currentStock} {item.unit}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Unit Cost</div>
+                      <div className="text-slate-700">KES {item.unitCost.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-sans text-slate-500">Total Value</div>
+                      <div className="font-bold text-emerald-800">KES {item.totalValue.toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-slate-500">{item.storeLocation} · Supplier: {item.supplierName}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 uppercase font-mono font-bold text-[10px] border-y border-slate-200">
                 <tr>
@@ -909,30 +950,32 @@ export const StoresPortalView: React.FC<StoresPortalViewProps> = ({
                 <div><span className="text-slate-400">LPO Ref:</span> <strong className="text-slate-900">{selectedGrnForPrint.lpoNumber}</strong></div>
               </div>
 
-              <table className="w-full text-left border-collapse border border-slate-300 my-2">
-                <thead>
-                  <tr className="bg-slate-100 text-[10px]">
-                    <th className="p-1 border border-slate-300">Item</th>
-                    <th className="p-1 border border-slate-300">Ordered</th>
-                    <th className="p-1 border border-slate-300">Accepted</th>
-                    <th className="p-1 border border-slate-300 text-right">Value (KES)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedGrnForPrint.itemsReceived.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="p-1 border border-slate-300">{it.itemName}</td>
-                      <td className="p-1 border border-slate-300">{it.orderedQty}</td>
-                      <td className="p-1 border border-slate-300 font-bold text-emerald-800">{it.acceptedQty}</td>
-                      <td className="p-1 border border-slate-300 text-right font-bold">{(it.acceptedQty * it.unitCost).toLocaleString()}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse border border-slate-300 my-2 min-w-[360px]">
+                  <thead>
+                    <tr className="bg-slate-100 text-[10px]">
+                      <th className="p-1 border border-slate-300">Item</th>
+                      <th className="p-1 border border-slate-300">Ordered</th>
+                      <th className="p-1 border border-slate-300">Accepted</th>
+                      <th className="p-1 border border-slate-300 text-right">Value (KES)</th>
                     </tr>
-                  ))}
-                  <tr className="bg-slate-50 font-black">
-                    <td colSpan={3} className="p-1 border border-slate-300 text-right">TOTAL ACCEPTED VALUE:</td>
-                    <td className="p-1 border border-slate-300 text-right text-emerald-800">KES {selectedGrnForPrint.totalAcceptedValue.toLocaleString()}</td>
-                  </tr>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {selectedGrnForPrint.itemsReceived.map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="p-1 border border-slate-300">{it.itemName}</td>
+                        <td className="p-1 border border-slate-300">{it.orderedQty}</td>
+                        <td className="p-1 border border-slate-300 font-bold text-emerald-800">{it.acceptedQty}</td>
+                        <td className="p-1 border border-slate-300 text-right font-bold">{(it.acceptedQty * it.unitCost).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-slate-50 font-black">
+                      <td colSpan={3} className="p-1 border border-slate-300 text-right">TOTAL ACCEPTED VALUE:</td>
+                      <td className="p-1 border border-slate-300 text-right text-emerald-800">KES {selectedGrnForPrint.totalAcceptedValue.toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               <div className="text-[10px] text-slate-500 pt-1">
                 Inspected by: <strong>{selectedGrnForPrint.inspectedBy}</strong> · Received by: {selectedGrnForPrint.receivedBy}

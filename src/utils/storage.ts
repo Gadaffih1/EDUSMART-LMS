@@ -1164,18 +1164,33 @@ export const Storage = {
     this.saveELinks(links);
   },
 
-  // Quizzes
-  getQuizzes(grade?: GradeLevel): Quiz[] {
+  getActiveSwitchedRole(userId?: string | null): UserRole | null {
+    const val = ClientDataStore.getActiveSwitchedRole(userId);
+    return (val as UserRole) || null;
+  },
+  setActiveSwitchedRole(role: UserRole | null, userId?: string | null): void {
+    ClientDataStore.setActiveSwitchedRole(role, userId);
+  },
+
+  // Quizzes (strictly scoped by grade and stream when provided)
+  getQuizzes(grade?: GradeLevel, stream?: StreamName): Quiz[] {
     const quizzes = getFromStorage<Quiz[]>(KEYS.QUIZZES, []);
-    if (grade) {
-      return quizzes.filter(q => q.grade === grade);
-    }
-    return quizzes;
+    const targetStream = stream ? String(stream).trim().toLowerCase() : '';
+    return quizzes.filter((q) => {
+      if (grade !== undefined && Number(q.grade) !== Number(grade)) return false;
+      if (targetStream && q.stream) {
+        if (String(q.stream).trim().toLowerCase() !== targetStream) return false;
+      }
+      return true;
+    });
   },
   addQuiz(quiz: Quiz): void {
     const quizzes = this.getQuizzes();
     quizzes.push(quiz);
     setToStorage(KEYS.QUIZZES, quizzes);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('quizzes-updated'));
+    }
   },
 
   // Quiz Attempts
@@ -1192,12 +1207,15 @@ export const Storage = {
     setToStorage(KEYS.QUIZ_ATTEMPTS, attempts);
   },
 
-  // Assignments
+  // Assignments (strictly scoped by grade and stream when provided)
   getAssignments(grade?: GradeLevel, stream?: StreamName): Assignment[] {
     const assignments = getFromStorage<Assignment[]>(KEYS.ASSIGNMENTS, []);
-    return assignments.filter(a => {
-      if (grade && a.grade !== grade) return false;
-      if (stream && a.stream && a.stream !== stream) return false;
+    const targetStream = stream ? String(stream).trim().toLowerCase() : '';
+    return assignments.filter((a) => {
+      if (grade !== undefined && Number(a.grade) !== Number(grade)) return false;
+      if (targetStream && a.stream) {
+        if (String(a.stream).trim().toLowerCase() !== targetStream) return false;
+      }
       return true;
     });
   },
@@ -1205,6 +1223,9 @@ export const Storage = {
     const assignments = this.getAssignments();
     assignments.push(assignment);
     setToStorage(KEYS.ASSIGNMENTS, assignments);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('assignments-updated'));
+    }
   },
 
   // Announcements
@@ -2431,7 +2452,7 @@ export const Storage = {
         status: 'guided_redirection',
         message: 'Educational Redirection: Non-curriculum search detected. We have guided you to approved gamified CBC challenges on Kahoot, Quizizz, and Interactive Quizzes.',
         matchedNotes: [],
-        matchedQuizzes: this.getQuizzes(user.grade),
+        matchedQuizzes: this.getQuizzes(user.grade, user.stream),
         matchedBooks: [],
         redirectionSuggestion: 'Try exploring: Gamified Mathematics Quizzes or KICD Creative Arts Storybooks!'
       };
@@ -2439,7 +2460,7 @@ export const Storage = {
 
     // Safe academic search across curriculum notes, quizzes, and books
     const allNotes = this.getNotes(user.grade);
-    const allQuizzes = this.getQuizzes(user.grade);
+    const allQuizzes = this.getQuizzes(user.grade, user.stream);
     const allBooks = this.getLibraryBooks();
 
     const matchedNotes = allNotes.filter(n => 

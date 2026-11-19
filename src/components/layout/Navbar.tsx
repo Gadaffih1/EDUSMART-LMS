@@ -161,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         Skip to main content
       </a>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-14 sm:min-h-16 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-3">
         
         {/* Zone 1: Current School Branding (Multi-Tenancy) & Campus Selector */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -198,16 +198,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
 
-            <div className="leading-tight">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm sm:text-base font-black tracking-tight text-slate-950 font-serif truncate max-w-[150px] sm:max-w-[210px] md:max-w-xs">
+            <div className="leading-tight min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-sm sm:text-base font-black tracking-tight text-slate-950 font-serif truncate max-w-[135px] sm:max-w-[210px] md:max-w-xs">
                   {currentTenant.name}
                 </span>
                 <span className="hidden xl:inline-block text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
                   {currentTenant.code}
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 font-medium truncate max-w-[140px] sm:max-w-[220px]">
+              <p className="hidden sm:block text-[10px] text-slate-500 font-medium truncate max-w-[140px] sm:max-w-[220px]">
                 {currentTenant.motto}
               </p>
             </div>
@@ -549,12 +549,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-2 xl:hidden">
+        <div className="flex items-center gap-1.5 sm:gap-2 xl:hidden shrink-0">
           {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
             <button
               type="button"
               onClick={onToggleClassTeacherMode}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
+              className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
                 isClassTeacherMode
                   ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
                   : 'border-emerald-700 bg-emerald-600 text-white hover:bg-emerald-700'
@@ -564,14 +564,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {isClassTeacherMode ? (
                 <>
                   <ArrowLeft className="h-3.5 w-3.5 text-amber-700" />
-                  <span className="hidden sm:inline">Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
-                  <span className="sm:hidden">HOD View</span>
+                  <span>Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
                 </>
               ) : (
                 <>
                   <UserCheck className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Switch as Class Teacher</span>
-                  <span className="sm:hidden">Class Teacher</span>
+                  <span>Switch as Class Teacher</span>
                 </>
               )}
             </button>
@@ -580,7 +578,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onToggleSubjectTeacherMode}
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
+              className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
                 isSubjectTeacherMode
                   ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
                   : 'border-indigo-700 bg-indigo-600 text-white hover:bg-indigo-700'
@@ -590,14 +588,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               {isSubjectTeacherMode ? (
                 <>
                   <ArrowLeft className="h-3.5 w-3.5 text-amber-700" />
-                  <span className="hidden sm:inline">Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
-                  <span className="sm:hidden">Admin View</span>
+                  <span>Return to {getAdministrativeRoleShortName(currentUser.role)}</span>
                 </>
               ) : (
                 <>
                   <BookOpen className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Switch as Subject Teacher</span>
-                  <span className="sm:hidden">Subject Teacher</span>
+                  <span>Switch as Subject Teacher</span>
                 </>
               )}
             </button>
@@ -606,7 +602,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             type="button"
             onClick={() => setIsMobileActionsOpen(prev => !prev)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 shadow-xs"
+            className="min-h-[40px] inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-xs cursor-pointer"
             aria-label="Open account and app actions"
             aria-expanded={isMobileActionsOpen}
             aria-haspopup="menu"
@@ -617,7 +613,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           {isMobileActionsOpen && (
             <div
-              className="absolute right-0 top-full z-50 mt-2 max-h-[min(70vh,32rem)] w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+              className="absolute right-0 top-full z-50 mt-2 max-h-[min(75dvh,32rem)] w-[min(17.5rem,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl space-y-1"
               role="menu"
               aria-label="Account and app actions"
             >

@@ -7,6 +7,8 @@ export interface SchoolDepartment {
   schoolId: string;
   name: string;
   kind?: DepartmentKind;
+  hodUserId?: string;
+  hodName?: string;
   subjects: string[];
   activities: string[];
   createdAt: string;
@@ -113,7 +115,11 @@ export function ensureDepartments(schoolId: string): SchoolDepartment[] {
   return listDepartments(schoolId);
 }
 
-export function createDepartment(schoolId: string, name: string): SchoolDepartment {
+export function createDepartment(
+  schoolId: string,
+  name: string,
+  hod?: { hodUserId?: string; hodName?: string }
+): SchoolDepartment {
   const clean = name.trim();
   if (!clean) throw new Error('Type a department name.');
   const rows = readAll();
@@ -124,6 +130,8 @@ export function createDepartment(schoolId: string, name: string): SchoolDepartme
     id: `dept-${schoolId}-${Date.now()}`,
     schoolId,
     name: clean,
+    hodUserId: hod?.hodUserId || '',
+    hodName: hod?.hodName || '',
     subjects: [],
     activities: [],
     createdAt: new Date().toISOString(),
@@ -150,7 +158,7 @@ export function updateDepartment(id: string, name: string): { previous: string; 
 
 export function saveDepartmentChoice(
   id: string,
-  updates: Partial<Pick<SchoolDepartment, 'kind' | 'subjects' | 'activities'>>,
+  updates: Partial<Pick<SchoolDepartment, 'kind' | 'subjects' | 'activities' | 'hodUserId' | 'hodName'>>,
 ): SchoolDepartment {
   const rows = readAll();
   const index = rows.findIndex((row) => row.id === id);
@@ -166,6 +174,13 @@ export function saveDepartmentChoice(
   rows[index] = next;
   writeAll(rows);
   return next;
+}
+
+export function linkDepartmentHod(id: string, hodUserId: string, hodName: string): SchoolDepartment {
+  return saveDepartmentChoice(id, {
+    hodUserId: hodUserId.trim(),
+    hodName: hodName.trim(),
+  });
 }
 
 export function deleteDepartment(id: string): void {

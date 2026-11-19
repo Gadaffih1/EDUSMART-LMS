@@ -110,6 +110,51 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
     }
   }, [workingDays, mobileDay]);
 
+  // Live Weekly Lesson Quota Compliance for selected Class/Stream & zero teacher clash check
+  const selectedClassQuotaRows = useMemo(() => {
+    const [gStr, stName] = selectedClassKey.split('|');
+    const grade = Number(gStr);
+    const stream = stName || '';
+    if (!grade || !stream) return [];
+    const allocs = (workspace.streamAllocations || []).filter(
+      (a) => a.isActive && a.grade === grade && a.stream.toLowerCase() === stream.toLowerCase()
+    );
+    const entriesList = activeVersion?.entries || [];
+    return allocs
+      .map((a) => {
+        const scheduled = entriesList.filter(
+          (e) =>
+            e.grade === grade &&
+            e.stream.toLowerCase() === stream.toLowerCase() &&
+            e.subjectName.toLowerCase() === a.subjectName.toLowerCase()
+        ).length;
+        return {
+          id: a.id,
+          subjectName: a.subjectName,
+          required: a.requiredWeeklyPeriods,
+          scheduled,
+        };
+      })
+      .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
+  }, [workspace.streamAllocations, activeVersion?.entries, selectedClassKey]);
+
+  const teacherClashCount = useMemo(() => {
+    const seen = new Map<string, Set<string>>();
+    for (const e of activeVersion?.entries || []) {
+      const eventKey = e.jointLessonId ? `jl:${e.jointLessonId}` : e.sessionBlockId;
+      for (const tid of e.teacherIds || []) {
+        const slot = `${tid}|${e.dayOfWeek}|${e.periodNumber}`;
+        if (!seen.has(slot)) seen.set(slot, new Set());
+        seen.get(slot)!.add(eventKey);
+      }
+    }
+    let clashes = 0;
+    for (const set of seen.values()) {
+      if (set.size > 1) clashes++;
+    }
+    return clashes;
+  }, [activeVersion?.entries]);
+
   // Poll active generation job
   useEffect(() => {
     if (!activeJob || (activeJob.status !== 'queued' && activeJob.status !== 'running')) return;
@@ -867,6 +912,52 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Multi-View Sync & Weekly Lesson Quota Compliance */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Weekly Quota &amp; Sync Audit
+              </h3>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${
+                  teacherClashCount === 0
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-rose-100 text-rose-800'
+                }`}
+              >
+                {teacherClashCount === 0 ? '0 Teacher Clashes' : `${teacherClashCount} Clash(es)`}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Class/Stream, Teacher, and Master timetables sync automatically from this version. Every teacher is restricted to max 1 lesson per slot.
+            </p>
+            {selectedClassQuotaRows.length > 0 && (
+              <div className="space-y-1 max-h-52 overflow-y-auto pr-1 pt-1">
+                {selectedClassQuotaRows.map((q) => {
+                  const exact = q.scheduled === q.required;
+                  const over = q.scheduled > q.required;
+                  return (
+                    <div
+                      key={q.id}
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-[11px] ${
+                        exact
+                          ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                          : over
+                          ? 'bg-rose-50 border-rose-200 text-rose-950'
+                          : 'bg-amber-50/70 border-amber-200 text-amber-950'
+                      }`}
+                    >
+                      <span className="font-semibold truncate pr-2">{q.subjectName}</span>
+                      <span className="font-mono font-bold shrink-0">
+                        {q.scheduled}/{q.required}p
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -1983,7 +1983,8 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
     streamName: string,
     subjectName: string,
     userId: string | null,
-    expectedOldUserId?: string | null
+    expectedOldUserId?: string | null,
+    periodsPerWeek?: number
   ) => {
     if (!gradeNumber || !streamName || !subjectName) return;
     const cfg = db
@@ -2000,12 +2001,63 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
     }
 
     const now = nowIso();
+    const existingAlloc = db
+      .prepare(
+        `SELECT id, required_weekly_periods, single_lessons, double_lessons, triple_lessons
+         FROM tt_stream_subject_allocations
+         WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?)
+         LIMIT 1`
+      )
+      .get(cfg.id, schoolId, gradeNumber, streamName, subjectName) as
+      | { id: string; required_weekly_periods: number; single_lessons: number; double_lessons: number; triple_lessons: number }
+      | undefined;
+
     if (userId && targetTtTeacherId) {
-      db.prepare(
-        `UPDATE tt_stream_subject_allocations
-         SET teacher_ids_json = ?, is_overridden = 1, updated_at = ?
-         WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?)`
-      ).run(JSON.stringify([targetTtTeacherId]), now, cfg.id, schoolId, gradeNumber, streamName, subjectName);
+      if (existingAlloc) {
+        const nextReq =
+          typeof periodsPerWeek === 'number' && Number.isFinite(periodsPerWeek) && periodsPerWeek >= 1
+            ? Math.floor(periodsPerWeek)
+            : Number(existingAlloc.required_weekly_periods || 4);
+        let triples = Number(existingAlloc.triple_lessons || 0);
+        let doubles = Number(existingAlloc.double_lessons || 0);
+        let singles = Number(existingAlloc.single_lessons || 0);
+        if (singles + doubles * 2 + triples * 3 !== nextReq) {
+          let rem = nextReq;
+          triples = Math.min(triples, Math.floor(rem / 3));
+          rem -= triples * 3;
+          doubles = Math.min(doubles, Math.floor(rem / 2));
+          rem -= doubles * 2;
+          singles = rem;
+        }
+        db.prepare(
+          `UPDATE tt_stream_subject_allocations
+           SET teacher_ids_json = ?, required_weekly_periods = ?, single_lessons = ?, double_lessons = ?, triple_lessons = ?,
+               is_overridden = 1, is_active = 1, updated_at = ?
+           WHERE id = ?`
+        ).run(JSON.stringify([targetTtTeacherId]), nextReq, singles, doubles, triples, now, existingAlloc.id);
+      } else {
+        // Only insert into tt_stream_subject_allocations if the grade & stream exist in timetable setup
+        const gradeOk = db
+          .prepare(`SELECT grade FROM tt_grade_schedules WHERE config_id = ? AND grade = ? LIMIT 1`)
+          .get(cfg.id, gradeNumber);
+        const grp = db
+          .prepare(
+            `SELECT id FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND is_whole_class = 1 LIMIT 1`
+          )
+          .get(schoolId, gradeNumber, streamName) as { id: string } | undefined;
+        if (gradeOk && grp) {
+          const nextReq =
+            typeof periodsPerWeek === 'number' && Number.isFinite(periodsPerWeek) && periodsPerWeek >= 1
+              ? Math.floor(periodsPerWeek)
+              : 4;
+          const newId = `ttsa-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+          db.prepare(
+            `INSERT INTO tt_stream_subject_allocations
+               (id, tenant_id, config_id, grade, stream, group_id, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, 0, 0, 'spread', 2, 0, '[]', '[]', 'general', NULL, ?, 1, ?)`
+          ).run(newId, schoolId, cfg.id, gradeNumber, streamName, grp.id, subjectName, nextReq, nextReq, JSON.stringify([targetTtTeacherId]), now);
+        }
+      }
     } else if (!userId && expectedOldUserId) {
       const oldTt = db
         .prepare(`SELECT id FROM tt_teacher_profiles WHERE tenant_id = ? AND user_id = ? LIMIT 1`)
@@ -2459,7 +2511,9 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
             target.gradeNumber,
             target.streamName,
             target.subjectName,
-            teacher.id
+            teacher.id,
+            null,
+            target.periodsPerWeek
           );
         }
 

@@ -15,6 +15,7 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { listSubjects } from '../../utils/catalogStore';
+import { getSubjectWeeklyLessonLimit } from '../../utils/curriculumDemand';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
@@ -144,9 +145,9 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   const loadPublishedBackendSchedule = async () => {
     try {
-      const shouldRequestTeacherScope =
-        initialPerspective === 'teacher' ||
-        ['teacher', 'hod', 'senior_teacher', 'curriculum_coordinator'].includes(currentUser.role);
+      // Request teacher-only subset ONLY when explicitly opened in standalone teacher-only perspective;
+      // otherwise load synced entries for Teacher View, Class/Stream View, and Master View together.
+      const shouldRequestTeacherScope = initialPerspective === 'teacher';
       const publishedUrl = shouldRequestTeacherScope
         ? '/api/timetable/published?viewAs=teacher'
         : '/api/timetable/published';
@@ -615,6 +616,53 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     return [...base, ...extras.sort()] as SubjectName[];
   }, [selectedGrade, ttWorkspace?.subjects, catalogRevision]);
 
+  // Strictly allocated subjects + assigned teacher + weekly lesson quota for (selectedGrade, selectedStream)
+  const streamAllocatedSubjects = useMemo(() => {
+    const map = new Map<
+      string,
+      { subject: SubjectName; requiredWeeklyPeriods: number; teacherName: string }
+    >();
+
+    // Priority 1: Authoritative Master Timetable stream allocations from workspace
+    if (ttWorkspace?.streamAllocations?.length) {
+      const tById = new Map<string, string>(
+        (ttWorkspace.teachers || []).map((t): [string, string] => [t.id, t.teacherName])
+      );
+      for (const a of ttWorkspace.streamAllocations) {
+        if (!a.isActive || a.requiredWeeklyPeriods < 1) continue;
+        if (Number(a.grade) !== Number(selectedGrade)) continue;
+        if (String(a.stream).trim().toLowerCase() !== String(selectedStream).trim().toLowerCase()) continue;
+        const tId = a.teacherIds?.[0];
+        const tName = tId ? tById.get(tId) || '' : '';
+        map.set(a.subjectName.trim().toLowerCase(), {
+          subject: a.subjectName as SubjectName,
+          requiredWeeklyPeriods: Math.max(1, Number(a.requiredWeeklyPeriods)),
+          teacherName: tName,
+        });
+      }
+    }
+
+    // Priority 2: Supplement from Faculty allocated SubjectStreamAllocations
+    const facultyUsers = Storage.getUsers().filter((u) =>
+      ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'curriculum_coordinator'].includes(u.role)
+    );
+    for (const teacher of facultyUsers) {
+      for (const alloc of teacher.assignedSubjectAllocations || []) {
+        if (Number(alloc.grade) !== Number(selectedGrade)) continue;
+        if (String(alloc.stream || '').trim().toLowerCase() !== String(selectedStream).trim().toLowerCase()) continue;
+        const key = String(alloc.subject || '').trim().toLowerCase();
+        if (!key || map.has(key)) continue;
+        map.set(key, {
+          subject: alloc.subject as SubjectName,
+          requiredWeeklyPeriods: getSubjectWeeklyLessonLimit(selectedGrade, alloc.subject, alloc.periodsPerWeek),
+          teacherName: teacher.name,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.subject.localeCompare(b.subject));
+  }, [ttWorkspace?.streamAllocations, ttWorkspace?.teachers, selectedGrade, selectedStream, catalogRevision]);
+
   // Filtered slots for active Grade & Stream
   const classSlots = useMemo(() => {
     return allSlots.filter(s => s.grade === selectedGrade && s.stream === selectedStream);
@@ -758,22 +806,50 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     };
   };
 
-  // Check double-booking conflict
-  const checkConflicts = (day: string, period: number, teacher: string, room: string, excludeId?: string) => {
-    const conflict = allSlots.find(s => {
-      if (excludeId && s.id === excludeId) return false;
-      if (s.dayOfWeek !== day || s.period !== period) return false;
-      const sameTeacher = s.teacherName.toLowerCase() === teacher.toLowerCase();
-      const sameRoom = room && s.roomName && s.roomName.toLowerCase() === room.toLowerCase();
-      return sameTeacher || sameRoom;
-    });
+  // Count non-remedial scheduled lessons for a subject in the currently selected Grade + Stream
+  const getScheduledWeeklyCount = (subjectName: string, excludeId?: string) => {
+    const subLower = String(subjectName || '').trim().toLowerCase();
+    return classSlots.filter(
+      (s) =>
+        (!excludeId || s.id !== excludeId) &&
+        !s.isRemedial &&
+        s.period !== 10 &&
+        s.period !== 11 &&
+        String(s.subject || '').trim().toLowerCase() === subLower
+    ).length;
+  };
 
-    if (conflict) {
-      if (conflict.teacherName.toLowerCase() === teacher.toLowerCase()) {
-        return `Conflict Detected: ${teacher} is already booked in Grade ${conflict.grade} ${conflict.stream} (${conflict.subject}) during Period ${period} on ${day}.`;
+  // Strict conflict check:
+  // 1. No teacher (primary or relief) may have more than 1 lesson at a time across ALL grades & streams
+  // 2. No class/stream may have 2 overlapping lessons in the same period
+  // 3. No room double-booking across all grades & streams
+  const checkConflicts = (day: string, period: number, teacher: string, room: string, excludeId?: string) => {
+    const teacherNorm = String(teacher || '').trim().toLowerCase();
+    const roomNorm = String(room || '').trim().toLowerCase();
+
+    for (const s of allSlots) {
+      if (excludeId && s.id === excludeId) continue;
+      if (s.dayOfWeek !== day || s.period !== period) continue;
+
+      // 1. Class/stream collision
+      if (Number(s.grade) === Number(selectedGrade) && String(s.stream).toLowerCase() === String(selectedStream).toLowerCase()) {
+        return `Class Overlap Blocked: Grade ${selectedGrade} ${selectedStream} already has ${s.subject} (${s.teacherName}) on ${day} Period ${period}.`;
       }
-      if (conflict.roomName && room && conflict.roomName.toLowerCase() === room.toLowerCase()) {
-        return `Room Collision: ${room} is already allocated to Grade ${conflict.grade} ${conflict.stream} during Period ${period} on ${day}.`;
+
+      // 2. Strict 1-lesson-at-a-time teacher clash (primary + co-teachers + relief cover)
+      if (teacherNorm && teacherNorm !== 'faculty lead' && teacherNorm !== 'subject teacher') {
+        const slotTeachers = [
+          ...String(s.teacherName || '').split(/[,&]/).map((n) => n.trim().toLowerCase()),
+          ...(s.reliefTeacherName ? [String(s.reliefTeacherName).trim().toLowerCase()] : []),
+        ].filter(Boolean);
+        if (slotTeachers.includes(teacherNorm)) {
+          return `Teacher Double-Booking Blocked: ${teacher} is already teaching Grade ${s.grade} ${s.stream} (${s.subject}) on ${day} Period ${period}. No teacher can have more than 1 lesson at a time.`;
+        }
+      }
+
+      // 3. Room collision
+      if (roomNorm && s.roomName && s.roomName.trim().toLowerCase() === roomNorm) {
+        return `Room Collision Blocked: ${room} is already allocated to Grade ${s.grade} ${s.stream} (${s.subject}) on ${day} Period ${period}.`;
       }
     }
     return null;
@@ -796,9 +872,19 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       setSlotToEdit(null);
       setFormDay('Monday');
       setFormPeriod(1);
-      setFormSubject(availableSubjects[0]);
-      setFormTeacherName(currentUser.name || 'Mr. David Kiprono');
-      setFormRoomName(`Classroom ${selectedGrade}-${selectedStream}`);
+      // Prefer the first allocated subject for this Grade + Stream that still has remaining weekly quota
+      const nextAlloc =
+        streamAllocatedSubjects.find(
+          (a) => getScheduledWeeklyCount(a.subject) < a.requiredWeeklyPeriods
+        ) || streamAllocatedSubjects[0];
+      const defaultSubject = (nextAlloc?.subject || availableSubjects[0]) as SubjectName;
+      setFormSubject(defaultSubject);
+      setFormTeacherName(nextAlloc?.teacherName || currentUser.name || 'Mr. David Kiprono');
+      setFormRoomName(
+        String(defaultSubject).toLowerCase().includes('library')
+          ? 'Main Library Reading Hall'
+          : `Classroom ${selectedGrade}-${selectedStream}`
+      );
       setFormMeetLink(`https://meet.google.com/edu-gr${selectedGrade}-${selectedStream.toLowerCase()}`);
       setFormStrandTopic('');
       setFormNotes('');
@@ -811,8 +897,39 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Save Slot Handler
   const handleSaveSlot = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Check conflicts
+
+    const isRemedialSession = formPeriod === 10 || formPeriod === 11 || formIsRemedial;
+
+    // Enforce strict Grade + Stream + Subject allocation and exact weekly lesson quota on regular lessons
+    if (!isRemedialSession && streamAllocatedSubjects.length > 0) {
+      const matchedAlloc = streamAllocatedSubjects.find(
+        (a) => a.subject.toLowerCase() === String(formSubject).trim().toLowerCase()
+      );
+      if (!matchedAlloc) {
+        setFormConflictWarning(
+          `Strict Allocation Policy: "${formSubject}" is not allocated to Grade ${selectedGrade} ${selectedStream}. Assign it in Subject Allocations before scheduling.`
+        );
+        return;
+      }
+      if (
+        matchedAlloc.teacherName &&
+        formTeacherName.trim().toLowerCase() !== matchedAlloc.teacherName.trim().toLowerCase()
+      ) {
+        setFormConflictWarning(
+          `Allocated Teacher Mismatch: ${matchedAlloc.teacherName} is the allocated teacher for ${formSubject} in Grade ${selectedGrade} ${selectedStream}.`
+        );
+        return;
+      }
+      const alreadyScheduled = getScheduledWeeklyCount(formSubject, slotToEdit?.id);
+      if (alreadyScheduled >= matchedAlloc.requiredWeeklyPeriods) {
+        setFormConflictWarning(
+          `Weekly Lesson Quota Reached: ${formSubject} in Grade ${selectedGrade} ${selectedStream} is limited to ${matchedAlloc.requiredWeeklyPeriods} lesson(s) per week (${alreadyScheduled}/${matchedAlloc.requiredWeeklyPeriods} already scheduled). Adjust lessons per week in Allocations if needed.`
+        );
+        return;
+      }
+    }
+
+    // Check conflicts (strict 1 lesson per teacher at a time, class overlap, room overlap)
     const conflict = checkConflicts(formDay, formPeriod, formTeacherName, formRoomName, slotToEdit?.id);
     if (conflict) {
       setFormConflictWarning(conflict);
@@ -820,7 +937,6 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     }
 
     const bell = bellSchedule.find(b => b.period === formPeriod);
-    const isRemedialSession = formPeriod === 10 || formPeriod === 11 || formIsRemedial;
 
     const slotPayload: TimetableSlot = {
       id: slotToEdit?.id || `tt-${selectedGrade}${selectedStream.charAt(0).toLowerCase()}-${Date.now().toString(36)}`,
@@ -3149,12 +3265,40 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Subject / Learning Area</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">Subject / Learning Area</label>
+                  {streamAllocatedSubjects.length > 0 && !(formIsRemedial || formPeriod === 10 || formPeriod === 11) && (() => {
+                    const matched = streamAllocatedSubjects.find(
+                      (a) => a.subject.toLowerCase() === String(formSubject).trim().toLowerCase()
+                    );
+                    if (!matched) return null;
+                    const count = getScheduledWeeklyCount(formSubject, slotToEdit?.id);
+                    const atCap = count >= matched.requiredWeeklyPeriods;
+                    return (
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                          atCap
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}
+                      >
+                        {count}/{matched.requiredWeeklyPeriods} lessons/wk scheduled
+                      </span>
+                    );
+                  })()}
+                </div>
                 <select
                   value={formSubject}
                   onChange={(e) => {
                     const nextSub = e.target.value as SubjectName;
                     setFormSubject(nextSub);
+                    setFormConflictWarning(null);
+                    const matchedAlloc = streamAllocatedSubjects.find(
+                      (a) => a.subject.toLowerCase() === String(nextSub).trim().toLowerCase()
+                    );
+                    if (matchedAlloc?.teacherName) {
+                      setFormTeacherName(matchedAlloc.teacherName);
+                    }
                     if (
                       String(nextSub).toLowerCase().includes('library') &&
                       (!formRoomName || formRoomName.toLowerCase().startsWith('classroom'))
@@ -3164,13 +3308,36 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
                 >
-                  {availableSubjects.map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                  {!availableSubjects.includes(formSubject) && (
-                    <option value={formSubject}>{formSubject}</option>
+                  {streamAllocatedSubjects.length > 0 && !(formIsRemedial || formPeriod === 10 || formPeriod === 11) ? (
+                    <>
+                      {streamAllocatedSubjects.map((alloc) => {
+                        const used = getScheduledWeeklyCount(alloc.subject, slotToEdit?.id);
+                        return (
+                          <option key={alloc.subject} value={alloc.subject}>
+                            {alloc.subject} ({used}/{alloc.requiredWeeklyPeriods} wk{alloc.teacherName ? ` · ${alloc.teacherName}` : ''})
+                          </option>
+                        );
+                      })}
+                      {!streamAllocatedSubjects.some((a) => a.subject === formSubject) && (
+                        <option value={formSubject}>{formSubject} (Not allocated)</option>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {availableSubjects.map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                      {!availableSubjects.includes(formSubject) && (
+                        <option value={formSubject}>{formSubject}</option>
+                      )}
+                    </>
                   )}
                 </select>
+                {streamAllocatedSubjects.length > 0 && !(formIsRemedial || formPeriod === 10 || formPeriod === 11) && (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Strictly restricted to subjects allocated to Grade {selectedGrade} {selectedStream} and their configured weekly lesson limits.
+                  </p>
+                )}
                 {String(formSubject).toLowerCase().includes('library') && (
                   <p className="text-[11px] text-indigo-700 font-semibold mt-1">
                     Linked to Library Bookings: saving this Library Lesson automatically marks this library slot as occupied so free slots are visible for other teachers.
@@ -3697,8 +3864,11 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           currentUser={currentUser}
           isOpen={showAutoGenModal}
           onClose={() => setShowAutoGenModal(false)}
+          streamAllocations={ttWorkspace?.streamAllocations || []}
+          teacherProfiles={ttWorkspace?.teachers || []}
           onTimetablePublished={() => {
-            setNotificationMsg('Master institutional timetable successfully auto-generated and published!');
+            setAllSlots(Storage.getAllTimetableSlots());
+            setNotificationMsg('Master, Class/Stream, and Teacher timetables successfully generated and synchronized with zero teacher clashes!');
             setTimeout(() => setNotificationMsg(null), 4000);
           }}
         />

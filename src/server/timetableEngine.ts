@@ -779,6 +779,11 @@ export function expandRequirementUnits(
     }
   }
 
+  const activeSubjectsRaw = db
+    .prepare(`SELECT name FROM tt_subjects WHERE tenant_id = ? AND is_active = 1`)
+    .all(tenantId) as Array<{ name: string }>;
+  const activeSubjectNames = new Set(activeSubjectsRaw.map((s) => String(s.name).trim().toLowerCase()));
+
   const streamAllocs = db
     .prepare(`SELECT * FROM tt_stream_subject_allocations WHERE config_id = ? AND is_active = 1 ORDER BY grade, stream, subject_name`)
     .all(configId) as any[];
@@ -794,26 +799,69 @@ export function expandRequirementUnits(
   // 1. Joint Multi-Stream Lessons first
   for (const jl of jointLessons) {
     const classTargetsRaw = safeJsonParse<Array<{ grade: number; stream: string }>>(jl.participating_classes_json, []);
+    const subjName = String(jl.subject_name || '').trim();
     if (classTargetsRaw.length < 2) {
       allocationIssues.push({
         grade: classTargetsRaw[0]?.grade || 0,
         stream: classTargetsRaw[0]?.stream || 'Joint',
-        subject: String(jl.subject_name),
+        subject: subjName,
         message: `Joint lesson "${jl.title}" must include at least 2 participating classes/streams.`,
       });
       continue;
     }
 
-    const teacherIds = safeJsonParse<string[]>(jl.teacher_ids_json, []);
-    const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Assigned Teacher');
-    const len = Math.min(3, Math.max(1, Number(jl.lesson_length || 1))) as 1 | 2 | 3;
-    const weeklyPeriods = Number(jl.weekly_periods || len);
-    const sessionsCount = Math.max(1, Math.round(weeklyPeriods / len));
+    if (activeSubjectNames.size > 0 && !activeSubjectNames.has(subjName.toLowerCase())) {
+      allocationIssues.push({
+        grade: Number(classTargetsRaw[0]?.grade || 0),
+        stream: String(classTargetsRaw[0]?.stream || 'Joint'),
+        subject: subjName,
+        message: `Joint lesson subject "${subjName}" is not an active configured curriculum subject.`,
+      });
+      continue;
+    }
+
     const classTargets = classTargetsRaw.map((c) => ({
       grade: Number(c.grade),
       stream: String(c.stream),
       classKey: classKeyOf(Number(c.grade), String(c.stream)),
     }));
+
+    let hasInvalidTarget = false;
+    for (const ct of classTargets) {
+      if (gradeSchedMap.size > 0 && !gradeSchedMap.has(ct.grade)) {
+        allocationIssues.push({
+          grade: ct.grade,
+          stream: ct.stream,
+          subject: subjName,
+          message: `Joint lesson "${jl.title}" references Grade ${ct.grade}, which is not an active configured grade.`,
+        });
+        hasInvalidTarget = true;
+      } else if (wholeGroupByClass.size > 0 && !wholeGroupByClass.has(ct.classKey)) {
+        allocationIssues.push({
+          grade: ct.grade,
+          stream: ct.stream,
+          subject: subjName,
+          message: `Joint lesson "${jl.title}" references Grade ${ct.grade} ${ct.stream}, which is not an allocated stream.`,
+        });
+        hasInvalidTarget = true;
+      }
+    }
+    if (hasInvalidTarget) continue;
+
+    const teacherIds = safeJsonParse<string[]>(jl.teacher_ids_json, []).filter((id) => teacherNameMap.has(id));
+    const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Assigned Teacher');
+    const len = Math.min(3, Math.max(1, Number(jl.lesson_length || 1))) as 1 | 2 | 3;
+    const weeklyPeriods = Number(jl.weekly_periods || len);
+    if (weeklyPeriods < 1 || weeklyPeriods % len !== 0) {
+      allocationIssues.push({
+        grade: classTargets[0].grade,
+        stream: classTargets.map((c) => c.stream).join('+'),
+        subject: subjName,
+        message: `Joint lesson "${jl.title}" weekly periods (${weeklyPeriods}) must be a positive multiple of lesson length (${len}).`,
+      });
+      continue;
+    }
+    const sessionsCount = Math.floor(weeklyPeriods / len);
     const combinedCount =
       Number(jl.combined_students || 0) ||
       classTargets.reduce((sum, c) => sum + Number(wholeGroupByClass.get(c.classKey)?.student_count || 38), 0);
@@ -827,7 +875,7 @@ export function expandRequirementUnits(
         sessionKey: `jl:${jl.id}:${i + 1}`,
         jointLessonId: String(jl.id),
         title: String(jl.title),
-        subjectName: String(jl.subject_name),
+        subjectName: subjName,
         grade: classTargets[0].grade,
         stream: classTargets.map((c) => c.stream).join('+'),
         classTargets,
@@ -848,24 +896,79 @@ export function expandRequirementUnits(
     }
   }
 
-  // 2. Individual Stream / Student-Group Subject Allocations
+  // 2. Individual Stream / Student-Group Subject Allocations (Strictly restricted to configured grades, streams, subjects & exact weekly lessons)
   for (const sa of streamAllocs) {
     const grade = Number(sa.grade);
-    const stream = String(sa.stream);
+    const stream = String(sa.stream || '').trim();
+    const subjectName = String(sa.subject_name || '').trim();
     const ck = classKeyOf(grade, stream);
-    const reqWeekly = Number(sa.required_weekly_periods || 0);
-    const singles = Number(sa.single_lessons || 0);
-    const doubles = Number(sa.double_lessons || 0);
-    const triples = Number(sa.triple_lessons || 0);
+    const reqWeekly = Math.floor(Number(sa.required_weekly_periods || 0));
+
+    // Strict Grade check
+    if (gradeSchedMap.size > 0 && !gradeSchedMap.has(grade)) {
+      allocationIssues.push({
+        grade,
+        stream,
+        subject: subjectName,
+        message: `Grade ${grade} is not an active configured grade in timetable setup; lessons cannot be assigned.`,
+      });
+      continue;
+    }
+
+    // Strict Stream check
+    if (wholeGroupByClass.size > 0 && !wholeGroupByClass.has(ck)) {
+      allocationIssues.push({
+        grade,
+        stream,
+        subject: subjectName,
+        message: `Stream "${stream}" is not an allocated stream for Grade ${grade}; lessons cannot be assigned.`,
+      });
+      continue;
+    }
+
+    // Strict Subject check
+    if (activeSubjectNames.size > 0 && !activeSubjectNames.has(subjectName.toLowerCase())) {
+      allocationIssues.push({
+        grade,
+        stream,
+        subject: subjectName,
+        message: `Subject "${subjectName}" is not an active subject in the school's curriculum catalog.`,
+      });
+      continue;
+    }
+
+    // Strict Weekly Lesson Count check
+    if (reqWeekly < 1) {
+      allocationIssues.push({
+        grade,
+        stream,
+        subject: subjectName,
+        message: `Required weekly lessons must be at least 1 period per week (currently ${reqWeekly}).`,
+      });
+      continue;
+    }
+
+    let singles = Math.max(0, Math.floor(Number(sa.single_lessons || 0)));
+    let doubles = Math.max(0, Math.floor(Number(sa.double_lessons || 0)));
+    let triples = Math.max(0, Math.floor(Number(sa.triple_lessons || 0)));
     const sessionSum = singles + doubles * 2 + triples * 3;
 
     if (sessionSum !== reqWeekly) {
       allocationIssues.push({
         grade,
         stream,
-        subject: String(sa.subject_name),
+        subject: subjectName,
         message: `Session breakdown (${singles}×1 + ${doubles}×2 + ${triples}×3 = ${sessionSum}) does not equal required weekly periods (${reqWeekly}).`,
       });
+      // Reconcile emitted units strictly to reqWeekly so the solver NEVER schedules more or fewer lessons than reqWeekly
+      let rem = reqWeekly;
+      const safeTriples = Math.min(triples, Math.floor(rem / 3));
+      rem -= safeTriples * 3;
+      const safeDoubles = Math.min(doubles, Math.floor(rem / 2));
+      rem -= safeDoubles * 2;
+      triples = safeTriples;
+      doubles = safeDoubles;
+      singles = rem;
     }
 
     const grp = sa.group_id ? groupById.get(String(sa.group_id)) : wholeGroupByClass.get(ck);
@@ -879,13 +982,13 @@ export function expandRequirementUnits(
     }
 
     const rawTeacherIds = safeJsonParse<string[]>(sa.teacher_ids_json, []);
-    const uniqueTeacherIds = Array.from(new Set(rawTeacherIds.filter(Boolean)));
+    const uniqueTeacherIds = Array.from(new Set(rawTeacherIds.filter((id) => Boolean(id) && teacherNameMap.has(String(id)))));
     if (uniqueTeacherIds.length > 1) {
       allocationIssues.push({
         grade,
         stream,
-        subject: String(sa.subject_name),
-        message: `Multiple teachers assigned to Grade ${grade} ${stream} · ${sa.subject_name}. No subject in any stream can have more than one teacher.`,
+        subject: subjectName,
+        message: `Multiple teachers assigned to Grade ${grade} ${stream} · ${subjectName}. No subject in any stream can have more than one teacher.`,
       });
     }
     const teacherIds = uniqueTeacherIds.slice(0, 1);
@@ -894,8 +997,8 @@ export function expandRequirementUnits(
       allocationIssues.push({
         grade,
         stream,
-        subject: String(sa.subject_name),
-        message: `No subject teacher assigned to Grade ${grade} ${stream} · ${sa.subject_name}.`,
+        subject: subjectName,
+        message: `No subject teacher assigned to Grade ${grade} ${stream} · ${subjectName}.`,
       });
     }
 
@@ -905,8 +1008,8 @@ export function expandRequirementUnits(
     const makeUnit = (blockLen: 1 | 2 | 3, idx: number): TTSessionUnit => ({
       sessionKey: `sa:${sa.id}:${blockLen}:${idx}`,
       allocationId: String(sa.id),
-      title: String(sa.subject_name),
-      subjectName: String(sa.subject_name),
+      title: subjectName,
+      subjectName,
       grade,
       stream,
       classTargets: [{ grade, stream, classKey: ck }],
@@ -1376,7 +1479,7 @@ export function validateTimetableVersion(
     }
   }
 
-  // G. Placed count vs Required count check (detect deleted entries)
+  // G. Strict Weekly Lesson Quota & Allocated Grade/Stream/Subject Compliance Checks
   const expectedCountByKey = new Map<string, number>();
   for (const u of units) {
     for (const ct of u.classTargets) {
@@ -1389,10 +1492,19 @@ export function validateTimetableVersion(
     const k = `${e.grade}|${e.stream}|${e.subject_name}|${e.group_name || 'Whole Class'}`;
     actualCountByKey.set(k, (actualCountByKey.get(k) || 0) + 1);
   }
+  const unscheduledCountByKey = new Map<string, number>();
+  for (const u of unscheduled) {
+    const k = `${u.grade}|${u.stream}|${u.subject_name}|${u.group_name || 'Whole Class'}`;
+    unscheduledCountByKey.set(k, (unscheduledCountByKey.get(k) || 0) + Number(u.block_length || 1));
+  }
+
+  // 1) Check missing AND excess weekly periods for every allocated (grade, stream, subject, group)
   for (const [k, exp] of expectedCountByKey.entries()) {
     const act = actualCountByKey.get(k) || 0;
-    if (act < exp && unscheduled.length === 0 && entries.length > 0) {
-      const [gStr, st, subj, grp] = k.split('|');
+    const unschedPts = unscheduledCountByKey.get(k) || 0;
+    const [gStr, st, subj, grp] = k.split('|');
+
+    if (entries.length > 0 && act + unschedPts < exp) {
       pushConflict(
         'error',
         'MISSING_WEEKLY_LESSONS',
@@ -1401,6 +1513,60 @@ export function validateTimetableVersion(
         undefined,
         { grade: Number(gStr), stream: st, subject: subj, scheduled: act, required: exp }
       );
+    } else if (act > exp) {
+      pushConflict(
+        'error',
+        'EXCESS_WEEKLY_LESSONS',
+        `Weekly lesson quota exceeded for Grade ${gStr} ${st} (${grp}) · ${subj}: ${act} periods scheduled, strictly allowed ${exp} per week.`,
+        undefined,
+        undefined,
+        { grade: Number(gStr), stream: st, subject: subj, scheduled: act, required: exp }
+      );
+    }
+  }
+
+  // 2) Detect any scheduled entry whose (grade, stream, subject, group) is NOT in active allocations
+  for (const [k, act] of actualCountByKey.entries()) {
+    if (!expectedCountByKey.has(k)) {
+      const [gStr, st, subj, grp] = k.split('|');
+      pushConflict(
+        'error',
+        'UNALLOCATED_LESSON_ENTRY',
+        `Unallocated lesson entry: Grade ${gStr} ${st} (${grp}) · ${subj} has ${act} scheduled period(s) but is not allocated in active stream curriculum allocations.`,
+        undefined,
+        undefined,
+        { grade: Number(gStr), stream: st, subject: subj, scheduled: act }
+      );
+    }
+  }
+
+  // 3) Verify scheduled non-joint lessons strictly match their stream allocation's assigned teacher
+  const checkedBlockTeacherMismatch = new Set<string>();
+  for (const e of entries) {
+    if (e.joint_lesson_id || Number(e.block_index || 0) !== 0) continue;
+    const alloc = e.allocation_id ? allocMap.get(String(e.allocation_id)) : null;
+    if (!alloc || Number(alloc.is_active) !== 1) continue;
+    const expectedTeachers = safeJsonParse<string[]>(alloc.teacher_ids_json, []).filter(Boolean);
+    if (expectedTeachers.length === 0) continue;
+    const entryTeachers = safeJsonParse<string[]>(e.teacher_ids_json, []).filter(Boolean);
+    const matchesTeacher =
+      entryTeachers.length === expectedTeachers.length &&
+      expectedTeachers.every((tid) => entryTeachers.includes(tid));
+    if (!matchesTeacher) {
+      const mKey = `${e.grade}|${e.stream}|${e.subject_name}|${e.session_block_id}`;
+      if (!checkedBlockTeacherMismatch.has(mKey)) {
+        checkedBlockTeacherMismatch.add(mKey);
+        const expectedNames = expectedTeachers.map((id) => teacherMap.get(id)?.teacher_name || id).join(', ');
+        const actualNames = safeJsonParse<string[]>(e.teacher_names_json, []).join(', ') || 'Unassigned';
+        pushConflict(
+          'error',
+          'TEACHER_ALLOCATION_MISMATCH',
+          `Teacher allocation mismatch on ${e.day_of_week} P${e.period_number}: Grade ${e.grade} ${e.stream} · ${e.subject_name} is assigned to ${actualNames}, but stream allocation restricts it to ${expectedNames}.`,
+          String(e.day_of_week),
+          Number(e.period_number),
+          { grade: Number(e.grade), stream: String(e.stream), subject: String(e.subject_name), expectedTeachers, entryTeachers }
+        );
+      }
     }
   }
 
@@ -1591,11 +1757,41 @@ export function validateSingleMoveCandidate(
     new Map(blockEntries.map((e) => [`${e.grade}|${e.stream}`, e])).values()
   );
 
+  // Strict allocation & grade schedule verification
+  const firstEntry = blockEntries[0];
+  if (!firstEntry.joint_lesson_id) {
+    const activeAlloc = firstEntry.allocation_id
+      ? (db
+          .prepare(
+            `SELECT id, grade, stream, subject_name, required_weekly_periods, is_active
+             FROM tt_stream_subject_allocations
+             WHERE id = ? AND config_id = ? AND is_active = 1`
+          )
+          .get(String(firstEntry.allocation_id), configId) as any)
+      : (db
+          .prepare(
+            `SELECT id, grade, stream, subject_name, required_weekly_periods, is_active
+             FROM tt_stream_subject_allocations
+             WHERE config_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?) AND is_active = 1
+             LIMIT 1`
+          )
+          .get(configId, Number(firstEntry.grade), String(firstEntry.stream), String(firstEntry.subject_name)) as any);
+    if (!activeAlloc) {
+      hardConflicts.push(
+        `Grade ${firstEntry.grade} ${firstEntry.stream} · ${firstEntry.subject_name} is no longer an active allocated subject for this stream and cannot be scheduled.`
+      );
+    }
+  }
+
   // Check Grade schedule limits
   for (const ce of uniqueClasses) {
     const gs = db
       .prepare(`SELECT periods_per_day, working_days_json FROM tt_grade_schedules WHERE config_id = ? AND grade = ?`)
       .get(configId, Number(ce.grade)) as any;
+    if (!gs) {
+      hardConflicts.push(`Grade ${ce.grade} is not configured in active grade schedules.`);
+      continue;
+    }
     const allowedDays = safeJsonParse<string[]>(gs?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
     if (!allowedDays.includes(targetDay)) {
       hardConflicts.push(`${targetDay} is not a configured working day for Grade ${ce.grade}.`);
@@ -1845,16 +2041,58 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
     }));
     const roomMap = new Map(roomsList.map((r) => [r.id, r]));
 
-    // Locked entries to preserve if preserveLocked=true
-    const lockedEntries = preserveLocked
+    // Locked entries to preserve if preserveLocked=true (filtered strictly against active allocations & exact weekly quotas)
+    const rawLockedEntries = preserveLocked
       ? (db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND is_locked = 1`).all(versionId) as any[])
       : [];
 
     const { units: allUnits, allocationIssues } = expandRequirementUnits(db, tenantId, configId);
 
+    // Compute strict allowed block count per allocation/joint key from active expanded units
+    const allowedBlockCountByKey = new Map<string, number>();
+    for (const u of allUnits) {
+      const k = u.jointLessonId
+        ? `jl:${u.jointLessonId}:${u.classTargets[0].grade}:${u.classTargets[0].stream}`
+        : `sa:${u.allocationId}:${u.blockLength}`;
+      allowedBlockCountByKey.set(k, (allowedBlockCountByKey.get(k) || 0) + 1);
+    }
+
+    const lockedEntries: any[] = [];
+    const staleLockedBlockIds = new Set<string>();
+    const keptLockedCountByKey = new Map<string, number>();
+
+    // Group rawLockedEntries by session_block_id so we keep/drop whole blocks atomically
+    const lockedByBlock = new Map<string, any[]>();
+    for (const le of rawLockedEntries) {
+      const bId = String(le.session_block_id || le.id);
+      if (!lockedByBlock.has(bId)) lockedByBlock.set(bId, []);
+      lockedByBlock.get(bId)!.push(le);
+    }
+    for (const [bId, segs] of lockedByBlock.entries()) {
+      const head = segs.find((s) => Number(s.block_index || 0) === 0) || segs[0];
+      const k = head.joint_lesson_id
+        ? `jl:${head.joint_lesson_id}:${head.grade}:${head.stream}`
+        : `sa:${head.allocation_id}:${head.block_length}`;
+      const maxAllowed = allowedBlockCountByKey.get(k) || 0;
+      const alreadyKept = keptLockedCountByKey.get(k) || 0;
+      if (maxAllowed > 0 && alreadyKept < maxAllowed) {
+        keptLockedCountByKey.set(k, alreadyKept + 1);
+        lockedEntries.push(...segs);
+      } else {
+        staleLockedBlockIds.add(bId);
+      }
+    }
+
+    if (staleLockedBlockIds.size > 0) {
+      const delStale = db.prepare(`DELETE FROM tt_entries WHERE version_id = ? AND session_block_id = ?`);
+      for (const bId of staleLockedBlockIds) {
+        delStale.run(versionId, bId);
+      }
+    }
+
     updateJob({
       progressPct: 20,
-      stageMessage: `Expanded ${allUnits.length} weekly session blocks (${lockedEntries.length} locked slots preserved)...`,
+      stageMessage: `Expanded ${allUnits.length} weekly session blocks (${lockedEntries.length} valid locked slots preserved)...`,
     });
     await yieldEventLoop();
     if (isCancelled()) {

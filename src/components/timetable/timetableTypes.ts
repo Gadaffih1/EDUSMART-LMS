@@ -48,6 +48,7 @@ export interface TTDepartmentItem {
   id: string;
   name: string;
   code: string;
+  hodUserId?: string;
   headName: string;
   description: string;
   isActive: boolean;

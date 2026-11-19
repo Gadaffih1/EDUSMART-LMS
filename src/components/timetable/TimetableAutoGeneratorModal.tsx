@@ -22,18 +22,24 @@ import {
   Eye
 } from 'lucide-react';
 
+import { TTStreamAllocationItem, TTTeacherProfileItem } from './timetableTypes';
+
 interface TimetableAutoGeneratorModalProps {
   currentUser: User;
   isOpen: boolean;
   onClose: () => void;
   onTimetablePublished: () => void;
+  streamAllocations?: TTStreamAllocationItem[];
+  teacherProfiles?: TTTeacherProfileItem[];
 }
 
 export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalProps> = ({
   currentUser,
   isOpen,
   onClose,
-  onTimetablePublished
+  onTimetablePublished,
+  streamAllocations = [],
+  teacherProfiles = [],
 }) => {
   const [step, setStep] = useState<'checklist' | 'generating' | 'preview'>('checklist');
   const [generationResult, setGenerationResult] = useState<TimetableGenerationResult | null>(null);
@@ -59,14 +65,42 @@ export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalPr
 
   const activeFixedCount = fixedConditions.filter(c => c.isActive).length;
 
+  // Map backend stream allocations into strict allocatedStreamSubjects when present
+  const mappedBackendAllocations = useMemo(() => {
+    if (!streamAllocations.length) return [];
+    const tMap = new Map<string, TTTeacherProfileItem>(
+      teacherProfiles.map((t): [string, TTTeacherProfileItem] => [t.id, t])
+    );
+    return streamAllocations
+      .filter((a) => a.isActive && a.requiredWeeklyPeriods >= 1)
+      .map((a) => {
+        const primaryTeacherId = a.teacherIds?.[0];
+        const tProf = primaryTeacherId ? tMap.get(primaryTeacherId) : undefined;
+        return {
+          grade: a.grade as GradeLevel,
+          stream: a.stream as StreamName,
+          subject: a.subjectName as any,
+          periodsPerWeek: a.requiredWeeklyPeriods,
+          teacherName: tProf?.teacherName || '',
+          teacherEmail: tProf?.teacherEmail || '',
+        };
+      })
+      .filter((item) => Boolean(item.teacherName));
+  }, [streamAllocations, teacherProfiles]);
+
   // Run the generation solver
   const handleExecuteGeneration = () => {
     setStep('generating');
     setTimeout(() => {
       const result = generateAutomatedTimetable(teachers, fixedConditions, sharedFacilities, {
-        gradesToGenerate: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        gradesToGenerate: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        allocatedStreamSubjects: mappedBackendAllocations.length > 0 ? mappedBackendAllocations : undefined,
       });
       setGenerationResult(result);
+      const firstStream = result.stats.strictAllocation?.allocatedStreams?.[0];
+      if (firstStream) {
+        setSelectedPreviewStream({ grade: firstStream.grade, stream: firstStream.stream });
+      }
       setStep('preview');
     }, 700);
   };
@@ -332,27 +366,48 @@ export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalPr
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Total Periods</div>
                   <div className="text-xl font-black text-slate-900 mt-0.5">{generationResult.stats.totalPeriods}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Academic sessions</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {generationResult.stats.strictAllocation
+                      ? `${generationResult.stats.strictAllocation.scheduledAllocatedPeriods}/${generationResult.stats.strictAllocation.requiredWeeklyPeriods} allocated`
+                      : 'Academic sessions'}
+                  </div>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Fixed Anchors</div>
-                  <div className="text-xl font-black text-amber-700 mt-0.5">{generationResult.stats.fixedPeriodsEnforced}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Locked conditions</div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Exact Weekly Quotas</div>
+                  <div className="text-xl font-black text-emerald-700 mt-0.5">
+                    {generationResult.stats.strictAllocation?.exactQuotaMatches ?? 0}/
+                    {generationResult.stats.strictAllocation?.allocatedSubjectLinks ?? 0}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Strict subject-stream match</div>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-center">
                   <div className="text-[10px] uppercase font-bold text-slate-400">Clashes Prevented</div>
                   <div className="text-xl font-black text-emerald-700 mt-0.5">{generationResult.stats.conflictsResolved}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Teacher/Room collisions</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Max 1 lesson/teacher/slot</div>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Active Streams</div>
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Allocated Streams</div>
                   <div className="text-xl font-black text-slate-900 mt-0.5">{generationResult.stats.totalStreams}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Primary & Junior</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">Strictly configured only</div>
                 </div>
               </div>
+
+              {generationResult.conflictReport.length > 0 && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-1.5">
+                  <div className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Strict Allocation &amp; Quota Notices ({generationResult.conflictReport.length})</span>
+                  </div>
+                  <ul className="list-disc pl-5 text-[11px] text-amber-900 space-y-0.5 max-h-28 overflow-y-auto">
+                    {generationResult.conflictReport.slice(0, 8).map((msg, idx) => (
+                      <li key={idx}>{msg}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Shared Resource Utilization Breakdown */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
@@ -376,7 +431,7 @@ export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalPr
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
                     <Eye className="w-4 h-4 text-emerald-600" />
-                    <span>Instant Sample Timetable Inspection:</span>
+                    <span>Instant Sample Timetable Inspection (Synced across Class, Teacher &amp; Master Views):</span>
                   </span>
 
                   <div className="flex items-center gap-1.5">
@@ -384,17 +439,18 @@ export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalPr
                     <select
                       value={`${selectedPreviewStream.grade}-${selectedPreviewStream.stream}`}
                       onChange={(e) => {
-                        const [g, s] = e.target.value.split('-');
+                        const dashIdx = e.target.value.indexOf('-');
+                        const g = e.target.value.slice(0, dashIdx);
+                        const s = e.target.value.slice(dashIdx + 1);
                         setSelectedPreviewStream({ grade: Number(g) as GradeLevel, stream: s as StreamName });
                       }}
                       className="px-2.5 py-1 bg-slate-100 border border-slate-300 rounded-lg text-xs font-bold text-slate-900"
                     >
-                      <option value="4-Dove">Grade 4 Dove (Primary)</option>
-                      <option value="4-Eagle">Grade 4 Eagle (Primary)</option>
-                      <option value="7-Mara">Grade 7 Mara (Junior)</option>
-                      <option value="8-Mara">Grade 8 Mara (Junior)</option>
-                      <option value="8-Serengeti">Grade 8 Serengeti (Junior)</option>
-                      <option value="9-Mara">Grade 9 Mara (Junior)</option>
+                      {(generationResult.stats.strictAllocation?.allocatedStreams || []).map((st) => (
+                        <option key={`${st.grade}-${st.stream}`} value={`${st.grade}-${st.stream}`}>
+                          Grade {st.grade} {st.stream} ({st.grade >= 7 ? 'Junior' : 'Primary'})
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

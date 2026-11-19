@@ -36,6 +36,7 @@ export const ReliefBookingModal: React.FC<ReliefBookingModalProps> = ({
   const [reliefReason, setReliefReason] = useState<string>(slot.reliefReason || `Colleague absence cover for ${slot.teacherName}`);
   const [reliefInstructions, setReliefInstructions] = useState<string>(slot.reliefInstructions || slot.notes || '');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [reliefError, setReliefError] = useState<string | null>(null);
 
   // Check if there is an official absence report for the original teacher
   const absenceReports = Storage.getTeacherAbsenceReports();
@@ -80,11 +81,16 @@ export const ReliefBookingModal: React.FC<ReliefBookingModalProps> = ({
     return allTeachers
       .filter(t => t.name.toLowerCase() !== origTeacher) // Exclude the absent teacher
       .map(t => {
-        const busySlot = allSlots.find(s => 
-          s.teacherName?.toLowerCase() === t.name.toLowerCase() &&
-          s.dayOfWeek === slot.dayOfWeek &&
-          s.period === slot.period
-        );
+        const tLower = t.name.toLowerCase();
+        const busySlot = allSlots.find(s => {
+          if (s.id === slot.id) return false;
+          if (s.dayOfWeek !== slot.dayOfWeek || s.period !== slot.period) return false;
+          const names = [
+            ...String(s.teacherName || '').split(/[,&]/).map(n => n.trim().toLowerCase()),
+            ...(s.reliefTeacherName ? [String(s.reliefTeacherName).trim().toLowerCase()] : []),
+          ];
+          return names.includes(tLower);
+        });
 
         return {
           ...t,
@@ -114,8 +120,20 @@ export const ReliefBookingModal: React.FC<ReliefBookingModalProps> = ({
 
   const handleBookRelief = (e: React.FormEvent) => {
     e.preventDefault();
+    setReliefError(null);
     if (!selectedReliefTeacher) {
-      alert('Please select a relief teacher to cover this lesson.');
+      setReliefError('Please select a free relief teacher to cover this lesson.');
+      return;
+    }
+
+    const chosenAvailability = teachersWithAvailability.find(
+      t => t.name.toLowerCase() === selectedReliefTeacher.toLowerCase()
+    );
+    if (chosenAvailability && !chosenAvailability.isFree && chosenAvailability.busySlot) {
+      const b = chosenAvailability.busySlot;
+      setReliefError(
+        `${selectedReliefTeacher} is already teaching Grade ${b.grade} ${b.stream} (${b.subject}) on ${slot.dayOfWeek} Period ${slot.period}. No teacher can have more than 1 lesson at a time.`
+      );
       return;
     }
 
@@ -227,7 +245,13 @@ export const ReliefBookingModal: React.FC<ReliefBookingModalProps> = ({
 
         {/* BOOKING FORM */}
         <form onSubmit={handleBookRelief} className="p-4 sm:p-6 overflow-y-auto space-y-4 text-xs">
-          
+          {reliefError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 font-semibold flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{reliefError}</span>
+            </div>
+          )}
+
           {/* Free Teachers Badge */}
           <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
             <div className="flex items-center gap-2">
@@ -248,11 +272,14 @@ export const ReliefBookingModal: React.FC<ReliefBookingModalProps> = ({
             </label>
             <select
               value={selectedReliefTeacher}
-              onChange={(e) => setSelectedReliefTeacher(e.target.value)}
+              onChange={(e) => {
+                setSelectedReliefTeacher(e.target.value);
+                setReliefError(null);
+              }}
               className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden cursor-pointer"
               required
             >
-              <optgroup label="✅ Free Teachers (Available in this period)">
+              <optgroup label="Free Teachers (Available in this period)">
                 {teachersWithAvailability
                   .filter(t => t.isFree)
                   .map(t => (
@@ -262,12 +289,12 @@ export const ReliefBookingModal: React.FC<ReliefBookingModalProps> = ({
                   ))}
               </optgroup>
 
-              <optgroup label="⚠️ Busy Teachers (Already teaching a class)">
+              <optgroup label="Busy Teachers (Unavailable — already teaching another lesson)">
                 {teachersWithAvailability
                   .filter(t => !t.isFree)
                   .map(t => (
-                    <option key={t.name} value={t.name}>
-                      {t.name} — (Teaching Gr {t.busySlot?.grade} {t.busySlot?.stream})
+                    <option key={t.name} value={t.name} disabled>
+                      {t.name} — (Busy: Gr {t.busySlot?.grade} {t.busySlot?.stream})
                     </option>
                   ))}
               </optgroup>

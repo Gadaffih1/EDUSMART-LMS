@@ -1,20 +1,30 @@
-import { 
-  User, 
-  GradeLevel, 
-  StreamName, 
-  TimetableSlot, 
-  SubjectName, 
-  FixedLessonCondition, 
+import {
+  User,
+  GradeLevel,
+  StreamName,
+  TimetableSlot,
+  SubjectName,
+  FixedLessonCondition,
   SharedResourceFacility,
-  PRIMARY_STREAMS,
-  JUNIOR_STREAMS
 } from '../types';
-import { getCurriculumDemandForGrade } from './curriculumDemand';
+import { getSubjectDemandMeta, getSubjectWeeklyLessonLimit } from './curriculumDemand';
+
+export interface ExplicitAllocatedSubject {
+  grade: GradeLevel;
+  stream: StreamName;
+  subject: SubjectName;
+  periodsPerWeek: number;
+  teacherName?: string;
+  teacherEmail?: string;
+  requiresSpecialistFacility?: boolean;
+  preferredFacilityType?: string;
+}
 
 export interface AutoGenOptions {
   gradesToGenerate?: GradeLevel[];
   activeStreamsOverride?: { [grade: number]: StreamName[] };
   preserveManualOverrides?: boolean;
+  allocatedStreamSubjects?: ExplicitAllocatedSubject[];
 }
 
 export interface TimetableGenerationResult {
@@ -28,16 +38,25 @@ export interface TimetableGenerationResult {
     conflictsResolved: number;
     unassignedDemands: number;
     generatedAt: string;
+    strictAllocation: {
+      allocatedGrades: GradeLevel[];
+      allocatedStreams: Array<{ grade: GradeLevel; stream: StreamName }>;
+      allocatedSubjectLinks: number;
+      requiredWeeklyPeriods: number;
+      scheduledAllocatedPeriods: number;
+      exactQuotaMatches: number;
+      underAllocatedSubjects: number;
+    };
   };
   conflictReport: string[];
 }
 
 const DAYS_OF_WEEK: Array<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'> = [
-  'Monday', 
-  'Tuesday', 
-  'Wednesday', 
-  'Thursday', 
-  'Friday'
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
 ];
 
 interface BellPeriodDef {
@@ -55,110 +74,109 @@ const BELL_PERIODS: BellPeriodDef[] = [
   { period: 6, startTime: '11:50', endTime: '12:30' },
   { period: 7, startTime: '12:30', endTime: '13:10' },
   { period: 8, startTime: '14:10', endTime: '14:50' },
-  { period: 9, startTime: '14:50', endTime: '15:30' }
+  { period: 9, startTime: '14:50', endTime: '15:30' },
 ];
 
-// Sample CBC Topics generator
 const CBC_STRAND_TOPICS: Record<string, string[]> = {
-  'Mathematics': [
+  Mathematics: [
     'Numbers & Place Value Operations',
     'Fractions, Decimals and Percentages',
     'Algebraic Expressions & Formulations',
     'Geometry, Angles & Polygons',
     'Measurement, Capacity and Volume',
-    'Data Representation & Probability'
+    'Data Representation & Probability',
   ],
-  'English': [
+  English: [
     'Intensive Reading & Narrative Analysis',
     'Grammar: Active vs Passive Voice',
     'Functional Composition Writing',
     'Speech Delivery, Phonetics & Intonation',
-    'Literary Appreciation & Poetry Analysis'
+    'Literary Appreciation & Poetry Analysis',
   ],
-  'Kiswahili': [
+  Kiswahili: [
     'Kusikiliza na Kuzungumza: Midahalo',
     'Sarufi: Ngeli za Nomino na Nyakati',
     'Kusoma kwa Ufahamu: Riwaya na Ushairi',
-    'Insha ya Kubuni na Tahariri'
+    'Insha ya Kubuni na Tahariri',
   ],
   'Integrated Science': [
     'Cell Structure & Living Organisms',
     'Separation of Mixtures & Lab Chemistry',
     'Force, Energy Transformation & Circuits',
     'Human Reproductive Health & Nutrition',
-    'Environmental Conservation & Pollution'
+    'Environmental Conservation & Pollution',
   ],
   'Science and Technology': [
     'Plant and Animal Classification',
     'Simple Machines & Mechanical Energy',
     'Digital Devices & Computational Logic',
-    'Human Body Organ Systems'
+    'Human Body Organ Systems',
   ],
   'Pretechnical Education': [
     'Safety in Technical Environments',
     'Materials: Metals, Plastics & Wood',
     'Technical Drawing & Geometric Isometric Projections',
-    'Simple Electronic Circuits & Robotics'
+    'Simple Electronic Circuits & Robotics',
   ],
   'Agriculture and Nutrition': [
     'Soil Fertility & Organic Composting',
     'Vegetable Nursery Bed Establishment',
     'Animal Production: Poultry & Rabbits',
-    'Food Preservation & Culinary Hygiene'
+    'Food Preservation & Culinary Hygiene',
   ],
   'Creative Arts & Sports': [
     'Visual Arts: Perspective Shading',
     'Kenyan Indigenous Music & Rhythm',
     'Athletics: Relay Baton Exchanges',
-    'Gymnastics & Spatial Formations'
+    'Gymnastics & Spatial Formations',
   ],
   'Creative Arts': [
     'Color Theory & Mosaic Composition',
     'Percussion Instruments & Folk Songs',
-    'Clay Modelling & Functional Pottery'
+    'Clay Modelling & Functional Pottery',
   ],
   'Physical and Health Education': [
     'Cardiorespiratory Endurance Training',
     'First Aid, CPR & Sports Safety',
-    'Football Passing & Defensive Positioning'
+    'Football Passing & Defensive Positioning',
   ],
   'Social Studies': [
     'East African Geography & Climatic Zones',
     'Historical Migration & Cultural Integration',
     'Governance, Citizenship & Human Rights',
-    'Trade, Mining and Industrial Development'
+    'Trade, Mining and Industrial Development',
   ],
   'Religious Education': [
     'Scriptural Teachings on Moral Integrity',
     'Peace, Reconciliation & Community Service',
-    'African Religious Heritage & Values'
+    'African Religious Heritage & Values',
   ],
   'Health Education': [
     'Adolescent Health, Hygiene & Wellness',
     'Preventive Healthcare & Disease Vectors',
-    'Mental Health, Stress Management & Resilience'
+    'Mental Health, Stress Management & Resilience',
   ],
   'Library Lesson': [
     'Information Literacy & Reference Catalogue Skills',
     'Guided Extensive Reading & Book Review',
     'CBC Digital Research & Citation Ethics',
-    'Storytelling, Comprehension & Vocabulary Mastery'
+    'Storytelling, Comprehension & Vocabulary Mastery',
   ],
-  'Arts': [
+  Arts: [
     'Drawing, Perspective & Visual Composition',
     'Sculpture, Clay Modelling & Applied Crafts',
-    'Printmaking, Collage & Colour Harmony'
+    'Printmaking, Collage & Colour Harmony',
   ],
-  'Music': [
+  Music: [
     'Kenyan Folk Songs, Rhythm & Percussion',
     'Vocal Harmony, Sight-Reading & Pitch',
-    'Instrumental Ensemble & Musical Appreciation'
+    'Instrumental Ensemble & Musical Appreciation',
   ],
-  'Nutrition': [
+  Nutrition: [
     'Balanced Diets & Micronutrient Health',
     'Food Hygiene, Preservation & Safe Preparation',
-    'Meal Planning for Growing Learners'
-  ]
+    'Meal Planning for Growing Learners',
+  ],
 };
 
 const CBC_COMPETENCIES = [
@@ -167,11 +185,29 @@ const CBC_COMPETENCIES = [
   'Digital Literacy',
   'Creativity and Imagination',
   'Self-Efficacy and Leadership',
-  'Citizenship and Value Orientation'
+  'Citizenship and Value Orientation',
 ];
 
+interface ResolvedAllocation {
+  grade: GradeLevel;
+  stream: StreamName;
+  subject: SubjectName;
+  periodsPerWeek: number;
+  teacherName: string;
+  teacherEmail: string;
+  requiresSpecialistFacility?: boolean;
+  preferredFacilityType?: string;
+}
+
+function allocKey(grade: number, stream: string, subject: string): string {
+  return `${grade}::${stream.trim().toLowerCase()}::${subject.trim().toLowerCase()}`;
+}
+
 /**
- * Core Algorithmic Timetable Auto-Generator
+ * Strictly Allocated Algorithmic Timetable Auto-Generator:
+ * - Assigns lessons STRICTLY to grades, streams, and subjects that are explicitly allocated.
+ * - Assigns each lesson STRICTLY to the allocated teacher (no unallocated fallbacks).
+ * - Schedules STRICTLY as per the configured weekly lesson count (periodsPerWeek) for each subject.
  */
 export function generateAutomatedTimetable(
   teachers: User[],
@@ -182,83 +218,272 @@ export function generateAutomatedTimetable(
   const generatedSlots: TimetableSlot[] = [];
   const conflictReport: string[] = [];
 
-  const targetGrades: GradeLevel[] = options.gradesToGenerate && options.gradesToGenerate.length > 0
-    ? options.gradesToGenerate
-    : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const allowedGradesFilter =
+    options.gradesToGenerate && options.gradesToGenerate.length > 0
+      ? new Set<number>(options.gradesToGenerate.map(Number))
+      : null;
+
+  // ========================================================
+  // STEP 1: BUILD STRICT ALLOCATION REGISTRY (Grade + Stream + Subject + Weekly Lessons)
+  // ========================================================
+  const strictAllocations = new Map<string, ResolvedAllocation>();
+
+  // Priority A: Explicit Master Timetable / Stream-Subject allocations passed in options
+  if (Array.isArray(options.allocatedStreamSubjects) && options.allocatedStreamSubjects.length > 0) {
+    for (const item of options.allocatedStreamSubjects) {
+      const grade = Number(item.grade) as GradeLevel;
+      const stream = String(item.stream || '').trim() as StreamName;
+      const subject = String(item.subject || '').trim() as SubjectName;
+      if (!grade || !stream || !subject) continue;
+      if (allowedGradesFilter && !allowedGradesFilter.has(grade)) continue;
+      if (
+        options.activeStreamsOverride &&
+        options.activeStreamsOverride[grade] &&
+        !options.activeStreamsOverride[grade].some((s) => s.toLowerCase() === stream.toLowerCase())
+      ) {
+        continue;
+      }
+
+      const key = allocKey(grade, stream, subject);
+      if (strictAllocations.has(key)) continue;
+
+      const demandMeta = getSubjectDemandMeta(grade, subject);
+      const periodsPerWeek = getSubjectWeeklyLessonLimit(grade, subject, item.periodsPerWeek);
+      strictAllocations.set(key, {
+        grade,
+        stream,
+        subject,
+        periodsPerWeek,
+        teacherName: item.teacherName?.trim() || '',
+        teacherEmail: item.teacherEmail?.trim() || 'faculty@edusmart.ac.ke',
+        requiresSpecialistFacility: item.requiresSpecialistFacility ?? demandMeta?.requiresSpecialistFacility,
+        preferredFacilityType: item.preferredFacilityType ?? demandMeta?.preferredFacilityType,
+      });
+    }
+  }
+
+  // Priority B: Explicit Faculty Grade + Stream + Subject Allocations (assignedSubjectAllocations)
+  for (const teacher of teachers) {
+    const explicitAllocs = teacher.assignedSubjectAllocations || [];
+    for (const a of explicitAllocs) {
+      const grade = Number(a.grade) as GradeLevel;
+      const stream = String(a.stream || '').trim() as StreamName;
+      const subject = String(a.subject || '').trim() as SubjectName;
+      if (!grade || !stream || !subject) continue;
+      if (allowedGradesFilter && !allowedGradesFilter.has(grade)) continue;
+      if (
+        options.activeStreamsOverride &&
+        options.activeStreamsOverride[grade] &&
+        !options.activeStreamsOverride[grade].some((s) => s.toLowerCase() === stream.toLowerCase())
+      ) {
+        continue;
+      }
+
+      const key = allocKey(grade, stream, subject);
+      const existing = strictAllocations.get(key);
+      if (existing) {
+        if (!existing.teacherName) {
+          existing.teacherName = teacher.name;
+          existing.teacherEmail = teacher.email || existing.teacherEmail;
+        }
+        continue;
+      }
+
+      const demandMeta = getSubjectDemandMeta(grade, subject);
+      const periodsPerWeek = getSubjectWeeklyLessonLimit(grade, subject, a.periodsPerWeek);
+      strictAllocations.set(key, {
+        grade,
+        stream,
+        subject,
+        periodsPerWeek,
+        teacherName: teacher.name,
+        teacherEmail: teacher.email || 'faculty@edusmart.ac.ke',
+        requiresSpecialistFacility: demandMeta?.requiresSpecialistFacility,
+        preferredFacilityType: demandMeta?.preferredFacilityType,
+      });
+    }
+  }
+
+  // Priority C: Legacy teacher assignedStreams × assignedSubjects ONLY for teachers without assignedSubjectAllocations
+  for (const teacher of teachers) {
+    if (teacher.assignedSubjectAllocations && teacher.assignedSubjectAllocations.length > 0) {
+      continue;
+    }
+    const streams = teacher.assignedStreams || [];
+    const subjects = teacher.assignedSubjects || [];
+    const streamTargets: Array<{ grade: GradeLevel; stream: StreamName }> = [...streams];
+    if (teacher.grade && teacher.stream) {
+      const hasPrimary = streamTargets.some(
+        (st) => st.grade === teacher.grade && st.stream.toLowerCase() === String(teacher.stream).toLowerCase()
+      );
+      if (!hasPrimary) {
+        streamTargets.push({ grade: teacher.grade, stream: teacher.stream });
+      }
+    }
+
+    for (const st of streamTargets) {
+      const grade = Number(st.grade) as GradeLevel;
+      const stream = String(st.stream || '').trim() as StreamName;
+      if (!grade || !stream) continue;
+      if (allowedGradesFilter && !allowedGradesFilter.has(grade)) continue;
+      if (
+        options.activeStreamsOverride &&
+        options.activeStreamsOverride[grade] &&
+        !options.activeStreamsOverride[grade].some((s) => s.toLowerCase() === stream.toLowerCase())
+      ) {
+        continue;
+      }
+
+      for (const sub of subjects) {
+        const subject = String(sub || '').trim() as SubjectName;
+        if (!subject) continue;
+        const key = allocKey(grade, stream, subject);
+        if (strictAllocations.has(key)) continue;
+
+        const demandMeta = getSubjectDemandMeta(grade, subject);
+        const periodsPerWeek = getSubjectWeeklyLessonLimit(grade, subject);
+        strictAllocations.set(key, {
+          grade,
+          stream,
+          subject,
+          periodsPerWeek,
+          teacherName: teacher.name,
+          teacherEmail: teacher.email || 'faculty@edusmart.ac.ke',
+          requiresSpecialistFacility: demandMeta?.requiresSpecialistFacility,
+          preferredFacilityType: demandMeta?.preferredFacilityType,
+        });
+      }
+    }
+  }
+
+  // Derive allocated Grades & Streams STRICTLY from active allocations (never invent unallocated streams!)
+  const gradeStreamsMap = new Map<GradeLevel, StreamName[]>();
+  const allocatedStreamsList: Array<{ grade: GradeLevel; stream: StreamName }> = [];
+  const seenStreamKeys = new Set<string>();
+
+  for (const alloc of strictAllocations.values()) {
+    const sk = `${alloc.grade}::${alloc.stream.toLowerCase()}`;
+    if (!seenStreamKeys.has(sk)) {
+      seenStreamKeys.add(sk);
+      allocatedStreamsList.push({ grade: alloc.grade, stream: alloc.stream });
+      const arr = gradeStreamsMap.get(alloc.grade) || [];
+      arr.push(alloc.stream);
+      gradeStreamsMap.set(alloc.grade, arr);
+    }
+  }
+
+  const allocatedGrades = Array.from(gradeStreamsMap.keys()).sort((a, b) => a - b);
+  allocatedGrades.forEach((g) => {
+    const arr = gradeStreamsMap.get(g) || [];
+    arr.sort((a, b) => a.localeCompare(b));
+    gradeStreamsMap.set(g, arr);
+  });
+  allocatedStreamsList.sort((a, b) => (a.grade !== b.grade ? a.grade - b.grade : a.stream.localeCompare(b.stream)));
 
   // Tracking matrices for zero-collision enforcement
-  // 1. streamSchedule: Map<`${grade}-${stream}-${day}-${period}`, TimetableSlot>
   const streamSchedule = new Map<string, TimetableSlot>();
-  
-  // 2. teacherSchedule: Map<`${teacherName.toLowerCase()}-${day}-${period}`, string> -> streamKey
   const teacherSchedule = new Map<string, string>();
-
-  // 3. facilitySchedule: Map<`${facilityName.toLowerCase()}-${day}-${period}`, string> -> streamKey
   const facilitySchedule = new Map<string, string>();
-
-  // 4. streamSubjectDailyCount: Map<`${grade}-${stream}-${day}-${subject}`, number>
   const streamSubjectDailyCount = new Map<string, number>();
+  const scheduledWeeklyCountByAlloc = new Map<string, number>();
 
-  // Stats accumulators
   let fixedPeriodsEnforced = 0;
   const sharedResourceBookings: Record<string, number> = {};
-  sharedFacilities.forEach(f => {
+  sharedFacilities.forEach((f) => {
     sharedResourceBookings[f.name] = 0;
   });
 
   const teacherWorkloads: Record<string, { periods: number; subjects: string[]; streams: string[] }> = {};
-  teachers.forEach(t => {
+  teachers.forEach((t) => {
     teacherWorkloads[t.name] = { periods: 0, subjects: [], streams: [] };
   });
 
-  // Determine streams per grade
-  const gradeStreamsMap: Map<GradeLevel, StreamName[]> = new Map();
-  targetGrades.forEach(g => {
-    if (options.activeStreamsOverride && options.activeStreamsOverride[g]) {
-      gradeStreamsMap.set(g, options.activeStreamsOverride[g]);
-    } else if (g >= 7) {
-      // Focus on active demonstration streams
-      gradeStreamsMap.set(g, ['Mara', 'Athi', 'Chania']);
-    } else {
-      gradeStreamsMap.set(g, ['Dove', 'Eagle']);
-    }
-  });
-
-  let totalStreamsCount = 0;
-  gradeStreamsMap.forEach(streams => {
-    totalStreamsCount += streams.length;
-  });
+  if (strictAllocations.size === 0) {
+    conflictReport.push(
+      'No active Grade, Stream, and Subject allocations found. Assign teachers to specific grades, streams, and subjects before generating the timetable.'
+    );
+    return {
+      slots: [],
+      stats: {
+        totalPeriods: 0,
+        totalStreams: 0,
+        fixedPeriodsEnforced: 0,
+        sharedResourceBookings,
+        teacherWorkloads,
+        conflictsResolved: 0,
+        unassignedDemands: 0,
+        generatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString(),
+        strictAllocation: {
+          allocatedGrades: [],
+          allocatedStreams: [],
+          allocatedSubjectLinks: 0,
+          requiredWeeklyPeriods: 0,
+          scheduledAllocatedPeriods: 0,
+          exactQuotaMatches: 0,
+          underAllocatedSubjects: 0,
+        },
+      },
+      conflictReport,
+    };
+  }
 
   // ========================================================
-  // STEP 1: APPLY FIXED LESSONS / INSTITUTIONAL ANCHORS FIRST
+  // STEP 2: APPLY FIXED LESSONS ONLY TO ALLOCATED GRADES & STREAMS
+  //         AND COUNT MATCHING SUBJECTS AGAINST WEEKLY QUOTA
   // ========================================================
-  const activeFixed = fixedConditions.filter(c => c.isActive);
+  const activeFixed = fixedConditions.filter((c) => c.isActive);
 
-  activeFixed.forEach(condition => {
-    const bell = BELL_PERIODS.find(b => b.period === condition.period);
+  activeFixed.forEach((condition) => {
+    const bell = BELL_PERIODS.find((b) => b.period === condition.period);
     if (!bell) return;
 
-    targetGrades.forEach(grade => {
+    allocatedGrades.forEach((grade) => {
       if (!condition.grades.includes(grade)) return;
       const streams = gradeStreamsMap.get(grade) || [];
 
-      streams.forEach(stream => {
-        if (condition.streams !== 'all' && !condition.streams.includes(stream)) {
+      streams.forEach((stream) => {
+        if (
+          condition.streams !== 'all' &&
+          !condition.streams.some((s) => s.toLowerCase() === stream.toLowerCase())
+        ) {
           return;
         }
 
         const streamSlotKey = `${grade}-${stream}-${condition.dayOfWeek}-${condition.period}`;
-        
-        // Facility check
+        if (streamSchedule.has(streamSlotKey)) return;
+
+        // If this fixed lesson is for a curriculum subject allocated to this stream, enforce weekly cap & allocated teacher!
+        const matchingAllocKey = allocKey(grade, stream, String(condition.subject || ''));
+        const matchingAlloc = strictAllocations.get(matchingAllocKey);
+        if (matchingAlloc) {
+          const already = scheduledWeeklyCountByAlloc.get(matchingAllocKey) || 0;
+          if (already >= matchingAlloc.periodsPerWeek) {
+            conflictReport.push(
+              `Skipped extra fixed lesson "${condition.title}" for Grade ${grade} ${stream} (${matchingAlloc.subject}): weekly quota of ${matchingAlloc.periodsPerWeek} period(s) already met.`
+            );
+            return;
+          }
+        }
+
         const roomName = condition.roomName || (grade >= 7 ? `Junior Block Rm ${grade}` : `Primary Block Rm ${grade}`);
         const facilityKey = `${roomName.toLowerCase()}-${condition.dayOfWeek}-${condition.period}`;
-
-        // Teacher check
-        const teacherName = condition.teacherName || 'Faculty Lead';
+        const teacherName = matchingAlloc?.teacherName || condition.teacherName || 'Faculty Lead';
+        const isNamedTeacher =
+          teacherName.trim().length > 0 &&
+          teacherName.toLowerCase() !== 'faculty lead' &&
+          teacherName.toLowerCase() !== 'all staff';
         const teacherKey = `${teacherName.toLowerCase()}-${condition.dayOfWeek}-${condition.period}`;
 
+        // Strictly prevent any teacher from having more than 1 lesson at a time
+        if (isNamedTeacher && teacherSchedule.has(teacherKey)) {
+          conflictReport.push(
+            `Blocked double-booking on fixed lesson "${condition.title}" for Grade ${grade} ${stream} (${condition.dayOfWeek} P${condition.period}): ${teacherName} is already teaching ${teacherSchedule.get(teacherKey)} at that time.`
+          );
+          return;
+        }
+
         const fixedSlot: TimetableSlot = {
-          id: `slot-fixed-${grade}-${stream.charAt(0).toLowerCase()}-${condition.dayOfWeek.slice(0, 3).toLowerCase()}-p${condition.period}`,
+          id: `slot-fixed-${grade}-${stream.toLowerCase().replace(/\s+/g, '')}-${condition.dayOfWeek.slice(0, 3).toLowerCase()}-p${condition.period}`,
           grade,
           stream,
           dayOfWeek: condition.dayOfWeek,
@@ -271,14 +496,23 @@ export function generateAutomatedTimetable(
           roomOrMeetLink: `https://meet.google.com/edu-gr${grade}-${stream.toLowerCase()}-anchor`,
           strandTopic: condition.title,
           notes: condition.notes || 'Institutional Anchor Period (Locked Before Publication)',
-          teacherEmail: 'academic.office@edusmart.ac.ke',
+          teacherEmail: matchingAlloc?.teacherEmail || 'academic.office@edusmart.ac.ke',
           materialsNeeded: ['Official Learner Journal', 'Stationery Pouch'],
-          competencies: ['Citizenship and Value Orientation', 'Self-Efficacy and Leadership']
+          competencies: ['Citizenship and Value Orientation', 'Self-Efficacy and Leadership'],
         };
 
         streamSchedule.set(streamSlotKey, fixedSlot);
         generatedSlots.push(fixedSlot);
         fixedPeriodsEnforced++;
+
+        if (matchingAlloc) {
+          scheduledWeeklyCountByAlloc.set(
+            matchingAllocKey,
+            (scheduledWeeklyCountByAlloc.get(matchingAllocKey) || 0) + 1
+          );
+          const dailySubjectKey = `${grade}-${stream}-${condition.dayOfWeek}-${matchingAlloc.subject}`;
+          streamSubjectDailyCount.set(dailySubjectKey, (streamSubjectDailyCount.get(dailySubjectKey) || 0) + 1);
+        }
 
         if (condition.roomName) {
           facilitySchedule.set(facilityKey, `${grade} ${stream}`);
@@ -287,11 +521,13 @@ export function generateAutomatedTimetable(
           }
         }
 
-        if (condition.teacherName && teacherWorkloads[condition.teacherName]) {
-          teacherSchedule.set(teacherKey, `${grade} ${stream}`);
-          teacherWorkloads[condition.teacherName].periods++;
-          if (!teacherWorkloads[condition.teacherName].streams.includes(`Gr ${grade} ${stream}`)) {
-            teacherWorkloads[condition.teacherName].streams.push(`Gr ${grade} ${stream}`);
+        if (isNamedTeacher) {
+          teacherSchedule.set(teacherKey, `Grade ${grade} ${stream}`);
+          if (teacherWorkloads[teacherName]) {
+            teacherWorkloads[teacherName].periods++;
+            if (!teacherWorkloads[teacherName].streams.includes(`Gr ${grade} ${stream}`)) {
+              teacherWorkloads[teacherName].streams.push(`Gr ${grade} ${stream}`);
+            }
           }
         }
       });
@@ -299,161 +535,111 @@ export function generateAutomatedTimetable(
   });
 
   // ========================================================
-  // STEP 2: BUILD TEACHER ALLOCATION LOOKUP
-  // ========================================================
-  // Map<`${grade}-${stream}-${subject}`, User> — strictly 1 teacher per subject per stream
-  const allocationMap = new Map<string, User>();
-
-  // Priority 1: Explicit grade + specific stream + subject links
-  teachers.forEach(teacher => {
-    const explicitAllocs = teacher.assignedSubjectAllocations || [];
-    explicitAllocs.forEach(a => {
-      const key = `${a.grade}-${a.stream}-${a.subject}`;
-      if (!allocationMap.has(key)) {
-        allocationMap.set(key, teacher);
-      }
-    });
-  });
-
-  // Priority 2: Legacy fallback only when no explicit link exists for that slot
-  teachers.forEach(teacher => {
-    if (teacher.assignedSubjectAllocations && teacher.assignedSubjectAllocations.length > 0) {
-      return;
-    }
-    const streams = teacher.assignedStreams || [];
-    const subjects = teacher.assignedSubjects || [];
-
-    streams.forEach(as => {
-      subjects.forEach(sub => {
-        const key = `${as.grade}-${as.stream}-${sub}`;
-        if (!allocationMap.has(key)) {
-          allocationMap.set(key, teacher);
-        }
-      });
-    });
-
-    // Also include primary grade/stream if set
-    if (teacher.grade && teacher.stream && subjects.length > 0) {
-      subjects.forEach(sub => {
-        const key = `${teacher.grade}-${teacher.stream}-${sub}`;
-        if (!allocationMap.has(key)) {
-          allocationMap.set(key, teacher);
-        }
-      });
-    }
-  });
-
-  // Helper to find best teacher for a stream and subject
-  const resolveTeacherForClass = (grade: GradeLevel, stream: StreamName, subject: SubjectName): User => {
-    // 1. Direct allocation (grade, stream, subject)
-    const exact = allocationMap.get(`${grade}-${stream}-${subject}`);
-    if (exact) return exact;
-
-    // 2. Teacher assigned to this grade & stream who can teach general primary / junior
-    const streamTeacher = teachers.find(t => 
-      t.assignedStreams?.some(as => as.grade === grade && as.stream === stream)
-    );
-    if (streamTeacher && (!streamTeacher.assignedSubjects || streamTeacher.assignedSubjects.length === 0 || streamTeacher.assignedSubjects.includes(subject))) {
-      return streamTeacher;
-    }
-
-    // 3. Teacher assigned to this subject anywhere
-    const subjectTeacher = teachers.find(t => t.assignedSubjects?.includes(subject));
-    if (subjectTeacher) return subjectTeacher;
-
-    // 4. Fallback specialist assignments based on academic role
-    if (subject.includes('Math')) {
-      const mathT = teachers.find(t => t.name.includes('Kiprono') || t.name.includes('Mwangi'));
-      if (mathT) return mathT;
-    }
-    if (subject.includes('Science') || subject.includes('Health')) {
-      const sciT = teachers.find(t => t.name.includes('Mwangi') || t.name.includes('Kiprono'));
-      if (sciT) return sciT;
-    }
-    if (subject.includes('English') || subject.includes('Kiswahili') || subject.includes('Social')) {
-      const langT = teachers.find(t => t.name.includes('Akinyi') || t.name.includes('Ochieng'));
-      if (langT) return langT;
-    }
-    if (subject.includes('Technical') || subject.includes('Agriculture') || subject.includes('Art')) {
-      const techT = teachers.find(t => t.name.includes('Mutua') || t.name.includes('Kamau'));
-      if (techT) return techT;
-    }
-
-    return teachers[0]; // Institutional default
-  };
-
-  // ========================================================
-  // STEP 3: SCHEDULE REMAINING CURRICULUM PERIODS
+  // STEP 3: SCHEDULE ALLOCATED SUBJECTS STRICTLY AS PER WEEKLY QUOTA
   // ========================================================
   let unassignedDemands = 0;
   let conflictsResolved = 0;
+  let totalRequiredWeeklyPeriods = 0;
 
-  targetGrades.forEach(grade => {
-    const streams = gradeStreamsMap.get(grade) || [];
-    const demands = getCurriculumDemandForGrade(grade);
+  for (const alloc of strictAllocations.values()) {
+    totalRequiredWeeklyPeriods += alloc.periodsPerWeek;
+  }
 
-    streams.forEach(stream => {
-      // Expand demands into individual lesson tickets
-      const lessonTickets: Array<{
-        subject: SubjectName;
-        requiresSpecialistFacility?: boolean;
-        preferredFacilityType?: string;
-      }> = [];
+  // Group allocations by stream, ordered most-constrained first (higher weekly count / specialist rooms first)
+  allocatedStreamsList.forEach(({ grade, stream }) => {
+    const streamAllocs = Array.from(strictAllocations.values())
+      .filter((a) => a.grade === grade && a.stream.toLowerCase() === stream.toLowerCase())
+      .sort((a, b) => b.periodsPerWeek - a.periodsPerWeek || a.subject.localeCompare(b.subject));
 
-      demands.forEach(d => {
-        for (let i = 0; i < d.periodsPerWeek; i++) {
-          lessonTickets.push({
-            subject: d.subject,
-            requiresSpecialistFacility: d.requiresSpecialistFacility,
-            preferredFacilityType: d.preferredFacilityType
-          });
-        }
-      });
+    // Check if total weekly periods for this stream exceed weekly bell capacity (45 periods)
+    const streamTotalRequired = streamAllocs.reduce((sum, a) => sum + a.periodsPerWeek, 0);
+    const maxWeeklySlots = DAYS_OF_WEEK.length * BELL_PERIODS.length;
+    if (streamTotalRequired > maxWeeklySlots) {
+      conflictReport.push(
+        `Grade ${grade} ${stream} has ${streamTotalRequired} allocated periods/week across ${streamAllocs.length} subjects, exceeding the ${maxWeeklySlots} weekly bell periods.`
+      );
+    }
 
-      // Distribute lessons over periods 1..8 and days Monday..Friday
-      lessonTickets.forEach((ticket, ticketIndex) => {
-        const teacher = resolveTeacherForClass(grade, stream, ticket.subject);
-        let scheduled = false;
+    const lessonTickets: Array<{ alloc: ResolvedAllocation; key: string; occurrence: number }> = [];
+    streamAllocs.forEach((alloc) => {
+      const key = allocKey(alloc.grade, alloc.stream, alloc.subject);
+      if (!alloc.teacherName) {
+        const remainingForUnassigned = Math.max(0, alloc.periodsPerWeek - (scheduledWeeklyCountByAlloc.get(key) || 0));
+        unassignedDemands += remainingForUnassigned;
+        conflictReport.push(
+          `Skipped Grade ${grade} ${stream} · ${alloc.subject} (${remainingForUnassigned} lessons/week): no allocated subject teacher assigned.`
+        );
+        return;
+      }
+      const alreadyFixed = scheduledWeeklyCountByAlloc.get(key) || 0;
+      const remainingToSchedule = Math.max(0, alloc.periodsPerWeek - alreadyFixed);
+      for (let i = 0; i < remainingToSchedule; i++) {
+        lessonTickets.push({ alloc, key, occurrence: alreadyFixed + i });
+      }
+    });
 
-        // Spread heuristic: start day search based on ticketIndex % 5 to distribute evenly
-        const dayStartIndex = ticketIndex % DAYS_OF_WEEK.length;
+    lessonTickets.forEach((ticket, ticketIndex) => {
+      const { alloc, key } = ticket;
+      const currentScheduledForAlloc = scheduledWeeklyCountByAlloc.get(key) || 0;
+      // Strict hard ceiling: never exceed periodsPerWeek for this (grade, stream, subject)
+      if (currentScheduledForAlloc >= alloc.periodsPerWeek) {
+        return;
+      }
+
+      let scheduled = false;
+      const dayStartIndex = ticketIndex % DAYS_OF_WEEK.length;
+
+      // Two passes: pass 1 prefers max 1 period/day for spread; pass 2 allows up to 2 periods/day when weekly quota > 5 or tight slots
+      const dailyCaps = [1, 2];
+
+      for (const dailyCap of dailyCaps) {
+        if (scheduled) break;
 
         for (let dayOffset = 0; dayOffset < DAYS_OF_WEEK.length; dayOffset++) {
           if (scheduled) break;
           const day = DAYS_OF_WEEK[(dayStartIndex + dayOffset) % DAYS_OF_WEEK.length];
 
-          // Check daily limit for this subject (max 2 per day, ideally 1)
-          const dailySubjectKey = `${grade}-${stream}-${day}-${ticket.subject}`;
+          const dailySubjectKey = `${grade}-${stream}-${day}-${alloc.subject}`;
           const currentDailyCount = streamSubjectDailyCount.get(dailySubjectKey) || 0;
-          if (currentDailyCount >= 2) {
-            continue; // Distribute on another day
+          if (currentDailyCount >= dailyCap) {
+            continue;
           }
 
           for (const bell of BELL_PERIODS) {
             const streamSlotKey = `${grade}-${stream}-${day}-${bell.period}`;
-            
-            // 1. Is stream free at this period?
             if (streamSchedule.has(streamSlotKey)) {
               continue;
             }
 
-            // 2. Is teacher free at this period?
-            const teacherKey = `${teacher.name.toLowerCase()}-${day}-${bell.period}`;
+            const teacherKey = `${alloc.teacherName.toLowerCase()}-${day}-${bell.period}`;
             if (teacherSchedule.has(teacherKey)) {
               conflictsResolved++;
-              continue; // Teacher is teaching another stream
+              continue;
             }
 
-            // 3. Resolve facility
+            // Resolve facility
             let chosenFacilityName = `Classroom ${grade}-${stream}`;
             let chosenFacilityKey: string | null = null;
 
-            if (ticket.requiresSpecialistFacility && ticket.preferredFacilityType) {
-              // Find matching facility from shared resources
-              const candidates = sharedFacilities.filter(f => 
-                f.type === ticket.preferredFacilityType || f.suitableSubjects.includes(ticket.subject)
+            const isLibraryLesson = String(alloc.subject).toLowerCase().includes('library');
+            if (isLibraryLesson) {
+              const libCandidates = sharedFacilities.filter(
+                (f) => f.type === 'library' || f.name.toLowerCase().includes('library')
               );
-
+              let pickedLib: SharedResourceFacility | null = null;
+              for (const cand of libCandidates) {
+                const facKey = `${cand.name.toLowerCase()}-${day}-${bell.period}`;
+                if (!facilitySchedule.has(facKey)) {
+                  pickedLib = cand;
+                  chosenFacilityKey = facKey;
+                  break;
+                }
+              }
+              chosenFacilityName = pickedLib ? pickedLib.name : 'Main Library Reading Hall';
+            } else if (alloc.requiresSpecialistFacility && alloc.preferredFacilityType) {
+              const candidates = sharedFacilities.filter(
+                (f) => f.type === alloc.preferredFacilityType || f.suitableSubjects.includes(alloc.subject)
+              );
               let availableFacility: SharedResourceFacility | null = null;
               for (const cand of candidates) {
                 const facKey = `${cand.name.toLowerCase()}-${day}-${bell.period}`;
@@ -463,46 +649,45 @@ export function generateAutomatedTimetable(
                   break;
                 }
               }
-
               if (availableFacility) {
                 chosenFacilityName = availableFacility.name;
               } else {
-                // If specialized facility is fully booked, fall back to class room
                 chosenFacilityName = `Classroom ${grade}-${stream} (Practical Station)`;
                 chosenFacilityKey = null;
                 conflictsResolved++;
               }
             }
 
-            // Book slot!
-            const strandTopics = CBC_STRAND_TOPICS[ticket.subject] || ['CBC Core Concepts & Practical Application'];
-            const strandTopic = strandTopics[ticketIndex % strandTopics.length];
+            const strandTopics = CBC_STRAND_TOPICS[alloc.subject] || ['CBC Core Concepts & Practical Application'];
+            const strandTopic = strandTopics[ticket.occurrence % strandTopics.length];
             const compIndex = (ticketIndex + bell.period) % CBC_COMPETENCIES.length;
 
             const slot: TimetableSlot = {
-              id: `slot-${grade}${stream.charAt(0).toLowerCase()}-${day.slice(0, 3).toLowerCase()}-p${bell.period}`,
+              id: `slot-${grade}${stream.toLowerCase().replace(/\s+/g, '')}-${day.slice(0, 3).toLowerCase()}-p${bell.period}`,
               grade,
               stream,
               dayOfWeek: day,
               period: bell.period,
               startTime: bell.startTime,
               endTime: bell.endTime,
-              subject: ticket.subject,
-              teacherName: teacher.name,
-              teacherEmail: teacher.email,
+              subject: alloc.subject,
+              teacherName: alloc.teacherName,
+              teacherEmail: alloc.teacherEmail,
               roomName: chosenFacilityName,
-              roomOrMeetLink: `https://meet.google.com/edu-gr${grade}-${stream.toLowerCase()}-${ticket.subject.slice(0, 4).toLowerCase()}`,
+              roomOrMeetLink: `https://meet.google.com/edu-gr${grade}-${stream.toLowerCase()}-${alloc.subject.slice(0, 4).toLowerCase()}`,
               strandTopic,
-              notes: `CBC curriculum pacing · Formative lesson delivery for Grade ${grade} ${stream}.`,
+              notes: `CBC curriculum pacing (${ticket.occurrence + 1}/${alloc.periodsPerWeek} weekly lessons) · Grade ${grade} ${stream}.`,
               materialsNeeded: [
                 'Learner Course Handbook',
                 'Activity Exercise Notebook',
-                chosenFacilityName.includes('Lab') ? 'Protective Lab Coat & Safety Eyewear' : 'Mathematical Geometrical Set'
+                chosenFacilityName.includes('Lab') ? 'Protective Lab Coat & Safety Eyewear' : 'Mathematical Geometrical Set',
               ],
-              competencies: [CBC_COMPETENCIES[compIndex], CBC_COMPETENCIES[(compIndex + 1) % CBC_COMPETENCIES.length]]
+              competencies: [
+                CBC_COMPETENCIES[compIndex],
+                CBC_COMPETENCIES[(compIndex + 1) % CBC_COMPETENCIES.length],
+              ],
             };
 
-            // Register in lookup matrices
             streamSchedule.set(streamSlotKey, slot);
             teacherSchedule.set(teacherKey, `${grade} ${stream}`);
             if (chosenFacilityKey && chosenFacilityName && sharedResourceBookings[chosenFacilityName] !== undefined) {
@@ -511,18 +696,18 @@ export function generateAutomatedTimetable(
             }
 
             streamSubjectDailyCount.set(dailySubjectKey, currentDailyCount + 1);
+            scheduledWeeklyCountByAlloc.set(key, (scheduledWeeklyCountByAlloc.get(key) || 0) + 1);
 
-            // Record teacher stats
-            if (!teacherWorkloads[teacher.name]) {
-              teacherWorkloads[teacher.name] = { periods: 0, subjects: [], streams: [] };
+            if (!teacherWorkloads[alloc.teacherName]) {
+              teacherWorkloads[alloc.teacherName] = { periods: 0, subjects: [], streams: [] };
             }
-            teacherWorkloads[teacher.name].periods++;
-            if (!teacherWorkloads[teacher.name].subjects.includes(ticket.subject)) {
-              teacherWorkloads[teacher.name].subjects.push(ticket.subject);
+            teacherWorkloads[alloc.teacherName].periods++;
+            if (!teacherWorkloads[alloc.teacherName].subjects.includes(alloc.subject)) {
+              teacherWorkloads[alloc.teacherName].subjects.push(alloc.subject);
             }
             const streamLabel = `Gr ${grade} ${stream}`;
-            if (!teacherWorkloads[teacher.name].streams.includes(streamLabel)) {
-              teacherWorkloads[teacher.name].streams.push(streamLabel);
+            if (!teacherWorkloads[alloc.teacherName].streams.includes(streamLabel)) {
+              teacherWorkloads[alloc.teacherName].streams.push(streamLabel);
             }
 
             generatedSlots.push(slot);
@@ -530,29 +715,53 @@ export function generateAutomatedTimetable(
             break;
           }
         }
+      }
 
-        if (!scheduled) {
-          unassignedDemands++;
-          conflictReport.push(
-            `Unable to find an open slot for Grade ${grade} ${stream} (${ticket.subject}) without teacher or room collision.`
-          );
-        }
-      });
+      if (!scheduled) {
+        unassignedDemands++;
+        conflictReport.push(
+          `Unable to place lesson ${ticket.occurrence + 1}/${alloc.periodsPerWeek} for Grade ${grade} ${stream} · ${alloc.subject} (${alloc.teacherName}) without teacher or stream clash.`
+        );
+      }
     });
   });
+
+  // Compute strict weekly quota compliance summary
+  let exactQuotaMatches = 0;
+  let underAllocatedSubjects = 0;
+  let scheduledAllocatedPeriods = 0;
+
+  for (const [key, alloc] of strictAllocations.entries()) {
+    const placed = scheduledWeeklyCountByAlloc.get(key) || 0;
+    scheduledAllocatedPeriods += placed;
+    if (placed === alloc.periodsPerWeek) {
+      exactQuotaMatches++;
+    } else if (placed < alloc.periodsPerWeek) {
+      underAllocatedSubjects++;
+    }
+  }
 
   return {
     slots: generatedSlots,
     stats: {
       totalPeriods: generatedSlots.length,
-      totalStreams: totalStreamsCount,
+      totalStreams: allocatedStreamsList.length,
       fixedPeriodsEnforced,
       sharedResourceBookings,
       teacherWorkloads,
       conflictsResolved,
       unassignedDemands,
-      generatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString()
+      generatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ', ' + new Date().toLocaleDateString(),
+      strictAllocation: {
+        allocatedGrades,
+        allocatedStreams: allocatedStreamsList,
+        allocatedSubjectLinks: strictAllocations.size,
+        requiredWeeklyPeriods: totalRequiredWeeklyPeriods,
+        scheduledAllocatedPeriods,
+        exactQuotaMatches,
+        underAllocatedSubjects,
+      },
     },
-    conflictReport
+    conflictReport,
   };
 }

@@ -78,6 +78,7 @@ export function initTimetableSchema(db: DatabaseSync): void {
       tenant_id TEXT NOT NULL,
       name TEXT NOT NULL,
       code TEXT NOT NULL DEFAULT '',
+      hod_user_id TEXT DEFAULT '',
       head_name TEXT DEFAULT '',
       description TEXT DEFAULT '',
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -348,4 +349,10 @@ export function initTimetableSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_tt_audit_tenant
       ON tt_audit_logs(tenant_id, created_at);
   `);
+
+  // Safe migration for existing databases missing hod_user_id on tt_departments
+  const deptCols = db.prepare(`PRAGMA table_info(tt_departments)`).all() as Array<{ name: string }>;
+  if (!deptCols.some((c) => c.name === 'hod_user_id')) {
+    db.exec(`ALTER TABLE tt_departments ADD COLUMN hod_user_id TEXT DEFAULT ''`);
+  }
 }

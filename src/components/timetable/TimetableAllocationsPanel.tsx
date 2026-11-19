@@ -301,14 +301,66 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
   const [gradeEdits, setGradeEdits] = useState<Record<string, TTGradeAllocationItem>>({});
   const [streamEdits, setStreamEdits] = useState<Record<string, TTStreamAllocationItem>>({});
 
+  // Auto-reconcile single/double/triple lesson breakdown whenever weekly lessons are adjusted
+  const reconcileBreakdown = (
+    required: number,
+    doubles: number,
+    triples: number
+  ): { requiredWeeklyPeriods: number; singleLessons: number; doubleLessons: number; tripleLessons: number } => {
+    const req = Math.max(1, Math.min(15, Math.floor(Number(required || 1))));
+    let tr = Math.max(0, Math.min(4, Math.floor(Number(triples || 0))));
+    while (tr * 3 > req && tr > 0) tr--;
+    let db = Math.max(0, Math.min(6, Math.floor(Number(doubles || 0))));
+    while (tr * 3 + db * 2 > req && db > 0) db--;
+    const sg = Math.max(0, req - tr * 3 - db * 2);
+    return {
+      requiredWeeklyPeriods: req,
+      singleLessons: sg,
+      doubleLessons: db,
+      tripleLessons: tr,
+    };
+  };
+
   const getG = (row: TTGradeAllocationItem) => gradeEdits[row.id] || row;
   const setG = (id: string, base: TTGradeAllocationItem, patch: Partial<TTGradeAllocationItem>) => {
-    setGradeEdits((prev) => ({ ...prev, [id]: { ...(prev[id] || base), ...patch } }));
+    setGradeEdits((prev) => {
+      const current = prev[id] || base;
+      const merged = { ...current, ...patch };
+      if (
+        patch.requiredWeeklyPeriods !== undefined ||
+        patch.doubleLessons !== undefined ||
+        patch.tripleLessons !== undefined
+      ) {
+        const balanced = reconcileBreakdown(
+          merged.requiredWeeklyPeriods,
+          merged.doubleLessons,
+          merged.tripleLessons
+        );
+        return { ...prev, [id]: { ...merged, ...balanced } };
+      }
+      return { ...prev, [id]: merged };
+    });
   };
 
   const getS = (row: TTStreamAllocationItem) => streamEdits[row.id] || row;
   const setS = (id: string, base: TTStreamAllocationItem, patch: Partial<TTStreamAllocationItem>) => {
-    setStreamEdits((prev) => ({ ...prev, [id]: { ...(prev[id] || base), ...patch } }));
+    setStreamEdits((prev) => {
+      const current = prev[id] || base;
+      const merged = { ...current, ...patch };
+      if (
+        patch.requiredWeeklyPeriods !== undefined ||
+        patch.doubleLessons !== undefined ||
+        patch.tripleLessons !== undefined
+      ) {
+        const balanced = reconcileBreakdown(
+          merged.requiredWeeklyPeriods,
+          merged.doubleLessons,
+          merged.tripleLessons
+        );
+        return { ...prev, [id]: { ...merged, ...balanced } };
+      }
+      return { ...prev, [id]: merged };
+    });
   };
 
   const wholeClassOptions = useMemo(
@@ -333,6 +385,19 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
           <span>{statusMsg.text}</span>
         </div>
       )}
+
+      {/* Strict Allocation & Adjustable Weekly Lessons Policy */}
+      <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/70 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-start gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold text-emerald-950">Strict Weekly Lesson Adherence Active: </span>
+            <span>
+              Timetable production schedules lessons strictly for the grades, streams, and subjects allocated below, matching each subject&apos;s exact weekly lesson count. Adjust lessons per week anytime using the <strong className="font-mono">- / +</strong> controls and save.
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* Consistency Warnings Banner */}
       {allocationIssues.length > 0 && (
@@ -534,14 +599,32 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                         )}
                       </td>
                       <td className="p-3">
-                        <input
-                          type="number"
-                          min={0}
-                          max={15}
-                          value={row.requiredWeeklyPeriods}
-                          onChange={(e) => setG(row.id, orig, { requiredWeeklyPeriods: Number(e.target.value || 0) })}
-                          className="w-14 px-2 py-1 border border-slate-200 rounded font-mono tabular-nums"
-                        />
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setG(row.id, orig, { requiredWeeklyPeriods: Math.max(1, row.requiredWeeklyPeriods - 1) })}
+                            className="w-6 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
+                            title="Decrease weekly lessons"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={1}
+                            max={15}
+                            value={row.requiredWeeklyPeriods}
+                            onChange={(e) => setG(row.id, orig, { requiredWeeklyPeriods: Math.max(1, Number(e.target.value || 1)) })}
+                            className="w-12 px-1.5 py-1 border border-slate-200 rounded font-mono tabular-nums text-center font-bold"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setG(row.id, orig, { requiredWeeklyPeriods: Math.min(15, row.requiredWeeklyPeriods + 1) })}
+                            className="w-6 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
+                            title="Increase weekly lessons"
+                          >
+                            +
+                          </button>
+                        </div>
                       </td>
                       <td className="p-3">
                         <input
@@ -639,9 +722,9 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                           <>
                             <button
                               type="button"
-                              disabled={busyId === row.id}
+                              disabled={busyId === row.id || mismatch || row.requiredWeeklyPeriods < 1}
                               onClick={() => handleSaveGradeRow(row)}
-                              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
+                              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
                             >
                               <Save className="w-3 h-3" />
                               <span>Save</span>
@@ -763,15 +846,31 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                         </td>
                         <td className="p-3">
                           <div className="flex items-center gap-1 font-mono tabular-nums">
+                            <button
+                              type="button"
+                              onClick={() => setS(row.id, orig, { requiredWeeklyPeriods: Math.max(1, row.requiredWeeklyPeriods - 1) })}
+                              className="w-5 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
+                              title="Decrease weekly lessons"
+                            >
+                              -
+                            </button>
                             <input
                               type="number"
-                              min={0}
+                              min={1}
                               max={15}
                               value={row.requiredWeeklyPeriods}
-                              onChange={(e) => setS(row.id, orig, { requiredWeeklyPeriods: Number(e.target.value || 0) })}
-                              className="w-12 px-1.5 py-1 border border-slate-200 rounded"
-                              title="Total Weekly Periods"
+                              onChange={(e) => setS(row.id, orig, { requiredWeeklyPeriods: Math.max(1, Number(e.target.value || 1)) })}
+                              className="w-11 px-1 py-1 border border-slate-200 rounded text-center font-bold"
+                              title="Total Weekly Periods (strictly enforced)"
                             />
+                            <button
+                              type="button"
+                              onClick={() => setS(row.id, orig, { requiredWeeklyPeriods: Math.min(15, row.requiredWeeklyPeriods + 1) })}
+                              className="w-5 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
+                              title="Increase weekly lessons"
+                            >
+                              +
+                            </button>
                             <span>=</span>
                             <input
                               type="number"
@@ -864,9 +963,9 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                               )}
                               <button
                                 type="button"
-                                disabled={busyId === row.id}
+                                disabled={busyId === row.id || sum !== row.requiredWeeklyPeriods || row.requiredWeeklyPeriods < 1}
                                 onClick={() => handleSaveStreamRow(row, false)}
-                                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
+                                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
                               >
                                 <Save className="w-3 h-3" />
                                 <span>Save</span>

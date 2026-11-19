@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Building2, Calendar, Clock, Plus, Save, Trash2, CheckCircle2, AlertCircle, Pencil, BookOpen, FolderKanban, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Building2, Calendar, Clock, Plus, Save, Trash2, CheckCircle2, AlertCircle, Pencil, BookOpen, FolderKanban, X, UserCheck } from 'lucide-react';
 import {
   ROOM_TYPE_LABELS,
   TTClassroomItem,
@@ -11,7 +11,8 @@ import {
   ttApiFetch,
 } from './timetableTypes';
 import { addCatalogSubject, deleteCatalogSubject, updateCatalogSubject } from '../../utils/catalogStore';
-import { createDepartment, deleteDepartment, listDepartments, updateDepartment } from '../../utils/departmentStore';
+import { createDepartment, deleteDepartment, linkDepartmentHod, listDepartments, updateDepartment } from '../../utils/departmentStore';
+import { Storage } from '../../utils/storage';
 
 interface TimetableConfigPanelProps {
   config: TTConfigData;
@@ -58,15 +59,32 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
   // Department CRUD State
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptCode, setNewDeptCode] = useState('');
+  const [newDeptHodUserId, setNewDeptHodUserId] = useState('');
   const [newDeptHead, setNewDeptHead] = useState('');
   const [newDeptDesc, setNewDeptDesc] = useState('');
   const [savingDept, setSavingDept] = useState(false);
   const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
   const [editDeptName, setEditDeptName] = useState('');
   const [editDeptCode, setEditDeptCode] = useState('');
+  const [editDeptHodUserId, setEditDeptHodUserId] = useState('');
   const [editDeptHead, setEditDeptHead] = useState('');
   const [editDeptDesc, setEditDeptDesc] = useState('');
   const [confirmDeleteDeptId, setConfirmDeleteDeptId] = useState<string | null>(null);
+
+  // Eligible HoD & faculty candidates for linking every department to a specific HoD
+  const hodCandidates = useMemo(() => {
+    const allUsers = Storage.getUsers().filter((u) => {
+      if (u.role === 'student' || u.role === 'parent') return false;
+      if (schoolId && u.schoolId && u.schoolId !== schoolId) return false;
+      return true;
+    });
+    return allUsers.sort((a, b) => {
+      const aIsHod = a.role === 'hod' || (Array.isArray(a.assignedRoles) && a.assignedRoles.includes('hod')) ? 0 : 1;
+      const bIsHod = b.role === 'hod' || (Array.isArray(b.assignedRoles) && b.assignedRoles.includes('hod')) ? 0 : 1;
+      if (aIsHod !== bIsHod) return aIsHod - bIsHod;
+      return a.name.localeCompare(b.name);
+    });
+  }, [schoolId, departments.length]);
 
   // Subject CRUD State
   const [newSubName, setNewSubName] = useState('');
@@ -209,6 +227,15 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
     }
   };
 
+  const syncLocalHodUser = (deptName: string, hodUserId: string) => {
+    if (!hodUserId) return;
+    const matched = hodCandidates.find((u) => u.id === hodUserId);
+    if (!matched) return;
+    const assigned = Array.isArray(matched.assignedRoles) ? matched.assignedRoles : [];
+    const nextAssigned = matched.role === 'hod' || assigned.includes('hod') ? assigned : [...assigned, 'hod' as const];
+    Storage.updateUser(matched.id, { department: deptName, assignedRoles: nextAssigned });
+  };
+
   // Department CRUD handlers
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,28 +244,48 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
     setStatusMsg(null);
     try {
       const cleanName = newDeptName.trim();
+      const selectedHod = newDeptHodUserId ? hodCandidates.find((u) => u.id === newDeptHodUserId) : undefined;
+      const resolvedHeadName = selectedHod?.name || newDeptHead.trim();
       await ttApiFetch('/api/timetable/departments', {
         method: 'POST',
         body: JSON.stringify({
           name: cleanName,
           code: newDeptCode.trim() || undefined,
-          headName: newDeptHead.trim(),
+          hodUserId: selectedHod?.id || '',
+          headName: resolvedHeadName,
           description: newDeptDesc.trim(),
         }),
       });
       if (schoolId) {
         try {
-          createDepartment(schoolId, cleanName);
+          createDepartment(schoolId, cleanName, {
+            hodUserId: selectedHod?.id || '',
+            hodName: resolvedHeadName,
+          });
         } catch {
-          // Already exists in departmentStore
+          const existingLocal = listDepartments(schoolId).find(
+            (d) => d.name.toLowerCase() === cleanName.toLowerCase()
+          );
+          if (existingLocal && selectedHod) {
+            linkDepartmentHod(existingLocal.id, selectedHod.id, resolvedHeadName);
+          }
         }
+      }
+      if (selectedHod) {
+        syncLocalHodUser(cleanName, selectedHod.id);
       }
       setNewDeptName('');
       setNewDeptCode('');
+      setNewDeptHodUserId('');
       setNewDeptHead('');
       setNewDeptDesc('');
       await onRefresh();
-      setStatusMsg({ type: 'ok', text: `Department "${cleanName}" added to Master Timetable.` });
+      setStatusMsg({
+        type: 'ok',
+        text: selectedHod
+          ? `Department "${cleanName}" added and linked to HoD ${selectedHod.name}.`
+          : `Department "${cleanName}" added to Master Timetable.`,
+      });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Could not add department.' });
     } finally {
@@ -252,12 +299,15 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
     setStatusMsg(null);
     try {
       const cleanNext = editDeptName.trim();
+      const selectedHod = editDeptHodUserId ? hodCandidates.find((u) => u.id === editDeptHodUserId) : undefined;
+      const resolvedHeadName = selectedHod ? selectedHod.name : editDeptHead.trim();
       await ttApiFetch(`/api/timetable/departments/${dept.id}`, {
         method: 'PUT',
         body: JSON.stringify({
           name: cleanNext,
           code: editDeptCode.trim(),
-          headName: editDeptHead.trim(),
+          hodUserId: selectedHod?.id || '',
+          headName: resolvedHeadName,
           description: editDeptDesc.trim(),
         }),
       });
@@ -265,17 +315,28 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
         const localMatch = listDepartments(schoolId).find(
           (d) => d.name.toLowerCase() === dept.name.toLowerCase()
         );
-        if (localMatch && localMatch.name !== cleanNext) {
-          try {
-            updateDepartment(localMatch.id, cleanNext);
-          } catch {
-            // ignore duplicate
+        if (localMatch) {
+          if (localMatch.name !== cleanNext) {
+            try {
+              updateDepartment(localMatch.id, cleanNext);
+            } catch {
+              // ignore duplicate
+            }
           }
+          linkDepartmentHod(localMatch.id, selectedHod?.id || '', resolvedHeadName);
         }
+      }
+      if (selectedHod) {
+        syncLocalHodUser(cleanNext, selectedHod.id);
       }
       setEditingDeptId(null);
       await onRefresh();
-      setStatusMsg({ type: 'ok', text: `Department "${cleanNext}" updated.` });
+      setStatusMsg({
+        type: 'ok',
+        text: selectedHod
+          ? `Department "${cleanNext}" updated and linked to HoD ${selectedHod.name}.`
+          : `Department "${cleanNext}" updated.`,
+      });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Could not update department.' });
     } finally {
@@ -806,13 +867,27 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
             onChange={(e) => setNewDeptCode(e.target.value)}
             className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white font-mono"
           />
-          <input
-            type="text"
-            placeholder="HOD / Lead (Optional)"
-            value={newDeptHead}
-            onChange={(e) => setNewDeptHead(e.target.value)}
+          <select
+            value={newDeptHodUserId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setNewDeptHodUserId(id);
+              const u = hodCandidates.find((c) => c.id === id);
+              setNewDeptHead(u?.name || '');
+            }}
             className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
-          />
+            title="Link Specific Head of Department (HoD)"
+          >
+            <option value="">-- Link Specific HoD --</option>
+            {hodCandidates.map((u) => {
+              const isHod = u.role === 'hod' || (Array.isArray(u.assignedRoles) && u.assignedRoles.includes('hod'));
+              return (
+                <option key={u.id} value={u.id}>
+                  {u.name} {isHod ? '(HoD)' : `(${u.role.replace(/_/g, ' ')})`}
+                </option>
+              );
+            })}
+          </select>
           <input
             type="text"
             placeholder="Description (Optional)"
@@ -836,7 +911,7 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
               <tr>
                 <th className="py-2 pr-3">Code</th>
                 <th className="py-2 pr-3">Department Name</th>
-                <th className="py-2 pr-3">HOD / Lead</th>
+                <th className="py-2 pr-3">Linked HoD</th>
                 <th className="py-2 pr-3">Subjects</th>
                 <th className="py-2 text-right">Actions</th>
               </tr>
@@ -868,13 +943,26 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                           />
                         </td>
                         <td className="py-2 pr-2">
-                          <input
-                            type="text"
-                            value={editDeptHead}
-                            onChange={(e) => setEditDeptHead(e.target.value)}
-                            placeholder="HOD Name"
-                            className="w-full px-2 py-1 border border-slate-300 rounded"
-                          />
+                          <select
+                            value={editDeptHodUserId}
+                            onChange={(e) => {
+                              const id = e.target.value;
+                              setEditDeptHodUserId(id);
+                              const u = hodCandidates.find((c) => c.id === id);
+                              setEditDeptHead(u?.name || '');
+                            }}
+                            className="w-full px-2 py-1 border border-slate-300 rounded bg-white"
+                          >
+                            <option value="">-- Unassigned HoD --</option>
+                            {hodCandidates.map((u) => {
+                              const isHod = u.role === 'hod' || (Array.isArray(u.assignedRoles) && u.assignedRoles.includes('hod'));
+                              return (
+                                <option key={u.id} value={u.id}>
+                                  {u.name} {isHod ? '(HoD)' : `(${u.role.replace(/_/g, ' ')})`}
+                                </option>
+                              );
+                            })}
+                          </select>
                         </td>
                         <td className="py-2 pr-2">
                           <input
@@ -912,7 +1000,18 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                             <div className="text-[11px] text-slate-500">{dept.description}</div>
                           )}
                         </td>
-                        <td className="py-2 pr-3 text-slate-600">{dept.headName || '—'}</td>
+                        <td className="py-2 pr-3">
+                          {dept.headName ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                              <UserCheck className="w-3 h-3 text-emerald-600" />
+                              <span>{dept.headName}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                              Not linked — click Edit
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2 pr-3 font-mono text-slate-600">{linkedSubCount}</td>
                         <td className="py-2 text-right whitespace-nowrap">
                           {confirmDeleteDeptId === dept.id ? (
@@ -941,6 +1040,7 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                                   setEditingDeptId(dept.id);
                                   setEditDeptName(dept.name);
                                   setEditDeptCode(dept.code || '');
+                                  setEditDeptHodUserId(dept.hodUserId || '');
                                   setEditDeptHead(dept.headName || '');
                                   setEditDeptDesc(dept.description || '');
                                 }}

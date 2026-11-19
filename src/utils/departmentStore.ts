@@ -14,11 +14,12 @@ export interface SchoolDepartment {
 
 const TEACHING_DEPARTMENT_SUBJECTS: Record<string, string[]> = {
   'Mathematics & Computational Sciences': ['Mathematics', 'Computer Studies'],
-  'Pure & Integrated Sciences': ['Integrated Science', 'Agriculture and Nutrition', 'Agriculture'],
+  'Pure & Integrated Sciences': ['Integrated Science', 'Agriculture and Nutrition', 'Agriculture', 'Nutrition'],
   'Technical & Applied Sciences': ['Pretechnical Education', 'Pre-Technical Studies', 'Business Studies'],
-  'Languages & Literature': ['English', 'Kiswahili'],
-  'Pretechnical & Creative Arts': ['Creative Arts', 'Pretechnical Education', 'Physical and Health Education'],
+  'Languages & Literature': ['English', 'Kiswahili', 'Library Lesson'],
+  'Pretechnical & Creative Arts': ['Creative Arts', 'Arts', 'Music', 'Pretechnical Education', 'Physical and Health Education'],
   'Humanities & Social Sciences': ['Social Studies', 'Religious Education'],
+  'Library & Information Services': ['Library Lesson'],
 };
 
 const NON_TEACHING_DEPARTMENT_ACTIVITIES: Record<string, string[]> = {

@@ -44,6 +44,15 @@ export interface TTSubjectItem {
   isActive: boolean;
 }
 
+export interface TTDepartmentItem {
+  id: string;
+  name: string;
+  code: string;
+  headName: string;
+  description: string;
+  isActive: boolean;
+}
+
 export interface TTClassroomItem {
   id: string;
   name: string;
@@ -245,6 +254,7 @@ export interface TTWorkspacePayload {
   gradeSchedules: TTGradeSchedule[];
   periods: TTPeriodItem[];
   subjects: TTSubjectItem[];
+  departments?: TTDepartmentItem[];
   classrooms: TTClassroomItem[];
   studentGroups: TTStudentGroupItem[];
   teachers: TTTeacherProfileItem[];
@@ -302,7 +312,8 @@ export const ROOM_TYPE_LABELS: Record<string, string> = {
   science_lab: 'Science Laboratory',
   computer_lab: 'Computer / ICT Lab',
   workshop: 'Pre-Tech Workshop',
-  art_room: 'Creative Arts Studio',
+  art_room: 'Creative Arts & Music Studio',
+  library: 'School Library / Reading Hall',
   field: 'Sports Field',
   hall: 'Assembly Hall',
 };

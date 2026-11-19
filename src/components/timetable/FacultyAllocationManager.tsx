@@ -28,6 +28,8 @@ import {
   User,
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { listSubjects } from '../../utils/catalogStore';
+import { listDepartments } from '../../utils/departmentStore';
 import { ahApiFetch, type AcademicBootstrapPayload } from '../academic-hierarchy/academicHierarchyTypes';
 
 interface FacultyAllocationManagerProps {
@@ -92,19 +94,29 @@ export const FacultyAllocationManager: React.FC<FacultyAllocationManagerProps> =
     }
   }, [schoolId]);
 
+  const [catalogTick, setCatalogTick] = useState(0);
+
   useEffect(() => {
     void loadHierarchyData();
     const onUsersUpdated = () => setUsers(Storage.getUsers(schoolId));
+    const onCatalogUpdated = () => setCatalogTick((t) => t + 1);
     const onSse = (e: Event) => {
       const detail = (e as CustomEvent)?.detail;
       if (!detail || detail.key === '*' || detail.key === 'academic_hierarchy' || detail.key === 'edusmart_users_v1') {
         void loadHierarchyData();
       }
+      if (!detail || detail.key === '*' || detail.key === 'edusmart_subjects_v1' || detail.key === 'edusmart_departments_v1') {
+        setCatalogTick((t) => t + 1);
+      }
     };
     window.addEventListener('users-updated', onUsersUpdated);
+    window.addEventListener('subjects-catalog-updated', onCatalogUpdated);
+    window.addEventListener('departments-updated', onCatalogUpdated);
     window.addEventListener('edusmart:data-changed', onSse);
     return () => {
       window.removeEventListener('users-updated', onUsersUpdated);
+      window.removeEventListener('subjects-catalog-updated', onCatalogUpdated);
+      window.removeEventListener('departments-updated', onCatalogUpdated);
       window.removeEventListener('edusmart:data-changed', onSse);
     };
   }, [loadHierarchyData, schoolId]);
@@ -114,14 +126,29 @@ export const FacultyAllocationManager: React.FC<FacultyAllocationManagerProps> =
     return users.filter((u) => ['teacher', 'class_teacher', 'hod', 'senior_teacher'].includes(u.role));
   }, [users]);
 
-  // Available curriculum subjects
+  // Available curriculum subjects (includes Library Lesson, Arts, Music, Nutrition & custom Master Timetable subjects)
   const allCurriculumSubjects = useMemo(() => {
     const set = new Set<string>([...PRIMARY_SUBJECTS, ...JUNIOR_SUBJECTS]);
+    for (const s of listSubjects()) {
+      if (s?.name) set.add(s.name);
+    }
     for (const a of bootstrap?.subjectAssignments || []) {
       if (a.subject_name) set.add(String(a.subject_name));
     }
     return Array.from(set).sort();
-  }, [bootstrap]);
+  }, [bootstrap, catalogTick]);
+
+  // Available academic departments (from Department Store + existing faculty records)
+  const departmentOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of listDepartments(schoolId)) {
+      if (d?.name) set.add(d.name);
+    }
+    for (const f of facultyList) {
+      if (f.department && f.department.trim()) set.add(f.department.trim());
+    }
+    return Array.from(set).sort();
+  }, [schoolId, facultyList, catalogTick]);
 
   // Available grades & their specific streams for this school
   const gradeOptions = useMemo(() => {
@@ -473,10 +500,11 @@ export const FacultyAllocationManager: React.FC<FacultyAllocationManagerProps> =
             className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
           >
             <option value="all">All Departments</option>
-            <option value="science">Sciences &amp; Mathematics</option>
-            <option value="language">Languages &amp; Linguistics</option>
-            <option value="humanities">Humanities &amp; Social Sciences</option>
-            <option value="technical">Technical &amp; Applied Studies</option>
+            {departmentOptions.map((dept) => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -638,11 +666,17 @@ export const FacultyAllocationManager: React.FC<FacultyAllocationManagerProps> =
                   <label className="block font-bold text-slate-700 mb-1">Academic Department</label>
                   <input
                     type="text"
+                    list="faculty-departments-datalist"
                     value={departmentInput}
                     onChange={(e) => setDepartmentInput(e.target.value)}
-                    placeholder="e.g. Sciences & Mathematics"
+                    placeholder="e.g. Sciences & Mathematics, Library & Information Services"
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg font-medium"
                   />
+                  <datalist id="faculty-departments-datalist">
+                    {departmentOptions.map((dept) => (
+                      <option key={dept} value={dept} />
+                    ))}
+                  </datalist>
                 </div>
                 <div className="flex items-end">
                   <label className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg w-full cursor-pointer">

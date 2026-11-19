@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Calendar, Clock, Plus, Save, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Building2, Calendar, Clock, Plus, Save, Trash2, CheckCircle2, AlertCircle, Pencil, BookOpen, FolderKanban, X } from 'lucide-react';
 import {
   ROOM_TYPE_LABELS,
   TTClassroomItem,
   TTConfigData,
+  TTDepartmentItem,
   TTGradeSchedule,
   TTPeriodItem,
+  TTSubjectItem,
   ttApiFetch,
 } from './timetableTypes';
+import { addCatalogSubject, deleteCatalogSubject, updateCatalogSubject } from '../../utils/catalogStore';
+import { createDepartment, deleteDepartment, listDepartments, updateDepartment } from '../../utils/departmentStore';
 
 interface TimetableConfigPanelProps {
   config: TTConfigData;
   gradeSchedules: TTGradeSchedule[];
   periods: TTPeriodItem[];
   classrooms: TTClassroomItem[];
+  subjects?: TTSubjectItem[];
+  departments?: TTDepartmentItem[];
+  schoolId?: string;
   onRefresh: () => Promise<void>;
 }
 
@@ -24,6 +31,9 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
   gradeSchedules,
   periods,
   classrooms,
+  subjects = [],
+  departments = [],
+  schoolId,
   onRefresh,
 }) => {
   const [academicYear, setAcademicYear] = useState(config.academicYear);
@@ -44,6 +54,34 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
   const [newRoomCapacity, setNewRoomCapacity] = useState(45);
   const [newRoomLocation, setNewRoomLocation] = useState('Main Block');
   const [savingRoom, setSavingRoom] = useState(false);
+
+  // Department CRUD State
+  const [newDeptName, setNewDeptName] = useState('');
+  const [newDeptCode, setNewDeptCode] = useState('');
+  const [newDeptHead, setNewDeptHead] = useState('');
+  const [newDeptDesc, setNewDeptDesc] = useState('');
+  const [savingDept, setSavingDept] = useState(false);
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
+  const [editDeptName, setEditDeptName] = useState('');
+  const [editDeptCode, setEditDeptCode] = useState('');
+  const [editDeptHead, setEditDeptHead] = useState('');
+  const [editDeptDesc, setEditDeptDesc] = useState('');
+  const [confirmDeleteDeptId, setConfirmDeleteDeptId] = useState<string | null>(null);
+
+  // Subject CRUD State
+  const [newSubName, setNewSubName] = useState('');
+  const [newSubCode, setNewSubCode] = useState('');
+  const [newSubDept, setNewSubDept] = useState<string>(departments[0]?.name || 'Core Academic');
+  const [newSubRoomType, setNewSubRoomType] = useState('general');
+  const [newSubPractical, setNewSubPractical] = useState(false);
+  const [savingSub, setSavingSub] = useState(false);
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editSubName, setEditSubName] = useState('');
+  const [editSubCode, setEditSubCode] = useState('');
+  const [editSubDept, setEditSubDept] = useState('');
+  const [editSubRoomType, setEditSubRoomType] = useState('general');
+  const [editSubPractical, setEditSubPractical] = useState(false);
+  const [confirmDeleteSubId, setConfirmDeleteSubId] = useState<string | null>(null);
 
   useEffect(() => {
     setAcademicYear(config.academicYear);
@@ -170,6 +208,183 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
       setStatusMsg({ type: 'err', text: err?.message || 'Could not delete room.' });
     }
   };
+
+  // Department CRUD handlers
+  const handleCreateDepartment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDeptName.trim()) return;
+    setSavingDept(true);
+    setStatusMsg(null);
+    try {
+      const cleanName = newDeptName.trim();
+      await ttApiFetch('/api/timetable/departments', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: cleanName,
+          code: newDeptCode.trim() || undefined,
+          headName: newDeptHead.trim(),
+          description: newDeptDesc.trim(),
+        }),
+      });
+      if (schoolId) {
+        try {
+          createDepartment(schoolId, cleanName);
+        } catch {
+          // Already exists in departmentStore
+        }
+      }
+      setNewDeptName('');
+      setNewDeptCode('');
+      setNewDeptHead('');
+      setNewDeptDesc('');
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Department "${cleanName}" added to Master Timetable.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not add department.' });
+    } finally {
+      setSavingDept(false);
+    }
+  };
+
+  const handleSaveDepartmentEdit = async (dept: TTDepartmentItem) => {
+    if (!editDeptName.trim()) return;
+    setSavingDept(true);
+    setStatusMsg(null);
+    try {
+      const cleanNext = editDeptName.trim();
+      await ttApiFetch(`/api/timetable/departments/${dept.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: cleanNext,
+          code: editDeptCode.trim(),
+          headName: editDeptHead.trim(),
+          description: editDeptDesc.trim(),
+        }),
+      });
+      if (schoolId) {
+        const localMatch = listDepartments(schoolId).find(
+          (d) => d.name.toLowerCase() === dept.name.toLowerCase()
+        );
+        if (localMatch && localMatch.name !== cleanNext) {
+          try {
+            updateDepartment(localMatch.id, cleanNext);
+          } catch {
+            // ignore duplicate
+          }
+        }
+      }
+      setEditingDeptId(null);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Department "${cleanNext}" updated.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not update department.' });
+    } finally {
+      setSavingDept(false);
+    }
+  };
+
+  const handleDeleteDepartment = async (dept: TTDepartmentItem) => {
+    setSavingDept(true);
+    setStatusMsg(null);
+    try {
+      await ttApiFetch(`/api/timetable/departments/${dept.id}`, { method: 'DELETE' });
+      if (schoolId) {
+        const localMatch = listDepartments(schoolId).find(
+          (d) => d.name.toLowerCase() === dept.name.toLowerCase()
+        );
+        if (localMatch) deleteDepartment(localMatch.id);
+      }
+      setConfirmDeleteDeptId(null);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Department "${dept.name}" removed.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not delete department.' });
+    } finally {
+      setSavingDept(false);
+    }
+  };
+
+  // Subject CRUD handlers
+  const handleCreateSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubName.trim()) return;
+    setSavingSub(true);
+    setStatusMsg(null);
+    try {
+      const cleanName = newSubName.trim();
+      await ttApiFetch('/api/timetable/subjects', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: cleanName,
+          code: newSubCode.trim() || undefined,
+          department: newSubDept || 'Core Academic',
+          requiresRoomType: newSubRoomType,
+          isPractical: newSubPractical,
+        }),
+      });
+      addCatalogSubject(cleanName);
+      setNewSubName('');
+      setNewSubCode('');
+      setNewSubPractical(false);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Subject "${cleanName}" added to Master Timetable.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not add subject.' });
+    } finally {
+      setSavingSub(false);
+    }
+  };
+
+  const handleSaveSubjectEdit = async (sub: TTSubjectItem) => {
+    if (!editSubName.trim()) return;
+    setSavingSub(true);
+    setStatusMsg(null);
+    try {
+      const cleanNext = editSubName.trim();
+      await ttApiFetch(`/api/timetable/subjects/${sub.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: cleanNext,
+          code: editSubCode.trim(),
+          department: editSubDept.trim() || 'Core Academic',
+          requiresRoomType: editSubRoomType,
+          isPractical: editSubPractical,
+        }),
+      });
+      updateCatalogSubject(sub.name, cleanNext);
+      setEditingSubId(null);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Subject "${cleanNext}" updated across timetable allocations.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not update subject.' });
+    } finally {
+      setSavingSub(false);
+    }
+  };
+
+  const handleDeleteSubject = async (sub: TTSubjectItem) => {
+    setSavingSub(true);
+    setStatusMsg(null);
+    try {
+      await ttApiFetch(`/api/timetable/subjects/${sub.id}`, { method: 'DELETE' });
+      deleteCatalogSubject(sub.name);
+      setConfirmDeleteSubId(null);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Subject "${sub.name}" removed from Master Timetable.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not remove subject.' });
+    } finally {
+      setSavingSub(false);
+    }
+  };
+
+  const departmentNameOptions = Array.from(
+    new Set<string>([
+      ...departments.map((d) => d.name),
+      ...subjects.map((s) => s.department).filter(Boolean),
+      'Core Academic',
+    ])
+  ).sort();
 
   return (
     <div className="space-y-6">
@@ -558,6 +773,426 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* 5. Academic Departments (Add, Edit & Remove) */}
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div className="border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <FolderKanban className="w-4 h-4 text-slate-600" />
+            <span>05. Academic Departments ({departments.length})</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Add, rename, edit, or remove academic departments used when preparing the Master Timetable, assigning subjects, and organizing teachers.
+          </p>
+        </div>
+
+        <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 sm:grid-cols-6 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+          <input
+            type="text"
+            placeholder="Department Name (e.g. Creative Arts & Music)"
+            value={newDeptName}
+            onChange={(e) => setNewDeptName(e.target.value)}
+            required
+            className="sm:col-span-2 px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+          />
+          <input
+            type="text"
+            placeholder="Code (e.g. ARTS)"
+            value={newDeptCode}
+            onChange={(e) => setNewDeptCode(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white font-mono"
+          />
+          <input
+            type="text"
+            placeholder="HOD / Lead (Optional)"
+            value={newDeptHead}
+            onChange={(e) => setNewDeptHead(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+          />
+          <input
+            type="text"
+            placeholder="Description (Optional)"
+            value={newDeptDesc}
+            onChange={(e) => setNewDeptDesc(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+          />
+          <button
+            type="submit"
+            disabled={savingDept}
+            className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>{savingDept ? 'Saving...' : 'Add Dept'}</span>
+          </button>
+        </form>
+
+        <div className="overflow-x-auto max-h-72 overflow-y-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="sticky top-0 bg-white border-b border-slate-200 text-slate-500 font-semibold">
+              <tr>
+                <th className="py-2 pr-3">Code</th>
+                <th className="py-2 pr-3">Department Name</th>
+                <th className="py-2 pr-3">HOD / Lead</th>
+                <th className="py-2 pr-3">Subjects</th>
+                <th className="py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {departments.map((dept) => {
+                const isEditing = editingDeptId === dept.id;
+                const linkedSubCount = subjects.filter(
+                  (s) => s.department.toLowerCase() === dept.name.toLowerCase()
+                ).length;
+                return (
+                  <tr key={dept.id} className="hover:bg-slate-50">
+                    {isEditing ? (
+                      <>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={editDeptCode}
+                            onChange={(e) => setEditDeptCode(e.target.value)}
+                            className="w-20 px-2 py-1 border border-slate-300 rounded font-mono"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={editDeptName}
+                            onChange={(e) => setEditDeptName(e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded font-semibold"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={editDeptHead}
+                            onChange={(e) => setEditDeptHead(e.target.value)}
+                            placeholder="HOD Name"
+                            className="w-full px-2 py-1 border border-slate-300 rounded"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={editDeptDesc}
+                            onChange={(e) => setEditDeptDesc(e.target.value)}
+                            placeholder="Description"
+                            className="w-full px-2 py-1 border border-slate-300 rounded"
+                          />
+                        </td>
+                        <td className="py-2 text-right whitespace-nowrap space-x-1">
+                          <button
+                            type="button"
+                            disabled={savingDept}
+                            onClick={() => handleSaveDepartmentEdit(dept)}
+                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-bold cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingDeptId(null)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-semibold cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="py-2 pr-3 font-mono text-slate-600">{dept.code || '—'}</td>
+                        <td className="py-2 pr-3">
+                          <div className="font-semibold text-slate-900">{dept.name}</div>
+                          {dept.description && (
+                            <div className="text-[11px] text-slate-500">{dept.description}</div>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-slate-600">{dept.headName || '—'}</td>
+                        <td className="py-2 pr-3 font-mono text-slate-600">{linkedSubCount}</td>
+                        <td className="py-2 text-right whitespace-nowrap">
+                          {confirmDeleteDeptId === dept.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={savingDept}
+                                onClick={() => handleDeleteDepartment(dept)}
+                                className="px-2 py-1 bg-rose-600 text-white rounded text-[11px] font-bold cursor-pointer"
+                              >
+                                Confirm Remove
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteDeptId(null)}
+                                className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[11px] font-semibold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDeptId(dept.id);
+                                  setEditDeptName(dept.name);
+                                  setEditDeptCode(dept.code || '');
+                                  setEditDeptHead(dept.headName || '');
+                                  setEditDeptDesc(dept.description || '');
+                                }}
+                                className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                title={`Edit ${dept.name}`}
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteDeptId(dept.id)}
+                                className="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                title={`Remove ${dept.name}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remove</span>
+                              </button>
+                            </span>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* 6. Master Timetable Subjects Catalogue (Add, Edit & Remove) */}
+      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div className="border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-slate-600" />
+            <span>06. Master Timetable Subjects ({subjects.length})</span>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Add, edit, or remove curriculum subjects (including Library Lesson, Arts, Music, Nutrition) and assign their department and specialist room requirements.
+          </p>
+        </div>
+
+        <form onSubmit={handleCreateSubject} className="grid grid-cols-1 sm:grid-cols-6 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200 items-center">
+          <input
+            type="text"
+            placeholder="Subject Name (e.g. French, Drama)"
+            value={newSubName}
+            onChange={(e) => setNewSubName(e.target.value)}
+            required
+            className="sm:col-span-2 px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+          />
+          <input
+            type="text"
+            placeholder="Code (e.g. FRE)"
+            value={newSubCode}
+            onChange={(e) => setNewSubCode(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white font-mono"
+          />
+          <select
+            value={newSubDept}
+            onChange={(e) => setNewSubDept(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+          >
+            {departmentNameOptions.map((dn) => (
+              <option key={dn} value={dn}>{dn}</option>
+            ))}
+          </select>
+          <select
+            value={newSubRoomType}
+            onChange={(e) => setNewSubRoomType(e.target.value)}
+            className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+          >
+            {Object.entries(ROOM_TYPE_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={newSubPractical}
+                onChange={(e) => setNewSubPractical(e.target.checked)}
+                className="rounded text-slate-900"
+              />
+              <span>Prac</span>
+            </label>
+            <button
+              type="submit"
+              disabled={savingSub}
+              className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{savingSub ? 'Adding...' : 'Add'}</span>
+            </button>
+          </div>
+        </form>
+
+        <div className="overflow-x-auto max-h-80 overflow-y-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="sticky top-0 bg-white border-b border-slate-200 text-slate-500 font-semibold">
+              <tr>
+                <th className="py-2 pr-3">Code</th>
+                <th className="py-2 pr-3">Subject Name</th>
+                <th className="py-2 pr-3">Department</th>
+                <th className="py-2 pr-3">Required Facility</th>
+                <th className="py-2 pr-3">Practical</th>
+                <th className="py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {subjects.map((sub) => {
+                const isEditing = editingSubId === sub.id;
+                return (
+                  <tr key={sub.id} className="hover:bg-slate-50">
+                    {isEditing ? (
+                      <>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={editSubCode}
+                            onChange={(e) => setEditSubCode(e.target.value)}
+                            className="w-16 px-2 py-1 border border-slate-300 rounded font-mono"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={editSubName}
+                            onChange={(e) => setEditSubName(e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded font-semibold"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <select
+                            value={editSubDept}
+                            onChange={(e) => setEditSubDept(e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded bg-white"
+                          >
+                            {!departmentNameOptions.includes(editSubDept) && editSubDept && (
+                              <option value={editSubDept}>{editSubDept}</option>
+                            )}
+                            {departmentNameOptions.map((dn) => (
+                              <option key={dn} value={dn}>{dn}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <select
+                            value={editSubRoomType}
+                            onChange={(e) => setEditSubRoomType(e.target.value)}
+                            className="w-full px-2 py-1 border border-slate-300 rounded bg-white"
+                          >
+                            {Object.entries(ROOM_TYPE_LABELS).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="checkbox"
+                            checked={editSubPractical}
+                            onChange={(e) => setEditSubPractical(e.target.checked)}
+                            className="rounded"
+                          />
+                        </td>
+                        <td className="py-2 text-right whitespace-nowrap space-x-1">
+                          <button
+                            type="button"
+                            disabled={savingSub}
+                            onClick={() => handleSaveSubjectEdit(sub)}
+                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded font-bold cursor-pointer"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSubId(null)}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-semibold cursor-pointer"
+                          >
+                            <X className="w-3 h-3 inline" />
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="py-2 pr-3 font-mono text-slate-600">{sub.code}</td>
+                        <td className="py-2 pr-3 font-semibold text-slate-900">
+                          {sub.name}
+                          {sub.name.toLowerCase().includes('library') && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold">
+                              Linked to Library Bookings
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-slate-600">{sub.department}</td>
+                        <td className="py-2 pr-3 text-slate-600">{ROOM_TYPE_LABELS[sub.requiresRoomType] || sub.requiresRoomType}</td>
+                        <td className="py-2 pr-3 text-slate-600">{sub.isPractical ? 'Yes' : 'No'}</td>
+                        <td className="py-2 text-right whitespace-nowrap">
+                          {confirmDeleteSubId === sub.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={savingSub}
+                                onClick={() => handleDeleteSubject(sub)}
+                                className="px-2 py-1 bg-rose-600 text-white rounded text-[11px] font-bold cursor-pointer"
+                              >
+                                Confirm Remove
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSubId(null)}
+                                className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-[11px] font-semibold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingSubId(sub.id);
+                                  setEditSubName(sub.name);
+                                  setEditSubCode(sub.code);
+                                  setEditSubDept(sub.department);
+                                  setEditSubRoomType(sub.requiresRoomType || 'general');
+                                  setEditSubPractical(Boolean(sub.isPractical));
+                                }}
+                                className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                title={`Edit ${sub.name}`}
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSubId(sub.id)}
+                                className="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                title={`Remove ${sub.name}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remove</span>
+                              </button>
+                            </span>
+                          )}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

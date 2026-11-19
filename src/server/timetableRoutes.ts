@@ -231,6 +231,17 @@ export function registerTimetableRoutes(app: Express): void {
       isActive: Number(s.is_active) === 1,
     }));
 
+    const departments = (
+      db.prepare(`SELECT * FROM tt_departments WHERE tenant_id = ? ORDER BY name ASC`).all(tenantId) as any[]
+    ).map((d) => ({
+      id: String(d.id),
+      name: String(d.name),
+      code: String(d.code || ''),
+      headName: String(d.head_name || ''),
+      description: String(d.description || ''),
+      isActive: Number(d.is_active) === 1,
+    }));
+
     const classrooms = (
       db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ? ORDER BY room_type, name ASC`).all(tenantId) as any[]
     ).map((r) => ({
@@ -389,6 +400,7 @@ export function registerTimetableRoutes(app: Express): void {
       gradeSchedules,
       periods,
       subjects,
+      departments,
       classrooms,
       studentGroups,
       teachers,
@@ -607,12 +619,16 @@ export function registerTimetableRoutes(app: Express): void {
 
     const db = getDb();
     const b = req.body || {};
-    if (!b.name) {
+    const cleanName = String(b.name || '').trim();
+    if (!cleanName) {
       res.status(400).json({ error: 'Subject name is required.' });
       return;
     }
     const id = uid('ttsub');
-    const code = String(b.code || String(b.name).slice(0, 4).toUpperCase());
+    const code = String(b.code || cleanName.split(/\s+/).map((w) => w[0]).join('').slice(0, 4).toUpperCase());
+    const deptName = String(b.department || 'Core Academic').trim() || 'Core Academic';
+    const now = new Date().toISOString();
+
     db.prepare(
       `INSERT INTO tt_subjects (id, tenant_id, name, code, department, is_practical, requires_room_type, color_token, is_active, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
@@ -626,16 +642,244 @@ export function registerTimetableRoutes(app: Express): void {
     ).run(
       id,
       tenantId,
-      String(b.name).trim(),
+      cleanName,
       code,
-      String(b.department || 'Academic'),
+      deptName,
       b.isPractical ? 1 : 0,
       String(b.requiresRoomType || 'general'),
       String(b.colorToken || 'slate'),
-      new Date().toISOString()
+      now
     );
-    notifyMySqlTablesChanged(['tt_subjects']);
-    res.status(201).json({ ok: true });
+
+    // Ensure department exists in tt_departments too
+    db.prepare(
+      `INSERT OR IGNORE INTO tt_departments (id, tenant_id, name, code, head_name, description, is_active, updated_at)
+       VALUES (?, ?, ?, ?, '', 'Academic department', 1, ?)`
+    ).run(uid('ttdept'), tenantId, deptName, deptName.slice(0, 4).toUpperCase(), now);
+
+    writeAudit(tenantId, null, 'SUBJECT_ADDED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), req.authSession!.role, {
+      name: cleanName,
+      code,
+      department: deptName,
+    });
+    notifyMySqlTablesChanged(['tt_subjects', 'tt_departments']);
+    res.status(201).json({ ok: true, id });
+  });
+
+  app.put('/api/timetable/subjects/:id', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const existing = db
+      .prepare(`SELECT * FROM tt_subjects WHERE id = ? AND tenant_id = ?`)
+      .get(req.params.id, tenantId) as any;
+    if (!existing) {
+      res.status(404).json({ error: 'Subject not found.' });
+      return;
+    }
+
+    const b = req.body || {};
+    const nextName = String(b.name ?? existing.name).trim();
+    if (!nextName) {
+      res.status(400).json({ error: 'Subject name cannot be empty.' });
+      return;
+    }
+
+    const dup = db
+      .prepare(`SELECT id FROM tt_subjects WHERE tenant_id = ? AND lower(name) = lower(?) AND id != ?`)
+      .get(tenantId, nextName, req.params.id) as any;
+    if (dup) {
+      res.status(409).json({ error: `A subject named "${nextName}" already exists.` });
+      return;
+    }
+
+    const nextCode = String(b.code ?? existing.code).trim() || nextName.slice(0, 4).toUpperCase();
+    const nextDept = String(b.department ?? existing.department).trim() || 'Core Academic';
+    const nextPractical = b.isPractical !== undefined ? (b.isPractical ? 1 : 0) : Number(existing.is_practical);
+    const nextRoomType = String(b.requiresRoomType ?? existing.requires_room_type ?? 'general');
+    const nextColor = String(b.colorToken ?? existing.color_token ?? 'slate');
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `UPDATE tt_subjects
+       SET name = ?, code = ?, department = ?, is_practical = ?, requires_room_type = ?, color_token = ?, updated_at = ?
+       WHERE id = ? AND tenant_id = ?`
+    ).run(nextName, nextCode, nextDept, nextPractical, nextRoomType, nextColor, now, req.params.id, tenantId);
+
+    // Cascade subject rename across allocations & teacher qualifications
+    if (String(existing.name).toLowerCase() !== nextName.toLowerCase()) {
+      db.prepare(
+        `UPDATE tt_grade_subject_allocations SET subject_name = ?, updated_at = ? WHERE tenant_id = ? AND lower(subject_name) = lower(?)`
+      ).run(nextName, now, tenantId, existing.name);
+      db.prepare(
+        `UPDATE tt_stream_subject_allocations SET subject_name = ?, updated_at = ? WHERE tenant_id = ? AND lower(subject_name) = lower(?)`
+      ).run(nextName, now, tenantId, existing.name);
+      db.prepare(
+        `UPDATE tt_joint_lessons SET subject_name = ?, updated_at = ? WHERE tenant_id = ? AND lower(subject_name) = lower(?)`
+      ).run(nextName, now, tenantId, existing.name);
+    }
+
+    writeAudit(tenantId, null, 'SUBJECT_UPDATED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), req.authSession!.role, {
+      id: req.params.id,
+      previousName: existing.name,
+      name: nextName,
+      department: nextDept,
+    });
+    notifyMySqlTablesChanged(['tt_subjects', 'tt_grade_subject_allocations', 'tt_stream_subject_allocations', 'tt_joint_lessons']);
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/timetable/subjects/:id', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const existing = db
+      .prepare(`SELECT * FROM tt_subjects WHERE id = ? AND tenant_id = ?`)
+      .get(req.params.id, tenantId) as any;
+    if (!existing) {
+      res.status(404).json({ error: 'Subject not found.' });
+      return;
+    }
+
+    db.prepare(`DELETE FROM tt_subjects WHERE id = ? AND tenant_id = ?`).run(req.params.id, tenantId);
+    db.prepare(`DELETE FROM tt_grade_subject_allocations WHERE tenant_id = ? AND lower(subject_name) = lower(?)`).run(tenantId, existing.name);
+    db.prepare(`DELETE FROM tt_stream_subject_allocations WHERE tenant_id = ? AND lower(subject_name) = lower(?)`).run(tenantId, existing.name);
+
+    writeAudit(tenantId, null, 'SUBJECT_DELETED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), req.authSession!.role, {
+      id: req.params.id,
+      name: existing.name,
+    });
+    notifyMySqlTablesChanged(['tt_subjects', 'tt_grade_subject_allocations', 'tt_stream_subject_allocations']);
+    res.json({ ok: true });
+  });
+
+  // ------------------------------------------------------------------
+  // 3b. MASTER TIMETABLE DEPARTMENTS CRUD
+  // ------------------------------------------------------------------
+  app.post('/api/timetable/departments', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const b = req.body || {};
+    const cleanName = String(b.name || '').trim();
+    if (!cleanName) {
+      res.status(400).json({ error: 'Department name is required.' });
+      return;
+    }
+    const existing = db
+      .prepare(`SELECT id FROM tt_departments WHERE tenant_id = ? AND lower(name) = lower(?)`)
+      .get(tenantId, cleanName) as any;
+    if (existing) {
+      res.status(409).json({ error: `Department "${cleanName}" already exists.` });
+      return;
+    }
+    const id = uid('ttdept');
+    const code = String(b.code || cleanName.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 5));
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO tt_departments (id, tenant_id, name, code, head_name, description, is_active, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+    ).run(id, tenantId, cleanName, code, String(b.headName || '').trim(), String(b.description || '').trim(), now);
+
+    writeAudit(tenantId, null, 'DEPARTMENT_ADDED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), req.authSession!.role, {
+      id,
+      name: cleanName,
+      code,
+    });
+    notifyMySqlTablesChanged(['tt_departments']);
+    res.status(201).json({ ok: true, id });
+  });
+
+  app.put('/api/timetable/departments/:id', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const existing = db
+      .prepare(`SELECT * FROM tt_departments WHERE id = ? AND tenant_id = ?`)
+      .get(req.params.id, tenantId) as any;
+    if (!existing) {
+      res.status(404).json({ error: 'Department not found.' });
+      return;
+    }
+
+    const b = req.body || {};
+    const nextName = String(b.name ?? existing.name).trim();
+    if (!nextName) {
+      res.status(400).json({ error: 'Department name cannot be empty.' });
+      return;
+    }
+    const dup = db
+      .prepare(`SELECT id FROM tt_departments WHERE tenant_id = ? AND lower(name) = lower(?) AND id != ?`)
+      .get(tenantId, nextName, req.params.id) as any;
+    if (dup) {
+      res.status(409).json({ error: `Department "${nextName}" already exists.` });
+      return;
+    }
+
+    const nextCode = String(b.code ?? existing.code).trim();
+    const nextHead = String(b.headName ?? existing.head_name ?? '').trim();
+    const nextDesc = String(b.description ?? existing.description ?? '').trim();
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `UPDATE tt_departments
+       SET name = ?, code = ?, head_name = ?, description = ?, updated_at = ?
+       WHERE id = ? AND tenant_id = ?`
+    ).run(nextName, nextCode, nextHead, nextDesc, now, req.params.id, tenantId);
+
+    // Cascade department rename to subjects and teacher timetable profiles
+    if (String(existing.name).toLowerCase() !== nextName.toLowerCase()) {
+      db.prepare(
+        `UPDATE tt_subjects SET department = ?, updated_at = ? WHERE tenant_id = ? AND lower(department) = lower(?)`
+      ).run(nextName, now, tenantId, existing.name);
+      db.prepare(
+        `UPDATE tt_teacher_profiles SET department = ?, updated_at = ? WHERE tenant_id = ? AND lower(department) = lower(?)`
+      ).run(nextName, now, tenantId, existing.name);
+    }
+
+    writeAudit(tenantId, null, 'DEPARTMENT_UPDATED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), req.authSession!.role, {
+      id: req.params.id,
+      previousName: existing.name,
+      name: nextName,
+    });
+    notifyMySqlTablesChanged(['tt_departments', 'tt_subjects', 'tt_teacher_profiles']);
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/timetable/departments/:id', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const existing = db
+      .prepare(`SELECT * FROM tt_departments WHERE id = ? AND tenant_id = ?`)
+      .get(req.params.id, tenantId) as any;
+    if (!existing) {
+      res.status(404).json({ error: 'Department not found.' });
+      return;
+    }
+    const now = new Date().toISOString();
+    db.prepare(`DELETE FROM tt_departments WHERE id = ? AND tenant_id = ?`).run(req.params.id, tenantId);
+    // Reassign orphaned subjects cleanly to Core Academic
+    db.prepare(
+      `UPDATE tt_subjects SET department = 'Core Academic', updated_at = ? WHERE tenant_id = ? AND lower(department) = lower(?)`
+    ).run(now, tenantId, existing.name);
+
+    writeAudit(tenantId, null, 'DEPARTMENT_DELETED', req.authSession!.userId, String(req.authSession!.user.name || 'Admin'), req.authSession!.role, {
+      id: req.params.id,
+      name: existing.name,
+    });
+    notifyMySqlTablesChanged(['tt_departments', 'tt_subjects']);
+    res.json({ ok: true });
   });
 
   app.post('/api/timetable/groups', requireAuth, (req: Request, res: Response) => {
@@ -820,6 +1064,40 @@ export function registerTimetableRoutes(app: Express): void {
     );
 
     notifyMySqlTablesChanged(['tt_grade_subject_allocations']);
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/timetable/allocations/grade/:id', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const existing = db
+      .prepare(`SELECT * FROM tt_grade_subject_allocations WHERE id = ? AND tenant_id = ?`)
+      .get(req.params.id, tenantId) as any;
+    if (!existing) {
+      res.status(404).json({ error: 'Grade subject allocation not found.' });
+      return;
+    }
+    db.prepare(`DELETE FROM tt_grade_subject_allocations WHERE id = ? AND tenant_id = ?`).run(req.params.id, tenantId);
+    db.prepare(
+      `DELETE FROM tt_stream_subject_allocations
+       WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(subject_name) = lower(?) AND is_overridden = 0`
+    ).run(existing.config_id, tenantId, existing.grade, existing.subject_name);
+
+    notifyMySqlTablesChanged(['tt_grade_subject_allocations', 'tt_stream_subject_allocations']);
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/timetable/allocations/stream/:id', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    db.prepare(`DELETE FROM tt_stream_subject_allocations WHERE id = ? AND tenant_id = ?`).run(req.params.id, tenantId);
+    notifyMySqlTablesChanged(['tt_stream_subject_allocations']);
     res.json({ ok: true });
   });
 

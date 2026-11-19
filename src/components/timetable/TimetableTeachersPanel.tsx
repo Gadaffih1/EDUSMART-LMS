@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Save, Search, ShieldCheck, UserCheck, UserX } from 'lucide-react';
-import { TTConfigData, TTPeriodItem, TTSubjectItem, TTTeacherProfileItem, ttApiFetch } from './timetableTypes';
+import { TTConfigData, TTDepartmentItem, TTPeriodItem, TTSubjectItem, TTTeacherProfileItem, ttApiFetch } from './timetableTypes';
 
 interface TimetableTeachersPanelProps {
   teachers: TTTeacherProfileItem[];
   subjects: TTSubjectItem[];
+  departments?: TTDepartmentItem[];
   config: TTConfigData;
   periods: TTPeriodItem[];
   onRefresh: () => Promise<void>;
@@ -13,6 +14,7 @@ interface TimetableTeachersPanelProps {
 export const TimetableTeachersPanel: React.FC<TimetableTeachersPanelProps> = ({
   teachers,
   subjects,
+  departments = [],
   config,
   periods,
   onRefresh,
@@ -204,10 +206,16 @@ export const TimetableTeachersPanel: React.FC<TimetableTeachersPanelProps> = ({
               <label className="block font-semibold text-slate-600 mb-1">Department</label>
               <input
                 type="text"
+                list="tt-teacher-departments-list"
                 value={activeDraft.department}
                 onChange={(e) => patchDraft({ department: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg"
               />
+              <datalist id="tt-teacher-departments-list">
+                {Array.from(new Set([...departments.map((d) => d.name), ...subjects.map((s) => s.department)])).map((dn) => (
+                  <option key={dn} value={dn} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="block font-semibold text-slate-600 mb-1">Max Daily Periods</label>

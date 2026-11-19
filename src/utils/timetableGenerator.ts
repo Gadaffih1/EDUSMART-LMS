@@ -137,6 +137,27 @@ const CBC_STRAND_TOPICS: Record<string, string[]> = {
     'Adolescent Health, Hygiene & Wellness',
     'Preventive Healthcare & Disease Vectors',
     'Mental Health, Stress Management & Resilience'
+  ],
+  'Library Lesson': [
+    'Information Literacy & Reference Catalogue Skills',
+    'Guided Extensive Reading & Book Review',
+    'CBC Digital Research & Citation Ethics',
+    'Storytelling, Comprehension & Vocabulary Mastery'
+  ],
+  'Arts': [
+    'Drawing, Perspective & Visual Composition',
+    'Sculpture, Clay Modelling & Applied Crafts',
+    'Printmaking, Collage & Colour Harmony'
+  ],
+  'Music': [
+    'Kenyan Folk Songs, Rhythm & Percussion',
+    'Vocal Harmony, Sight-Reading & Pitch',
+    'Instrumental Ensemble & Musical Appreciation'
+  ],
+  'Nutrition': [
+    'Balanced Diets & Micronutrient Health',
+    'Food Hygiene, Preservation & Safe Preparation',
+    'Meal Planning for Growing Learners'
   ]
 };
 

@@ -90,10 +90,14 @@ export const PRIMARY_SUBJECTS = [
   'Social Studies',
   'Religious Education',
   'Creative Arts',
+  'Arts',
+  'Music',
+  'Nutrition',
+  'Library Lesson',
   'Physical and Health Education'
 ] as const;
 
-// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies)
+// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies + Library/Arts/Music/Nutrition)
 export const JUNIOR_SUBJECTS = [
   'Mathematics',
   'English',
@@ -102,9 +106,13 @@ export const JUNIOR_SUBJECTS = [
   'Computer Studies',
   'Agriculture and Nutrition',
   'Agriculture',
+  'Nutrition',
   'Social Studies',
   'Religious Education',
   'Creative Arts',
+  'Arts',
+  'Music',
+  'Library Lesson',
   'Pretechnical Education',
   'Pre-Technical Studies',
   'Business Studies',

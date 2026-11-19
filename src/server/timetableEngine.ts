@@ -335,7 +335,7 @@ export function ensureTenantTimetableSeeded(
     insGradeSched.run(uid('ttgs'), tenantId, configId, g, defaultPeriodsForGrade, workingDaysDefault, now);
   }
 
-  // 5. Ensure tt_subjects
+  // 5. Ensure tt_subjects (including Library Lesson, Arts, Music, Nutrition)
   const insSub = db.prepare(
     `INSERT OR IGNORE INTO tt_subjects (id, tenant_id, name, code, department, is_practical, requires_room_type, color_token, is_active, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
@@ -350,8 +350,12 @@ export function ensureTenantTimetableSeeded(
     'Social Studies': 'orange',
     'Religious Education': 'violet',
     'Agriculture and Nutrition': 'lime',
+    Nutrition: 'lime',
     'Pre-Technical Studies': 'slate',
     'Creative Arts': 'rose',
+    Arts: 'rose',
+    Music: 'pink',
+    'Library Lesson': 'purple',
     'Physical and Health Education': 'teal',
   };
   for (const p of combinedPresets) {
@@ -367,9 +371,50 @@ export function ensureTenantTimetableSeeded(
         : p.roomType === 'computer_lab'
         ? 'ICT & Computing'
         : p.roomType === 'art_room' || p.roomType === 'field'
-        ? 'Creative & Sports'
+        ? 'Creative Arts & Sports'
         : 'Core Academic';
     insSub.run(uid('ttsub'), tenantId, p.subject, code, dept, p.isPractical, p.roomType, colorMap[p.subject] || 'slate', now);
+  }
+
+  // Ensure Library Lesson, Arts, Music, and Nutrition are always present in tt_subjects
+  const additionalSubjects: Array<[string, string, string, number, string, string]> = [
+    ['Library Lesson', 'LIB', 'Library & Information Services', 0, 'library', 'purple'],
+    ['Arts', 'ART', 'Creative Arts & Music', 1, 'art_room', 'rose'],
+    ['Music', 'MUS', 'Creative Arts & Music', 1, 'art_room', 'pink'],
+    ['Nutrition', 'NUT', 'Agriculture & Nutrition', 1, 'general', 'lime'],
+  ];
+  for (const [subName, subCode, subDept, isPrac, rType, cTok] of additionalSubjects) {
+    insSub.run(uid('ttsub'), tenantId, subName, subCode, subDept, isPrac, rType, cTok, now);
+  }
+
+  // 5b. Ensure tt_departments
+  const insDept = db.prepare(
+    `INSERT OR IGNORE INTO tt_departments (id, tenant_id, name, code, head_name, description, is_active, updated_at)
+     VALUES (?, ?, ?, ?, '', ?, 1, ?)`
+  );
+  const defaultDepartments: Array<[string, string, string]> = [
+    ['Core Academic', 'CORE', 'Core foundational curriculum learning areas'],
+    ['Mathematics & Computational Sciences', 'MATH', 'Mathematics and computational logic'],
+    ['Sciences', 'SCI', 'Integrated and pure sciences'],
+    ['Languages & Literature', 'LANG', 'English, Kiswahili, and literacy studies'],
+    ['Humanities & Social Sciences', 'HUM', 'Social studies, history, geography, and religious education'],
+    ['ICT & Computing', 'ICT', 'Computer studies and digital literacy'],
+    ['Creative Arts & Music', 'ARTS', 'Visual Arts, Creative Arts, and Music education'],
+    ['Creative Arts & Sports', 'CAS', 'Creative arts, physical education, and athletics'],
+    ['Agriculture & Nutrition', 'AGRN', 'Agriculture, food science, and nutrition'],
+    ['Technical & Applied Sciences', 'TECH', 'Pre-technical studies and business education'],
+    ['Library & Information Services', 'LIB', 'Library lessons, reading culture, and research literacy'],
+  ];
+  for (const [dName, dCode, dDesc] of defaultDepartments) {
+    insDept.run(uid('ttdept'), tenantId, dName, dCode, dDesc, now);
+  }
+  const existingSubDepts = db
+    .prepare(`SELECT DISTINCT department FROM tt_subjects WHERE tenant_id = ? AND department IS NOT NULL AND trim(department) != ''`)
+    .all(tenantId) as any[];
+  for (const row of existingSubDepts) {
+    const dn = String(row.department).trim();
+    const dc = dn.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 4);
+    insDept.run(uid('ttdept'), tenantId, dn, dc, 'Academic department', now);
   }
 
   // 6. Sync tt_student_groups (whole class group per active grade+stream)
@@ -424,6 +469,7 @@ export function ensureTenantTimetableSeeded(
       ['Creative Arts & Music Studio', 'ART-STU-01', 'art_room', 50, 'Arts Pavilion'],
       ['Main Sports Field', 'FLD-SPT-01', 'field', 140, 'Sports Complex'],
       ['Main Assembly & Multi-Purpose Hall', 'HALL-MAIN-01', 'hall', 320, 'Administration Block'],
+      ['Main Library Reading Hall', 'LIB-MAIN-01', 'library', 60, 'Ground Floor · Central Wing'],
     ];
     for (const [name, code, rtype, cap, loc] of specialized) {
       insRoom.run(uid('ttrm'), tenantId, name, code, rtype, cap, loc, null, null, now);
@@ -438,6 +484,18 @@ export function ensureTenantTimetableSeeded(
       }
     }
     changedTables.push('tt_classrooms');
+  } else {
+    // Ensure a dedicated School Library facility exists for Library Lesson scheduling
+    const libRoomCount = (
+      db.prepare(`SELECT COUNT(*) as c FROM tt_classrooms WHERE tenant_id = ? AND room_type = 'library'`).get(tenantId) as any
+    ).c;
+    if (libRoomCount === 0) {
+      db.prepare(
+        `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
+         VALUES (?, ?, ?, ?, 'library', 60, 'Ground Floor · Central Wing', NULL, NULL, '{}', 1, ?)`
+      ).run(uid('ttrm'), tenantId, 'Main Library Reading Hall', 'LIB-MAIN-01', now);
+      changedTables.push('tt_classrooms');
+    }
   }
 
   // 8. Sync Teachers from existing LMS `users` & `provisioned_accounts` (zero duplicate user accounts)
@@ -2373,6 +2431,40 @@ export function publishVersionEffects(
     upsertCollectionRecord(db, 'edusmart_timetable_v1', legacySlot.id, tenantId, legacySlot, false);
   }
 
+  // Sync published Library Lesson entries into edusmart_library_timetable_v1 so Library Bookings reflect free vs occupied slots
+  db.prepare(
+    `UPDATE collections_store SET deleted_at = ?, updated_at = ?
+     WHERE collection_key = 'edusmart_library_timetable_v1' AND tenant_id = ? AND record_id LIKE 'mt-lib-%'`
+  ).run(now, now, tenantId);
+
+  let syncedLibraryLessonsCount = 0;
+  for (const e of entries) {
+    if (!String(e.subject_name || '').toLowerCase().includes('library')) continue;
+    const pt = pTimeMap.get(Number(e.period_number)) || { startTime: '08:00', endTime: '08:40' };
+    const names = safeJsonParse<string[]>(e.teacher_names_json, []);
+    const libSlotId = `mt-lib-${String(e.id)}`;
+    upsertCollectionRecord(
+      db,
+      'edusmart_library_timetable_v1',
+      libSlotId,
+      tenantId,
+      {
+        id: libSlotId,
+        schoolId: tenantId,
+        dayOfWeek: String(e.day_of_week),
+        startTime: pt.startTime,
+        endTime: pt.endTime,
+        grade: Number(e.grade),
+        stream: String(e.stream),
+        teacherInCharge: names.join(' & ') || 'Subject Teacher',
+        sessionType: 'Library Reading Period',
+        venue: String(e.room_name || 'Main Library Reading Hall'),
+      },
+      false
+    );
+    syncedLibraryLessonsCount++;
+  }
+
   // Emit tenant-wide notification when timetable is published
   const notifId = uid('ttnotif');
   upsertCollectionRecord(
@@ -2402,6 +2494,15 @@ export function publishVersionEffects(
     recordId: versionId,
     timestamp: now,
   });
+  if (syncedLibraryLessonsCount > 0) {
+    broadcastChange({
+      type: 'collection:updated',
+      collection: 'edusmart_library_timetable_v1',
+      tenantId,
+      recordId: versionId,
+      timestamp: now,
+    });
+  }
   broadcastChange({
     type: 'collection:updated',
     collection: 'edusmart_notifications_v1',

@@ -14,6 +14,7 @@ import {
   TeacherAbsenceReport
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { listSubjects } from '../../utils/catalogStore';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
@@ -202,6 +203,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     }
   }, [currentUser.id, currentUser.schoolId, currentUser.role]);
 
+  const [catalogRevision, setCatalogRevision] = useState(0);
+
   // Listen for storage updates
   useEffect(() => {
     const handleTimetableUpdate = () => {
@@ -214,13 +217,18 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     const handleAbsenceUpdate = () => {
       setAbsenceReports(Storage.getTeacherAbsenceReports());
     };
+    const handleCatalogUpdate = () => {
+      setCatalogRevision((v) => v + 1);
+    };
     window.addEventListener('timetable-updated', handleTimetableUpdate);
     window.addEventListener('bell-schedule-updated', handleBellUpdate);
     window.addEventListener('teacher-absence-reports-updated', handleAbsenceUpdate);
+    window.addEventListener('subjects-catalog-updated', handleCatalogUpdate);
     return () => {
       window.removeEventListener('timetable-updated', handleTimetableUpdate);
       window.removeEventListener('bell-schedule-updated', handleBellUpdate);
       window.removeEventListener('teacher-absence-reports-updated', handleAbsenceUpdate);
+      window.removeEventListener('subjects-catalog-updated', handleCatalogUpdate);
     };
   }, []);
 
@@ -587,10 +595,25 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     return selectedGrade >= 7 ? JUNIOR_STREAMS : PRIMARY_STREAMS;
   }, [selectedGrade]);
 
-  // Subjects applicable to active grade
+  // Subjects applicable to active grade (merged with Master Timetable workspace & catalog subjects)
   const availableSubjects = useMemo(() => {
-    return selectedGrade >= 7 ? JUNIOR_SUBJECTS : PRIMARY_SUBJECTS;
-  }, [selectedGrade]);
+    const base: string[] = selectedGrade >= 7 ? [...JUNIOR_SUBJECTS] : [...PRIMARY_SUBJECTS];
+    const seen = new Set(base.map((s) => s.toLowerCase()));
+    const extras: string[] = [];
+    for (const s of ttWorkspace?.subjects || []) {
+      if (s?.name && !seen.has(s.name.toLowerCase())) {
+        seen.add(s.name.toLowerCase());
+        extras.push(s.name);
+      }
+    }
+    for (const s of listSubjects()) {
+      if (s?.name && !seen.has(s.name.toLowerCase())) {
+        seen.add(s.name.toLowerCase());
+        extras.push(s.name);
+      }
+    }
+    return [...base, ...extras.sort()] as SubjectName[];
+  }, [selectedGrade, ttWorkspace?.subjects, catalogRevision]);
 
   // Filtered slots for active Grade & Stream
   const classSlots = useMemo(() => {
@@ -618,6 +641,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Distinct Rooms & Labs across timetable
   const distinctRooms = useMemo(() => {
     const list = Array.from(new Set(allSlots.map(s => s.roomName).filter((r): r is string => Boolean(r))));
+    if (!list.includes('Main Library Reading Hall')) list.push('Main Library Reading Hall');
     if (!list.includes('Junior Science Lab 1')) list.push('Junior Science Lab 1');
     if (!list.includes('Computer Lab A')) list.push('Computer Lab A');
     if (!list.includes('Fine Art & Music Studio')) list.push('Fine Art & Music Studio');
@@ -696,6 +720,24 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         border: 'border-lime-300',
         accent: 'bg-lime-600',
         badge: 'text-lime-800 bg-lime-100/60'
+      };
+    }
+    if (s.includes('library')) {
+      return {
+        bg: 'bg-indigo-50/90 hover:bg-indigo-100/90',
+        text: 'text-indigo-950',
+        border: 'border-indigo-300',
+        accent: 'bg-indigo-600',
+        badge: 'text-indigo-800 bg-indigo-100/80'
+      };
+    }
+    if (s.includes('nutrition')) {
+      return {
+        bg: 'bg-emerald-50/90 hover:bg-emerald-100/90',
+        text: 'text-emerald-950',
+        border: 'border-emerald-300',
+        accent: 'bg-emerald-600',
+        badge: 'text-emerald-800 bg-emerald-100/80'
       };
     }
     if (s.includes('religious') || s.includes('cre') || s.includes('ire')) {
@@ -799,8 +841,43 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     };
 
     Storage.saveTimetableSlot(slotPayload);
+
+    // Sync Library Lesson slots directly to Library Timetable so Library Bookings detect occupied vs free slots
+    const linkedLibId = `mt-lib-${slotPayload.id}`;
+    const isLibrarySubject = String(slotPayload.subject || '').toLowerCase().includes('library');
+    const existingLibSlots = Storage.getLibraryTimetable();
+    const existingLinked = existingLibSlots.find((ls) => ls.id === linkedLibId);
+    if (isLibrarySubject) {
+      const libVenue =
+        slotPayload.roomName && slotPayload.roomName.toLowerCase().includes('library')
+          ? slotPayload.roomName
+          : 'Main Library Reading Hall';
+      const syncedEntry = {
+        id: linkedLibId,
+        dayOfWeek: slotPayload.dayOfWeek,
+        startTime: slotPayload.startTime,
+        endTime: slotPayload.endTime,
+        grade: slotPayload.grade,
+        stream: `Grade ${slotPayload.grade} ${slotPayload.stream}`,
+        teacherInCharge: slotPayload.teacherName || 'Subject Teacher',
+        sessionType: 'Library Reading Period' as const,
+        venue: libVenue,
+      };
+      if (existingLinked) {
+        Storage.updateLibraryTimetableSlot(linkedLibId, syncedEntry);
+      } else {
+        Storage.addLibraryTimetableSlot(syncedEntry);
+      }
+    } else if (existingLinked) {
+      Storage.deleteLibraryTimetableSlot(linkedLibId);
+    }
+
     setShowEditModal(false);
-    setNotificationMsg(`Timetable period saved successfully for Grade ${selectedGrade} ${selectedStream}!`);
+    setNotificationMsg(
+      isLibrarySubject
+        ? `Library Lesson saved for Grade ${selectedGrade} ${selectedStream} and synced to Library Bookings!`
+        : `Timetable period saved successfully for Grade ${selectedGrade} ${selectedStream}!`
+    );
     setTimeout(() => setNotificationMsg(null), 3500);
   };
 
@@ -808,6 +885,10 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const handleDeleteSlot = (id: string) => {
     if (window.confirm('Are you sure you want to remove this timetable slot?')) {
       Storage.deleteTimetableSlot(id);
+      const linkedLibId = `mt-lib-${id}`;
+      if (Storage.getLibraryTimetable().some((ls) => ls.id === linkedLibId)) {
+        Storage.deleteLibraryTimetableSlot(linkedLibId);
+      }
       setSelectedSlotForDetail(null);
       setNotificationMsg('Period removed from schedule.');
       setTimeout(() => setNotificationMsg(null), 3000);
@@ -1057,7 +1138,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             {(
               [
                 { id: 'published', label: 'Published Views', icon: LayoutGrid },
-                { id: 'config', label: '1. Configuration & Rooms', icon: Sliders },
+                { id: 'config', label: '1. Config, Subjects & Depts', icon: Sliders },
                 { id: 'allocations', label: '2. Allocations & Groups', icon: Layers },
                 { id: 'teachers', label: '3. Teachers & Limits', icon: UserCog },
                 { id: 'editor', label: '4. Auto-Solver & Editor', icon: Sparkles },
@@ -1107,6 +1188,9 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   gradeSchedules={ttWorkspace.gradeSchedules}
                   periods={ttWorkspace.periods}
                   classrooms={ttWorkspace.classrooms}
+                  subjects={ttWorkspace.subjects}
+                  departments={ttWorkspace.departments || []}
+                  schoolId={currentTenant.id}
                   onRefresh={async () => {
                     await loadWorkspace(ttWorkspace.activeVersion?.id);
                   }}
@@ -1135,6 +1219,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 <TimetableTeachersPanel
                   teachers={ttWorkspace.teachers}
                   subjects={ttWorkspace.subjects}
+                  departments={ttWorkspace.departments || []}
                   config={ttWorkspace.config}
                   periods={ttWorkspace.periods}
                   onRefresh={async () => {
@@ -3067,13 +3152,30 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 <label className="block font-bold text-slate-700 mb-1">Subject / Learning Area</label>
                 <select
                   value={formSubject}
-                  onChange={(e) => setFormSubject(e.target.value as any)}
+                  onChange={(e) => {
+                    const nextSub = e.target.value as SubjectName;
+                    setFormSubject(nextSub);
+                    if (
+                      String(nextSub).toLowerCase().includes('library') &&
+                      (!formRoomName || formRoomName.toLowerCase().startsWith('classroom'))
+                    ) {
+                      setFormRoomName('Main Library Reading Hall');
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
                 >
                   {availableSubjects.map(sub => (
                     <option key={sub} value={sub}>{sub}</option>
                   ))}
+                  {!availableSubjects.includes(formSubject) && (
+                    <option value={formSubject}>{formSubject}</option>
+                  )}
                 </select>
+                {String(formSubject).toLowerCase().includes('library') && (
+                  <p className="text-[11px] text-indigo-700 font-semibold mt-1">
+                    Linked to Library Bookings: saving this Library Lesson automatically marks this library slot as occupied so free slots are visible for other teachers.
+                  </p>
+                )}
               </div>
 
               <div>

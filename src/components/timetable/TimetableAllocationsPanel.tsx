@@ -76,6 +76,14 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
   const [jlLessonLen, setJlLessonLen] = useState(1);
   const [jlRoomId, setJlRoomId] = useState('');
 
+  // Add Subject to Grade Template Form
+  const [addTplSubject, setAddTplSubject] = useState('');
+  const [addTplWeekly, setAddTplWeekly] = useState(2);
+  const [addTplRoomType, setAddTplRoomType] = useState('general');
+  const [addTplTeacherId, setAddTplTeacherId] = useState('');
+  const [confirmRemoveGradeAllocId, setConfirmRemoveGradeAllocId] = useState<string | null>(null);
+  const [confirmRemoveStreamAllocId, setConfirmRemoveStreamAllocId] = useState<string | null>(null);
+
   const gradeTemplateRows = useMemo(
     () => gradeAllocations.filter((a) => a.grade === selectedGrade),
     [gradeAllocations, selectedGrade]
@@ -107,6 +115,73 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
       setStatusMsg({ type: 'ok', text: `Saved Grade ${row.grade} template for ${row.subjectName}.` });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Failed to save grade allocation.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleAddSubjectToGradeTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const subjName = addTplSubject.trim();
+    if (!subjName) return;
+    setBusyId('add-tpl-sub');
+    setStatusMsg(null);
+    try {
+      const periodsCount = Math.max(1, Number(addTplWeekly || 1));
+      await ttApiFetch('/api/timetable/allocations/grade', {
+        method: 'PUT',
+        body: JSON.stringify({
+          grade: selectedGrade,
+          subjectName: subjName,
+          requiredWeeklyPeriods: periodsCount,
+          singleLessons: periodsCount,
+          doubleLessons: 0,
+          tripleLessons: 0,
+          maxPerDay: 1,
+          minSpacingDays: 0,
+          requiredRoomType: addTplRoomType,
+          teacherIds: addTplTeacherId ? [addTplTeacherId] : [],
+          isActive: true,
+        }),
+      });
+      setAddTplSubject('');
+      await onRefresh();
+      setStatusMsg({
+        type: 'ok',
+        text: `Added "${subjName}" (${periodsCount}p/wk) to Grade ${selectedGrade} template. Click "Apply Template" to sync streams.`,
+      });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not add subject to grade template.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRemoveGradeRow = async (row: TTGradeAllocationItem) => {
+    setBusyId(row.id);
+    setStatusMsg(null);
+    try {
+      await ttApiFetch(`/api/timetable/allocations/grade/${row.id}`, { method: 'DELETE' });
+      setConfirmRemoveGradeAllocId(null);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Removed "${row.subjectName}" from Grade ${row.grade} template.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not remove subject allocation.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRemoveStreamRow = async (row: TTStreamAllocationItem) => {
+    setBusyId(row.id);
+    setStatusMsg(null);
+    try {
+      await ttApiFetch(`/api/timetable/allocations/stream/${row.id}`, { method: 'DELETE' });
+      setConfirmRemoveStreamAllocId(null);
+      await onRefresh();
+      setStatusMsg({ type: 'ok', text: `Removed "${row.subjectName}" from Grade ${row.grade} ${row.stream}.` });
+    } catch (err: any) {
+      setStatusMsg({ type: 'err', text: err?.message || 'Could not remove stream subject allocation.' });
     } finally {
       setBusyId(null);
     }
@@ -322,7 +397,76 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
 
       {/* Sub-view 1: Grade Template */}
       {subTab === 'grade_template' && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="space-y-3">
+          {/* Add Subject to Grade Template Bar */}
+          <form
+            onSubmit={handleAddSubjectToGradeTemplate}
+            className="bg-white border border-slate-200 rounded-xl p-3.5 grid grid-cols-1 sm:grid-cols-6 gap-2 items-center text-xs"
+          >
+            <select
+              value={addTplSubject}
+              onChange={(e) => {
+                const val = e.target.value;
+                setAddTplSubject(val);
+                const meta = subjects.find((s) => s.name === val);
+                if (meta?.requiresRoomType) setAddTplRoomType(meta.requiresRoomType);
+                if (val.toLowerCase().includes('library')) {
+                  setAddTplWeekly(1);
+                  setAddTplRoomType('library');
+                }
+              }}
+              required
+              className="sm:col-span-2 px-2.5 py-2 border border-slate-200 rounded-lg bg-white font-semibold"
+            >
+              <option value="">+ Add Subject to Grade {selectedGrade} Template...</option>
+              {subjects
+                .filter((s) => !gradeTemplateRows.some((r) => r.subjectName.toLowerCase() === s.name.toLowerCase()))
+                .map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} ({s.department})
+                  </option>
+                ))}
+            </select>
+            <input
+              type="number"
+              min={1}
+              max={15}
+              value={addTplWeekly}
+              onChange={(e) => setAddTplWeekly(Math.max(1, Number(e.target.value || 1)))}
+              title="Weekly Periods"
+              placeholder="Periods/wk"
+              className="px-2.5 py-2 border border-slate-200 rounded-lg font-mono tabular-nums"
+            />
+            <select
+              value={addTplRoomType}
+              onChange={(e) => setAddTplRoomType(e.target.value)}
+              className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+            >
+              {Object.entries(ROOM_TYPE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <select
+              value={addTplTeacherId}
+              onChange={(e) => setAddTplTeacherId(e.target.value)}
+              className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
+            >
+              <option value="">-- Default Teacher --</option>
+              {teachers.filter((t) => t.activeInTimetable).map((t) => (
+                <option key={t.id} value={t.id}>{t.teacherName}</option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={!addTplSubject || busyId === 'add-tpl-sub'}
+              className="px-3 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-lg cursor-pointer flex items-center justify-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Subject</span>
+            </button>
+          </form>
+
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -336,7 +480,7 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                   <th className="p-3">Min Spacing (d)</th>
                   <th className="p-3">Room Type</th>
                   <th className="p-3">Default Teacher</th>
-                  <th className="p-3 text-right">Save</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -437,22 +581,53 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                           ))}
                         </select>
                       </td>
-                      <td className="p-3 text-right">
-                        <button
-                          type="button"
-                          disabled={busyId === row.id}
-                          onClick={() => handleSaveGradeRow(row)}
-                          className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
-                        >
-                          <Save className="w-3 h-3" />
-                          <span>Save</span>
-                        </button>
+                      <td className="p-3 text-right whitespace-nowrap space-x-1">
+                        {confirmRemoveGradeAllocId === row.id ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={busyId === row.id}
+                              onClick={() => handleRemoveGradeRow(row)}
+                              className="px-2 py-1 bg-rose-600 text-white rounded font-bold cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmRemoveGradeAllocId(null)}
+                              className="px-2 py-1 bg-slate-100 text-slate-700 rounded font-semibold cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              disabled={busyId === row.id}
+                              onClick={() => handleSaveGradeRow(row)}
+                              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <Save className="w-3 h-3" />
+                              <span>Save</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmRemoveGradeAllocId(row.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer align-middle"
+                              title={`Remove ${row.subjectName} from Grade ${row.grade}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+          </div>
           </div>
         </div>
       )}
@@ -622,25 +797,55 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                           </select>
                         </td>
                         <td className="p-3 text-right space-x-1 whitespace-nowrap">
-                          {row.isOverridden && (
-                            <button
-                              type="button"
-                              onClick={() => handleSaveStreamRow(row, true)}
-                              className="px-2 py-1 border border-slate-200 hover:bg-slate-100 rounded text-slate-700 cursor-pointer"
-                              title="Reset to Inherited Template"
-                            >
-                              <RotateCcw className="w-3 h-3 inline" />
-                            </button>
+                          {confirmRemoveStreamAllocId === row.id ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={busyId === row.id}
+                                onClick={() => handleRemoveStreamRow(row)}
+                                className="px-2 py-1 bg-rose-600 text-white rounded font-bold cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmRemoveStreamAllocId(null)}
+                                className="px-2 py-1 bg-slate-100 text-slate-700 rounded font-semibold cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {row.isOverridden && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveStreamRow(row, true)}
+                                  className="px-2 py-1 border border-slate-200 hover:bg-slate-100 rounded text-slate-700 cursor-pointer"
+                                  title="Reset to Inherited Template"
+                                >
+                                  <RotateCcw className="w-3 h-3 inline" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                disabled={busyId === row.id}
+                                onClick={() => handleSaveStreamRow(row, false)}
+                                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
+                              >
+                                <Save className="w-3 h-3" />
+                                <span>Save</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmRemoveStreamAllocId(row.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer align-middle"
+                                title={`Remove ${row.subjectName} from ${row.stream}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           )}
-                          <button
-                            type="button"
-                            disabled={busyId === row.id}
-                            onClick={() => handleSaveStreamRow(row, false)}
-                            className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded font-semibold cursor-pointer inline-flex items-center gap-1"
-                          >
-                            <Save className="w-3 h-3" />
-                            <span>Save</span>
-                          </button>
                         </td>
                       </tr>
                     );

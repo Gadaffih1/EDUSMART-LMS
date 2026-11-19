@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles,
   UserCheck,
@@ -10,12 +10,16 @@ import {
   Trash2,
   Building2,
   RotateCcw,
-  X
+  X,
+  CheckCircle2,
+  Clock,
+  BookOpen
 } from 'lucide-react';
 import {
   User,
   GradeLevel,
   StreamName,
+  TimetableSlot,
   ReadingProgrammeMember,
   LibraryAttendanceLog,
   LibraryTimetableSlot,
@@ -27,6 +31,7 @@ import { Storage } from '../../utils/storage';
 import { LibraryPortalSection } from './types';
 import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
 import { BOOKING_PERIODS } from './LibraryRoomBookingModal';
+import { ttApiFetch } from '../timetable/timetableTypes';
 
 interface ProgrammesViewsProps {
   currentUser?: User;
@@ -152,20 +157,156 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
   const [bkLearners, setBkLearners] = useState<number>(30);
   const [bkStatus, setBkStatus] = useState<'confirmed' | 'cancelled'>('confirmed');
 
+  // Master Timetable Library Lesson linkage & Free Slots Monitor state
+  const [masterTimetableSlots, setMasterTimetableSlots] = useState<TimetableSlot[]>(() => Storage.getAllTimetableSlots());
+  const [publishedMasterLibLessons, setPublishedMasterLibLessons] = useState<
+    Array<LibraryTimetableSlot & { periodNumber?: number }>
+  >([]);
+  const [monitorDay, setMonitorDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('Monday');
+  const [monitorRoomId, setMonitorRoomId] = useState<string>(() => Storage.getLibraryRooms()[0]?.id || 'room-main-hall');
+
   useEffect(() => {
     const syncRooms = () => setRooms(Storage.getLibraryRooms());
     const syncBookings = () => setBookings(Storage.getLibraryRoomBookings());
+    const syncMaster = () => setMasterTimetableSlots(Storage.getAllTimetableSlots());
     window.addEventListener('library-rooms-updated', syncRooms);
     window.addEventListener('library-room-bookings-updated', syncBookings);
+    window.addEventListener('timetable-updated', syncMaster);
     window.addEventListener('edusmart:data-changed', syncRooms);
     window.addEventListener('edusmart:data-changed', syncBookings);
+    window.addEventListener('edusmart:data-changed', syncMaster);
     return () => {
       window.removeEventListener('library-rooms-updated', syncRooms);
       window.removeEventListener('library-room-bookings-updated', syncBookings);
+      window.removeEventListener('timetable-updated', syncMaster);
       window.removeEventListener('edusmart:data-changed', syncRooms);
       window.removeEventListener('edusmart:data-changed', syncBookings);
+      window.removeEventListener('edusmart:data-changed', syncMaster);
     };
   }, []);
+
+  useEffect(() => {
+    if (section !== 'room_booking' && section !== 'timetable') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pub = await ttApiFetch<{
+          published?: boolean;
+          periods?: Array<{ periodNumber: number; kind: string; startTime: string; endTime: string }>;
+          entries?: Array<{
+            id: string;
+            dayOfWeek: string;
+            periodNumber: number;
+            grade: number;
+            stream: string;
+            subjectName: string;
+            teacherNames?: string[];
+            roomName?: string;
+          }>;
+        }>('/api/timetable/published');
+        if (cancelled || !pub?.published || !Array.isArray(pub.entries)) return;
+        const pMap = new Map<number, { startTime: string; endTime: string }>();
+        for (const p of pub.periods || []) {
+          if (p.kind === 'lesson' && p.periodNumber > 0) {
+            pMap.set(p.periodNumber, { startTime: p.startTime, endTime: p.endTime });
+          }
+        }
+        const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
+        const list = pub.entries
+          .filter((e) => String(e.subjectName || '').toLowerCase().includes('library'))
+          .map((e) => {
+            const tm = pMap.get(e.periodNumber) || BOOKING_PERIODS.find((bp) => bp.periodNum === e.periodNumber);
+            const day = validDays.includes(e.dayOfWeek as any)
+              ? (e.dayOfWeek as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday')
+              : 'Monday';
+            return {
+              id: `mt-pub-${e.id}`,
+              dayOfWeek: day,
+              startTime: tm?.startTime || '08:00',
+              endTime: tm?.endTime || '08:40',
+              grade: Number(e.grade || 4) as GradeLevel,
+              stream: `Grade ${e.grade} ${e.stream}`.trim(),
+              teacherInCharge: (e.teacherNames || []).join(', ') || 'Subject Teacher',
+              sessionType: 'Library Reading Period' as const,
+              venue:
+                e.roomName && e.roomName.toLowerCase().includes('library')
+                  ? e.roomName
+                  : 'Main Library Reading Hall',
+              periodNumber: e.periodNumber,
+            };
+          });
+        setPublishedMasterLibLessons(list);
+      } catch {
+        // Fallback to local storage slots
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [section]);
+
+  const toMinutes = (t: string) => {
+    if (!t) return 0;
+    const up = t.trim().toUpperCase();
+    const pm = up.includes('PM');
+    const am = up.includes('AM');
+    const [hStr, mStr] = up.replace(/[A-Z\s]/g, '').split(':');
+    let h = parseInt(hStr || '0', 10);
+    const m = parseInt(mStr || '0', 10);
+    if (pm && h < 12) h += 12;
+    if (am && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  // Unified Library Lessons from Master Timetable + Library Timetable
+  const linkedLibraryLessons = useMemo(() => {
+    const map = new Map<string, LibraryTimetableSlot & { fromMaster: boolean; periodNumber?: number }>();
+    const keyOf = (day: string, start: string, grade: number, stream: string) =>
+      `${day.toLowerCase()}::${toMinutes(start)}::${grade}::${stream.toLowerCase().replace(/^grade\s*\d+\s*/i, '').trim()}`;
+
+    for (const item of publishedMasterLibLessons) {
+      map.set(keyOf(item.dayOfWeek, item.startTime, Number(item.grade), item.stream), {
+        ...item,
+        fromMaster: true,
+      });
+    }
+    for (const slot of masterTimetableSlots) {
+      if (!slot || !String(slot.subject || '').toLowerCase().includes('library')) continue;
+      const streamLabel = String(slot.stream || '').toLowerCase().startsWith('grade')
+        ? String(slot.stream)
+        : `Grade ${slot.grade} ${slot.stream}`;
+      const k = keyOf(slot.dayOfWeek, slot.startTime, Number(slot.grade), streamLabel);
+      if (!map.has(k)) {
+        map.set(k, {
+          id: `mt-local-${slot.id}`,
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          grade: slot.grade,
+          stream: streamLabel,
+          teacherInCharge: slot.teacherName || 'Subject Teacher',
+          sessionType: 'Library Reading Period',
+          venue:
+            slot.roomName && slot.roomName.toLowerCase().includes('library')
+              ? slot.roomName
+              : 'Main Library Reading Hall',
+          fromMaster: true,
+          periodNumber: slot.period,
+        });
+      }
+    }
+    for (const slot of timetableSlots) {
+      if (!slot) continue;
+      const k = keyOf(slot.dayOfWeek, slot.startTime, Number(slot.grade), slot.stream || '');
+      if (!map.has(k)) {
+        map.set(k, {
+          ...slot,
+          fromMaster: String(slot.id || '').startsWith('mt-lib-'),
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [publishedMasterLibLessons, masterTimetableSlots, timetableSlots]);
 
   // Reading Programme
   if (section === 'reading_programme') {
@@ -704,13 +845,22 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {timetableSlots.map((slot) => (
+          {linkedLibraryLessons.map((slot) => {
+            const isEditableLocalSlot = timetableSlots.some((ts) => ts.id === slot.id);
+            return (
             <div key={slot.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between">
-                  <span className="font-black text-xs uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-900">
-                    {slot.dayOfWeek}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-black text-xs uppercase px-2 py-0.5 rounded bg-purple-100 text-purple-900">
+                      {slot.dayOfWeek}
+                    </span>
+                    {slot.fromMaster && (
+                      <span className="font-bold text-[10px] px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                        Master TT
+                      </span>
+                    )}
+                  </div>
                   <span className="font-mono text-xs font-bold text-slate-600">
                     {slot.startTime} - {slot.endTime}
                   </span>
@@ -723,6 +873,7 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
 
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                 <span className="text-[11px] text-purple-700 font-mono truncate">📍 {slot.venue}</span>
+                {isEditableLocalSlot ? (
                 <div className="flex items-center gap-1 shrink-0">
                   {onUpdateTimetableSlot && (
                     <button
@@ -776,9 +927,13 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
                     )
                   )}
                 </div>
+                ) : (
+                  <span className="text-[10px] font-semibold text-indigo-700 shrink-0">Synced via Master TT</span>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Add / Edit Timetable Slot Modal */}
@@ -1011,6 +1166,141 @@ export const ProgrammesViews: React.FC<ProgrammesViewsProps> = ({
             />
           </div>
         </div>
+
+        {/* Master Timetable Library Lessons & Free Slots Monitor */}
+        {(() => {
+          const activeMonitorRoom = rooms.find((r) => r.id === monitorRoomId) || rooms[0];
+          const safeRoom = (activeMonitorRoom?.name || '').toLowerCase();
+          const isDefaultMain =
+            safeRoom.includes('main') ||
+            safeRoom.includes('reading') ||
+            activeMonitorRoom?.id === rooms[0]?.id;
+
+          const periodStatuses = BOOKING_PERIODS.map((p) => {
+            const pStart = toMinutes(p.startTime);
+            const pEnd = toMinutes(p.endTime);
+            const lesson = linkedLibraryLessons.find((l) => {
+              if (l.dayOfWeek !== monitorDay) return false;
+              const v = (l.venue || '').toLowerCase().trim();
+              const generic = !v || v === 'library' || v === 'school library' || v.startsWith('classroom');
+              const venueOk =
+                (generic && isDefaultMain) ||
+                (v && safeRoom && (v.includes(safeRoom) || safeRoom.includes(v))) ||
+                (safeRoom.includes('main') && v.includes('main')) ||
+                (safeRoom.includes('digital') && v.includes('digital'));
+              if (!venueOk) return false;
+              if (typeof l.periodNumber === 'number' && l.periodNumber === p.periodNum) return true;
+              return Math.max(pStart, toMinutes(l.startTime)) < Math.min(pEnd, toMinutes(l.endTime));
+            });
+            const booked = bookings.find((b) => {
+              if (!b || b.status === 'cancelled' || b.dayOfWeek !== monitorDay) return false;
+              if (b.roomId !== activeMonitorRoom?.id && b.roomName !== activeMonitorRoom?.name) return false;
+              return Math.max(pStart, toMinutes(b.startTime)) < Math.min(pEnd, toMinutes(b.endTime));
+            });
+            return { period: p, lesson, booked };
+          });
+
+          const freeCount = periodStatuses.filter((s) => !s.lesson && !s.booked).length;
+          const lessonCount = periodStatuses.filter((s) => Boolean(s.lesson)).length;
+          const bookedCount = periodStatuses.filter((s) => !s.lesson && Boolean(s.booked)).length;
+
+          return (
+            <div className="bg-white rounded-2xl border border-indigo-200 p-5 shadow-2xs space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-black text-base text-slate-900 flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <span>Master Timetable Library Lessons &amp; Free Slots Monitor</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Linked directly to scheduled <strong>Library Lessons</strong> in the Master Timetable so you can instantly spot free slots when booking for other teachers.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={monitorDay}
+                    onChange={(e) => setMonitorDay(e.target.value as any)}
+                    className="border border-slate-300 rounded-xl px-3 py-1.5 bg-slate-50 text-xs font-bold text-slate-800"
+                  >
+                    {(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const).map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={activeMonitorRoom?.id || ''}
+                    onChange={(e) => setMonitorRoomId(e.target.value)}
+                    className="border border-slate-300 rounded-xl px-3 py-1.5 bg-slate-50 text-xs font-bold text-slate-800"
+                  >
+                    {rooms.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  {freeCount} Free Slots for Other Teachers
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-800 border border-rose-200">
+                  <Clock className="w-3.5 h-3.5 text-rose-600" />
+                  {lessonCount} Library Lessons (Master TT / Schedule)
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+                  {bookedCount} Reserved Bookings
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {periodStatuses.map(({ period, lesson, booked }) => (
+                  <div
+                    key={period.periodNum}
+                    className={`p-3 rounded-xl border text-xs flex flex-col justify-between gap-1.5 ${
+                      lesson
+                        ? 'bg-rose-50/80 border-rose-200 text-rose-900'
+                        : booked
+                        ? 'bg-amber-50/80 border-amber-200 text-amber-900'
+                        : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold">
+                      <span>Period {period.periodNum}</span>
+                      <span className="font-mono">{period.startTime}</span>
+                    </div>
+                    {lesson ? (
+                      <div>
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-rose-200 text-rose-900 font-black text-[9px] uppercase">
+                          {lesson.fromMaster ? 'Master TT Lesson' : 'Library Lesson'}
+                        </span>
+                        <div className="font-bold text-[11px] mt-1 truncate">{lesson.stream}</div>
+                        <div className="text-[10px] text-rose-700 truncate">{lesson.teacherInCharge}</div>
+                      </div>
+                    ) : booked ? (
+                      <div>
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 font-black text-[9px] uppercase">
+                          Booked
+                        </span>
+                        <div className="font-bold text-[11px] mt-1 truncate">{booked.bookedByName}</div>
+                        <div className="text-[10px] text-amber-700 truncate">{booked.subject || booked.purpose}</div>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-900 font-black text-[9px] uppercase">
+                          FREE SLOT
+                        </span>
+                        <div className="text-[10px] text-emerald-800 font-medium mt-1">
+                          Open to book for other teachers
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Library Rooms / Venues Directory */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">

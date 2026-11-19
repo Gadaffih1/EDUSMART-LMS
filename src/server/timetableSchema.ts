@@ -73,6 +73,19 @@ export function initTimetableSchema(db: DatabaseSync): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_subjects_tenant_name
       ON tt_subjects(tenant_id, lower(name));
 
+    CREATE TABLE IF NOT EXISTS tt_departments (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      code TEXT NOT NULL DEFAULT '',
+      head_name TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_departments_tenant_name
+      ON tt_departments(tenant_id, lower(name));
+
     CREATE TABLE IF NOT EXISTS tt_classrooms (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,

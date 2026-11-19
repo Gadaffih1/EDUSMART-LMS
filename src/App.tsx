@@ -44,8 +44,10 @@ import { isPlatformSuperAdmin } from './utils/platformAdminAuth';
 import { fromAppPath, toAppPath } from './utils/appPath';
 import { PWAInstallInvitation, PWAUpdateAndOfflineBanner } from './components/pwa/PWAInstallExperience';
 import { InactivityTimeoutModal } from './components/auth/InactivityTimeoutModal';
+import { StudentStreamManager } from './components/teacher/StudentStreamManager';
 import {
   SUBJECT_TEACHER_ELIGIBLE_ROLES,
+  canAccessStudentStreamAllocation,
   canSwitchToClassTeacher,
   canSwitchToSubjectTeacher,
   createRoleProxyUser,
@@ -113,6 +115,7 @@ function AppContent({
   const [portalView, setPortalView] = useState<PortalView>(() => getPortalRoute(window.location.pathname).view);
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
+  const [viewingStreamAllocator, setViewingStreamAllocator] = useState<boolean>(false);
   const resolvePersistedSwitchedRole = React.useCallback((user: User | null): UserRole | null => {
     if (!user) return null;
     const saved = Storage.getActiveSwitchedRole(user.id);
@@ -127,6 +130,7 @@ function AppContent({
 
   React.useEffect(() => {
     setSwitchedWorkspaceRole(resolvePersistedSwitchedRole(currentUser));
+    setViewingStreamAllocator(false);
   }, [currentUser, resolvePersistedSwitchedRole]);
 
   const updateSwitchedWorkspaceRole = React.useCallback(
@@ -158,6 +162,7 @@ function AppContent({
   const handleSwitchWorkspaceRole = React.useCallback(
     (targetRole: UserRole | null) => {
       setViewingOperationsHub(false);
+      setViewingStreamAllocator(false);
       if (!currentUser || !targetRole || targetRole === currentUser.role) {
         updateSwitchedWorkspaceRole(null);
         return;
@@ -170,11 +175,13 @@ function AppContent({
 
   const handleToggleSubjectTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
+    setViewingStreamAllocator(false);
     updateSwitchedWorkspaceRole(switchedWorkspaceRole === 'teacher' ? null : 'teacher');
   }, [switchedWorkspaceRole, updateSwitchedWorkspaceRole]);
 
   const handleToggleClassTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
+    setViewingStreamAllocator(false);
     updateSwitchedWorkspaceRole(switchedWorkspaceRole === 'class_teacher' ? null : 'class_teacher');
   }, [switchedWorkspaceRole, updateSwitchedWorkspaceRole]);
 
@@ -259,22 +266,34 @@ function AppContent({
   React.useEffect(() => {
     const handleOpenOps = () => {
       updateSwitchedWorkspaceRole(null);
+      setViewingStreamAllocator(false);
       setViewingOperationsHub(true);
     };
     const handleCloseOps = () => setViewingOperationsHub(false);
+    const handleOpenStreamAllocator = () => {
+      if (canAccessStudentStreamAllocation(currentUser)) {
+        setViewingOperationsHub(false);
+        setViewingStreamAllocator(true);
+      }
+    };
+    const handleCloseStreamAllocator = () => setViewingStreamAllocator(false);
     const handleToggleSubjectTeacher = () => handleToggleSubjectTeacherMode();
     const handleToggleClassTeacher = () => handleToggleClassTeacherMode();
     window.addEventListener('open-operations-hub', handleOpenOps);
     window.addEventListener('close-operations-hub', handleCloseOps);
+    window.addEventListener('open-stream-allocator', handleOpenStreamAllocator);
+    window.addEventListener('close-stream-allocator', handleCloseStreamAllocator);
     window.addEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
     window.addEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     return () => {
       window.removeEventListener('open-operations-hub', handleOpenOps);
       window.removeEventListener('close-operations-hub', handleCloseOps);
+      window.removeEventListener('open-stream-allocator', handleOpenStreamAllocator);
+      window.removeEventListener('close-stream-allocator', handleCloseStreamAllocator);
       window.removeEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
       window.removeEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     };
-  }, [handleToggleSubjectTeacherMode, handleToggleClassTeacherMode, updateSwitchedWorkspaceRole]);
+  }, [currentUser, handleToggleSubjectTeacherMode, handleToggleClassTeacherMode, updateSwitchedWorkspaceRole]);
 
   // Public landing stays available, including while the platform admin is signed in.
   if (portalView === 'public_landing' && (!currentUser || isPlatformSuperAdmin(currentUser))) {
@@ -532,7 +551,23 @@ function AppContent({
                   </div>
                 )}
 
-                {effectiveRole === 'student' ? (
+                {viewingStreamAllocator && canAccessStudentStreamAllocation(currentUser) ? (
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setViewingStreamAllocator(false)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                      >
+                        <span>&larr; Return to {getAdministrativeRoleDisplayName(currentUser.role)} Workspace</span>
+                      </button>
+                      <span className="text-xs font-semibold text-slate-500">
+                        Student Stream Allocation Hub &bull; {currentTenant.name}
+                      </span>
+                    </div>
+                    <StudentStreamManager currentUser={currentUser} />
+                  </div>
+                ) : effectiveRole === 'student' ? (
                   <WorkspaceRoleGuard
                     currentUser={effectiveUser}
                     allowedRoles={['student']}

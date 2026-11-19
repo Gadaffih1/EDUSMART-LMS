@@ -39,7 +39,10 @@ import {
 } from 'lucide-react';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
-import { getAdministrativeRoleDisplayName } from '../../utils/subjectTeacherSwitch';
+import {
+  canAccessStudentStreamAllocation,
+  getAdministrativeRoleDisplayName,
+} from '../../utils/subjectTeacherSwitch';
 
 export interface QuickActionItem {
   id: string;
@@ -61,7 +64,8 @@ export interface QuickActionItem {
     | 'toggle_notif'
     | 'toggle_subject_teacher'
     | 'toggle_class_teacher'
-    | 'switch_workspace_role';
+    | 'switch_workspace_role'
+    | 'open_stream_allocator';
 }
 
 interface QuickActionsFloatingMenuProps {
@@ -1197,6 +1201,21 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       }
     }
 
+    if (canAccessStudentStreamAllocation(currentUser)) {
+      switchItems.push({
+        id: 'student-stream-allocation-hub',
+        title: 'Student Stream Allocations',
+        subtitle: 'Open CBC Student Stream Assignment Hub (Admin, Grade Senior Teacher & delegated role only)',
+        icon: Users,
+        iconBg: 'bg-sky-100',
+        iconColor: 'text-sky-700',
+        category: 'management',
+        badge: 'CBC Streams',
+        badgeColor: 'bg-sky-600 text-white',
+        actionType: 'open_stream_allocator',
+      });
+    }
+
     return [...switchItems, ...base];
   }, [
     currentUser,
@@ -1290,6 +1309,15 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
           : `Returned to ${getAdministrativeRoleDisplayName(currentUser.role)} workspace`
       );
       setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    if (action.actionType === 'open_stream_allocator') {
+      if (canAccessStudentStreamAllocation(currentUser)) {
+        window.dispatchEvent(new CustomEvent('open-stream-allocator'));
+        setToastMessage('Opened Student Stream Assignment Hub');
+        setTimeout(() => setToastMessage(null), 3000);
+      }
       return;
     }
 

@@ -46,6 +46,37 @@ export function userHasRole(user: User | null | undefined, targetRole: UserRole)
   return getUserRoles(user).includes(targetRole);
 }
 
+/**
+ * Strict Student Stream Allocation policy:
+ * ONLY System Administrators (`admin`), Grade Senior Teachers (`senior_teacher`),
+ * or staff explicitly granted the `student_stream_allocator` extra role may view
+ * the Student Stream Allocation button/hub or allocate/transfer students across streams.
+ * No other role (regular subject teachers, class teachers, HODs, Head Teacher, Deputy Head,
+ * Dean of Studies, Curriculum Coordinator, students, parents, etc.) is permitted.
+ */
+export function canAccessStudentStreamAllocation(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (userHasRole(user, 'admin')) return true;
+  if (userHasRole(user, 'senior_teacher')) return true;
+  if (Array.isArray(user.extraRoles) && user.extraRoles.includes('student_stream_allocator')) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Returns true if the user can allocate student streams across all grades (Grades 1-9),
+ * as opposed to a Grade Senior Teacher who is scoped to their assigned grade(s).
+ */
+export function hasFullSchoolStreamAllocationAccess(user: User | null | undefined): boolean {
+  if (!user) return false;
+  if (userHasRole(user, 'admin')) return true;
+  if (Array.isArray(user.extraRoles) && user.extraRoles.includes('student_stream_allocator')) {
+    return true;
+  }
+  return false;
+}
+
 export function canSwitchToSubjectTeacher(user: User | null | undefined): boolean {
   if (!user) return false;
   return getUserRoles(user).some((r) => ELIGIBLE_ROLE_SET.has(r));

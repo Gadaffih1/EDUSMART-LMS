@@ -25,6 +25,8 @@ import {
   type GradeOverviewPayload,
 } from './academicHierarchyTypes';
 import { exportAcademicReportToExcel, printAcademicReportPdf } from './academicReportExporter';
+import { Storage } from '../../utils/storage';
+import { canAccessStudentStreamAllocation } from '../../utils/subjectTeacherSwitch';
 
 export type AdminAcademicMode =
   | 'grades'
@@ -48,6 +50,7 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
   allowCampusSelection = false,
 }) => {
   const { currentTenant, allTenants } = useTenant();
+  const canAllocateStreams = canAccessStudentStreamAllocation(Storage.getCurrentUser());
   const [internalMode, setInternalMode] = useState<AdminAcademicMode>(defaultMode);
   const effectiveMode = mode ?? internalMode;
   const handleSelectMode = (next: AdminAcademicMode) => {
@@ -976,7 +979,7 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
                       <th className="py-2 pr-3">Adm No.</th>
                       <th className="py-2 pr-3">Student Name</th>
                       <th className="py-2 pr-3">Parent / Contact</th>
-                      <th className="py-2 text-right">Transfer</th>
+                      {canAllocateStreams && <th className="py-2 text-right">Transfer</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -987,19 +990,21 @@ export const GradeStreamManagementConsole: React.FC<GradeStreamManagementConsole
                         <td className="py-2.5 pr-3 text-slate-600">
                           {stu.parentName ? `${stu.parentName} · ${stu.parentPhone || stu.parentEmail || ''}` : stu.email || '—'}
                         </td>
-                        <td className="py-2.5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTransferStudent(stu);
-                              setTransferTargetStreamId(streams.find((x) => x.id !== stu.streamId)?.id || '');
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-md cursor-pointer"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                            <span>Transfer Stream</span>
-                          </button>
-                        </td>
+                        {canAllocateStreams && (
+                          <td className="py-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTransferStudent(stu);
+                                setTransferTargetStreamId(streams.find((x) => x.id !== stu.streamId)?.id || '');
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-md cursor-pointer"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                              <span>Transfer Stream</span>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

@@ -59,6 +59,45 @@ table {
   textarea {
     font-size: 16px;
   }
+
+  /* Compact, non-overlapping button titles on smartphone screens */
+  button,
+  [role="button"] {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    max-width: 100%;
+  }
+
+  button > span,
+  button .text-xs,
+  button .text-sm,
+  button .text-base,
+  [role="button"] > span {
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    min-width: 0;
+  }
+
+  /* Keep micro-badges and bottom-nav labels even tighter */
+  button .text-\[10px\],
+  nav button,
+  nav button > span {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+}
+
+@media (max-width: 390px) {
+  button,
+  [role="button"],
+  button > span,
+  button .text-xs,
+  button .text-sm,
+  button .text-base,
+  [role="button"] > span {
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+  }
 }
 
 /* =========================================================================

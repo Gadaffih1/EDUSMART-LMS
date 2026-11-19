@@ -12,9 +12,14 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { ClientDataStore } from '../../utils/clientDataStore';
-import { getUserRoles, normalizeAssignedRoleList } from '../../utils/subjectTeacherSwitch';
+import {
+  canAccessStudentStreamAllocation,
+  getUserRoles,
+  normalizeAssignedRoleList,
+} from '../../utils/subjectTeacherSwitch';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { GradeStreamManagementConsole, type AdminAcademicMode } from '../academic-hierarchy/GradeStreamManagementConsole';
+import { StudentStreamManager } from '../teacher/StudentStreamManager';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
@@ -105,6 +110,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const isHeadTeacher = currentUser.role === 'head_teacher';
   const isDeputyHead = currentUser.role === 'deputy_head';
   const isDean = currentUser.role === 'dean_of_studies';
+  const canAllocateStreams = canAccessStudentStreamAllocation(currentUser);
 
   // Sub-tabs: Default to overview (Panel 3 School Dashboard)
   const defaultTab = 'overview';
@@ -614,6 +620,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         onCloseMobile={() => setMobileMenuOpen(false)}
         userCount={tenantUsers.length}
         workLogCount={workLogs.length}
+        canAllocateStreams={canAllocateStreams}
       />
       <div className="min-w-0 flex-1 px-4 py-6 space-y-6 sm:px-6 lg:px-8">
       {actionToast && (
@@ -707,6 +714,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             openTab(tabMap[nextMode]);
           }}
         />
+      )}
+
+      {activeTab === 'student_stream_allocation' && canAllocateStreams && (
+        <StudentStreamManager currentUser={currentUser} />
       )}
 
       {activeTab === 'grades' && (
@@ -2170,6 +2181,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           currentUser={currentUser} 
           onNavigateToDocs={() => openTab('doc_requests')}
           onNavigateToCMS={() => openTab('cms_hub')}
+          onNavigateToStreamAllocation={canAllocateStreams ? () => openTab('student_stream_allocation') : undefined}
         />
       )}
 

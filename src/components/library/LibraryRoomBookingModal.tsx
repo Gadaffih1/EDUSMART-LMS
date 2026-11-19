@@ -129,6 +129,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   ]);
   const [notes, setNotes] = useState('');
   const [bookingSubmitted, setBookingSubmitted] = useState<LibraryRoomBooking | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   // Filter for my bookings
   const [bookingsFilter, setBookingsFilter] = useState<'all' | 'mine'>('all');
@@ -251,15 +252,16 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
 
   const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
+    setBookingError(null);
 
     // Guard: strictly forbid spots with library lessons or existing bookings
     if (currentSlotConflict.status !== 'available') {
-      alert(`Cannot book: ${currentSlotConflict.reason}`);
+      setBookingError(`Cannot book: ${currentSlotConflict.reason}`);
       return;
     }
 
     if (learnersCount > selectedRoom.capacity) {
-      alert(`Learners count (${learnersCount}) exceeds room capacity (${selectedRoom.capacity}). Please select a larger room or reduce count.`);
+      setBookingError(`Learners count (${learnersCount}) exceeds room capacity (${selectedRoom.capacity}). Please select a larger room or reduce count.`);
       return;
     }
 
@@ -520,6 +522,21 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
               ) : (
                 /* Booking Form */
                 <form onSubmit={handleConfirmBooking} className="space-y-6 text-xs">
+                  {bookingError && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{bookingError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setBookingError(null)}
+                        className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   
                   {/* Step 1: Choose Room */}
                   <div className="space-y-3">

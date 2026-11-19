@@ -399,6 +399,59 @@ function buildPublicTenantsList(): any[] {
   return tenants.map((t: any) => stripSecrets(t));
 }
 
+const EXT_TO_MIME: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.avif': 'image/avif',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.ogv': 'video/ogg',
+  '.3gp': 'video/3gpp',
+  '.mkv': 'video/x-matroska',
+  '.avi': 'video/x-msvideo',
+  '.mpeg': 'video/mpeg',
+  '.mpg': 'video/mpeg',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.weba': 'audio/webm',
+  '.flac': 'audio/flac',
+  '.amr': 'audio/amr',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.csv': 'text/csv',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+
+function resolveUploadMimeType(rawMime: unknown, originalName: string): string {
+  const clean = String(rawMime || '').split(';')[0].trim().toLowerCase();
+  if (clean && clean !== 'application/octet-stream' && ALLOWED_UPLOAD_MIMES.has(clean)) {
+    return clean;
+  }
+  const ext = path.extname(originalName || '').toLowerCase();
+  if (ext && EXT_TO_MIME[ext]) {
+    return EXT_TO_MIME[ext];
+  }
+  return clean || 'application/octet-stream';
+}
+
 function getFileExtensionForMime(mime: string, originalName: string): string {
   const extFromName = path.extname(originalName || '').toLowerCase();
   if (extFromName && /^[.a-z0-9]{2,8}$/.test(extFromName)) return extFromName;
@@ -409,31 +462,93 @@ function getFileExtensionForMime(mime: string, originalName: string): string {
     'image/webp': '.webp',
     'image/svg+xml': '.svg',
     'image/gif': '.gif',
+    'image/bmp': '.bmp',
+    'image/avif': '.avif',
+    'image/heic': '.heic',
+    'image/heif': '.heif',
     'video/mp4': '.mp4',
     'video/webm': '.webm',
+    'video/quicktime': '.mov',
+    'video/ogg': '.ogv',
+    'video/x-m4v': '.m4v',
+    'video/3gpp': '.3gp',
+    'video/x-matroska': '.mkv',
+    'video/x-msvideo': '.avi',
+    'video/mpeg': '.mpeg',
+    'audio/mpeg': '.mp3',
+    'audio/mp3': '.mp3',
+    'audio/wav': '.wav',
+    'audio/x-wav': '.wav',
+    'audio/wave': '.wav',
+    'audio/ogg': '.ogg',
+    'audio/mp4': '.m4a',
+    'audio/x-m4a': '.m4a',
+    'audio/m4a': '.m4a',
+    'audio/aac': '.aac',
+    'audio/webm': '.weba',
+    'audio/flac': '.flac',
+    'audio/3gpp': '.3gp',
+    'audio/amr': '.amr',
     'application/pdf': '.pdf',
     'text/plain': '.txt',
     'text/csv': '.csv',
     'application/msword': '.doc',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'application/vnd.ms-powerpoint': '.ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+    'application/vnd.ms-excel': '.xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   };
   return map[mime] || '.bin';
 }
 
 const ALLOWED_UPLOAD_MIMES = new Set([
+  // Images & Pictures
   'image/png',
   'image/jpeg',
   'image/jpg',
   'image/webp',
   'image/svg+xml',
   'image/gif',
+  'image/bmp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  // Videos
   'video/mp4',
   'video/webm',
+  'video/quicktime',
+  'video/ogg',
+  'video/x-m4v',
+  'video/3gpp',
+  'video/x-matroska',
+  'video/x-msvideo',
+  'video/mpeg',
+  // Audio
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/m4a',
+  'audio/aac',
+  'audio/webm',
+  'audio/flac',
+  'audio/3gpp',
+  'audio/amr',
+  // Documents (PDF & Office)
   'application/pdf',
   'text/plain',
   'text/csv',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
 export function registerDataRoutes(app: Express): void {
@@ -647,6 +762,159 @@ export function registerDataRoutes(app: Express): void {
 
       const db = getDb();
       const now = new Date().toISOString();
+
+      // Strict Student Stream Allocation guard on edusmart_users_v1:
+      // Even roles allowed to sync user directory (e.g. head_teacher, school_admin_staff)
+      // may NOT alter an existing student's stream unless they are System Admin, Grade Senior Teacher,
+      // or explicitly granted the `student_stream_allocator` extra role.
+      if (
+        collection === 'edusmart_users_v1' &&
+        Array.isArray(records) &&
+        !session.isSuperAdmin &&
+        !sessionHasAnyRole(session, ['admin', 'senior_teacher'])
+      ) {
+        const actorRow = db
+          .prepare(`SELECT payload_json FROM users WHERE id = ? LIMIT 1`)
+          .get(session.userId) as { payload_json?: string } | undefined;
+        let hasDelegatedStreamRole = false;
+        if (actorRow?.payload_json) {
+          try {
+            const p = JSON.parse(actorRow.payload_json);
+            hasDelegatedStreamRole = Array.isArray(p?.extraRoles) && p.extraRoles.includes('student_stream_allocator');
+          } catch {
+            hasDelegatedStreamRole = false;
+          }
+        }
+        if (!hasDelegatedStreamRole) {
+          const existingStudentRows = db
+            .prepare(
+              `SELECT record_id, payload_json FROM collections_store
+               WHERE collection_key = 'edusmart_users_v1' AND tenant_id = ? AND deleted_at IS NULL`
+            )
+            .all(authorizedTenantId) as Array<{ record_id: string; payload_json: string }>;
+          const existingStreams = new Map<string, { role: string; stream: string }>();
+          for (const r of existingStudentRows) {
+            try {
+              const obj = JSON.parse(r.payload_json);
+              existingStreams.set(r.record_id, {
+                role: String(obj?.role || '').toLowerCase(),
+                stream: String(obj?.stream || '').trim(),
+              });
+            } catch {
+              // ignore malformed
+            }
+          }
+          for (let i = 0; i < records.length; i++) {
+            const item = records[i];
+            if (!item || typeof item !== 'object') continue;
+            const recId = resolveRecordId(item, i);
+            const prev = existingStreams.get(recId);
+            if (prev && prev.role === 'student') {
+              const nextStream = String(item.stream || '').trim();
+              if (prev.stream !== nextStream) {
+                return res.status(403).json({
+                  error:
+                    'Access Restricted: Only the System Administrator, Grade Senior Teachers, or staff assigned the Student Stream Allocator extra role may modify student stream allocations.',
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Strict E-Resource deletion guard:
+      // Deleting any E-resource can ONLY be done by the user who uploaded it or the System Administrator.
+      const E_RESOURCE_COLLECTIONS = new Set([
+        'edusmart_notes_v1',
+        'edusmart_videos_v1',
+        'edusmart_audios_v1',
+        'edusmart_lesson_images_v1',
+        'edusmart_e_links_v1',
+        'edusmart_teacher_lesson_files_v1',
+        'edusmart_library_digital_items_v1',
+      ]);
+      if (
+        E_RESOURCE_COLLECTIONS.has(collection) &&
+        Array.isArray(records) &&
+        !session.isSuperAdmin &&
+        !sessionHasAnyRole(session, ['admin'])
+      ) {
+        const existingResourceRows = db
+          .prepare(
+            `SELECT record_id, payload_json FROM collections_store
+             WHERE collection_key = ? AND tenant_id = ? AND deleted_at IS NULL`
+          )
+          .all(collection, authorizedTenantId) as Array<{ record_id: string; payload_json: string }>;
+
+        const incomingIds = new Set<string>();
+        for (let i = 0; i < records.length; i++) {
+          const item = records[i];
+          if (item && typeof item === 'object') {
+            incomingIds.add(resolveRecordId(item, i));
+          }
+        }
+
+        let actorNameNorm = '';
+        const actorCollectionRow = db
+          .prepare(
+            `SELECT payload_json FROM collections_store
+             WHERE collection_key = 'edusmart_users_v1' AND tenant_id = ? AND record_id = ? AND deleted_at IS NULL`
+          )
+          .get(authorizedTenantId, session.userId) as { payload_json?: string } | undefined;
+        if (actorCollectionRow?.payload_json) {
+          try {
+            const p = JSON.parse(actorCollectionRow.payload_json);
+            actorNameNorm = String(p?.name || '').trim().toLowerCase();
+          } catch {
+            // ignore
+          }
+        }
+        if (!actorNameNorm) {
+          const userRow = db
+            .prepare(`SELECT name FROM users WHERE id = ?`)
+            .get(session.userId) as { name?: string } | undefined;
+          actorNameNorm = String(userRow?.name || '').trim().toLowerCase();
+        }
+
+        for (const existing of existingResourceRows) {
+          if (incomingIds.has(existing.record_id)) continue;
+          try {
+            const obj = JSON.parse(existing.payload_json);
+            const ownerId =
+              obj?.uploadedById ||
+              obj?.teacherId ||
+              obj?.authorId ||
+              obj?.addedById ||
+              '';
+            if (ownerId) {
+              if (String(ownerId).trim() !== String(session.userId).trim()) {
+                return res.status(403).json({
+                  error:
+                    'Access Restricted: Only the user who uploaded this E-resource or the System Administrator may delete it.',
+                });
+              }
+            } else {
+              const rawOwnerName = String(
+                obj?.author || obj?.teacherName || obj?.addedBy || ''
+              )
+                .replace(/\s*\([^)]*\)\s*$/, '')
+                .trim()
+                .toLowerCase();
+              if (!actorNameNorm || !rawOwnerName || rawOwnerName !== actorNameNorm) {
+                return res.status(403).json({
+                  error:
+                    'Access Restricted: Only the user who uploaded this E-resource or the System Administrator may delete it.',
+                });
+              }
+            }
+          } catch {
+            return res.status(403).json({
+              error:
+                'Access Restricted: Only the user who uploaded this E-resource or the System Administrator may delete it.',
+            });
+          }
+        }
+      }
 
       // Strict subject-teacher scoping for homework & assignments:
       // Non-admin teaching users may only create/modify assignments for (grade, stream, subject) assigned to them.
@@ -1545,6 +1813,103 @@ export function registerDataRoutes(app: Express): void {
   // -------------------------------------------------------------------------
   // 5. Server-Backed File & Document Storage API (/api/files/*)
   // -------------------------------------------------------------------------
+  const persistUploadedFileBuffer = (
+    tenantId: string,
+    uploadedBy: string,
+    fileName: string,
+    rawMimeType: string,
+    category: string,
+    buffer: Buffer
+  ) => {
+    const cleanMime = resolveUploadMimeType(rawMimeType, fileName);
+    if (!ALLOWED_UPLOAD_MIMES.has(cleanMime)) {
+      return {
+        errorStatus: 400,
+        errorMessage: `Unsupported file type (${cleanMime || 'unknown'}). Allowed: video (MP4/WebM/MOV), audio (MP3/WAV/OGG/M4A/AAC), PDF & documents, and images/pictures (PNG/JPG/WEBP/GIF).`,
+      };
+    }
+
+    const MAX_BYTES = 60 * 1024 * 1024; // 60MB to support teacher videos, audio lessons, PDFs & images
+    if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTES) {
+      return {
+        errorStatus: 400,
+        errorMessage: 'File size must be between 1 byte and 60 MB.',
+      };
+    }
+
+    const { uploadsDir } = initDatabase();
+    const safeTenantDir = tenantId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const tenantUploadDir = path.join(uploadsDir, safeTenantDir);
+    if (!fs.existsSync(tenantUploadDir)) fs.mkdirSync(tenantUploadDir, { recursive: true });
+
+    const fileId = `file-${crypto.randomUUID()}`;
+    const ext = getFileExtensionForMime(cleanMime, String(fileName));
+    const diskName = `${fileId}${ext}`;
+    const absPath = path.join(tenantUploadDir, diskName);
+    fs.writeFileSync(absPath, buffer);
+
+    const publicUrl = `/api/files/${fileId}`;
+    const now = new Date().toISOString();
+    const db = getDb();
+    db.prepare(
+      `INSERT INTO uploaded_files (id, school_id, uploaded_by, original_name, mime_type, size_bytes, category, storage_path, public_url, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      fileId,
+      tenantId,
+      uploadedBy,
+      path.basename(String(fileName)).slice(0, 200),
+      cleanMime,
+      buffer.byteLength,
+      String(category).slice(0, 64),
+      path.relative(uploadsDir, absPath),
+      publicUrl,
+      now
+    );
+    notifyMySqlTablesChanged(['uploaded_files']);
+
+    return {
+      file: {
+        id: fileId,
+        schoolId: tenantId,
+        uploadedBy,
+        originalName: path.basename(String(fileName)),
+        mimeType: cleanMime,
+        sizeBytes: buffer.byteLength,
+        category,
+        url: publicUrl,
+        createdAt: now,
+      },
+    };
+  };
+
+  app.post('/api/files/upload-binary', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      const headerTenant = (req.headers['x-tenant-id'] as string) || (req.query.tenantId as string);
+      const tenantId = resolveAuthorizedTenantId(req, res, headerTenant);
+      if (!tenantId) return;
+
+      const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (buffer.byteLength === 0) {
+        return res.status(400).json({ error: 'Uploaded binary file payload is empty.' });
+      }
+
+      const rawName = decodeURIComponent(String(req.headers['x-file-name'] || req.query.fileName || 'upload.bin'));
+      const rawMime = String(req.headers['x-mime-type'] || req.query.mimeType || 'application/octet-stream');
+      const category = String(req.headers['x-file-category'] || req.query.category || 'general');
+
+      const result = persistUploadedFileBuffer(tenantId, session.userId, rawName, rawMime, category, buffer);
+      if ('errorStatus' in result && typeof result.errorStatus === 'number') {
+        return res.status(result.errorStatus).json({ error: result.errorMessage });
+      }
+      return res.status(201).json({ success: true, file: result.file });
+    } catch (err: any) {
+      console.error('Error in POST /api/files/upload-binary:', err);
+      return res.status(500).json({ error: 'File upload failed', message: err?.message });
+    }
+  });
+
   app.post('/api/files/upload', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
@@ -1556,65 +1921,15 @@ export function registerDataRoutes(app: Express): void {
         return res.status(400).json({ error: 'File dataBase64 is required.' });
       }
 
-      const cleanMime = String(mimeType).split(';')[0].trim().toLowerCase();
-      if (!ALLOWED_UPLOAD_MIMES.has(cleanMime)) {
-        return res.status(400).json({ error: `Unsupported file type: ${cleanMime}` });
-      }
-
       // Strip data URI prefix if sent
       const rawBase64 = dataBase64.includes(',') ? dataBase64.split(',')[1] : dataBase64;
       const buffer = Buffer.from(rawBase64, 'base64');
 
-      const MAX_BYTES = 25 * 1024 * 1024; // 25MB
-      if (buffer.byteLength === 0 || buffer.byteLength > MAX_BYTES) {
-        return res.status(400).json({ error: 'File size must be between 1 byte and 25 MB.' });
+      const result = persistUploadedFileBuffer(tenantId, session.userId, String(fileName), String(mimeType), String(category), buffer);
+      if ('errorStatus' in result && typeof result.errorStatus === 'number') {
+        return res.status(result.errorStatus).json({ error: result.errorMessage });
       }
-
-      const { uploadsDir } = initDatabase();
-      const safeTenantDir = tenantId.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const tenantUploadDir = path.join(uploadsDir, safeTenantDir);
-      if (!fs.existsSync(tenantUploadDir)) fs.mkdirSync(tenantUploadDir, { recursive: true });
-
-      const fileId = `file-${crypto.randomUUID()}`;
-      const ext = getFileExtensionForMime(cleanMime, String(fileName));
-      const diskName = `${fileId}${ext}`;
-      const absPath = path.join(tenantUploadDir, diskName);
-      fs.writeFileSync(absPath, buffer);
-
-      const publicUrl = `/api/files/${fileId}`;
-      const now = new Date().toISOString();
-      const db = getDb();
-      db.prepare(
-        `INSERT INTO uploaded_files (id, school_id, uploaded_by, original_name, mime_type, size_bytes, category, storage_path, public_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        fileId,
-        tenantId,
-        session.userId,
-        path.basename(String(fileName)).slice(0, 200),
-        cleanMime,
-        buffer.byteLength,
-        String(category).slice(0, 64),
-        path.relative(uploadsDir, absPath),
-        publicUrl,
-        now
-      );
-      notifyMySqlTablesChanged(['uploaded_files']);
-
-      return res.status(201).json({
-        success: true,
-        file: {
-          id: fileId,
-          schoolId: tenantId,
-          uploadedBy: session.userId,
-          originalName: path.basename(String(fileName)),
-          mimeType: cleanMime,
-          sizeBytes: buffer.byteLength,
-          category,
-          url: publicUrl,
-          createdAt: now,
-        },
-      });
+      return res.status(201).json({ success: true, file: result.file });
     } catch (err: any) {
       console.error('Error in POST /api/files/upload:', err);
       return res.status(500).json({ error: 'File upload failed', message: err?.message });
@@ -1653,9 +1968,14 @@ export function registerDataRoutes(app: Express): void {
       const isPublicAsset = row.school_id === 'global' || row.category === 'branding' || row.category === 'hero';
       if (!isPublicAsset) {
         const session = req.authSession;
-        if (!session) return res.status(401).json({ error: 'Authentication required to download this file.' });
+        if (!session) return res.status(401).json({ error: 'Authentication required to view this resource.' });
         if (!session.isSuperAdmin && session.schoolId !== row.school_id) {
           return res.status(403).json({ error: 'Access denied to file outside your school tenant.' });
+        }
+        if (String(req.query.download || '').toLowerCase() === '1' || String(req.query.download || '').toLowerCase() === 'true') {
+          return res.status(403).json({
+            error: 'Downloading shared E-resources and library contents is restricted. View in-app only.',
+          });
         }
       }
 
@@ -1665,8 +1985,12 @@ export function registerDataRoutes(app: Express): void {
         return res.status(404).json({ error: 'Stored file missing on disk.' });
       }
 
+      const safeInlineName = String(row.original_name || 'resource').replace(/["\r\n]/g, '_');
       res.setHeader('Content-Type', row.mime_type);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Content-Disposition', `inline; filename="${safeInlineName}"`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', isPublicAsset ? 'public, max-age=3600' : 'private, no-store');
       res.sendFile(absPath);
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed serving file', message: err?.message });

@@ -54,11 +54,20 @@ async function startServer() {
 
   app.use(
     express.json({
-      limit: '35mb',
+      limit: '50mb',
       type: ['application/json', 'application/webhook+json'],
       verify: (req: any, _res, buf) => {
         req.rawBody = buf.toString('utf8');
       },
+    })
+  );
+
+  // Raw binary body parser for large teacher E-resource uploads (video, audio, PDF, images up to 60MB)
+  app.use(
+    '/api/files/upload-binary',
+    express.raw({
+      type: '*/*',
+      limit: '65mb',
     })
   );
 

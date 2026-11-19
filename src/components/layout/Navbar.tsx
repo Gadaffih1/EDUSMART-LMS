@@ -44,6 +44,7 @@ import { PWAInstallButton } from '../pwa/PWAInstallExperience';
 import {
   getAdministrativeRoleDisplayName,
   getAdministrativeRoleShortName,
+  userHasRole,
 } from '../../utils/subjectTeacherSwitch';
 
 interface NavbarProps {
@@ -448,6 +449,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             </select>
           )}
 
+          {/* Delegated Extra Role: Student Stream Allocations Quick Launcher (ONLY for non-admin/non-senior staff explicitly assigned the extra role) */}
+          {currentUser &&
+            Array.isArray(currentUser.extraRoles) &&
+            currentUser.extraRoles.includes('student_stream_allocator') &&
+            !userHasRole(currentUser, 'admin') &&
+            !userHasRole(currentUser, 'senior_teacher') && (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('open-stream-allocator'))}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer flex items-center gap-1.5 text-xs font-bold whitespace-nowrap"
+                title="Open Student Stream Assignment Hub (Delegated Extra Role)"
+                aria-label="Student Stream Allocations"
+              >
+                <Users className="w-4 h-4 text-sky-600" />
+                <span className="hidden xl:inline">Student Streams</span>
+              </button>
+            )}
+
           {/* Integrated Operations & Architecture Quick Launcher */}
           {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
             <button
@@ -749,6 +768,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                       : `Switch as ${getAdministrativeRoleShortName(r)}`}
                   </button>
                 ))}
+              {currentUser &&
+                Array.isArray(currentUser.extraRoles) &&
+                currentUser.extraRoles.includes('student_stream_allocator') &&
+                !userHasRole(currentUser, 'admin') &&
+                !userHasRole(currentUser, 'senior_teacher') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('open-stream-allocator'));
+                      setIsMobileActionsOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100"
+                    role="menuitem"
+                  >
+                    <Users className="h-4 w-4 text-sky-700" /> Student Stream Allocations
+                  </button>
+                )}
               {currentUser && ['admin', 'head_teacher', 'deputy_head', 'finance_officer', 'procurement_officer', 'storekeeper', 'hr_manager'].includes(currentUser.role) && (
                 <button
                   type="button"

@@ -22,6 +22,7 @@ import {
   PRIMARY_STREAMS
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { ClassTeacherModule } from './ClassTeacherModule';
 import { StudentGateExit } from './StudentGateExit';
 import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
@@ -41,6 +42,8 @@ import { StudentStreamManager } from './StudentStreamManager';
 import { TeacherLessonFileManager } from './TeacherLessonFileManager';
 import { TeacherSubjectChatInbox } from './TeacherSubjectChatInbox';
 import { SubjectTeacherVirtualLessonsPanel } from '../virtual-classroom/SubjectTeacherVirtualLessonsPanel';
+import { TeacherLibraryPortal } from '../library/TeacherLibraryPortal';
+import { canDeleteEResource } from '../../utils/resourcePermissions';
 import { 
   ClipboardCheck,
   FileCheck2, 
@@ -79,10 +82,18 @@ import {
   FlaskConical,
   Laptop,
   Atom,
-  MessageSquare
+  MessageSquare,
+  Upload,
+  X,
+  Loader2,
+  Library,
+  Lock
 } from 'lucide-react';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
-import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
+import {
+  canAccessStudentStreamAllocation,
+  getAdministrativeRoleShortName,
+} from '../../utils/subjectTeacherSwitch';
 import {
   canAccessTeacherLabs,
   getAllowedGradesForTeacher,
@@ -115,6 +126,7 @@ type TeacherTab =
   | 'quizzes'
   | 'virtual_class'
   | 'timetable'
+  | 'library_contents'
   | 'library_booking'
   | 'reminders'
   | 'reporting_hub';
@@ -149,6 +161,10 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     () => canAccessTeacherLabs(currentUser),
     [currentUser, allocationRevision]
   );
+  const canAllocateStreams = React.useMemo(
+    () => canAccessStudentStreamAllocation(currentUser),
+    [currentUser, allocationRevision]
+  );
   const teacherAssignedSubjects = React.useMemo(
     () => getTeacherAssignedSubjects(currentUser),
     [currentUser, allocationRevision]
@@ -158,12 +174,15 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     [currentUser, allocationRevision]
   );
 
-  // If lab access is revoked or unavailable, never remain on a lab tab
+  // If lab access or stream allocation access is revoked or unavailable, never remain on restricted tabs
   React.useEffect(() => {
     if (!hasLabAccess && (activeTab === 'computer_lab' || activeTab === 'virtual_lab')) {
       setActiveTab(isClassTeacher ? 'class_register' : 'work_entry');
     }
-  }, [hasLabAccess, activeTab, isClassTeacher]);
+    if (!canAllocateStreams && activeTab === 'stream_management') {
+      setActiveTab(isClassTeacher ? 'class_register' : 'work_entry');
+    }
+  }, [hasLabAccess, canAllocateStreams, activeTab, isClassTeacher]);
 
   // Handle direct tab navigation from notification items
   React.useEffect(() => {
@@ -171,8 +190,10 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'reminders', 'reporting_hub', 'lunch_register'].includes(tab)) {
+        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'library_contents', 'library_booking', 'reminders', 'reporting_hub', 'lunch_register'].includes(tab)) {
           setActiveTab(tab as TeacherTab);
+        } else if (tab === 'library') {
+          setActiveTab('library_contents');
         } else if (tab === 'computer_lab' || tab === 'scratch' || tab === 'cs_lab' || tab === 'coding') {
           if (canAccessTeacherLabs(currentUser)) {
             setActiveTab('computer_lab');
@@ -189,6 +210,10 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           setActiveTab('work_entry');
         } else if (tab === 'report' || tab === 'reports' || tab === 'reporting') {
           setActiveTab('reporting_hub');
+        } else if (tab === 'stream_management' || tab === 'student_stream_allocation') {
+          if (canAccessStudentStreamAllocation(currentUser)) {
+            setActiveTab('stream_management');
+          }
         } else if (tab === 'notes' || tab === 'videos' || tab === 'audio') {
           setActiveTab('resources');
         }
@@ -251,44 +276,205 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
   // Resource Sub-Tab (Notes, Audios, Videos, Images, E-Links)
   const [resourceSubTab, setResourceSubTab] = useState<'notes' | 'audios' | 'videos' | 'images' | 'elinks'>('notes');
 
-  // Lesson Note Creation Form State
+  // Lesson Note Creation Form State (with optional PDF Document device upload)
   const [noteTitle, setNoteTitle] = useState('');
   const [noteGrade, setNoteGrade] = useState<GradeLevel>(defaultGrade);
   const [noteSubject, setNoteSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
   const [noteSummary, setNoteSummary] = useState('');
   const [noteContent, setNoteContent] = useState('');
   const [noteKeyTakeaway, setNoteKeyTakeaway] = useState('');
+  const [notePdfUrl, setNotePdfUrl] = useState('');
+  const [notePdfName, setNotePdfName] = useState('');
+  const [notePdfMime, setNotePdfMime] = useState('');
+  const [notePdfSize, setNotePdfSize] = useState('');
   const [noteSuccess, setNoteSuccess] = useState(false);
 
-  // Audio Lesson Form State
+  // Audio Lesson Form State (supports direct audio upload from device)
   const [audioTitle, setAudioTitle] = useState('');
   const [audioGrade, setAudioGrade] = useState<GradeLevel>(defaultGrade);
   const [audioSubject, setAudioSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
   const [audioDuration, setAudioDuration] = useState<number>(10);
-  const [audioUrl, setAudioUrl] = useState('https://actions.google.com/sounds/v1/science/digital_computer_sounds.ogg');
+  const [audioUrl, setAudioUrl] = useState('');
+  const [audioFileName, setAudioFileName] = useState('');
+  const [audioMimeType, setAudioMimeType] = useState('');
+  const [audioFileSize, setAudioFileSize] = useState('');
   const [audioTranscript, setAudioTranscript] = useState('');
   const [audioKeyPoint, setAudioKeyPoint] = useState('');
   const [audioSuccess, setAudioSuccess] = useState(false);
 
-  // Video Lesson Form State
+  // Video Lesson Form State (supports direct video + thumbnail picture upload from device)
   const [videoTitle, setVideoTitle] = useState('');
   const [videoGrade, setVideoGrade] = useState<GradeLevel>(defaultGrade);
   const [videoSubject, setVideoSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
   const [videoDuration, setVideoDuration] = useState<number>(15);
-  const [videoUrl, setVideoUrl] = useState('https://www.youtube.com/embed/dQw4w9WgXcQ');
-  const [videoThumbnail, setVideoThumbnail] = useState('https://images.unsplash.com/photo-1596495578065-6e0763fa1178?auto=format&fit=crop&w=600&q=80');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoThumbnail, setVideoThumbnail] = useState('');
+  const [videoFileName, setVideoFileName] = useState('');
+  const [videoMimeType, setVideoMimeType] = useState('');
+  const [videoFileSize, setVideoFileSize] = useState('');
   const [videoKeyPoint, setVideoKeyPoint] = useState('');
   const [videoSuccess, setVideoSuccess] = useState(false);
 
-  // Lesson Image / Pedagogical Diagram Form State
+  // Lesson Image / Pedagogical Diagram / Picture Form State (supports direct image/picture upload from device)
   const [imgTitle, setImgTitle] = useState('');
   const [imgGrade, setImgGrade] = useState<GradeLevel>(defaultGrade);
   const [imgSubject, setImgSubject] = useState<SubjectName>(getSubjectsForGrade(defaultGrade)[0]);
-  const [imgUrl, setImgUrl] = useState('https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1000&q=80');
+  const [imgUrl, setImgUrl] = useState('');
+  const [imgFileName, setImgFileName] = useState('');
+  const [imgMimeType, setImgMimeType] = useState('');
+  const [imgFileSize, setImgFileSize] = useState('');
   const [imgCaption, setImgCaption] = useState('');
   const [imgCategory, setImgCategory] = useState<'diagram' | 'chart' | 'infographic' | 'illustration'>('diagram');
   const [imgTags, setImgTags] = useState('CBC, Revision, Curriculum');
   const [imgSuccess, setImgSuccess] = useState(false);
+
+  // Device Upload Progress & Error State across E-Resource Channels
+  const [uploadingResource, setUploadingResource] = useState<
+    'note_pdf' | 'audio' | 'video' | 'video_thumb' | 'image' | null
+  >(null);
+  const [resourceUploadError, setResourceUploadError] = useState<string | null>(null);
+
+  const formatFileSizeLabel = (bytes: number): string => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const titleFromFileName = (name: string): string => {
+    const clean = name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : '';
+  };
+
+  const detectMediaMinutes = (file: File, kind: 'audio' | 'video'): Promise<number | null> =>
+    new Promise((resolve) => {
+      try {
+        const objUrl = URL.createObjectURL(file);
+        const media = document.createElement(kind);
+        media.preload = 'metadata';
+        media.onloadedmetadata = () => {
+          const mins = Number.isFinite(media.duration) && media.duration > 0
+            ? Math.max(1, Math.round(media.duration / 60))
+            : null;
+          URL.revokeObjectURL(objUrl);
+          resolve(mins);
+        };
+        media.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          resolve(null);
+        };
+        media.src = objUrl;
+      } catch {
+        resolve(null);
+      }
+    });
+
+  const handleUploadNotePdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setResourceUploadError(null);
+    setUploadingResource('note_pdf');
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'e-resource-pdf');
+      setNotePdfUrl(uploaded.url);
+      setNotePdfName(file.name);
+      setNotePdfMime(uploaded.mimeType || file.type || 'application/pdf');
+      setNotePdfSize(formatFileSizeLabel(file.size));
+      if (!noteTitle.trim()) {
+        setNoteTitle(titleFromFileName(file.name));
+      }
+    } catch (err: any) {
+      setResourceUploadError(err?.message || 'Failed to upload PDF document from device.');
+    } finally {
+      setUploadingResource(null);
+    }
+  };
+
+  const handleUploadAudioFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setResourceUploadError(null);
+    setUploadingResource('audio');
+    try {
+      const detectedMins = await detectMediaMinutes(file, 'audio');
+      const uploaded = await ClientDataStore.uploadFile(file, 'e-resource-audio');
+      setAudioUrl(uploaded.url);
+      setAudioFileName(file.name);
+      setAudioMimeType(uploaded.mimeType || file.type || 'audio/mpeg');
+      setAudioFileSize(formatFileSizeLabel(file.size));
+      if (detectedMins) setAudioDuration(detectedMins);
+      if (!audioTitle.trim()) {
+        setAudioTitle(titleFromFileName(file.name));
+      }
+    } catch (err: any) {
+      setResourceUploadError(err?.message || 'Failed to upload audio file from device.');
+    } finally {
+      setUploadingResource(null);
+    }
+  };
+
+  const handleUploadVideoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setResourceUploadError(null);
+    setUploadingResource('video');
+    try {
+      const detectedMins = await detectMediaMinutes(file, 'video');
+      const uploaded = await ClientDataStore.uploadFile(file, 'e-resource-video');
+      setVideoUrl(uploaded.url);
+      setVideoFileName(file.name);
+      setVideoMimeType(uploaded.mimeType || file.type || 'video/mp4');
+      setVideoFileSize(formatFileSizeLabel(file.size));
+      if (detectedMins) setVideoDuration(detectedMins);
+      if (!videoTitle.trim()) {
+        setVideoTitle(titleFromFileName(file.name));
+      }
+    } catch (err: any) {
+      setResourceUploadError(err?.message || 'Failed to upload video file from device.');
+    } finally {
+      setUploadingResource(null);
+    }
+  };
+
+  const handleUploadVideoThumbnail = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setResourceUploadError(null);
+    setUploadingResource('video_thumb');
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'e-resource-thumbnail');
+      setVideoThumbnail(uploaded.url);
+    } catch (err: any) {
+      setResourceUploadError(err?.message || 'Failed to upload thumbnail image from device.');
+    } finally {
+      setUploadingResource(null);
+    }
+  };
+
+  const handleUploadLessonImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setResourceUploadError(null);
+    setUploadingResource('image');
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'e-resource-image');
+      setImgUrl(uploaded.url);
+      setImgFileName(file.name);
+      setImgMimeType(uploaded.mimeType || file.type || 'image/jpeg');
+      setImgFileSize(formatFileSizeLabel(file.size));
+      if (!imgTitle.trim()) {
+        setImgTitle(titleFromFileName(file.name));
+      }
+    } catch (err: any) {
+      setResourceUploadError(err?.message || 'Failed to upload image/picture from device.');
+    } finally {
+      setUploadingResource(null);
+    }
+  };
 
   // Existing Resources Lists for Teacher Management
   const [existingNotes, setExistingNotes] = useState<LessonNote[]>(() => Storage.getNotes());
@@ -429,18 +615,28 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
   const handleCreateNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!noteTitle || !noteContent) return;
+    setResourceUploadError(null);
+    if (!noteTitle.trim()) return;
+    if (!noteContent.trim() && !notePdfUrl) {
+      setResourceUploadError('Please enter written lesson notes or upload a PDF document from your device.');
+      return;
+    }
 
     const newNote: LessonNote = {
       id: `note-${Date.now()}`,
       topicId: `top-custom-${Date.now()}`,
       grade: noteGrade,
       subject: noteSubject,
-      title: noteTitle,
-      summary: noteSummary || 'Comprehensive classroom study note.',
-      content: noteContent,
-      keyTakeaways: noteKeyTakeaway ? [noteKeyTakeaway] : ['Review all concepts thoroughly before topical quiz.'],
+      title: noteTitle.trim(),
+      summary: noteSummary.trim() || (notePdfName ? `PDF Document: ${notePdfName}` : 'Comprehensive classroom study note.'),
+      content: noteContent.trim() || (notePdfName ? `Study the attached PDF document (${notePdfName}) carefully.` : ''),
+      keyTakeaways: noteKeyTakeaway.trim() ? [noteKeyTakeaway.trim()] : ['Review all concepts thoroughly before topical quiz.'],
+      documentUrl: notePdfUrl || undefined,
+      documentName: notePdfName || undefined,
+      documentMimeType: notePdfMime || undefined,
+      documentSize: notePdfSize || undefined,
       author: currentUser.name,
+      uploadedById: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
@@ -450,29 +646,48 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     setNoteTitle('');
     setNoteSummary('');
     setNoteContent('');
-    setTimeout(() => setNoteSuccess(false), 2500);
+    setNoteKeyTakeaway('');
+    setNotePdfUrl('');
+    setNotePdfName('');
+    setNotePdfMime('');
+    setNotePdfSize('');
+    setTimeout(() => setNoteSuccess(false), 3000);
   };
 
   const handleDeleteNote = (id: string) => {
+    const target = existingNotes.find((n) => n.id === id);
+    if (!target || !canDeleteEResource(currentUser, target)) {
+      setResourceUploadError('Only the user who uploaded this E-resource or the System Administrator may delete it.');
+      return;
+    }
     Storage.deleteNote(id);
     setExistingNotes(Storage.getNotes());
   };
 
   const handleCreateAudio = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!audioTitle) return;
+    setResourceUploadError(null);
+    if (!audioTitle.trim()) return;
+    if (!audioUrl.trim()) {
+      setResourceUploadError('Please upload an audio file from your device or paste an audio URL.');
+      return;
+    }
 
     const newAudio: AudioLesson = {
       id: `aud-${Date.now()}`,
       topicId: `top-custom-${Date.now()}`,
       grade: audioGrade,
       subject: audioSubject,
-      title: audioTitle,
+      title: audioTitle.trim(),
       durationMinutes: Number(audioDuration) || 10,
-      audioUrl: audioUrl || 'https://actions.google.com/sounds/v1/science/digital_computer_sounds.ogg',
-      transcript: audioTranscript || 'Comprehensive CBC audio lesson for student mental revision.',
-      keyPoints: audioKeyPoint ? [audioKeyPoint] : ['Listen attentively and note down key curriculum concepts.'],
+      audioUrl: audioUrl.trim(),
+      fileName: audioFileName || undefined,
+      mimeType: audioMimeType || undefined,
+      fileSize: audioFileSize || undefined,
+      transcript: audioTranscript.trim() || 'Comprehensive CBC audio lesson for student revision.',
+      keyPoints: audioKeyPoint.trim() ? [audioKeyPoint.trim()] : ['Listen attentively and note down key curriculum concepts.'],
       teacherName: currentUser.name,
+      uploadedById: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
@@ -480,31 +695,49 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     setExistingAudios(Storage.getAudios());
     setAudioSuccess(true);
     setAudioTitle('');
+    setAudioUrl('');
+    setAudioFileName('');
+    setAudioMimeType('');
+    setAudioFileSize('');
     setAudioTranscript('');
     setAudioKeyPoint('');
-    setTimeout(() => setAudioSuccess(false), 2500);
+    setTimeout(() => setAudioSuccess(false), 3000);
   };
 
   const handleDeleteAudio = (id: string) => {
+    const target = existingAudios.find((a) => a.id === id);
+    if (!target || !canDeleteEResource(currentUser, target)) {
+      setResourceUploadError('Only the user who uploaded this E-resource or the System Administrator may delete it.');
+      return;
+    }
     Storage.deleteAudio(id);
     setExistingAudios(Storage.getAudios());
   };
 
   const handleCreateVideo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!videoTitle) return;
+    setResourceUploadError(null);
+    if (!videoTitle.trim()) return;
+    if (!videoUrl.trim()) {
+      setResourceUploadError('Please upload a video file from your device or enter a video URL.');
+      return;
+    }
 
     const newVideo: VideoLesson = {
       id: `vid-${Date.now()}`,
       topicId: `top-custom-${Date.now()}`,
       grade: videoGrade,
       subject: videoSubject,
-      title: videoTitle,
+      title: videoTitle.trim(),
       durationMinutes: Number(videoDuration) || 15,
-      videoUrl: videoUrl,
-      videoThumbnail: videoThumbnail,
-      keyPoints: videoKeyPoint ? [videoKeyPoint] : ['Observe the demonstrated steps and apply in your homework exercise.'],
+      videoUrl: videoUrl.trim(),
+      videoThumbnail: videoThumbnail.trim() || undefined,
+      fileName: videoFileName || undefined,
+      mimeType: videoMimeType || undefined,
+      fileSize: videoFileSize || undefined,
+      keyPoints: videoKeyPoint.trim() ? [videoKeyPoint.trim()] : ['Observe the demonstrated steps and apply in your homework exercise.'],
       teacherName: currentUser.name,
+      uploadedById: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
@@ -512,18 +745,33 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     setExistingVideos(Storage.getVideos());
     setVideoSuccess(true);
     setVideoTitle('');
+    setVideoUrl('');
+    setVideoThumbnail('');
+    setVideoFileName('');
+    setVideoMimeType('');
+    setVideoFileSize('');
     setVideoKeyPoint('');
-    setTimeout(() => setVideoSuccess(false), 2500);
+    setTimeout(() => setVideoSuccess(false), 3000);
   };
 
   const handleDeleteVideo = (id: string) => {
+    const target = existingVideos.find((v) => v.id === id);
+    if (!target || !canDeleteEResource(currentUser, target)) {
+      setResourceUploadError('Only the user who uploaded this E-resource or the System Administrator may delete it.');
+      return;
+    }
     Storage.deleteVideo(id);
     setExistingVideos(Storage.getVideos());
   };
 
   const handleCreateImage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imgTitle || !imgUrl) return;
+    setResourceUploadError(null);
+    if (!imgTitle.trim()) return;
+    if (!imgUrl.trim()) {
+      setResourceUploadError('Please upload an image/picture from your device or enter an image URL.');
+      return;
+    }
 
     const tagsArray = imgTags.split(',').map(t => t.trim()).filter(Boolean);
     const newImg: LessonImage = {
@@ -531,12 +779,16 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       topicId: `top-custom-${Date.now()}`,
       grade: imgGrade,
       subject: imgSubject,
-      title: imgTitle,
-      imageUrl: imgUrl,
-      caption: imgCaption || 'Visual pedagogical demonstration diagram for CBC curriculum learners.',
+      title: imgTitle.trim(),
+      imageUrl: imgUrl.trim(),
+      fileName: imgFileName || undefined,
+      mimeType: imgMimeType || undefined,
+      fileSize: imgFileSize || undefined,
+      caption: imgCaption.trim() || 'Visual pedagogical demonstration image/picture for CBC curriculum learners.',
       category: imgCategory,
-      tags: tagsArray.length > 0 ? tagsArray : ['Diagram', 'Visuals'],
+      tags: tagsArray.length > 0 ? tagsArray : ['Diagram', 'Picture', 'Visuals'],
       teacherName: currentUser.name,
+      uploadedById: currentUser.id,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
@@ -544,11 +796,20 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     setExistingImages(Storage.getLessonImages());
     setImgSuccess(true);
     setImgTitle('');
+    setImgUrl('');
+    setImgFileName('');
+    setImgMimeType('');
+    setImgFileSize('');
     setImgCaption('');
-    setTimeout(() => setImgSuccess(false), 2500);
+    setTimeout(() => setImgSuccess(false), 3000);
   };
 
   const handleDeleteImage = (id: string) => {
+    const target = existingImages.find((img) => img.id === id);
+    if (!target || !canDeleteEResource(currentUser, target)) {
+      setResourceUploadError('Only the user who uploaded this E-resource or the System Administrator may delete it.');
+      return;
+    }
     Storage.deleteLessonImage(id);
     setExistingImages(Storage.getLessonImages());
   };
@@ -637,7 +898,9 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       items: [
         { id: 'work_entry', label: '1. Lesson Work Entry', icon: Briefcase },
         { id: 'class_register', label: '2. Class Roll Call Register', icon: UserCheck, badge: isClassTeacher ? `${currentUser.stream || 'Stream'}` : undefined },
-        { id: 'stream_management' as TeacherTab, label: '3. Student Stream Allocations', icon: Users, badge: 'CBC Streams', badgeColor: 'bg-blue-600' },
+        ...(canAllocateStreams
+          ? [{ id: 'stream_management' as TeacherTab, label: '3. Student Stream Allocations', icon: Users, badge: 'CBC Streams', badgeColor: 'bg-blue-600' }]
+          : []),
         ...(isClassTeacher ? [{ id: 'lunch_register' as TeacherTab, label: '4. Learner Lunch Register', icon: Utensils, badge: 'Class Teacher' }] : []),
         { id: 'cbc_results', label: '5. CBC Assessment Results', icon: Award, badge: 'Marks / Entry', badgeColor: 'bg-emerald-600' }
       ]
@@ -656,6 +919,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           : []),
         { id: 'quizzes', label: '8. CBC Topical Quizzes', icon: CheckSquare },
         { id: 'resources', label: '9. Curriculum Resources & Links', icon: FolderTree },
+        { id: 'library_contents', label: '9b. School Library Contents', icon: Library, badge: 'Books & Digital', badgeColor: 'bg-purple-600' },
         { id: 'virtual_class', label: '10. Virtual Classrooms (LiveKit)', icon: Video }
       ]
     },
@@ -676,23 +940,23 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       
       {/* Top Navbar Header */}
-      <header className="relative lg:sticky lg:top-16 z-20 bg-slate-900 border-b border-slate-800 text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-3">
+      <header className="relative lg:sticky lg:top-16 z-20 bg-slate-900 border-b border-slate-800 text-white px-3 sm:px-6 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2 shadow-xs">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors lg:hidden cursor-pointer shrink-0"
             title="Toggle Menu"
           >
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
+          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block shrink-0">
             <EduSmartGadsaLogo variant="horizontal" size="xs" />
           </div>
 
-          <div>
-            <h1 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
-              <span>Academic Department Teacher Console</span>
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-black tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="truncate">Academic Department Teacher Console</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
                 {isClassTeacher ? `Grade ${currentUser.grade} ${currentUser.stream} Class Teacher` : 'Subject Teacher'}
               </span>
@@ -708,20 +972,40 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {switchedFromRole && onReturnToAdminWorkspace && (
             <button
               type="button"
               onClick={onReturnToAdminWorkspace}
-              className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <span>&larr; Return to {getAdministrativeRoleShortName(switchedFromRole)}</span>
             </button>
           )}
+
+          {/* Quick School Library Access */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('library_contents')}
+            className="px-2.5 sm:px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Access School Library Books, Digital E-Books & E-Links"
+          >
+            <Library className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">School Library</span>
+            <span className="sm:hidden">Library</span>
+          </button>
+
+          {/* Quick Library Room Booking */}
+          <LibraryRoomBookingButton
+            currentUser={currentUser}
+            variant="header"
+            label="Book Library Room"
+          />
+
           {/* Quick Result Upload / View Button */}
           <button
             onClick={() => setActiveTab('cbc_results')}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Award className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">CBC Assessment Results</span>
@@ -731,7 +1015,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           {/* Report Absence to Leadership */}
           <button
             onClick={() => setShowAbsenceModal(true)}
-            className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             title="Report your absence directly to Head Teacher, Deputy Head, Dean of Studies, and Senior Teacher"
           >
             <ShieldAlert className="w-3.5 h-3.5" />
@@ -740,7 +1024,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
           <button
             onClick={() => setActiveTab('virtual_class')}
-            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="px-2.5 sm:px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Video className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Virtual Classrooms</span>
@@ -801,7 +1085,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       {/* ========================================================
           STUDENT STREAM MANAGEMENT (DOVE..SWAN / ATHI..TURKWEL)
           ======================================================== */}
-      {activeTab === 'stream_management' && (
+      {activeTab === 'stream_management' && canAllocateStreams && (
         <StudentStreamManager currentUser={currentUser} />
       )}
 
@@ -1246,26 +1530,92 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* CHANNEL 1: LESSON NOTES */}
+          {/* CHANNEL 1: LESSON NOTES & PDF DOCUMENTS */}
           {resourceSubTab === 'notes' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
                 <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-purple-600" />
-                  <span>Prepare & Publish Lesson Notes (Anti-Download Protected)</span>
+                  <span>Prepare & Publish Lesson Notes or PDF Document</span>
                 </h3>
                 <p className="text-xs text-slate-500 mb-4">
-                  Notes are securely stored in the learner workspace with copy/download prevention.
+                  Upload a PDF document directly from your device or author structured Markdown lesson notes for learners.
                 </p>
+
+                {resourceUploadError && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800 flex items-center justify-between gap-2">
+                    <span>{resourceUploadError}</span>
+                    <button type="button" onClick={() => setResourceUploadError(null)} className="text-rose-500 hover:text-rose-700">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {noteSuccess && (
                   <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
                     <Check className="w-4 h-4 text-emerald-600" />
-                    <span>Lesson note saved and immediately available to Grade {noteGrade} learners!</span>
+                    <span>Lesson note / PDF saved and immediately available to Grade {noteGrade} learners!</span>
                   </div>
                 )}
 
                 <form onSubmit={handleCreateNote} className="space-y-4">
+                  {/* Device PDF Upload Zone */}
+                  <div className="p-4 rounded-xl border-2 border-dashed border-purple-200 bg-purple-50/40 space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                          {uploadingResource === 'note_pdf' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <FileText className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">
+                            Upload PDF Document from Device
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Select a PDF handout, textbook excerpt, or worksheet (up to 60 MB).
+                          </div>
+                        </div>
+                      </div>
+                      <label className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs shrink-0 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingResource === 'note_pdf' ? 'Uploading PDF...' : notePdfUrl ? 'Replace PDF' : 'Choose PDF File'}</span>
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          onChange={handleUploadNotePdf}
+                          disabled={uploadingResource !== null}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {notePdfUrl && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-white border border-purple-200 rounded-lg text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FileText className="w-4 h-4 text-rose-600 shrink-0" />
+                          <span className="font-bold text-slate-800 truncate">{notePdfName || 'Uploaded PDF Document'}</span>
+                          {notePdfSize && <span className="text-[10px] font-mono text-slate-500 shrink-0">({notePdfSize})</span>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotePdfUrl('');
+                            setNotePdfName('');
+                            setNotePdfMime('');
+                            setNotePdfSize('');
+                          }}
+                          className="text-rose-600 hover:text-rose-800 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Remove PDF</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
@@ -1298,7 +1648,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Note Title</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Note / Document Title</label>
                     <input
                       type="text"
                       required
@@ -1322,11 +1672,11 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Full Lesson Content (Markdown formatted, headings with ###)
+                      Written Lesson Content {notePdfUrl ? '(Optional when PDF is uploaded)' : '(Markdown formatted, headings with ###)'}
                     </label>
                     <textarea
-                      rows={6}
-                      required
+                      rows={5}
+                      required={!notePdfUrl}
                       value={noteContent}
                       onChange={(e) => setNoteContent(e.target.value)}
                       placeholder="### 1. Introduction to Decimals&#10;A decimal number has a whole number part and a fractional part separated by a decimal point..."
@@ -1347,41 +1697,64 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                    disabled={uploadingResource === 'note_pdf'}
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
-                    Publish Lesson Note
+                    {uploadingResource === 'note_pdf' ? 'Uploading PDF...' : 'Publish Lesson Note / PDF'}
                   </button>
                 </form>
               </div>
 
               {/* Published Notes Roster */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                  Published Lesson Notes ({existingNotes.length})
+                  Published Lesson Notes & PDFs ({existingNotes.length})
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {existingNotes.map((n) => (
                     <div key={n.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3">
                       <div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
-                            Grade {n.grade} · {n.subject}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">
+                              Grade {n.grade} · {n.subject}
+                            </span>
+                            {n.documentUrl && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 inline-flex items-center gap-1">
+                                <FileText className="w-3 h-3" />
+                                <span>PDF</span>
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-slate-400 font-mono">{n.createdAt}</span>
                         </div>
                         <h5 className="font-bold text-xs text-slate-900 mt-2 line-clamp-1">{n.title}</h5>
                         <p className="text-[11px] text-slate-500 line-clamp-2 mt-1">{n.summary}</p>
+                        {n.documentUrl && (
+                          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg mt-2">
+                            <FileText className="w-3 h-3 shrink-0" />
+                            <span className="truncate max-w-[200px]">{n.documentName || 'PDF Attached'}</span>
+                            <span className="text-[10px] text-amber-700 font-semibold">· View-Only</span>
+                          </div>
+                        )}
                       </div>
                       <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                         <span className="text-[10px] text-slate-400">By {n.author}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteNote(n.id)}
-                          className="text-rose-600 hover:text-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Remove</span>
-                        </button>
+                        {canDeleteEResource(currentUser, n) ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNote(n.id)}
+                            className="text-rose-600 hover:text-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 inline-flex items-center gap-1" title="Only the uploader or System Administrator can delete this E-resource">
+                            <Lock className="w-3 h-3" />
+                            <span>Protected</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1393,14 +1766,23 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           {/* CHANNEL 2: AUDIO LESSONS */}
           {resourceSubTab === 'audios' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
                 <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
                   <Volume2 className="w-4 h-4 text-purple-600" />
-                  <span>Publish Audio Lesson & Mental Math Podcast</span>
+                  <span>Upload & Publish Audio Lesson</span>
                 </h3>
                 <p className="text-xs text-slate-500 mb-4">
-                  Streamable audio podcasts with accompanying transcripts and key revision checkpoints.
+                  Upload voice recordings or audio lessons directly from your phone, tablet, or computer (MP3, WAV, M4A, OGG, AAC) or link an external audio stream.
                 </p>
+
+                {resourceUploadError && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800 flex items-center justify-between gap-2">
+                    <span>{resourceUploadError}</span>
+                    <button type="button" onClick={() => setResourceUploadError(null)} className="text-rose-500 hover:text-rose-700">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {audioSuccess && (
                   <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
@@ -1410,6 +1792,66 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                 )}
 
                 <form onSubmit={handleCreateAudio} className="space-y-4">
+                  {/* Device Audio Upload Zone */}
+                  <div className="p-4 rounded-xl border-2 border-dashed border-teal-200 bg-teal-50/40 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+                          {uploadingResource === 'audio' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Volume2 className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">
+                            Upload Audio File from Device
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Supports MP3, WAV, M4A, OGG, AAC, FLAC voice notes & podcasts (up to 60 MB).
+                          </div>
+                        </div>
+                      </div>
+                      <label className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs shrink-0 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingResource === 'audio' ? 'Uploading Audio...' : audioFileName ? 'Replace Audio' : 'Choose Audio File'}</span>
+                        <input
+                          type="file"
+                          accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.weba,.amr"
+                          onChange={handleUploadAudioFile}
+                          disabled={uploadingResource !== null}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {audioUrl && (
+                      <div className="space-y-2 bg-white p-3 rounded-lg border border-teal-200">
+                        {audioFileName && (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-bold text-teal-900 truncate">
+                              {audioFileName} {audioFileSize ? `(${audioFileSize})` : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAudioUrl('');
+                                setAudioFileName('');
+                                setAudioMimeType('');
+                                setAudioFileSize('');
+                              }}
+                              className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Clear</span>
+                            </button>
+                          </div>
+                        )}
+                        <audio controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()} preload="metadata" src={audioUrl} className="w-full h-9" />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
@@ -1444,7 +1886,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                       <input
                         type="number"
                         min="1"
-                        max="60"
+                        max="180"
                         value={audioDuration}
                         onChange={(e) => setAudioDuration(Number(e.target.value))}
                         className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
@@ -1465,13 +1907,15 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Audio Stream / MP3 URL</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Uploaded Audio Path or External Stream URL
+                    </label>
                     <input
-                      type="url"
+                      type="text"
                       required
                       value={audioUrl}
                       onChange={(e) => setAudioUrl(e.target.value)}
-                      placeholder="https://..."
+                      placeholder="Upload an audio file above or paste https://..."
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
                     />
                   </div>
@@ -1490,7 +1934,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Full Audio Script / Transcript</label>
                     <textarea
-                      rows={4}
+                      rows={3}
                       value={audioTranscript}
                       onChange={(e) => setAudioTranscript(e.target.value)}
                       placeholder="Enter script text so learners can follow along as they listen..."
@@ -1500,41 +1944,50 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                    disabled={uploadingResource === 'audio'}
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
-                    Publish Audio Lesson
+                    {uploadingResource === 'audio' ? 'Uploading Audio...' : 'Publish Audio Lesson'}
                   </button>
                 </form>
               </div>
 
               {/* Published Audios Roster */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
                   Published Audio Lessons ({existingAudios.length})
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {existingAudios.map((a) => (
                     <div key={a.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between space-y-3">
-                      <div>
+                      <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-800">
                             Grade {a.grade} · {a.subject}
                           </span>
                           <span className="text-[10px] text-teal-700 font-mono font-bold">{a.durationMinutes} mins</span>
                         </div>
-                        <h5 className="font-bold text-xs text-slate-900 mt-2 line-clamp-1">{a.title}</h5>
-                        <p className="text-[11px] text-slate-500 line-clamp-2 mt-1 italic">"{a.transcript}"</p>
+                        <h5 className="font-bold text-xs text-slate-900 line-clamp-1">{a.title}</h5>
+                        <audio controls controlsList="nodownload" onContextMenu={(e) => e.preventDefault()} preload="metadata" src={a.audioUrl} className="w-full h-8" />
+                        <p className="text-[11px] text-slate-500 line-clamp-2 italic">"{a.transcript}"</p>
                       </div>
                       <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                         <span className="text-[10px] text-slate-400">By {a.teacherName}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteAudio(a.id)}
-                          className="text-rose-600 hover:text-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Remove</span>
-                        </button>
+                        {canDeleteEResource(currentUser, a) ? (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAudio(a.id)}
+                            className="text-rose-600 hover:text-rose-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 inline-flex items-center gap-1" title="Only the uploader or System Administrator can delete this E-resource">
+                            <Lock className="w-3 h-3" />
+                            <span>Protected</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1546,14 +1999,23 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           {/* CHANNEL 3: VIDEO LESSONS */}
           {resourceSubTab === 'videos' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
                 <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
                   <Video className="w-4 h-4 text-purple-600" />
-                  <span>Publish Video Lesson & Whiteboard Stream</span>
+                  <span>Upload & Publish Video Lesson</span>
                 </h3>
                 <p className="text-xs text-slate-500 mb-4">
-                  Curate video demonstrations, KICD EduTV recordings, and animated concept explanations.
+                  Upload classroom demonstration videos directly from your device (MP4, WebM, MOV, 3GP, MKV) or link a YouTube / Vimeo educational stream.
                 </p>
+
+                {resourceUploadError && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800 flex items-center justify-between gap-2">
+                    <span>{resourceUploadError}</span>
+                    <button type="button" onClick={() => setResourceUploadError(null)} className="text-rose-500 hover:text-rose-700">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {videoSuccess && (
                   <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
@@ -1563,6 +2025,76 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                 )}
 
                 <form onSubmit={handleCreateVideo} className="space-y-4">
+                  {/* Device Video Upload Zone */}
+                  <div className="p-4 rounded-xl border-2 border-dashed border-rose-200 bg-rose-50/40 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+                          {uploadingResource === 'video' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Video className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">
+                            Upload Video from Device
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Supports MP4, WebM, MOV, M4V, 3GP recorded lessons (up to 60 MB).
+                          </div>
+                        </div>
+                      </div>
+                      <label className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs shrink-0 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingResource === 'video' ? 'Uploading Video...' : videoFileName ? 'Replace Video' : 'Choose Video File'}</span>
+                        <input
+                          type="file"
+                          accept="video/*,.mp4,.webm,.mov,.ogv,.m4v,.3gp,.mkv"
+                          onChange={handleUploadVideoFile}
+                          disabled={uploadingResource !== null}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {videoUrl && !videoUrl.includes('youtube.com') && !videoUrl.includes('youtu.be') && !videoUrl.includes('vimeo.com') && (
+                      <div className="space-y-2 bg-white p-3 rounded-lg border border-rose-200">
+                        {videoFileName && (
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-bold text-rose-900 truncate">
+                              {videoFileName} {videoFileSize ? `(${videoFileSize})` : ''}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVideoUrl('');
+                                setVideoFileName('');
+                                setVideoMimeType('');
+                                setVideoFileSize('');
+                              }}
+                              className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Clear</span>
+                            </button>
+                          </div>
+                        )}
+                        <video
+                          controls
+                          controlsList="nodownload"
+                          disablePictureInPicture
+                          onContextMenu={(e) => e.preventDefault()}
+                          playsInline
+                          preload="metadata"
+                          poster={videoThumbnail || undefined}
+                          src={videoUrl}
+                          className="w-full max-h-56 rounded-lg bg-black"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
@@ -1597,7 +2129,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                       <input
                         type="number"
                         min="1"
-                        max="120"
+                        max="180"
                         value={videoDuration}
                         onChange={(e) => setVideoDuration(Number(e.target.value))}
                         className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
@@ -1619,23 +2151,40 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Video Stream / Embed URL</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Uploaded Video Path or Stream/YouTube URL
+                      </label>
                       <input
-                        type="url"
+                        type="text"
                         required
                         value={videoUrl}
                         onChange={(e) => setVideoUrl(e.target.value)}
-                        placeholder="https://..."
+                        placeholder="Upload a video above or paste https://..."
                         className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Thumbnail Cover Image URL</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Thumbnail Picture (Optional)
+                        </label>
+                        <label className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 hover:text-purple-900 cursor-pointer">
+                          <Upload className="w-3 h-3" />
+                          <span>{uploadingResource === 'video_thumb' ? 'Uploading...' : 'Upload Image'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleUploadVideoThumbnail}
+                            disabled={uploadingResource !== null}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                       <input
-                        type="url"
+                        type="text"
                         value={videoThumbnail}
                         onChange={(e) => setVideoThumbnail(e.target.value)}
-                        placeholder="https://..."
+                        placeholder="Upload a cover image or paste https://..."
                         className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
                       />
                     </div>
@@ -1654,22 +2203,23 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                    disabled={uploadingResource === 'video' || uploadingResource === 'video_thumb'}
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
-                    Publish Video Lesson
+                    {uploadingResource === 'video' ? 'Uploading Video...' : 'Publish Video Lesson'}
                   </button>
                 </form>
               </div>
 
               {/* Published Videos Roster */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
                   Published Video Lessons ({existingVideos.length})
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {existingVideos.map((v) => (
                     <div key={v.id} className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex flex-col justify-between">
-                      {v.videoThumbnail && (
+                      {v.videoThumbnail ? (
                         <div className="h-32 w-full bg-slate-900 relative overflow-hidden">
                           <img src={v.videoThumbnail} alt={v.title} className="w-full h-full object-cover opacity-80" />
                           <div className="absolute inset-0 flex items-center justify-center">
@@ -1681,7 +2231,11 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                             {v.durationMinutes}m
                           </span>
                         </div>
-                      )}
+                      ) : !v.videoUrl.includes('youtube.com') && !v.videoUrl.includes('youtu.be') && !v.videoUrl.includes('vimeo.com') ? (
+                        <div className="bg-slate-950">
+                          <video controls controlsList="nodownload" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} playsInline preload="metadata" src={v.videoUrl} className="w-full h-36 object-contain" />
+                        </div>
+                      ) : null}
                       <div className="p-4 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
@@ -1695,14 +2249,21 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                         )}
                         <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
                           <span className="text-slate-400">By {v.teacherName}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteVideo(v.id)}
-                            className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Remove</span>
-                          </button>
+                          {canDeleteEResource(currentUser, v) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteVideo(v.id)}
+                              className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Remove</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 inline-flex items-center gap-1" title="Only the uploader or System Administrator can delete this E-resource">
+                              <Lock className="w-3 h-3" />
+                              <span>Protected</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1712,26 +2273,90 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             </div>
           )}
 
-          {/* CHANNEL 4: DIAGRAMS & IMAGES */}
+          {/* CHANNEL 4: DIAGRAMS, IMAGES & PICTURES */}
           {resourceSubTab === 'images' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
                 <h3 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
                   <ImageIcon className="w-4 h-4 text-purple-600" />
-                  <span>Publish Pedagogical Diagram, Chart or Infographic</span>
+                  <span>Upload & Publish Diagram, Image or Picture</span>
                 </h3>
                 <p className="text-xs text-slate-500 mb-4">
-                  Visual learning materials, anatomical diagrams, maps, and flowchart infographics for CBC learners.
+                  Upload photos, whiteboard snapshots, anatomical diagrams, maps, or infographics directly from your device gallery or camera.
                 </p>
+
+                {resourceUploadError && (
+                  <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-800 flex items-center justify-between gap-2">
+                    <span>{resourceUploadError}</span>
+                    <button type="button" onClick={() => setResourceUploadError(null)} className="text-rose-500 hover:text-rose-700">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {imgSuccess && (
                   <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-2 animate-in fade-in">
                     <Check className="w-4 h-4 text-emerald-600" />
-                    <span>Diagram asset published and available to Grade {imgGrade} learners!</span>
+                    <span>Image / picture published and available to Grade {imgGrade} learners!</span>
                   </div>
                 )}
 
                 <form onSubmit={handleCreateImage} className="space-y-4">
+                  {/* Device Image / Picture Upload Zone */}
+                  <div className="p-4 rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/40 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                          {uploadingResource === 'image' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <ImageIcon className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">
+                            Upload Image / Picture from Device
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Supports JPG, PNG, WebP, GIF, SVG, HEIC photos & diagrams from gallery or camera.
+                          </div>
+                        </div>
+                      </div>
+                      <label className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl cursor-pointer shadow-xs shrink-0 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingResource === 'image' ? 'Uploading Image...' : imgFileName ? 'Replace Picture' : 'Choose Image / Picture'}</span>
+                        <input
+                          type="file"
+                          accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.svg,.bmp,.avif,.heic,.heif"
+                          onChange={handleUploadLessonImage}
+                          disabled={uploadingResource !== null}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {imgFileName && (
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs">
+                        <span className="font-bold text-blue-900 truncate">
+                          {imgFileName} {imgFileSize ? `(${imgFileSize})` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImgUrl('');
+                            setImgFileName('');
+                            setImgMimeType('');
+                            setImgFileSize('');
+                          }}
+                          className="text-rose-600 hover:text-rose-800 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Clear</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Grade Level</label>
@@ -1771,13 +2396,13 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                         <option value="diagram">Anatomical / Technical Diagram</option>
                         <option value="chart">Data Chart / Graph</option>
                         <option value="infographic">Infographic Flowchart</option>
-                        <option value="illustration">Curriculum Illustration</option>
+                        <option value="illustration">Curriculum Illustration / Picture</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Image / Diagram Title</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Image / Picture Title</label>
                     <input
                       type="text"
                       required
@@ -1789,13 +2414,15 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Image Asset URL (Direct HTTPS)</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Uploaded Image Path or External Image URL
+                    </label>
                     <input
-                      type="url"
+                      type="text"
                       required
                       value={imgUrl}
                       onChange={(e) => setImgUrl(e.target.value)}
-                      placeholder="https://images.unsplash.com/..."
+                      placeholder="Upload an image/picture above or paste https://..."
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-mono text-slate-800"
                     />
                   </div>
@@ -1825,7 +2452,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                   {imgUrl && (
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                       <div className="text-[10px] uppercase font-bold text-slate-400 mb-1.5">Asset Live Preview</div>
-                      <div className="h-40 max-w-sm rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center">
+                      <div className="h-44 max-w-sm rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center">
                         <img src={imgUrl} alt="Preview" className="h-full w-auto object-contain" />
                       </div>
                     </div>
@@ -1833,23 +2460,24 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                    disabled={uploadingResource === 'image'}
+                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
                   >
-                    Publish Pedagogical Diagram
+                    {uploadingResource === 'image' ? 'Uploading Image...' : 'Publish Image / Picture'}
                   </button>
                 </form>
               </div>
 
               {/* Published Images Roster */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-                  Published Diagrams & Visual Assets ({existingImages.length})
+                  Published Diagrams, Images & Pictures ({existingImages.length})
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {existingImages.map((img) => (
                     <div key={img.id} className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden flex flex-col justify-between">
-                      <div className="h-44 bg-slate-950 flex items-center justify-center p-2">
-                        <img src={img.imageUrl} alt={img.title} className="max-h-full max-w-full object-contain rounded" />
+                      <div className="h-44 bg-slate-950 flex items-center justify-center p-2 select-none" onContextMenu={(e) => e.preventDefault()}>
+                        <img src={img.imageUrl} alt={img.title} draggable={false} className="max-h-full max-w-full object-contain rounded pointer-events-none" />
                       </div>
                       <div className="p-4 space-y-2">
                         <div className="flex items-center justify-between gap-1">
@@ -1862,14 +2490,21 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
                         <p className="text-[11px] text-slate-500 line-clamp-2">{img.caption}</p>
                         <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px]">
                           <span className="text-slate-400">By {img.teacherName}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteImage(img.id)}
-                            className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Remove</span>
-                          </button>
+                          {canDeleteEResource(currentUser, img) ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteImage(img.id)}
+                              className="text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Remove</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 inline-flex items-center gap-1" title="Only the uploader or System Administrator can delete this E-resource">
+                              <Lock className="w-3 h-3" />
+                              <span>Protected</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2264,6 +2899,13 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             initialPerspective="teacher"
           />
         </div>
+      )}
+
+      {/* ========================================================
+          AUX TAB: SCHOOL LIBRARY CONTENTS (BOOKS, DIGITAL & E-LINKS)
+          ======================================================== */}
+      {activeTab === 'library_contents' && (
+        <TeacherLibraryPortal currentUser={currentUser} />
       )}
 
       {/* ========================================================

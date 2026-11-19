@@ -482,6 +482,43 @@ export const ClientDataStore = {
     file: File,
     category: string = 'general'
   ): Promise<{ id: string; url: string; originalName: string; mimeType: string; sizeBytes: number }> {
+    const MAX_BYTES = 60 * 1024 * 1024;
+    if (file.size === 0) {
+      throw new Error('Selected file is empty.');
+    }
+    if (file.size > MAX_BYTES) {
+      throw new Error(`File "${file.name}" exceeds the 60 MB upload limit.`);
+    }
+
+    // Prefer raw binary upload (zero base64 overhead — ideal for videos, audio, PDFs, and high-res pictures)
+    try {
+      const binRes = await fetch('/api/files/upload-binary', {
+        method: 'POST',
+        credentials: 'include',
+        headers: authHeaders({
+          'Content-Type': 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+          'X-Mime-Type': file.type || 'application/octet-stream',
+          'X-File-Category': category,
+          'X-Tenant-Id': activeTenantId,
+        }),
+        body: file,
+      });
+
+      if (binRes.ok) {
+        const body = await binRes.json();
+        if (body?.file?.url) return body.file;
+      } else if (binRes.status !== 404 && binRes.status !== 405) {
+        const errBody = await binRes.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Failed to upload file (${binRes.status})`);
+      }
+    } catch (err: any) {
+      if (err instanceof Error && !err.message.includes('Failed to fetch')) {
+        throw err;
+      }
+    }
+
+    // Fallback to base64 JSON endpoint
     const dataBase64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result || ''));

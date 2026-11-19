@@ -32,6 +32,7 @@ export type AdminActionTab =
   | 'overview'
   | 'grade_management'
   | 'stream_management'
+  | 'student_stream_allocation'
   | 'senior_assignments'
   | 'class_assignments'
   | 'grade_performance'
@@ -79,6 +80,7 @@ interface SchoolActionMenuProps {
   onCloseMobile: () => void;
   userCount: number;
   workLogCount: number;
+  canAllocateStreams?: boolean;
 }
 
 export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
@@ -90,6 +92,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
   onCloseMobile,
   userCount,
   workLogCount,
+  canAllocateStreams = false,
 }) => {
   const groups: { title: string; items: ActionItem[] }[] = [
     {
@@ -108,6 +111,9 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       items: [
         { id: 'grade_management', label: 'Grade Management', icon: GraduationCap },
         { id: 'stream_management', label: 'Stream Management', icon: Users },
+        ...(canAllocateStreams
+          ? [{ id: 'student_stream_allocation' as AdminActionTab, label: 'Student Stream Allocations', icon: Users, badge: 'CBC' }]
+          : []),
         { id: 'senior_assignments', label: 'Senior Teacher Assignments', icon: ShieldCheck },
         { id: 'class_assignments', label: 'Class Teacher Assignments', icon: ClipboardCheck },
         { id: 'grade_performance', label: 'Grade Performance', icon: BarChart3 },

@@ -65,6 +65,8 @@ import {
   StudentInterventionsPanel,
 } from '../academic-hierarchy/GradeReportSubmitAndReviewPanels';
 import { SeniorVirtualClassroomManager } from '../virtual-classroom/SeniorVirtualClassroomManager';
+import { StudentStreamManager } from '../teacher/StudentStreamManager';
+import { canAccessStudentStreamAllocation } from '../../utils/subjectTeacherSwitch';
 
 interface SeniorTeacherWorkspaceProps {
   currentUser: User;
@@ -74,6 +76,7 @@ type SupervisionTab =
   | 'dashboard'
   | 'my_grade'
   | 'streams'
+  | 'student_stream_allocation'
   | 'class_teachers'
   | 'students'
   | 'attendance_monitor'
@@ -350,6 +353,16 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
   const allGatePasses = Storage.getGatePasses();
   const allWorkLogs = Storage.getWorkEntryLogs();
   const assignedGrades = bootstrap?.grades || [];
+  const seniorAllowedGrades = React.useMemo<GradeLevel[]>(() => {
+    const fromBootstrap = assignedGrades
+      .map((g) => Number(g.gradeNumber))
+      .filter((n): n is GradeLevel => Number.isInteger(n) && n >= 1 && n <= 9);
+    if (fromBootstrap.length > 0) {
+      return Array.from(new Set(fromBootstrap)).sort((a, b) => a - b);
+    }
+    return currentUser.grade ? [currentUser.grade] : [];
+  }, [assignedGrades, currentUser.grade]);
+  const canAllocateStreams = canAccessStudentStreamAllocation(currentUser);
   const gradeStreams = (bootstrap?.streams || []).filter((s) => s.gradeId === selectedGradeId);
   const unreadCount = notifications.filter((n) => !n.is_read).length;
   const pendingReportsCount = classReports.filter((r) => r.status === 'submitted').length;
@@ -361,6 +374,9 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'my_grade', label: 'My Grade', icon: GraduationCap },
         { id: 'streams', label: 'Streams', icon: Users, badge: gradeStreams.length || undefined },
+        ...(canAllocateStreams
+          ? [{ id: 'student_stream_allocation' as SupervisionTab, label: 'Student Stream Allocations', icon: Users, badge: 'CBC Streams', badgeColor: 'bg-blue-600' }]
+          : []),
         {
           id: 'class_teachers',
           label: 'Class Teachers',
@@ -1347,6 +1363,12 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
             </section>
           )}
 
+          {activeTab === 'student_stream_allocation' && canAllocateStreams && (
+            <StudentStreamManager
+              currentUser={currentUser}
+              allowedGrades={seniorAllowedGrades}
+            />
+          )}
           {activeTab === 'virtual_classrooms' && (
             <SeniorVirtualClassroomManager
               selectedGradeId={selectedGradeId}

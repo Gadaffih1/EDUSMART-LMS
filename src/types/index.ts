@@ -47,6 +47,7 @@ export interface RoleAccessRights {
   canAddCategoriesToPosts: boolean;            // 3. Add categories under different posts
   hasDoubleAccessRights: boolean;              // 4. Double Access rights for specific teachers
   canManageAllPostsCategoriesSections: boolean; // 5. Add, remove, edit posts, Categories, sections
+  canAllocateStudentStreams?: boolean;         // 6. Allocate and transfer students across CBC streams (Admin, Grade Senior Teacher, or delegated Extra Role only)
 }
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -170,7 +171,7 @@ export interface User {
   roleReleasedAt?: string; // Set when they are removed from a role; their seat data stays
   customPermissions?: Partial<RoleAccessRights>;
   // 🛡️ EXTRA ADMINISTRATOR ASSIGNMENTS:
-  extraRoles?: ('document_requester' | 'delegated_post_editor' | 'category_curator' | 'double_access_teacher' | 'cms_content_master')[];
+  extraRoles?: ExtraAdminRoleType[];
   documentRequestScope?: {
     allowedUserIds?: string[]; // Specific users they can request docs from (or empty/['*'] for any)
     allowedRoles?: UserRole[];
@@ -216,6 +217,11 @@ export interface LessonNote {
   keyTakeaways: string[];
   diagramUrl?: string;
   diagramCaption?: string;
+  documentUrl?: string; // Uploaded PDF/document file path
+  documentName?: string;
+  documentMimeType?: string;
+  documentSize?: string;
+  uploadedById?: string;
   author: string;
   createdAt: string;
 }
@@ -227,9 +233,13 @@ export interface VideoLesson {
   subject: SubjectName;
   title: string;
   durationMinutes: number;
-  videoUrl: string; // Secure embedded educational video
+  videoUrl: string; // Secure embedded educational video or device-uploaded file URL
   videoThumbnail?: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: string;
   keyPoints: string[];
+  uploadedById?: string;
   teacherName: string;
   createdAt: string;
 }
@@ -242,8 +252,12 @@ export interface AudioLesson {
   title: string;
   durationMinutes: number;
   audioUrl: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: string;
   transcript: string;
   keyPoints: string[];
+  uploadedById?: string;
   teacherName: string;
   createdAt: string;
 }
@@ -255,9 +269,13 @@ export interface LessonImage {
   subject: SubjectName;
   title: string;
   imageUrl: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: string;
   caption: string;
   category?: 'diagram' | 'chart' | 'infographic' | 'illustration';
   tags?: string[];
+  uploadedById?: string;
   teacherName: string;
   createdAt: string;
 }
@@ -270,6 +288,7 @@ export interface ELink {
   category: 'Curriculum & Reference' | 'Science & STEM' | 'KICD & Open Access' | 'Literature & Languages' | 'Digital Library & Research' | 'General Learning';
   gradeLevel?: GradeLevel | 'All Grades';
   subject?: SubjectName | 'Cross-Curricular';
+  uploadedById?: string;
   addedBy: string;
   addedByRole: 'Librarian' | 'Teacher' | 'Admin';
   createdAt: string;
@@ -1074,6 +1093,7 @@ export interface DigitalLibraryItem {
   downloadCount: number;
   readUrl: string;
   coverColor: string;
+  uploadedById?: string;
 }
 
 export interface ReadingProgrammeMember {
@@ -1924,7 +1944,8 @@ export type ExtraAdminRoleType =
   | 'delegated_post_editor'   // 2. Edit posts by specific users
   | 'category_curator'        // 3. Add categories under different posts
   | 'double_access_teacher'   // 4. Double Access rights for specific teachers
-  | 'cms_content_master';     // 5. Add, remove, edit posts, Categories, sections
+  | 'cms_content_master'      // 5. Add, remove, edit posts, Categories, sections
+  | 'student_stream_allocator'; // 6. Allocate & transfer students across CBC streams (delegated extra role)
 
 export interface DocumentSubmissionRequest {
   id: string;
@@ -2044,7 +2065,7 @@ export interface TeacherLessonFile {
   title: string;
   description?: string;
   fileName: string;
-  fileType: 'pdf' | 'image' | 'doc' | 'slides';
+  fileType: 'pdf' | 'image' | 'video' | 'audio' | 'doc' | 'slides';
   fileSize: string;
   fileUrl: string;
   subject: SubjectName;

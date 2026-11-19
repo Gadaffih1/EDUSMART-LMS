@@ -8,6 +8,7 @@ import {
   JUNIOR_SUBJECTS
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { canDeleteEResource } from '../../utils/resourcePermissions';
 import { 
   ExternalLink, 
   Plus, 
@@ -23,7 +24,8 @@ import {
   BookOpen,
   Laptop,
   Check,
-  Copy
+  Copy,
+  Lock
 } from 'lucide-react';
 
 interface ELinksDirectoryProps {
@@ -157,11 +159,15 @@ export const ELinksDirectory: React.FC<ELinksDirectoryProps> = ({
     setShowModal(true);
   };
 
-  const handleDeleteLink = (id: string, linkTitle: string) => {
-    if (window.confirm(`Are you sure you want to remove the E-Link: "${linkTitle}"?`)) {
-      Storage.deleteELink(id);
+  const handleDeleteLink = (link: ELink) => {
+    if (!canDeleteEResource(currentUser, link)) {
+      showFeedback('Only the user who uploaded this E-Link or the System Administrator may delete it.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to remove the E-Link: "${link.title}"?`)) {
+      Storage.deleteELink(link.id);
       setLinks(Storage.getELinks());
-      showFeedback(`E-Link "${linkTitle}" successfully removed.`);
+      showFeedback(`E-Link "${link.title}" successfully removed.`);
     }
   };
 
@@ -200,6 +206,7 @@ export const ELinksDirectory: React.FC<ELinksDirectoryProps> = ({
         gradeLevel: formGradeLevel,
         subject: formSubject,
         addedBy: `${currentUser.name} (${roleName})`,
+        uploadedById: currentUser.id,
         addedByRole: roleName,
         createdAt: new Date().toISOString().split('T')[0],
         clicksCount: 0
@@ -427,13 +434,22 @@ export const ELinksDirectory: React.FC<ELinksDirectoryProps> = ({
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDeleteLink(link.id, link.title)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="Remove E-Link"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canDeleteEResource(currentUser, link) ? (
+                          <button
+                            onClick={() => handleDeleteLink(link)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Remove E-Link"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span
+                            className="p-1.5 rounded-lg text-slate-300 inline-flex items-center"
+                            title="Only the uploader or System Administrator can delete this E-Link"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
+                        )}
                       </>
                     )}
                   </div>

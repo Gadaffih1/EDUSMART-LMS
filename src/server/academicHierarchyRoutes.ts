@@ -37,6 +37,63 @@ function hasClassTeacherPrivilege(session: AuthSession): boolean {
   return sessionHasAnyRole(session, ['class_teacher', 'hod']);
 }
 
+function userHasExtraRole(db: DatabaseSync, userId: string, extraRole: string): boolean {
+  if (!userId) return false;
+  const row = db
+    .prepare(`SELECT payload_json FROM users WHERE id = ? LIMIT 1`)
+    .get(userId) as { payload_json?: string } | undefined;
+  if (!row?.payload_json) return false;
+  const payload = safeParseJson<Record<string, any>>(row.payload_json, {});
+  return Array.isArray(payload.extraRoles) && payload.extraRoles.includes(extraRole);
+}
+
+/**
+ * Strict Student Stream Allocation policy:
+ * ONLY Platform Super Admin, System Administrator (`admin`), Grade Senior Teacher (`senior_teacher`,
+ * scoped strictly to their assigned grade(s)), or staff explicitly granted the
+ * `student_stream_allocator` extra role may allocate or transfer students across streams.
+ */
+function resolveStreamAllocationAccess(
+  db: DatabaseSync,
+  session: AuthSession,
+  schoolId: string
+): { allowed: boolean; fullSchool: boolean; seniorGradeIds: string[]; seniorGradeNumbers: number[] } {
+  if (session.isSuperAdmin || sessionHasRole(session, 'admin')) {
+    return { allowed: true, fullSchool: true, seniorGradeIds: [], seniorGradeNumbers: [] };
+  }
+  if (userHasExtraRole(db, session.userId, 'student_stream_allocator')) {
+    return { allowed: true, fullSchool: true, seniorGradeIds: [], seniorGradeNumbers: [] };
+  }
+  if (sessionHasRole(session, 'senior_teacher')) {
+    const gradeRows = db
+      .prepare(
+        `SELECT g.id, g.grade_number, g.name
+         FROM grade_senior_teachers gst
+         JOIN grades g ON g.id = gst.grade_id
+         WHERE gst.school_id = ? AND gst.teacher_id = ? AND gst.is_active = 1`
+      )
+      .all(schoolId, session.userId) as Array<{ id: string; grade_number: number | null; name: string }>;
+    const seniorGradeIds = gradeRows.map((r) => r.id);
+    const seniorGradeNumbers = gradeRows
+      .map((r) => parseGradeNumber(r.name, r.grade_number))
+      .filter((n): n is number => n !== null);
+
+    // Fallback to user profile's grade if grade_senior_teachers table not yet seeded for this user
+    if (seniorGradeNumbers.length === 0) {
+      const userRow = db
+        .prepare(`SELECT payload_json FROM users WHERE id = ? LIMIT 1`)
+        .get(session.userId) as { payload_json?: string } | undefined;
+      const payload = safeParseJson<Record<string, any>>(userRow?.payload_json, {});
+      const profileGrade = parseGradeNumber(String(payload.grade || ''), Number(payload.grade));
+      if (profileGrade !== null) {
+        seniorGradeNumbers.push(profileGrade);
+      }
+    }
+    return { allowed: true, fullSchool: false, seniorGradeIds, seniorGradeNumbers };
+  }
+  return { allowed: false, fullSchool: false, seniorGradeIds: [], seniorGradeNumbers: [] };
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -2633,11 +2690,17 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
   app.post('/api/academic/students/transfer', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      if (!isSchoolAdmin(session)) {
-        return res.status(403).json({ error: 'Only School Administrators can transfer students between streams.' });
-      }
       const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
       if (!schoolId) return;
+
+      const db = getDb();
+      const access = resolveStreamAllocationAccess(db, session, schoolId);
+      if (!access.allowed) {
+        return res.status(403).json({
+          error:
+            'Access Restricted: Only the System Administrator, Grade Senior Teachers (for their assigned grades), or staff assigned the Student Stream Allocator extra role can transfer students between streams.',
+        });
+      }
 
       const studentId = String(req.body?.studentId || '').trim();
       const targetStreamId = String(req.body?.targetStreamId || '').trim();
@@ -2648,7 +2711,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         return res.status(400).json({ error: 'studentId and targetStreamId are required.' });
       }
 
-      const db = getDb();
       const targetStream = db
         .prepare(
           `SELECT s.id, s.grade_id, s.name, s.display_name, g.name as grade_name, g.grade_number
@@ -2657,6 +2719,17 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         )
         .get(targetStreamId, schoolId) as any;
       if (!targetStream) return res.status(404).json({ error: 'Target stream not found in this school.' });
+
+      if (!access.fullSchool) {
+        const targetGradeNum = parseGradeNumber(targetStream.grade_name, targetStream.grade_number);
+        const matchesGradeId = access.seniorGradeIds.includes(targetStream.grade_id);
+        const matchesGradeNum = targetGradeNum !== null && access.seniorGradeNumbers.includes(targetGradeNum);
+        if (!matchesGradeId && !matchesGradeNum) {
+          return res.status(403).json({
+            error: `Access Restricted: As a Grade Senior Teacher, you can only allocate or transfer students within your assigned grade(s).`,
+          });
+        }
+      }
 
       // Resolve student from users or students table
       const dirStu = db
@@ -2812,6 +2885,208 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed transferring student', message: err?.message });
+    }
+  });
+
+  app.post('/api/academic/students/allocate-stream', requireAuth, (req: Request, res: Response) => {
+    try {
+      const session = req.authSession!;
+      const schoolId = resolveAuthorizedTenantId(req, res, req.body?.schoolId);
+      if (!schoolId) return;
+
+      const db = getDb();
+      const access = resolveStreamAllocationAccess(db, session, schoolId);
+      if (!access.allowed) {
+        return res.status(403).json({
+          error:
+            'Access Restricted: Only the System Administrator, Grade Senior Teachers (for their assigned grades), or staff assigned the Student Stream Allocator extra role can allocate student streams.',
+        });
+      }
+
+      const rawIds = Array.isArray(req.body?.studentIds)
+        ? req.body.studentIds
+        : req.body?.studentId
+          ? [req.body.studentId]
+          : [];
+      const studentIds = rawIds.map((id: unknown) => String(id || '').trim()).filter(Boolean);
+      const gradeNum = parseGradeNumber(String(req.body?.grade ?? ''), Number(req.body?.grade));
+      const streamName = String(req.body?.stream || '').trim();
+
+      if (studentIds.length === 0 || !gradeNum || !streamName) {
+        return res.status(400).json({ error: 'studentIds, grade, and stream are required.' });
+      }
+
+      if (!access.fullSchool && !access.seniorGradeNumbers.includes(gradeNum)) {
+        return res.status(403).json({
+          error: `Access Restricted: As a Grade Senior Teacher, you can only allocate streams for your assigned grade(s), not Grade ${gradeNum}.`,
+        });
+      }
+
+      const className = `Grade ${gradeNum} ${streamName}`;
+      const now = nowIso();
+
+      // Optionally locate matching grade/stream rows in academic hierarchy tables
+      const matchingStreamRow = db
+        .prepare(
+          `SELECT s.id, s.grade_id, s.name, s.display_name, g.name as grade_name, g.grade_number
+           FROM streams s
+           JOIN grades g ON g.id = s.grade_id
+           WHERE s.school_id = ? AND g.grade_number = ? AND LOWER(s.name) = LOWER(?)
+           LIMIT 1`
+        )
+        .get(schoolId, gradeNum, streamName) as any;
+
+      const updatedIds: string[] = [];
+
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        for (const studentId of studentIds) {
+          const userRow = db
+            .prepare(`SELECT id, name, admission_number, payload_json FROM users WHERE id = ? AND school_id = ? LIMIT 1`)
+            .get(studentId, schoolId) as any;
+
+          const colRow = db
+            .prepare(
+              `SELECT record_id, payload_json FROM collections_store
+               WHERE collection_key = 'edusmart_users_v1' AND tenant_id = ? AND record_id = ? AND deleted_at IS NULL
+               LIMIT 1`
+            )
+            .get(schoolId, studentId) as { record_id: string; payload_json: string } | undefined;
+
+          const dirStu = db
+            .prepare(`SELECT id, name, admission_number, payload_json FROM students WHERE id = ? AND school_id = ? LIMIT 1`)
+            .get(studentId, schoolId) as any;
+
+          if (!userRow && !colRow && !dirStu) continue;
+
+          // Verify student belongs to the requested grade (prevents cross-grade escalation by Senior Teacher)
+          const existingPayload = safeParseJson<Record<string, any>>(
+            userRow?.payload_json || colRow?.payload_json || dirStu?.payload_json,
+            {}
+          );
+          const studentRole = String(existingPayload.role || (dirStu ? 'student' : '')).toLowerCase();
+          if (studentRole && studentRole !== 'student') continue;
+
+          const existingGradeNum = parseGradeNumber(
+            String(existingPayload.grade ?? existingPayload.gradeLabel ?? ''),
+            Number(existingPayload.grade)
+          );
+          if (!access.fullSchool && existingGradeNum !== null && !access.seniorGradeNumbers.includes(existingGradeNum)) {
+            continue;
+          }
+
+          const metaPatch: Record<string, any> = {
+            grade: gradeNum,
+            stream: streamName,
+            className,
+            ...(matchingStreamRow
+              ? { gradeId: matchingStreamRow.grade_id, streamId: matchingStreamRow.id }
+              : {}),
+          };
+
+          if (userRow) {
+            updateUserPayloadMetadata(db, schoolId, studentId, metaPatch);
+          } else if (colRow) {
+            const nextObj = { ...existingPayload, ...metaPatch };
+            upsertCollectionRecord(db, 'edusmart_users_v1', studentId, schoolId, nextObj, false);
+          }
+
+          if (dirStu) {
+            const stuPayload = safeParseJson<Record<string, any>>(dirStu.payload_json, {});
+            const nextStuPayload = {
+              ...stuPayload,
+              gradeLabel: matchingStreamRow?.grade_name || `Grade ${gradeNum}`,
+              streamLabel: streamName,
+              className,
+              ...(matchingStreamRow
+                ? { gradeId: matchingStreamRow.grade_id, streamId: matchingStreamRow.id }
+                : {}),
+            };
+            db.prepare(
+              `UPDATE students SET grade_id = COALESCE(?, grade_id), stream_id = COALESCE(?, stream_id),
+                 grade_label = ?, stream_label = ?, class_name = ?, payload_json = ?
+               WHERE id = ? AND school_id = ?`
+            ).run(
+              matchingStreamRow?.grade_id || null,
+              matchingStreamRow?.id || null,
+              nextStuPayload.gradeLabel,
+              streamName,
+              className,
+              JSON.stringify(nextStuPayload),
+              studentId,
+              schoolId
+            );
+            upsertCollectionRecord(db, 'edusmart_students_v1', studentId, schoolId, nextStuPayload, false);
+          }
+
+          if (matchingStreamRow) {
+            const newAssignmentId = `ssa-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+            db.prepare(
+              `UPDATE student_stream_assignments
+               SET is_active = 0, unassigned_at = ?, updated_at = ?
+               WHERE school_id = ? AND student_id = ? AND is_active = 1`
+            ).run(now, now, schoolId, studentId);
+            db.prepare(
+              `INSERT INTO student_stream_assignments
+                (id, school_id, student_id, student_name, admission_number, grade_id, stream_id, academic_year, assigned_at, transfer_reason, transferred_by, is_active, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+            ).run(
+              newAssignmentId,
+              schoolId,
+              studentId,
+              userRow?.name || dirStu?.name || existingPayload.name || 'Student',
+              userRow?.admission_number || dirStu?.admission_number || existingPayload.admissionNumber || '',
+              matchingStreamRow.grade_id,
+              matchingStreamRow.id,
+              '2026',
+              now,
+              'CBC Stream Allocator assignment',
+              session.userId,
+              now,
+              now
+            );
+          }
+
+          updatedIds.push(studentId);
+        }
+
+        if (updatedIds.length > 0) {
+          logAcademicAudit(db, {
+            schoolId,
+            actor: session,
+            action: 'STUDENT_STREAM_ALLOCATE',
+            entityType: 'student_stream_assignments',
+            entityId: updatedIds[0],
+            gradeId: matchingStreamRow?.grade_id || null,
+            streamId: matchingStreamRow?.id || null,
+            details: { studentIds: updatedIds, grade: gradeNum, stream: streamName },
+          });
+        }
+        db.exec('COMMIT');
+      } catch (e) {
+        db.exec('ROLLBACK');
+        throw e;
+      }
+
+      notifyMySqlTablesChanged([...ACADEMIC_HIERARCHY_TABLES, 'students', 'users', 'collections_store']);
+      broadcastChange({
+        type: 'collection:updated',
+        collection: 'edusmart_users_v1',
+        tenantId: schoolId,
+        actorId: session.userId,
+        timestamp: now,
+      });
+
+      return res.json({
+        success: true,
+        updatedCount: updatedIds.length,
+        studentIds: updatedIds,
+        grade: gradeNum,
+        stream: streamName,
+        className,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: 'Failed allocating student stream', message: err?.message });
     }
   });
 

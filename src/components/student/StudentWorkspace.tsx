@@ -195,6 +195,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
     window.addEventListener('users-updated', handleUpdate);
     window.addEventListener('subject-teacher-chats-updated', handleUpdate);
     window.addEventListener('teacher-lesson-files-updated', handleUpdate);
+    window.addEventListener('lesson-resources-updated', handleUpdate);
     window.addEventListener('announcements-updated', handleUpdate);
     window.addEventListener('quizzes-updated', handleUpdate);
     window.addEventListener('assignments-updated', handleUpdate);
@@ -202,6 +203,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       window.removeEventListener('users-updated', handleUpdate);
       window.removeEventListener('subject-teacher-chats-updated', handleUpdate);
       window.removeEventListener('teacher-lesson-files-updated', handleUpdate);
+      window.removeEventListener('lesson-resources-updated', handleUpdate);
       window.removeEventListener('announcements-updated', handleUpdate);
       window.removeEventListener('quizzes-updated', handleUpdate);
       window.removeEventListener('assignments-updated', handleUpdate);
@@ -829,9 +831,23 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2.5">
                                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                                    file.fileType === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'
+                                    file.fileType === 'video'
+                                      ? 'bg-purple-50 text-purple-600'
+                                      : file.fileType === 'audio'
+                                      ? 'bg-teal-50 text-teal-600'
+                                      : file.fileType === 'pdf'
+                                      ? 'bg-rose-50 text-rose-600'
+                                      : 'bg-indigo-50 text-indigo-600'
                                   }`}>
-                                    {file.fileType === 'pdf' ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                                    {file.fileType === 'video' ? (
+                                      <Video className="w-4 h-4" />
+                                    ) : file.fileType === 'audio' ? (
+                                      <Volume2 className="w-4 h-4" />
+                                    ) : file.fileType === 'image' ? (
+                                      <ImageIcon className="w-4 h-4" />
+                                    ) : (
+                                      <FileText className="w-4 h-4" />
+                                    )}
                                   </div>
                                   <div>
                                     <span className="text-[10px] font-mono text-slate-400 font-bold block uppercase">
@@ -875,21 +891,11 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                                 <button
                                   type="button"
                                   onClick={() => setPreviewLessonFile(file)}
-                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  <span>Preview</span>
-                                </button>
-                                <a
-                                  href={file.fileUrl}
-                                  download={file.fileName}
-                                  target="_blank"
-                                  rel="noreferrer"
                                   className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                                 >
-                                  <Download className="w-3 h-3" />
-                                  <span>Download</span>
-                                </a>
+                                  <Eye className="w-3 h-3" />
+                                  <span>Open Viewer</span>
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -898,8 +904,130 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   )}
                 </div>
               ) : (
-                /* VIEW 2: TOPICS AND SYLLABUS BREAKDOWN */
+                /* VIEW 2: TOPICS AND SYLLABUS BREAKDOWN + TEACHER-SHARED E-RESOURCES */
                 <div className="space-y-6">
+                {(() => {
+                  const topicIdSet = new Set(gradeTopics.map(t => t.id));
+                  const sharedNotes = gradeNotes.filter(
+                    n => n.subject === selectedSubject && !topicIdSet.has(n.topicId)
+                  );
+                  const sharedVideos = gradeVideos.filter(
+                    v => v.subject === selectedSubject && !topicIdSet.has(v.topicId)
+                  );
+                  const sharedAudios = gradeAudios.filter(
+                    a => a.subject === selectedSubject && !topicIdSet.has(a.topicId)
+                  );
+                  const sharedImages = gradeImages.filter(
+                    img => img.subject === selectedSubject && !topicIdSet.has(img.topicId)
+                  );
+                  const totalShared =
+                    sharedNotes.length + sharedVideos.length + sharedAudios.length + sharedImages.length;
+
+                  if (totalShared === 0) return null;
+
+                  return (
+                    <div className="bg-white rounded-2xl border border-indigo-200 p-5 sm:p-6 shadow-xs space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                            Teacher-Shared E-Resources · {selectedSubject}
+                          </div>
+                          <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                            Uploaded Videos, Audio, PDF Notes & Pictures
+                          </h3>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">
+                          {sharedNotes.length} Notes/PDF · {sharedVideos.length} Video · {sharedAudios.length} Audio · {sharedImages.length} Pictures
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {sharedNotes.map(n => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => handleOpenNote(n)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                              {n.documentUrl ? <FileText className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">
+                                {n.documentUrl ? 'PDF Lesson Document' : 'Lesson Notes'}
+                              </div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{n.title}</div>
+                              <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                By {n.author}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+
+                        {sharedVideos.map(v => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => handleOpenVideo(v)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                              <Play className="w-4 h-4 fill-current ml-0.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">Video Lesson</div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{v.title}</div>
+                              <div className="text-[10px] text-rose-700 font-medium mt-1">
+                                {v.durationMinutes} mins · {v.teacherName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+
+                        {sharedAudios.map(a => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => handleOpenAudio(a)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-teal-50/60 hover:border-teal-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                              <Volume2 className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">Audio Lesson</div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{a.title}</div>
+                              <div className="text-[10px] text-teal-700 font-medium mt-1">
+                                {a.durationMinutes} mins · {a.teacherName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+
+                        {sharedImages.map(img => (
+                          <button
+                            key={img.id}
+                            type="button"
+                            onClick={() => handleOpenImage(img)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">Image / Picture</div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{img.title}</div>
+                              <div className="text-[10px] text-blue-700 font-medium mt-1">
+                                {img.category || 'Diagram'} · {img.teacherName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {gradeTopics.length === 0 ? (
                   <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
                     <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -2257,8 +2385,16 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  {previewLessonFile.fileType === 'pdf' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  {previewLessonFile.fileType === 'video' ? (
+                    <Video className="w-5 h-5" />
+                  ) : previewLessonFile.fileType === 'audio' ? (
+                    <Volume2 className="w-5 h-5" />
+                  ) : previewLessonFile.fileType === 'image' ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-900 text-sm">{previewLessonFile.title}</h4>
@@ -2276,43 +2412,73 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
               </button>
             </div>
 
-            <div className="h-80 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
+            <div
+              className="h-80 sm:h-96 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center select-none"
+              onContextMenu={(e) => e.preventDefault()}
+            >
               {previewLessonFile.fileType === 'image' ? (
                 <img
                   src={previewLessonFile.fileUrl}
                   alt={previewLessonFile.title}
-                  className="w-full h-full object-contain"
+                  draggable={false}
+                  className="w-full h-full object-contain pointer-events-none"
+                />
+              ) : previewLessonFile.fileType === 'video' ? (
+                <video
+                  controls
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  playsInline
+                  preload="metadata"
+                  src={previewLessonFile.fileUrl}
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : previewLessonFile.fileType === 'audio' ? (
+                <div className="w-full max-w-md p-6 text-center text-white space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center mx-auto">
+                    <Volume2 className="w-7 h-7" />
+                  </div>
+                  <div className="font-bold text-sm truncate">{previewLessonFile.fileName}</div>
+                  <audio
+                    controls
+                    controlsList="nodownload"
+                    onContextMenu={(e) => e.preventDefault()}
+                    preload="metadata"
+                    src={previewLessonFile.fileUrl}
+                    className="w-full"
+                  />
+                </div>
+              ) : previewLessonFile.fileType === 'pdf' ? (
+                <iframe
+                  src={previewLessonFile.fileUrl.includes('#') ? previewLessonFile.fileUrl : `${previewLessonFile.fileUrl}#toolbar=0&navpanes=0`}
+                  title={previewLessonFile.title}
+                  className="w-full h-full bg-white"
                 />
               ) : (
                 <div className="text-center text-white space-y-2 p-6">
                   <FileText className="w-12 h-12 text-blue-400 mx-auto" />
                   <div className="font-bold text-sm">{previewLessonFile.fileName}</div>
                   <p className="text-xs text-slate-300">
-                    KICD CBC educational handout ({previewLessonFile.fileSize})
+                    KICD CBC educational handout ({previewLessonFile.fileSize}) · View-only mode
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <span className="text-xs text-slate-500">
                 Teacher: <strong>{previewLessonFile.teacherName}</strong>
               </span>
               <div className="flex items-center gap-2">
-                <a
-                  href={previewLessonFile.fileUrl}
-                  download={previewLessonFile.fileName}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Resource</span>
-                </a>
+                <span className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px] rounded-xl flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Download Restricted · View-Only</span>
+                </span>
                 <button
                   type="button"
                   onClick={() => setPreviewLessonFile(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
                 >
                   Close
                 </button>

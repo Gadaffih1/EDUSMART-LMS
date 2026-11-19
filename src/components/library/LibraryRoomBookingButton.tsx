@@ -31,7 +31,7 @@ export const LibraryRoomBookingButton: React.FC<LibraryRoomBookingButtonProps> =
         >
           <DoorOpen className="w-3.5 h-3.5 text-purple-200" />
           <span className="hidden sm:inline">{label || 'Book Library Room'}</span>
-          <span className="sm:hidden">{label || 'Book Room'}</span>
+          <span className="sm:hidden">Book Room</span>
         </button>
 
         {isOpen && (

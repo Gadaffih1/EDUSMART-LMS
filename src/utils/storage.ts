@@ -99,6 +99,8 @@ import {
 import { getStudentRecord, studentRecordToUser, listSchoolParents, saveStudentRecord, saveStudentParent, StudentRecord } from './schoolDirectoryStore';
 import { ClientDataStore } from './clientDataStore';
 import { SyncEngine } from './syncEngine';
+import { canAccessStudentStreamAllocation } from './subjectTeacherSwitch';
+import { canDeleteEResource } from './resourcePermissions';
 
 const KEYS = {
   USERS: 'edusmart_users_v1',
@@ -843,6 +845,10 @@ export const Storage = {
       effective.canEditPostsBySpecificUsers = true;
     }
 
+    // Strict Student Stream Allocation policy:
+    // ONLY System Administrator, Grade Senior Teacher, or explicitly assigned `student_stream_allocator` extra role.
+    effective.canAllocateStudentStreams = canAccessStudentStreamAllocation(user);
+
     return effective;
   },
 
@@ -1073,10 +1079,17 @@ export const Storage = {
     const notes = this.getNotes();
     notes.push(note);
     setToStorage(KEYS.NOTES, notes);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
-  deleteNote(id: string): void {
-    const notes = this.getNotes().filter(n => n.id !== id);
+  deleteNote(id: string): boolean {
+    const all = this.getNotes();
+    const target = all.find(n => n.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const notes = all.filter(n => n.id !== id);
     setToStorage(KEYS.NOTES, notes);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+    return true;
   },
 
   // Videos
@@ -1093,10 +1106,15 @@ export const Storage = {
     setToStorage(KEYS.VIDEOS, videos);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
-  deleteVideo(id: string): void {
-    const videos = this.getVideos().filter(v => v.id !== id);
+  deleteVideo(id: string): boolean {
+    const all = this.getVideos();
+    const target = all.find(v => v.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const videos = all.filter(v => v.id !== id);
     setToStorage(KEYS.VIDEOS, videos);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+    return true;
   },
 
   // Audios
@@ -1113,10 +1131,15 @@ export const Storage = {
     setToStorage(KEYS.AUDIOS, audios);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
-  deleteAudio(id: string): void {
-    const audios = this.getAudios().filter(a => a.id !== id);
+  deleteAudio(id: string): boolean {
+    const all = this.getAudios();
+    const target = all.find(a => a.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const audios = all.filter(a => a.id !== id);
     setToStorage(KEYS.AUDIOS, audios);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+    return true;
   },
 
   // Lesson Images (Diagrams, Charts, Visual Resources)
@@ -1136,9 +1159,14 @@ export const Storage = {
     images.unshift(image);
     this.saveLessonImages(images);
   },
-  deleteLessonImage(id: string): void {
-    const images = this.getLessonImages().filter(img => img.id !== id);
+  deleteLessonImage(id: string): boolean {
+    const all = this.getLessonImages();
+    const target = all.find(img => img.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const images = all.filter(img => img.id !== id);
     this.saveLessonImages(images);
+    return true;
   },
 
   // E-Links (Curated Digital Web Links for Library & Subject Teachers)
@@ -1159,9 +1187,14 @@ export const Storage = {
     const updated = links.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString().split('T')[0] } : l);
     this.saveELinks(updated);
   },
-  deleteELink(id: string): void {
-    const links = this.getELinks().filter(l => l.id !== id);
+  deleteELink(id: string): boolean {
+    const all = this.getELinks();
+    const target = all.find(l => l.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const links = all.filter(l => l.id !== id);
     this.saveELinks(links);
+    return true;
   },
 
   getActiveSwitchedRole(userId?: string | null): UserRole | null {
@@ -1486,11 +1519,15 @@ export const Storage = {
     window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated'));
   },
 
-  deleteTeacherLessonFile(id: string): void {
+  deleteTeacherLessonFile(id: string): boolean {
     const files = this.getTeacherLessonFiles();
+    const target = files.find(f => f.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
     const updated = files.filter(f => f.id !== id);
     setToStorage(KEYS.TEACHER_LESSON_FILES, updated);
     window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated'));
+    return true;
   },
 
   // Virtual Classes

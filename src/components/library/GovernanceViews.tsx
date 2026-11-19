@@ -6,12 +6,12 @@ import {
   Settings, 
   History, 
   Printer, 
-  Search, 
   CheckCircle2, 
-  Save, 
-  Lock, 
   Send,
-  Sparkles
+  Plus,
+  Pencil,
+  Trash2,
+  X
 } from 'lucide-react';
 import { 
   LibraryPolicy, 
@@ -28,7 +28,9 @@ interface GovernanceViewsProps {
   auditLogs: LibraryAuditLog[];
   books: LibraryBook[];
   borrowRecords: LibraryBorrowRecord[];
+  onAddPolicy?: (policy: LibraryPolicy) => void;
   onUpdatePolicy: (id: string, updates: Partial<LibraryPolicy>) => void;
+  onDeletePolicy?: (id: string) => void;
   onAddAuditLog: (log: LibraryAuditLog) => void;
 }
 
@@ -38,9 +40,66 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
   auditLogs,
   books,
   borrowRecords,
+  onAddPolicy,
   onUpdatePolicy,
+  onDeletePolicy,
   onAddAuditLog
 }) => {
+  const [govNotice, setGovNotice] = useState<string | null>(null);
+  const [broadcastAudience, setBroadcastAudience] = useState('All Students & Faculty');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+
+  // Policy Add/Edit Modal state
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [editingPolicyId, setEditingPolicyId] = useState<string | null>(null);
+  const [polName, setPolName] = useState('');
+  const [polCategory, setPolCategory] = useState<LibraryPolicy['category']>('Lending');
+  const [polValue, setPolValue] = useState('');
+  const [polDescription, setPolDescription] = useState('');
+  const [confirmDeletePolicyId, setConfirmDeletePolicyId] = useState<string | null>(null);
+
+  const openAddPolicyModal = () => {
+    setEditingPolicyId(null);
+    setPolName('');
+    setPolCategory('Lending');
+    setPolValue('');
+    setPolDescription('');
+    setShowPolicyModal(true);
+  };
+
+  const openEditPolicyModal = (pol: LibraryPolicy) => {
+    setEditingPolicyId(pol.id);
+    setPolName(pol.policyName);
+    setPolCategory(pol.category);
+    setPolValue(pol.value);
+    setPolDescription(pol.description);
+    setShowPolicyModal(true);
+  };
+
+  const handleSavePolicy = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!polName.trim() || !polValue.trim()) return;
+    if (editingPolicyId) {
+      onUpdatePolicy(editingPolicyId, {
+        policyName: polName.trim(),
+        category: polCategory,
+        value: polValue.trim(),
+        description: polDescription.trim()
+      });
+      setGovNotice(`Policy "${polName.trim()}" updated successfully.`);
+    } else if (onAddPolicy) {
+      onAddPolicy({
+        id: `pol-${Date.now()}`,
+        policyName: polName.trim(),
+        category: polCategory,
+        value: polValue.trim(),
+        description: polDescription.trim()
+      });
+      setGovNotice(`New policy "${polName.trim()}" added successfully.`);
+    }
+    setShowPolicyModal(false);
+    setEditingPolicyId(null);
+  };
   // Reports & Analytics
   if (section === 'reports_analytics') {
     const totalBorrowed = borrowRecords.length;
@@ -196,10 +255,29 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
 
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-3">
             <h4 className="font-bold text-sm text-slate-900">Broadcast General Announcement</h4>
+            {govNotice && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  {govNotice}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGovNotice(null)}
+                  className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <div className="space-y-2 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Target Audience</label>
-                <select className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white">
+                <select
+                  value={broadcastAudience}
+                  onChange={(e) => setBroadcastAudience(e.target.value)}
+                  className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
+                >
                   <option>All Students & Faculty</option>
                   <option>Grade 4 to 6 Learners Only</option>
                   <option>Junior Secondary (Grades 7-9)</option>
@@ -211,13 +289,28 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
                 <label className="block font-semibold text-slate-700 mb-1">Message Notice</label>
                 <textarea
                   rows={3}
+                  value={broadcastMessage}
+                  onChange={(e) => setBroadcastMessage(e.target.value)}
                   placeholder="e.g. Library will remain open until 5:30 PM for midterm exam revision..."
                   className="w-full text-xs border border-slate-300 rounded-lg p-2"
                 />
               </div>
 
               <button
-                onClick={() => alert('Broadcast announcement dispatched to selected portal users.')}
+                type="button"
+                onClick={() => {
+                  const summary = broadcastMessage.trim() || 'General library schedule notice';
+                  onAddAuditLog({
+                    id: `aud-${Date.now()}`,
+                    action: 'Library Broadcast Dispatched',
+                    performedBy: 'Library Desk',
+                    role: 'librarian',
+                    timestamp: new Date().toISOString(),
+                    details: `Sent announcement to ${broadcastAudience}: "${summary}"`
+                  });
+                  setBroadcastMessage('');
+                  setGovNotice(`Broadcast announcement dispatched to ${broadcastAudience}.`);
+                }}
                 className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
@@ -234,40 +327,209 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
   if (section === 'policies') {
     return (
       <div className="space-y-6">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-          <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span>Library Circulation Policies & Borrowing Rules</span>
-          </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Governing rules set by the School Academic Board regarding loan periods, renewals, and fines.
-          </p>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              <span>Library Circulation Policies & Borrowing Rules</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Governing rules managed by the Librarian regarding loan periods, renewals, conduct, acquisitions, and fines.
+            </p>
+          </div>
+
+          {onAddPolicy && (
+            <button
+              type="button"
+              onClick={openAddPolicyModal}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Library Policy</span>
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {policies.map((pol) => (
-            <div key={pol.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 uppercase">
-                    {pol.category}
-                  </span>
-                  <span className="font-black text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    {pol.value}
-                  </span>
+        {govNotice && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              {govNotice}
+            </span>
+            <button
+              type="button"
+              onClick={() => setGovNotice(null)}
+              className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {policies.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+            No library policies configured yet. Click "Add Library Policy" to create one.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {policies.map((pol) => (
+              <div key={pol.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-700 uppercase">
+                      {pol.category}
+                    </span>
+                    <span className="font-black text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      {pol.value}
+                    </span>
+                  </div>
+
+                  <h4 className="font-extrabold text-sm text-slate-900 mt-2">{pol.policyName}</h4>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">{pol.description}</p>
                 </div>
 
-                <h4 className="font-extrabold text-sm text-slate-900 mt-2">{pol.policyName}</h4>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">{pol.description}</p>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-emerald-700 font-bold text-[11px]">Enforced in System</span>
+                  <div className="flex items-center gap-1.5">
+                    {confirmDeletePolicyId === pol.id ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeletePolicy?.(pol.id);
+                            setConfirmDeletePolicyId(null);
+                            setGovNotice(`Policy "${pol.policyName}" removed.`);
+                          }}
+                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] rounded-lg cursor-pointer"
+                        >
+                          Confirm Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeletePolicyId(null)}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEditPolicyModal(pol)}
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] rounded-lg flex items-center gap-1 cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+                        {onDeletePolicy && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeletePolicyId(pol.id)}
+                            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] rounded-lg flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add / Edit Policy Modal */}
+        {showPolicyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
+              <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <h4 className="font-black text-sm flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>{editingPolicyId ? 'Edit Library Policy' : 'Add New Library Policy'}</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowPolicyModal(false)}
+                  className="text-slate-300 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                <span>Institutional Standard</span>
-                <span className="text-emerald-700 font-bold">Enforced in System</span>
-              </div>
+              <form onSubmit={handleSavePolicy} className="p-5 space-y-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Policy Title *</label>
+                  <input
+                    type="text"
+                    required
+                    value={polName}
+                    onChange={(e) => setPolName(e.target.value)}
+                    placeholder="e.g. Maximum Student Loan Duration"
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Category *</label>
+                    <select
+                      value={polCategory}
+                      onChange={(e) => setPolCategory(e.target.value as LibraryPolicy['category'])}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    >
+                      <option value="Lending">Lending</option>
+                      <option value="Fines">Fines</option>
+                      <option value="Conduct">Conduct</option>
+                      <option value="Acquisitions">Acquisitions</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Rule Value / Limit *</label>
+                    <input
+                      type="text"
+                      required
+                      value={polValue}
+                      onChange={(e) => setPolValue(e.target.value)}
+                      placeholder="e.g. 14 Days / KES 10/day"
+                      className="w-full border border-slate-300 rounded-lg p-2 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Policy Description *</label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={polDescription}
+                    onChange={(e) => setPolDescription(e.target.value)}
+                    placeholder="Detailed rule guidance enforced across the library..."
+                    className="w-full border border-slate-300 rounded-lg p-2"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowPolicyModal(false)}
+                    className="px-3 py-1.5 text-slate-600 font-bold hover:text-slate-900 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg shadow-xs cursor-pointer"
+                  >
+                    {editingPolicyId ? 'Save Changes' : 'Create Policy'}
+                  </button>
+                </div>
+              </form>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -287,6 +549,22 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4 max-w-xl text-xs">
+          {govNotice && (
+            <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                {govNotice}
+              </span>
+              <button
+                type="button"
+                onClick={() => setGovNotice(null)}
+                className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div className="flex items-center justify-between py-2 border-b">
               <div>
@@ -315,7 +593,18 @@ export const GovernanceViews: React.FC<GovernanceViewsProps> = ({
 
           <div className="pt-2">
             <button
-              onClick={() => alert('Library settings successfully saved.')}
+              type="button"
+              onClick={() => {
+                onAddAuditLog({
+                  id: `aud-${Date.now()}`,
+                  action: 'Library Settings Updated',
+                  performedBy: 'Library Desk',
+                  role: 'librarian',
+                  timestamp: new Date().toISOString(),
+                  details: 'Saved library portal operational configuration.'
+                });
+                setGovNotice('Library settings successfully saved.');
+              }}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
             >
               Save Configuration

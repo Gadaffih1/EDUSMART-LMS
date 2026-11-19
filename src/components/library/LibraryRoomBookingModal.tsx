@@ -33,7 +33,11 @@ import {
   Tv,
   Tablet,
   LayoutGrid,
-  FileText
+  FileText,
+  Pencil,
+  Plus,
+  Building2,
+  RotateCcw
 } from 'lucide-react';
 
 interface LibraryRoomBookingModalProps {
@@ -113,6 +117,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   const safeUserId = currentUser?.id || 'faculty-user';
   const safeUserName = currentUser?.name || 'Subject Teacher';
   const safeUserRole = currentUser?.role || 'teacher';
+  const isLibrarianOrAdmin = safeUserRole === 'librarian' || safeUserRole === 'admin';
 
   const [roomsList, setRoomsList] = useState<LibraryRoom[]>(() => {
     const loaded = Storage.getLibraryRooms();
@@ -122,12 +127,35 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     () => (roomsList.length > 0 ? roomsList : [FALLBACK_LIBRARY_ROOM]),
     [roomsList]
   );
-  const [activeTab, setActiveTab] = useState<'book' | 'matrix' | 'my_bookings'>('book');
+  const [activeTab, setActiveTab] = useState<'book' | 'matrix' | 'my_bookings' | 'manage_rooms'>('book');
 
   // Bookings & timetable state
   const [allBookings, setAllBookings] = useState<LibraryRoomBooking[]>(() => Storage.getLibraryRoomBookings());
   const [timetableSlots, setTimetableSlots] = useState<LibraryTimetableSlot[]>(() => Storage.getLibraryTimetable());
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [confirmDeleteBookingId, setConfirmDeleteBookingId] = useState<string | null>(null);
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [editBkRoomId, setEditBkRoomId] = useState<string>('');
+  const [editBkDate, setEditBkDate] = useState<string>('');
+  const [editBkPeriodNum, setEditBkPeriodNum] = useState<number>(3);
+  const [editBkTeacher, setEditBkTeacher] = useState<string>('');
+  const [editBkSubject, setEditBkSubject] = useState<string>('');
+  const [editBkStream, setEditBkStream] = useState<string>('');
+  const [editBkPurpose, setEditBkPurpose] = useState<string>('');
+  const [editBkLearners, setEditBkLearners] = useState<number>(30);
+  const [editBkStatus, setEditBkStatus] = useState<'confirmed' | 'cancelled'>('confirmed');
+  const [editBkNotes, setEditBkNotes] = useState<string>('');
+
+  // Librarian Room Management states
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [roomNameInput, setRoomNameInput] = useState('');
+  const [roomTypeInput, setRoomTypeInput] = useState('Seminar Room');
+  const [roomCapacityInput, setRoomCapacityInput] = useState<number>(30);
+  const [roomLocationInput, setRoomLocationInput] = useState('');
+  const [roomFeaturesInput, setRoomFeaturesInput] = useState('Interactive Smart Screen, Reference Tables');
+  const [roomDescInput, setRoomDescInput] = useState('');
+  const [confirmDeleteRoomId, setConfirmDeleteRoomId] = useState<string | null>(null);
+  const [roomActionNotice, setRoomActionNotice] = useState<string | null>(null);
 
   // Form inputs
   const [selectedRoomId, setSelectedRoomId] = useState<string>(rooms[0]?.id || FALLBACK_LIBRARY_ROOM.id);
@@ -347,9 +375,176 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   };
 
   const handleCancelBooking = (id: string) => {
+    const target = allBookings.find(b => b.id === id);
     Storage.cancelLibraryRoomBooking(id);
+    if (target) {
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Room Booking Cancelled',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Cancelled room booking ${target.bookingRef} (${target.roomName} on ${target.date})`
+      });
+    }
     setAllBookings(Storage.getLibraryRoomBookings());
     setConfirmCancelId(null);
+  };
+
+  const handleDeleteBooking = (id: string) => {
+    const target = allBookings.find(b => b.id === id);
+    Storage.deleteLibraryRoomBooking(id);
+    if (target) {
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Room Booking Deleted',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Permanently removed booking ${target.bookingRef} (${target.roomName} on ${target.date})`
+      });
+    }
+    setAllBookings(Storage.getLibraryRoomBookings());
+    setConfirmDeleteBookingId(null);
+    if (editingBookingId === id) setEditingBookingId(null);
+  };
+
+  const startEditBooking = (bk: LibraryRoomBooking) => {
+    setEditingBookingId(bk.id);
+    setEditBkRoomId(bk.roomId);
+    setEditBkDate(bk.date);
+    const matchedPeriod = BOOKING_PERIODS.find(p => p.label === bk.periodLabel || p.displayTime.startsWith(bk.startTime));
+    setEditBkPeriodNum(matchedPeriod?.periodNum || 3);
+    setEditBkTeacher(bk.bookedByName);
+    setEditBkSubject(bk.subject || '');
+    setEditBkStream(bk.stream || '');
+    setEditBkPurpose(bk.purpose);
+    setEditBkLearners(bk.learnersCount);
+    setEditBkStatus(bk.status);
+    setEditBkNotes(bk.notes || '');
+  };
+
+  const handleSaveBookingEdit = (id: string) => {
+    const rm = rooms.find(r => r.id === editBkRoomId) || selectedRoom;
+    const per = BOOKING_PERIODS.find(p => p.periodNum === editBkPeriodNum) || BOOKING_PERIODS[2];
+    const dayIdx = editBkDate ? new Date(editBkDate + 'T00:00:00').getDay() : 1;
+    const dayMap: Record<number, 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'> = {
+      1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'
+    };
+    const dayOfWeek = dayMap[dayIdx] || 'Monday';
+
+    Storage.updateLibraryRoomBooking(id, {
+      roomId: rm.id,
+      roomName: rm.name,
+      roomCapacity: rm.capacity,
+      date: editBkDate,
+      dayOfWeek,
+      startTime: per.displayTime.split(' - ')[0],
+      endTime: per.displayTime.split(' - ')[1],
+      periodLabel: per.label,
+      bookedByName: editBkTeacher.trim() || safeUserName,
+      subject: editBkSubject.trim(),
+      stream: editBkStream.trim(),
+      purpose: editBkPurpose.trim() || 'Library Session',
+      learnersCount: Math.max(1, Number(editBkLearners) || 1),
+      status: editBkStatus,
+      notes: editBkNotes.trim()
+    });
+    Storage.addLibraryAuditLog({
+      id: `aud-${Date.now()}`,
+      action: 'Room Booking Updated',
+      performedBy: safeUserName,
+      role: safeUserRole,
+      timestamp: new Date().toISOString(),
+      details: `Edited room booking for "${rm.name}" on ${editBkDate} (${per.label})`
+    });
+    setAllBookings(Storage.getLibraryRoomBookings());
+    setEditingBookingId(null);
+  };
+
+  const resetRoomForm = () => {
+    setEditingRoomId(null);
+    setRoomNameInput('');
+    setRoomTypeInput('Seminar Room');
+    setRoomCapacityInput(30);
+    setRoomLocationInput('');
+    setRoomFeaturesInput('Interactive Smart Screen, Reference Tables');
+    setRoomDescInput('');
+  };
+
+  const handleSaveRoom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomNameInput.trim()) return;
+    const features = roomFeaturesInput
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (editingRoomId) {
+      Storage.updateLibraryRoom(editingRoomId, {
+        name: roomNameInput.trim(),
+        type: roomTypeInput.trim() || 'Reading Hall',
+        capacity: Math.max(1, Number(roomCapacityInput) || 20),
+        location: roomLocationInput.trim() || 'Library Wing',
+        features,
+        description: roomDescInput.trim() || 'Dedicated library learning space.'
+      });
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Library Room Updated',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Updated library venue "${roomNameInput.trim()}" (Capacity: ${roomCapacityInput})`
+      });
+      setRoomActionNotice(`Updated room "${roomNameInput.trim()}".`);
+    } else {
+      const newRoom: LibraryRoom = {
+        id: `room-${Date.now()}`,
+        name: roomNameInput.trim(),
+        type: roomTypeInput.trim() || 'Seminar Room',
+        capacity: Math.max(1, Number(roomCapacityInput) || 20),
+        location: roomLocationInput.trim() || 'Library Wing',
+        features,
+        description: roomDescInput.trim() || 'Dedicated library learning space.'
+      };
+      Storage.addLibraryRoom(newRoom);
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Library Room Added',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Added new library venue "${newRoom.name}" (Capacity: ${newRoom.capacity})`
+      });
+      setRoomActionNotice(`Added new library room "${newRoom.name}".`);
+    }
+    setRoomsList(Storage.getLibraryRooms());
+    resetRoomForm();
+    setTimeout(() => setRoomActionNotice(null), 4000);
+  };
+
+  const handleDeleteRoom = (id: string) => {
+    const target = rooms.find(r => r.id === id);
+    Storage.deleteLibraryRoom(id);
+    if (target) {
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Library Room Removed',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Removed library room "${target.name}"`
+      });
+      setRoomActionNotice(`Removed room "${target.name}".`);
+      setTimeout(() => setRoomActionNotice(null), 4000);
+    }
+    const nextRooms = Storage.getLibraryRooms();
+    setRoomsList(nextRooms);
+    if (selectedRoomId === id && nextRooms[0]) {
+      setSelectedRoomId(nextRooms[0].id);
+    }
+    setConfirmDeleteRoomId(null);
   };
 
   // Filtered bookings
@@ -458,6 +653,20 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
             <FileText className="w-4 h-4 text-purple-600" />
             <span>3. Active Reservations ({allBookings.filter(b => b.status === 'confirmed').length})</span>
           </button>
+
+          {isLibrarianOrAdmin && (
+            <button
+              onClick={() => setActiveTab('manage_rooms')}
+              className={`px-4 py-2.5 font-bold text-xs rounded-t-xl transition-all flex items-center gap-2 cursor-pointer border-t border-x ${
+                activeTab === 'manage_rooms'
+                  ? 'bg-white text-purple-900 border-slate-200 -mb-px font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-100/60'
+              }`}
+            >
+              <Building2 className="w-4 h-4 text-purple-600" />
+              <span>4. Manage Rooms ({rooms.length})</span>
+            </button>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -1096,14 +1305,25 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                           </div>
                         </div>
 
-                        {bk.status === 'confirmed' && (
-                          <div className="flex items-center gap-2 self-start sm:self-auto">
-                            {confirmCancelId === bk.id ? (
-                              <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+                          {isLibrarianOrAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => editingBookingId === bk.id ? setEditingBookingId(null) : startEditBooking(bk)}
+                              className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>{editingBookingId === bk.id ? 'Close Edit' : 'Edit'}</span>
+                            </button>
+                          )}
+
+                          {bk.status === 'confirmed' && (isLibrarianOrAdmin || bk.bookedByUserId === safeUserId || bk.bookedByName === safeUserName) && (
+                            confirmCancelId === bk.id ? (
+                              <div className="flex items-center gap-1">
                                 <button
                                   type="button"
                                   onClick={() => handleCancelBooking(bk.id)}
-                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
                                 >
                                   Confirm Cancel
                                 </button>
@@ -1119,15 +1339,173 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                               <button
                                 type="button"
                                 onClick={() => setConfirmCancelId(bk.id)}
-                                className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                className="px-2.5 py-1 text-amber-700 hover:bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <X className="w-3 h-3" />
                                 <span>Cancel</span>
                               </button>
-                            )}
-                          </div>
-                        )}
+                            )
+                          )}
+
+                          {isLibrarianOrAdmin && bk.status === 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                Storage.updateLibraryRoomBooking(bk.id, { status: 'confirmed' });
+                                setAllBookings(Storage.getLibraryRoomBookings());
+                              }}
+                              className="px-2.5 py-1 text-emerald-700 hover:bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Restore</span>
+                            </button>
+                          )}
+
+                          {isLibrarianOrAdmin && (
+                            confirmDeleteBookingId === bk.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBooking(bk.id)}
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Confirm Delete
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteBookingId(null)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBookingId(bk.id)}
+                                className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            )
+                          )}
+                        </div>
                       </div>
+
+                      {editingBookingId === bk.id && isLibrarianOrAdmin && (
+                        <div className="mt-3 p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3 text-xs">
+                          <div className="font-black text-indigo-950 text-xs">Edit Room Booking ({bk.bookingRef})</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Room</label>
+                              <select
+                                value={editBkRoomId}
+                                onChange={(e) => setEditBkRoomId(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              >
+                                {rooms.map(r => (
+                                  <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Date</label>
+                              <input
+                                type="date"
+                                value={editBkDate}
+                                onChange={(e) => setEditBkDate(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Period</label>
+                              <select
+                                value={editBkPeriodNum}
+                                onChange={(e) => setEditBkPeriodNum(Number(e.target.value))}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              >
+                                {BOOKING_PERIODS.map(p => (
+                                  <option key={p.periodNum} value={p.periodNum}>{p.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Teacher / Requester</label>
+                              <input
+                                type="text"
+                                value={editBkTeacher}
+                                onChange={(e) => setEditBkTeacher(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Class / Stream</label>
+                              <input
+                                type="text"
+                                value={editBkStream}
+                                onChange={(e) => setEditBkStream(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Subject</label>
+                              <input
+                                type="text"
+                                value={editBkSubject}
+                                onChange={(e) => setEditBkSubject(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Purpose</label>
+                              <input
+                                type="text"
+                                value={editBkPurpose}
+                                onChange={(e) => setEditBkPurpose(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Learners</label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={editBkLearners}
+                                onChange={(e) => setEditBkLearners(Number(e.target.value))}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Status</label>
+                              <select
+                                value={editBkStatus}
+                                onChange={(e) => setEditBkStatus(e.target.value as 'confirmed' | 'cancelled')}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              >
+                                <option value="confirmed">Confirmed</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingBookingId(null)}
+                              className="px-3 py-1.5 text-slate-600 font-bold text-xs cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveBookingEdit(bk.id)}
+                              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                            >
+                              Save Changes
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                         <div>
@@ -1161,6 +1539,170 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 4: LIBRARIAN ROOM MANAGEMENT */}
+          {activeTab === 'manage_rooms' && isLibrarianOrAdmin && (
+            <div className="space-y-5">
+              {roomActionNotice && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{roomActionNotice}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveRoom} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-black text-sm text-slate-900 flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-purple-600" />
+                    <span>{editingRoomId ? 'Edit Library Room / Venue' : 'Add New Library Room / Learning Space'}</span>
+                  </h4>
+                  {editingRoomId && (
+                    <button type="button" onClick={resetRoomForm} className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer">
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Room Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={roomNameInput}
+                      onChange={(e) => setRoomNameInput(e.target.value)}
+                      placeholder="e.g. Storytelling & Reading Amphitheatre"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Room Type</label>
+                    <input
+                      type="text"
+                      value={roomTypeInput}
+                      onChange={(e) => setRoomTypeInput(e.target.value)}
+                      placeholder="e.g. Reading Hall / Seminar Room"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Capacity (Learners)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={roomCapacityInput}
+                      onChange={(e) => setRoomCapacityInput(Number(e.target.value))}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Location / Wing</label>
+                    <input
+                      type="text"
+                      value={roomLocationInput}
+                      onChange={(e) => setRoomLocationInput(e.target.value)}
+                      placeholder="e.g. First Floor · South Wing"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Features (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={roomFeaturesInput}
+                      onChange={(e) => setRoomFeaturesInput(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={roomDescInput}
+                    onChange={(e) => setRoomDescInput(e.target.value)}
+                    placeholder="Brief description of intended learning activities..."
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl cursor-pointer"
+                  >
+                    {editingRoomId ? 'Update Room' : '+ Add Library Room'}
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {rooms.map(rm => (
+                  <div key={rm.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex flex-col justify-between gap-3">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-black text-slate-900 text-sm">{rm.name}</div>
+                          <div className="text-[11px] text-purple-700 font-semibold">{rm.type} · 📍 {rm.location}</div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
+                          Cap: {rm.capacity}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1.5">{rm.description}</p>
+                    </div>
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRoomId(rm.id);
+                          setRoomNameInput(rm.name);
+                          setRoomTypeInput(rm.type);
+                          setRoomCapacityInput(rm.capacity);
+                          setRoomLocationInput(rm.location);
+                          setRoomFeaturesInput((rm.features || []).join(', '));
+                          setRoomDescInput(rm.description);
+                        }}
+                        className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+                      {rooms.length > 1 && (
+                        confirmDeleteRoomId === rm.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRoom(rm.id)}
+                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              Confirm Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteRoomId(null)}
+                              className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteRoomId(rm.id)}
+                            className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remove</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

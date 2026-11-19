@@ -1845,6 +1845,13 @@ export const Storage = {
       books.unshift(book);
     }
     setToStorage(KEYS.LIBRARY_BOOKS, books);
+    window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+  },
+  deleteLibraryBook(id: string): void {
+    const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
+    const updated = books.filter(b => b.id !== id);
+    setToStorage(KEYS.LIBRARY_BOOKS, updated);
+    window.dispatchEvent(new CustomEvent('library-books-updated', { detail: updated }));
   },
   getBorrowRecords(): LibraryBorrowRecord[] {
     return getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
@@ -1891,6 +1898,47 @@ export const Storage = {
     }
     return null;
   },
+  updateBorrowRecord(id: string, updates: Partial<LibraryBorrowRecord>): void {
+    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
+    const existing = records.find(r => r.id === id);
+    if (!existing) return;
+    const wasReturned = existing.status === 'returned';
+    const nextStatus = updates.status ?? existing.status;
+    const updated = records.map(r => r.id === id ? { ...r, ...updates } : r);
+    setToStorage(KEYS.BORROW_RECORDS, updated);
+
+    if (wasReturned !== (nextStatus === 'returned')) {
+      const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
+      const bk = books.find(b => b.id === existing.bookId);
+      if (bk) {
+        if (nextStatus === 'returned' && bk.copiesAvailable < bk.totalCopies) {
+          bk.copiesAvailable += 1;
+        } else if (nextStatus !== 'returned' && bk.copiesAvailable > 0) {
+          bk.copiesAvailable -= 1;
+        }
+        setToStorage(KEYS.LIBRARY_BOOKS, books);
+        window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+      }
+    }
+    window.dispatchEvent(new CustomEvent('library-borrow-records-updated', { detail: updated }));
+  },
+  deleteBorrowRecord(id: string): void {
+    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
+    const target = records.find(r => r.id === id);
+    const updated = records.filter(r => r.id !== id);
+    setToStorage(KEYS.BORROW_RECORDS, updated);
+
+    if (target && target.status !== 'returned') {
+      const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
+      const bk = books.find(b => b.id === target.bookId);
+      if (bk && bk.copiesAvailable < bk.totalCopies) {
+        bk.copiesAvailable += 1;
+        setToStorage(KEYS.LIBRARY_BOOKS, books);
+        window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+      }
+    }
+    window.dispatchEvent(new CustomEvent('library-borrow-records-updated', { detail: updated }));
+  },
   getActiveBorrowRecordByCopyId(copyId: string): LibraryBorrowRecord | undefined {
     if (!copyId) return undefined;
     const records = this.getBorrowRecords();
@@ -1927,6 +1975,11 @@ export const Storage = {
     const updated = list.map(r => r.id === id ? { ...r, ...updates } : r);
     this.saveLibraryReservations(updated);
   },
+  deleteLibraryReservation(id: string): void {
+    const list = this.getLibraryReservations();
+    const updated = list.filter(r => r.id !== id);
+    this.saveLibraryReservations(updated);
+  },
 
   getLibraryFines(): LibraryFine[] {
     return getFromStorage<LibraryFine[]>(KEYS.LIBRARY_FINES, []);
@@ -1943,6 +1996,11 @@ export const Storage = {
   updateLibraryFine(id: string, updates: Partial<LibraryFine>): void {
     const list = this.getLibraryFines();
     const updated = list.map(f => f.id === id ? { ...f, ...updates } : f);
+    this.saveLibraryFines(updated);
+  },
+  deleteLibraryFine(id: string): void {
+    const list = this.getLibraryFines();
+    const updated = list.filter(f => f.id !== id);
     this.saveLibraryFines(updated);
   },
 
@@ -1963,6 +2021,11 @@ export const Storage = {
     const updated = list.map(a => a.id === id ? { ...a, ...updates } : a);
     this.saveLibraryAcquisitions(updated);
   },
+  deleteLibraryAcquisition(id: string): void {
+    const list = this.getLibraryAcquisitions();
+    const updated = list.filter(a => a.id !== id);
+    this.saveLibraryAcquisitions(updated);
+  },
 
   getLibraryShelves(): LibraryShelfLocation[] {
     return getFromStorage<LibraryShelfLocation[]>(KEYS.LIBRARY_SHELVES, []);
@@ -1976,6 +2039,16 @@ export const Storage = {
     const updated = [...list, shelf];
     this.saveLibraryShelves(updated);
   },
+  updateLibraryShelf(id: string, updates: Partial<LibraryShelfLocation>): void {
+    const list = this.getLibraryShelves();
+    const updated = list.map(s => s.id === id ? { ...s, ...updates } : s);
+    this.saveLibraryShelves(updated);
+  },
+  deleteLibraryShelf(id: string): void {
+    const list = this.getLibraryShelves();
+    const updated = list.filter(s => s.id !== id);
+    this.saveLibraryShelves(updated);
+  },
 
   getDigitalLibraryItems(): DigitalLibraryItem[] {
     return getFromStorage<DigitalLibraryItem[]>(KEYS.LIBRARY_DIGITAL_ITEMS, []);
@@ -1987,6 +2060,16 @@ export const Storage = {
   addDigitalLibraryItem(item: DigitalLibraryItem): void {
     const list = this.getDigitalLibraryItems();
     const updated = [item, ...list];
+    this.saveDigitalLibraryItems(updated);
+  },
+  updateDigitalLibraryItem(id: string, updates: Partial<DigitalLibraryItem>): void {
+    const list = this.getDigitalLibraryItems();
+    const updated = list.map(i => i.id === id ? { ...i, ...updates } : i);
+    this.saveDigitalLibraryItems(updated);
+  },
+  deleteDigitalLibraryItem(id: string): void {
+    const list = this.getDigitalLibraryItems();
+    const updated = list.filter(i => i.id !== id);
     this.saveDigitalLibraryItems(updated);
   },
 
@@ -2007,6 +2090,11 @@ export const Storage = {
     const updated = list.map(m => m.id === id ? { ...m, ...updates } : m);
     this.saveReadingProgrammeMembers(updated);
   },
+  deleteReadingProgrammeMember(id: string): void {
+    const list = this.getReadingProgrammeMembers();
+    const updated = list.filter(m => m.id !== id);
+    this.saveReadingProgrammeMembers(updated);
+  },
 
   getLibraryAttendance(): LibraryAttendanceLog[] {
     return getFromStorage<LibraryAttendanceLog[]>(KEYS.LIBRARY_ATTENDANCE, []);
@@ -2018,6 +2106,16 @@ export const Storage = {
   addLibraryAttendanceLog(log: LibraryAttendanceLog): void {
     const list = this.getLibraryAttendance();
     const updated = [log, ...list];
+    this.saveLibraryAttendance(updated);
+  },
+  updateLibraryAttendanceLog(id: string, updates: Partial<LibraryAttendanceLog>): void {
+    const list = this.getLibraryAttendance();
+    const updated = list.map(l => l.id === id ? { ...l, ...updates } : l);
+    this.saveLibraryAttendance(updated);
+  },
+  deleteLibraryAttendanceLog(id: string): void {
+    const list = this.getLibraryAttendance();
+    const updated = list.filter(l => l.id !== id);
     this.saveLibraryAttendance(updated);
   },
 
@@ -2033,6 +2131,16 @@ export const Storage = {
     const updated = [...list, slot];
     this.saveLibraryTimetable(updated);
   },
+  updateLibraryTimetableSlot(id: string, updates: Partial<LibraryTimetableSlot>): void {
+    const list = this.getLibraryTimetable();
+    const updated = list.map(s => s.id === id ? { ...s, ...updates } : s);
+    this.saveLibraryTimetable(updated);
+  },
+  deleteLibraryTimetableSlot(id: string): void {
+    const list = this.getLibraryTimetable();
+    const updated = list.filter(s => s.id !== id);
+    this.saveLibraryTimetable(updated);
+  },
 
   getLibraryEvents(): LibraryEvent[] {
     return getFromStorage<LibraryEvent[]>(KEYS.LIBRARY_EVENTS, []);
@@ -2046,6 +2154,16 @@ export const Storage = {
     const updated = [event, ...list];
     this.saveLibraryEvents(updated);
   },
+  updateLibraryEvent(id: string, updates: Partial<LibraryEvent>): void {
+    const list = this.getLibraryEvents();
+    const updated = list.map(e => e.id === id ? { ...e, ...updates } : e);
+    this.saveLibraryEvents(updated);
+  },
+  deleteLibraryEvent(id: string): void {
+    const list = this.getLibraryEvents();
+    const updated = list.filter(e => e.id !== id);
+    this.saveLibraryEvents(updated);
+  },
 
   getLibraryPolicies(): LibraryPolicy[] {
     return getFromStorage<LibraryPolicy[]>(KEYS.LIBRARY_POLICIES, []);
@@ -2054,9 +2172,19 @@ export const Storage = {
     setToStorage(KEYS.LIBRARY_POLICIES, policies);
     window.dispatchEvent(new CustomEvent('library-policies-updated', { detail: policies }));
   },
+  addLibraryPolicy(policy: LibraryPolicy): void {
+    const list = this.getLibraryPolicies();
+    const updated = [policy, ...list];
+    this.saveLibraryPolicies(updated);
+  },
   updateLibraryPolicy(id: string, updates: Partial<LibraryPolicy>): void {
     const list = this.getLibraryPolicies();
     const updated = list.map(p => p.id === id ? { ...p, ...updates } : p);
+    this.saveLibraryPolicies(updated);
+  },
+  deleteLibraryPolicy(id: string): void {
+    const list = this.getLibraryPolicies();
+    const updated = list.filter(p => p.id !== id);
     this.saveLibraryPolicies(updated);
   },
 
@@ -2119,15 +2247,31 @@ export const Storage = {
         description: 'Quiet academic reference wing tailored for focused research, exam revision, and teacher resource preparation.',
       },
     ];
-    const stored = getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, []);
-    const validStored = Array.isArray(stored)
-      ? stored.filter((r): r is LibraryRoom => Boolean(r && typeof r === 'object' && r.id && r.name))
-      : [];
-    return validStored.length > 0 ? validStored : defaultRooms;
+    const stored = getFromStorage<LibraryRoom[] | null>(KEYS.LIBRARY_ROOMS, null);
+    if (Array.isArray(stored)) {
+      const validStored = stored.filter((r): r is LibraryRoom => Boolean(r && typeof r === 'object' && r.id && r.name));
+      return validStored.length > 0 ? validStored : defaultRooms;
+    }
+    return defaultRooms;
   },
   saveLibraryRooms(rooms: LibraryRoom[]): void {
     setToStorage(KEYS.LIBRARY_ROOMS, rooms);
     window.dispatchEvent(new CustomEvent('library-rooms-updated', { detail: rooms }));
+  },
+  addLibraryRoom(room: LibraryRoom): void {
+    const list = this.getLibraryRooms();
+    const updated = [...list, room];
+    this.saveLibraryRooms(updated);
+  },
+  updateLibraryRoom(id: string, updates: Partial<LibraryRoom>): void {
+    const list = this.getLibraryRooms();
+    const updated = list.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveLibraryRooms(updated);
+  },
+  deleteLibraryRoom(id: string): void {
+    const list = this.getLibraryRooms();
+    const updated = list.filter(r => r.id !== id);
+    this.saveLibraryRooms(updated);
   },
   getLibraryRoomBookings(): LibraryRoomBooking[] {
     return getFromStorage<LibraryRoomBooking[]>(KEYS.LIBRARY_ROOM_BOOKINGS, []);
@@ -2149,6 +2293,11 @@ export const Storage = {
   cancelLibraryRoomBooking(id: string): void {
     const list = this.getLibraryRoomBookings();
     const updated = list.map(b => b.id === id ? { ...b, status: 'cancelled' as const } : b);
+    this.saveLibraryRoomBookings(updated);
+  },
+  deleteLibraryRoomBooking(id: string): void {
+    const list = this.getLibraryRoomBookings();
+    const updated = list.filter(b => b.id !== id);
     this.saveLibraryRoomBookings(updated);
   },
 

@@ -32,7 +32,9 @@ import {
   Atom,
   ShieldCheck,
   Lock,
-  Volume2
+  Volume2,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 import { 
@@ -58,8 +60,17 @@ interface CollectionViewsProps {
   shelves: LibraryShelfLocation[];
   digitalItems: DigitalLibraryItem[];
   onAddBook: (book: LibraryBook) => void;
+  onUpdateBook?: (book: LibraryBook) => void;
+  onDeleteBook?: (id: string) => void;
   onAddAcquisition: (acq: LibraryAcquisition) => void;
+  onUpdateAcquisition?: (id: string, updates: Partial<LibraryAcquisition>) => void;
+  onDeleteAcquisition?: (id: string) => void;
+  onAddShelf?: (shelf: LibraryShelfLocation) => void;
+  onUpdateShelf?: (id: string, updates: Partial<LibraryShelfLocation>) => void;
+  onDeleteShelf?: (id: string) => void;
   onAddDigitalItem: (item: DigitalLibraryItem) => void;
+  onUpdateDigitalItem?: (id: string, updates: Partial<DigitalLibraryItem>) => void;
+  onDeleteDigitalItem?: (id: string) => void;
   onIssueBook?: (record: LibraryBorrowRecord) => void;
   onReturnBook?: (recordId: string, remarks?: string) => void;
 }
@@ -74,8 +85,17 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   shelves,
   digitalItems,
   onAddBook,
+  onUpdateBook,
+  onDeleteBook,
   onAddAcquisition,
+  onUpdateAcquisition,
+  onDeleteAcquisition,
+  onAddShelf,
+  onUpdateShelf,
+  onDeleteShelf,
   onAddDigitalItem,
+  onUpdateDigitalItem,
+  onDeleteDigitalItem,
   onIssueBook,
   onReturnBook
 }) => {
@@ -84,9 +104,14 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [showAddBookModal, setShowAddBookModal] = useState(false);
+  const [editingCatalogueBookId, setEditingCatalogueBookId] = useState<string | null>(null);
+  const [confirmDeleteBookId, setConfirmDeleteBookId] = useState<string | null>(null);
   const [showAddAcqModal, setShowAddAcqModal] = useState(false);
+  const [editingAcqId, setEditingAcqId] = useState<string | null>(null);
+  const [confirmDeleteAcqId, setConfirmDeleteAcqId] = useState<string | null>(null);
   const [showScienceModal, setShowScienceModal] = useState(false);
   const [readingDigitalItem, setReadingDigitalItem] = useState<DigitalLibraryItem | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   // Inventory Specific States
   const [inventorySearch, setInventorySearch] = useState('');
@@ -94,8 +119,9 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   const [inventoryCatFilter, setInventoryCatFilter] = useState<string>('all');
   const [selectedBookForLedger, setSelectedBookForLedger] = useState<LibraryBook | null>(null);
   const [showAddInventoryModal, setShowAddInventoryModal] = useState(false);
+  const [editingInventoryBookId, setEditingInventoryBookId] = useState<string | null>(null);
   
-  // Inventory Add Form States
+  // Inventory Add/Edit Form States
   const [invTitle, setInvTitle] = useState('');
   const [invPublisher, setInvPublisher] = useState('Kenya Literature Bureau (KLB)');
   const [invAuthor, setInvAuthor] = useState('');
@@ -106,6 +132,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   const [invAcqType, setInvAcqType] = useState<'Stocked' | 'Donated'>('Stocked');
   const [invDonorName, setInvDonorName] = useState('Ministry of Education Capitation Grant');
   const [invTotalCopies, setInvTotalCopies] = useState<number>(35);
+  const [invCopiesAvailable, setInvCopiesAvailable] = useState<number>(35);
   const [invLocationShelf, setInvLocationShelf] = useState('Shelf M-04A');
   const [invAccessionPrefix, setInvAccessionPrefix] = useState('ACC-KLB-M4');
 
@@ -122,7 +149,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   const [invIssueRemarks, setInvIssueRemarks] = useState('Library Inventory Checkout');
   const [ledgerNewCopyId, setLedgerNewCopyId] = useState('');
 
-  // New Book state
+  // Catalogue Add/Edit Book state
   const [newTitle, setNewTitle] = useState('');
   const [newAuthor, setNewAuthor] = useState('');
   const [newIsbn, setNewIsbn] = useState('978-9966-');
@@ -130,14 +157,43 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   const [newCat, setNewCat] = useState<'CBC Textbook' | 'CBC Teacher Guide' | 'Supplementary Reader' | 'Encyclopedia' | 'Fiction Storybook'>('CBC Textbook');
   const [newGrade, setNewGrade] = useState<number>(4);
   const [newCopies, setNewCopies] = useState<number>(30);
+  const [newAvailCopies, setNewAvailCopies] = useState<number>(30);
   const [newShelf, setNewShelf] = useState('SEC-A-01');
 
-  // New Acquisition state
+  // Acquisition Add/Edit state
   const [acqTitle, setAcqTitle] = useState('');
-  const [acqAuthor, setAcqAuthor] = useState('');
+  const [acqAuthor, setAcqAuthor] = useState('Editorial Board');
+  const [acqPublisher, setAcqPublisher] = useState('Kenya Literature Bureau');
   const [acqSupplier, setAcqSupplier] = useState('Text Book Centre Ltd');
   const [acqQty, setAcqQty] = useState<number>(20);
   const [acqUnitCost, setAcqUnitCost] = useState<number>(750);
+  const [acqStatus, setAcqStatus] = useState<LibraryAcquisition['status']>('ordered');
+
+  // Shelves Add/Edit/Delete state
+  const [showShelfModal, setShowShelfModal] = useState(false);
+  const [editingShelfId, setEditingShelfId] = useState<string | null>(null);
+  const [confirmDeleteShelfId, setConfirmDeleteShelfId] = useState<string | null>(null);
+  const [shelfCode, setShelfCode] = useState('');
+  const [shelfSectionName, setShelfSectionName] = useState('');
+  const [shelfFloor, setShelfFloor] = useState('Ground Floor');
+  const [shelfAisle, setShelfAisle] = useState('Aisle A');
+  const [shelfDeweyRange, setShelfDeweyRange] = useState('500 - 599');
+  const [shelfCapacity, setShelfCapacity] = useState<number>(500);
+  const [shelfCurrentCount, setShelfCurrentCount] = useState<number>(0);
+  const [shelfSpecialization, setShelfSpecialization] = useState('CBC Sciences & Mathematics');
+
+  // Digital Library E-Books Add/Edit/Delete state
+  const [showDigitalModal, setShowDigitalModal] = useState(false);
+  const [editingDigitalId, setEditingDigitalId] = useState<string | null>(null);
+  const [confirmDeleteDigitalId, setConfirmDeleteDigitalId] = useState<string | null>(null);
+  const [digTitle, setDigTitle] = useState('');
+  const [digAuthor, setDigAuthor] = useState('');
+  const [digFileType, setDigFileType] = useState<DigitalLibraryItem['fileType']>('PDF');
+  const [digFileSize, setDigFileSize] = useState('4.2 MB');
+  const [digCategory, setDigCategory] = useState('CBC Compendium');
+  const [digAccessLevel, setDigAccessLevel] = useState<DigitalLibraryItem['accessLevel']>('all');
+  const [digReadUrl, setDigReadUrl] = useState('#');
+  const [digCoverColor, setDigCoverColor] = useState('from-purple-700 to-indigo-800');
 
   // Catalogue & Books
   if (section === 'catalogue' || section === 'books_resources') {
@@ -190,7 +246,19 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
             </select>
 
             <button
-              onClick={() => setShowAddBookModal(true)}
+              onClick={() => {
+                setEditingCatalogueBookId(null);
+                setNewTitle('');
+                setNewAuthor('');
+                setNewIsbn('978-9966-');
+                setNewPublisher('Kenya Literature Bureau');
+                setNewCat('CBC Textbook');
+                setNewGrade(4);
+                setNewCopies(30);
+                setNewAvailCopies(30);
+                setNewShelf('SEC-A-01');
+                setShowAddBookModal(true);
+              }}
               className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -218,29 +286,89 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                 <div className="text-[11px] text-slate-400">Publisher: {b.publisher}</div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="font-mono text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded">
-                  📍 {b.locationShelf}
-                </span>
-                <span className={`font-bold ${b.copiesAvailable > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                  {b.copiesAvailable} / {b.totalCopies} Available
-                </span>
+              <div className="mt-4 pt-3 border-t border-slate-100 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded">
+                    📍 {b.locationShelf}
+                  </span>
+                  <span className={`font-bold ${b.copiesAvailable > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {b.copiesAvailable} / {b.totalCopies} Available
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCatalogueBookId(b.id);
+                      setNewTitle(b.title);
+                      setNewAuthor(b.author);
+                      setNewIsbn(b.isbn);
+                      setNewPublisher(b.publisher);
+                      setNewCat(b.category);
+                      setNewGrade(Number(b.grade || 4));
+                      setNewCopies(b.totalCopies);
+                      setNewAvailCopies(b.copiesAvailable);
+                      setNewShelf(b.locationShelf);
+                      setShowAddBookModal(true);
+                    }}
+                    className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    <span>Edit</span>
+                  </button>
+
+                  {onDeleteBook && (
+                    confirmDeleteBookId === b.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteBook(b.id);
+                            setConfirmDeleteBookId(null);
+                          }}
+                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          Confirm Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteBookId(null)}
+                          className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteBookId(b.id)}
+                        className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete</span>
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Add Book Modal */}
+        {/* Add / Edit Book Modal */}
         {showAddBookModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-4">
               <div className="flex items-center justify-between border-b pb-3">
-                <h4 className="font-bold text-sm text-slate-900">Catalogue New Title</h4>
-                <button onClick={() => setShowAddBookModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <h4 className="font-bold text-sm text-slate-900">
+                  {editingCatalogueBookId ? 'Edit Catalogued Title' : 'Catalogue New Title'}
+                </h4>
+                <button onClick={() => setShowAddBookModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Book Title</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Book Title *</label>
                 <input
                   type="text"
                   required
@@ -253,7 +381,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Author</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Author *</label>
                   <input
                     type="text"
                     required
@@ -262,6 +390,18 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                     className="w-full text-xs border border-slate-300 rounded-lg p-2"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Publisher</label>
+                  <input
+                    type="text"
+                    value={newPublisher}
+                    onChange={(e) => setNewPublisher(e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">ISBN</label>
                   <input
@@ -272,9 +412,6 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                     className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
                   <select
@@ -289,52 +426,93 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                     <option value="Fiction Storybook">Fiction Storybook</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Total Copies</label>
                   <input
                     type="number"
+                    min={1}
                     value={newCopies}
-                    onChange={(e) => setNewCopies(Number(e.target.value))}
+                    onChange={(e) => {
+                      const val = Math.max(1, Number(e.target.value));
+                      setNewCopies(val);
+                      if (!editingCatalogueBookId) setNewAvailCopies(val);
+                    }}
                     className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+                {editingCatalogueBookId && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Available</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={newCopies}
+                      value={newAvailCopies}
+                      onChange={(e) => setNewAvailCopies(Math.min(newCopies, Math.max(0, Number(e.target.value))))}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
+                    />
+                  </div>
+                )}
+                <div className={editingCatalogueBookId ? '' : 'col-span-2'}>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Shelf Assignment</label>
+                  <input
+                    type="text"
+                    value={newShelf}
+                    onChange={(e) => setNewShelf(e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Shelf Assignment</label>
-                <input
-                  type="text"
-                  value={newShelf}
-                  onChange={(e) => setNewShelf(e.target.value)}
-                  className="w-full text-xs border border-slate-300 rounded-lg p-2"
-                />
-              </div>
-
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddBookModal(false)} className="px-3 py-1.5 text-xs text-slate-600 font-bold">
+                <button onClick={() => setShowAddBookModal(false)} className="px-3 py-1.5 text-xs text-slate-600 font-bold cursor-pointer">
                   Cancel
                 </button>
                 <button
                   onClick={() => {
-                    if (!newTitle || !newAuthor) return;
-                    onAddBook({
-                      id: `bk-${Date.now()}`,
-                      title: newTitle,
-                      author: newAuthor,
-                      isbn: newIsbn,
-                      publisher: newPublisher,
-                      category: newCat,
-                      grade: newGrade as any,
-                      copiesAvailable: newCopies,
-                      totalCopies: newCopies,
-                      locationShelf: newShelf
-                    });
+                    if (!newTitle.trim() || !newAuthor.trim()) return;
+                    if (editingCatalogueBookId) {
+                      const existing = books.find(x => x.id === editingCatalogueBookId);
+                      if (existing) {
+                        const updated: LibraryBook = {
+                          ...existing,
+                          title: newTitle.trim(),
+                          author: newAuthor.trim(),
+                          isbn: newIsbn.trim(),
+                          publisher: newPublisher.trim() || existing.publisher,
+                          category: newCat,
+                          grade: newGrade as any,
+                          totalCopies: newCopies,
+                          copiesAvailable: Math.min(newCopies, newAvailCopies),
+                          locationShelf: newShelf.trim() || existing.locationShelf
+                        };
+                        if (onUpdateBook) onUpdateBook(updated);
+                        else onAddBook(updated);
+                      }
+                    } else {
+                      onAddBook({
+                        id: `bk-${Date.now()}`,
+                        title: newTitle.trim(),
+                        author: newAuthor.trim(),
+                        isbn: newIsbn.trim(),
+                        publisher: newPublisher.trim() || 'Kenya Literature Bureau',
+                        category: newCat,
+                        grade: newGrade as any,
+                        copiesAvailable: newCopies,
+                        totalCopies: newCopies,
+                        locationShelf: newShelf.trim() || 'SEC-A-01'
+                      });
+                    }
                     setShowAddBookModal(false);
+                    setEditingCatalogueBookId(null);
                     setNewTitle('');
                   }}
-                  className="px-4 py-1.5 bg-purple-600 text-white font-black text-xs rounded-lg"
+                  className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-lg cursor-pointer"
                 >
-                  Save Title
+                  {editingCatalogueBookId ? 'Update Title' : 'Save Title'}
                 </button>
               </div>
             </div>
@@ -366,7 +544,17 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
               Total Order Value: <strong>KES {totalExpenditure.toLocaleString()}</strong>
             </span>
             <button
-              onClick={() => setShowAddAcqModal(true)}
+              onClick={() => {
+                setEditingAcqId(null);
+                setAcqTitle('');
+                setAcqAuthor('Editorial Board');
+                setAcqPublisher('Kenya Literature Bureau');
+                setAcqSupplier('Text Book Centre Ltd');
+                setAcqQty(20);
+                setAcqUnitCost(750);
+                setAcqStatus('ordered');
+                setShowAddAcqModal(true);
+              }}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -376,7 +564,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse min-w-[640px]">
+          <table className="w-full text-left text-xs border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <th className="py-3 px-4">Title / Material</th>
@@ -385,6 +573,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                 <th className="py-3 px-4 font-mono text-right">Total Cost</th>
                 <th className="py-3 px-4">Requested By</th>
                 <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-mono">
@@ -400,23 +589,79 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                       {acq.status}
                     </span>
                   </td>
+                  <td className="py-3.5 px-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAcqId(acq.id);
+                          setAcqTitle(acq.title);
+                          setAcqAuthor(acq.author);
+                          setAcqPublisher(acq.publisher);
+                          setAcqSupplier(acq.supplier);
+                          setAcqQty(acq.quantity);
+                          setAcqUnitCost(acq.unitCost);
+                          setAcqStatus(acq.status);
+                          setShowAddAcqModal(true);
+                        }}
+                        className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+                      {onDeleteAcquisition && (
+                        confirmDeleteAcqId === acq.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteAcquisition(acq.id);
+                                setConfirmDeleteAcqId(null);
+                              }}
+                              className="px-2 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteAcqId(null)}
+                              className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteAcqId(acq.id)}
+                            className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remove</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        {/* Modal Acquisition */}
+        {/* Modal Acquisition Add/Edit */}
         {showAddAcqModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-3">
               <div className="flex items-center justify-between border-b pb-3">
-                <h4 className="font-bold text-sm text-slate-900">Create Acquisition Order</h4>
-                <button onClick={() => setShowAddAcqModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <h4 className="font-bold text-sm text-slate-900">
+                  {editingAcqId ? 'Edit Acquisition Order' : 'Create Acquisition Order'}
+                </h4>
+                <button onClick={() => setShowAddAcqModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Title</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Title *</label>
                 <input
                   type="text"
                   required
@@ -437,53 +682,94 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Publisher</label>
                   <input
-                    type="number"
-                    value={acqQty}
-                    onChange={(e) => setAcqQty(Number(e.target.value))}
-                    className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
+                    type="text"
+                    value={acqPublisher}
+                    onChange={(e) => setAcqPublisher(e.target.value)}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Unit Cost (KES)</label>
-                <input
-                  type="number"
-                  value={acqUnitCost}
-                  onChange={(e) => setAcqUnitCost(Number(e.target.value))}
-                  className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
-                />
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quantity</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={acqQty}
+                    onChange={(e) => setAcqQty(Math.max(1, Number(e.target.value)))}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Unit Cost (KES)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={acqUnitCost}
+                    onChange={(e) => setAcqUnitCost(Math.max(0, Number(e.target.value)))}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                  <select
+                    value={acqStatus}
+                    onChange={(e) => setAcqStatus(e.target.value as LibraryAcquisition['status'])}
+                    className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
+                  >
+                    <option value="requested">Requested</option>
+                    <option value="approved">Approved</option>
+                    <option value="ordered">Ordered</option>
+                    <option value="received">Received</option>
+                    <option value="catalogued">Catalogued</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setShowAddAcqModal(false)} className="px-3 py-1.5 text-xs text-slate-600 font-bold">
+                <button onClick={() => setShowAddAcqModal(false)} className="px-3 py-1.5 text-xs text-slate-600 font-bold cursor-pointer">
                   Cancel
                 </button>
                 <button
                   onClick={() => {
-                    if (!acqTitle) return;
-                    onAddAcquisition({
-                      id: `acq-${Date.now()}`,
-                      title: acqTitle,
-                      author: 'Editorial Board',
-                      isbn: '978-000-000-0',
-                      publisher: 'Kenya Literature Bureau',
-                      quantity: acqQty,
-                      unitCost: acqUnitCost,
-                      totalCost: acqQty * acqUnitCost,
-                      supplier: acqSupplier,
-                      requestDate: new Date().toISOString().split('T')[0],
-                      status: 'ordered',
-                      requestedBy: 'School Librarian'
-                    });
+                    if (!acqTitle.trim()) return;
+                    if (editingAcqId && onUpdateAcquisition) {
+                      onUpdateAcquisition(editingAcqId, {
+                        title: acqTitle.trim(),
+                        author: acqAuthor.trim() || 'Editorial Board',
+                        publisher: acqPublisher.trim() || 'Kenya Literature Bureau',
+                        supplier: acqSupplier.trim(),
+                        quantity: acqQty,
+                        unitCost: acqUnitCost,
+                        totalCost: acqQty * acqUnitCost,
+                        status: acqStatus
+                      });
+                    } else {
+                      onAddAcquisition({
+                        id: `acq-${Date.now()}`,
+                        title: acqTitle.trim(),
+                        author: acqAuthor.trim() || 'Editorial Board',
+                        isbn: '978-000-000-0',
+                        publisher: acqPublisher.trim() || 'Kenya Literature Bureau',
+                        quantity: acqQty,
+                        unitCost: acqUnitCost,
+                        totalCost: acqQty * acqUnitCost,
+                        supplier: acqSupplier.trim(),
+                        requestDate: new Date().toISOString().split('T')[0],
+                        status: acqStatus,
+                        requestedBy: currentUser?.name || 'School Librarian'
+                      });
+                    }
                     setShowAddAcqModal(false);
+                    setEditingAcqId(null);
                     setAcqTitle('');
                   }}
-                  className="px-4 py-1.5 bg-indigo-600 text-white font-black text-xs rounded-lg"
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-lg cursor-pointer"
                 >
-                  Submit Order
+                  {editingAcqId ? 'Save Changes' : 'Submit Order'}
                 </button>
               </div>
             </div>
@@ -525,14 +811,56 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
 
     const handleCreateInventoryBook = (e: React.FormEvent) => {
       e.preventDefault();
+      setInlineError(null);
       if (!invTitle.trim() || !invPublisher.trim()) {
-        alert('Please specify both Title and Publisher.');
+        setInlineError('Please specify both Title and Publisher.');
         return;
       }
 
       const count = Math.max(1, Number(invTotalCopies) || 1);
       const prefix = invAccessionPrefix.trim() || `ACC-${invPublisher.slice(0, 3).toUpperCase()}-${invTitle.slice(0, 3).toUpperCase()}`;
-      
+
+      if (editingInventoryBookId) {
+        const existing = books.find(x => x.id === editingInventoryBookId);
+        if (existing) {
+          const existingCopyIds = existing.uniqueCopyIds && existing.uniqueCopyIds.length > 0
+            ? existing.uniqueCopyIds
+            : Array.from({ length: existing.totalCopies }, (_, i) => `${prefix}-${String(i + 1).padStart(3, '0')}`);
+          let nextCopyIds = [...existingCopyIds];
+          if (count > nextCopyIds.length) {
+            for (let i = nextCopyIds.length; i < count; i++) {
+              nextCopyIds.push(`${prefix}-${String(i + 1).padStart(3, '0')}`);
+            }
+          } else if (count < nextCopyIds.length) {
+            nextCopyIds = nextCopyIds.slice(0, count);
+          }
+
+          const updatedBook: LibraryBook = {
+            ...existing,
+            title: invTitle.trim(),
+            publisher: invPublisher.trim(),
+            author: invAuthor.trim() || 'Author / Ministry Advisory',
+            isbn: invIsbn.trim() || existing.isbn,
+            category: invCategory,
+            grade: invGrade as GradeLevel,
+            subject: invSubject as SubjectName,
+            totalCopies: count,
+            copiesAvailable: Math.min(count, Math.max(0, Number(invCopiesAvailable))),
+            locationShelf: invLocationShelf.trim() || 'Main Stacks',
+            acquisitionType: invAcqType,
+            donorName: invDonorName.trim() || undefined,
+            accessionPrefix: prefix,
+            uniqueCopyIds: nextCopyIds
+          };
+
+          if (onUpdateBook) onUpdateBook(updatedBook);
+          else onAddBook(updatedBook);
+        }
+        setEditingInventoryBookId(null);
+        setShowAddInventoryModal(false);
+        return;
+      }
+
       // Generate individual unique IDs for each physical copy
       const copyIds = Array.from({ length: count }, (_, i) => 
         `${prefix}-${String(i + 1).padStart(3, '0')}`
@@ -567,16 +895,17 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
 
     const handleIssueFromInventorySubmit = (e: React.FormEvent) => {
       e.preventDefault();
+      setInlineError(null);
       if (!issuingBookFromInventory) return;
 
       const borrower = allUsers.find(u => u.id === invIssueBorrowerId);
       if (!borrower) {
-        alert('Please select a borrower.');
+        setInlineError('Please select a borrower.');
         return;
       }
 
       if (!invIssueCopyId.trim()) {
-        alert('Please specify the Unique ID for this physical copy.');
+        setInlineError('Please specify the Unique ID for this physical copy.');
         return;
       }
 
@@ -588,7 +917,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
       );
 
       if (alreadyBorrowed) {
-        alert(`Copy Unique ID "${invIssueCopyId}" is already checked out to another borrower! Please select an available copy.`);
+        setInlineError(`Copy Unique ID "${invIssueCopyId}" is already checked out to another borrower! Please select an available copy.`);
         return;
       }
 
@@ -619,12 +948,13 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
 
     const handleAddExtraCopyIdToSelectedBook = (e: React.FormEvent) => {
       e.preventDefault();
+      setInlineError(null);
       if (!selectedBookForLedger || !ledgerNewCopyId.trim()) return;
 
       const trimmedId = ledgerNewCopyId.trim().toUpperCase();
       const existingIds = selectedBookForLedger.uniqueCopyIds || [];
       if (existingIds.includes(trimmedId)) {
-        alert('This Unique ID already exists for this book.');
+        setInlineError('This Unique ID already exists for this book.');
         return;
       }
 
@@ -636,9 +966,29 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
         uniqueCopyIds: updatedIds
       };
 
-      onAddBook(updatedBook);
+      if (onUpdateBook) onUpdateBook(updatedBook);
+      else onAddBook(updatedBook);
       setSelectedBookForLedger(updatedBook);
       setLedgerNewCopyId('');
+    };
+
+    const handleRemoveCopyIdFromSelectedBook = (copyIdToRemove: string) => {
+      if (!selectedBookForLedger) return;
+      const baseIds = selectedBookForLedger.uniqueCopyIds && selectedBookForLedger.uniqueCopyIds.length > 0
+        ? selectedBookForLedger.uniqueCopyIds
+        : Array.from({ length: selectedBookForLedger.totalCopies }, (_, i) =>
+            `${selectedBookForLedger.accessionPrefix || 'ACC-' + selectedBookForLedger.id.slice(-4)}-${String(i + 1).padStart(3, '0')}`
+          );
+      const updatedIds = baseIds.filter(cid => cid !== copyIdToRemove);
+      const updatedBook: LibraryBook = {
+        ...selectedBookForLedger,
+        totalCopies: Math.max(0, selectedBookForLedger.totalCopies - 1),
+        copiesAvailable: Math.max(0, selectedBookForLedger.copiesAvailable - 1),
+        uniqueCopyIds: updatedIds
+      };
+      if (onUpdateBook) onUpdateBook(updatedBook);
+      else onAddBook(updatedBook);
+      setSelectedBookForLedger(updatedBook);
     };
 
     return (
@@ -671,7 +1021,24 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
               <span className="hidden sm:inline">Print Register</span>
             </button>
             <button
-              onClick={() => setShowAddInventoryModal(true)}
+              onClick={() => {
+                setEditingInventoryBookId(null);
+                setInlineError(null);
+                setInvTitle('');
+                setInvAuthor('');
+                setInvPublisher('Kenya Literature Bureau (KLB)');
+                setInvIsbn('978-9966-');
+                setInvCategory('CBC Textbook');
+                setInvGrade(4);
+                setInvSubject('Mathematics');
+                setInvAcqType('Stocked');
+                setInvDonorName('Ministry of Education Capitation Grant');
+                setInvTotalCopies(35);
+                setInvCopiesAvailable(35);
+                setInvLocationShelf('Shelf M-04A');
+                setInvAccessionPrefix('ACC-KLB-M4');
+                setShowAddInventoryModal(true);
+              }}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -919,7 +1286,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
 
                         {/* Physical Copies Ledger & Actions */}
                         <td className="py-3.5 px-4 text-right space-y-1.5">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
                             <button
                               onClick={() => setSelectedBookForLedger(b)}
                               className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
@@ -938,7 +1305,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                                 );
                               }}
                               disabled={b.copiesAvailable <= 0}
-                              className={`px-3 py-1 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs ${
+                              className={`px-2.5 py-1 font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs ${
                                 b.copiesAvailable > 0
                                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
@@ -946,8 +1313,69 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                               title={b.copiesAvailable > 0 ? "Issue one physical copy" : "No copies available"}
                             >
                               <ArrowLeftRight className="w-3 h-3" />
-                              <span>Issue Copy</span>
+                              <span>Issue</span>
                             </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingInventoryBookId(b.id);
+                                setInlineError(null);
+                                setInvTitle(b.title);
+                                setInvPublisher(b.publisher);
+                                setInvAuthor(b.author);
+                                setInvIsbn(b.isbn);
+                                setInvCategory(b.category);
+                                setInvGrade(Number(b.grade || 4));
+                                setInvSubject(String(b.subject || 'Mathematics'));
+                                setInvAcqType(b.acquisitionType || 'Stocked');
+                                setInvDonorName(b.donorName || '');
+                                setInvTotalCopies(b.totalCopies);
+                                setInvCopiesAvailable(b.copiesAvailable);
+                                setInvLocationShelf(b.locationShelf);
+                                setInvAccessionPrefix(b.accessionPrefix || 'ACC');
+                                setShowAddInventoryModal(true);
+                              }}
+                              className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
+                              title="Edit inventory item"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
+                            {onDeleteBook && (
+                              confirmDeleteBookId === b.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      onDeleteBook(b.id);
+                                      setConfirmDeleteBookId(null);
+                                    }}
+                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteBookId(null)}
+                                    className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteBookId(b.id)}
+                                  className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer"
+                                  title="Delete title from inventory"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span>Delete</span>
+                                </button>
+                              )
+                            )}
                           </div>
 
                           {activeIssuedForBook.length > 0 && (
@@ -1115,15 +1543,26 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                                     Mark Returned
                                   </button>
                                 ) : (
-                                  <button
-                                    onClick={() => {
-                                      setIssuingBookFromInventory(selectedBookForLedger);
-                                      setInvIssueCopyId(cid);
-                                    }}
-                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                                  >
-                                    Issue This Copy
-                                  </button>
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => {
+                                        setIssuingBookFromInventory(selectedBookForLedger);
+                                        setInvIssueCopyId(cid);
+                                      }}
+                                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      Issue
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCopyIdFromSelectedBook(cid)}
+                                      className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                                      title={`Remove physical copy ${cid} from inventory`}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                      <span>Remove</span>
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
@@ -1157,16 +1596,22 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                 <div>
                   <h4 className="font-black text-base flex items-center gap-2">
                     <Boxes className="w-5 h-5 text-purple-300" />
-                    <span>Add Book Title / Stock to Library Inventory</span>
+                    <span>{editingInventoryBookId ? 'Edit Inventory Title & Holdings' : 'Add Book Title / Stock to Library Inventory'}</span>
                   </h4>
                   <p className="text-xs text-purple-200 mt-0.5">
-                    Register title, publisher, acquisition source (Stocked/Donated), quantity & copy IDs.
+                    Register or update title, publisher, acquisition source (Stocked/Donated), quantity & copy IDs.
                   </p>
                 </div>
-                <button onClick={() => setShowAddInventoryModal(false)} className="text-white/70 hover:text-white cursor-pointer">✕</button>
+                <button onClick={() => { setShowAddInventoryModal(false); setEditingInventoryBookId(null); }} className="text-white/70 hover:text-white cursor-pointer">✕</button>
               </div>
 
               <form onSubmit={handleCreateInventoryBook} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto text-xs">
+                {inlineError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{inlineError}</span>
+                  </div>
+                )}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Book Title *</label>
                   <input
@@ -1336,7 +1781,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                 <div className="flex justify-end gap-2 pt-3 border-t">
                   <button
                     type="button"
-                    onClick={() => setShowAddInventoryModal(false)}
+                    onClick={() => { setShowAddInventoryModal(false); setEditingInventoryBookId(null); }}
                     className="px-4 py-2 text-slate-600 font-bold cursor-pointer"
                   >
                     Cancel
@@ -1345,7 +1790,7 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
                     type="submit"
                     className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-xs cursor-pointer"
                   >
-                    Add Title & Generate Copy IDs
+                    {editingInventoryBookId ? 'Save Inventory Changes' : 'Add Title & Generate Copy IDs'}
                   </button>
                 </div>
               </form>
@@ -1480,39 +1925,207 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
   if (section === 'shelves_locations') {
     return (
       <div className="space-y-6">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
-          <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <Compass className="w-5 h-5 text-emerald-600" />
-            <span>Shelves, Stacks & Location Management</span>
-          </h3>
-          <p className="text-xs text-slate-500 mt-1">
-            Floor zoning, Dewey Decimal Classification ranges, and physical shelf capacity monitoring.
-          </p>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <Compass className="w-5 h-5 text-emerald-600" />
+              <span>Shelves, Stacks & Location Management</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Floor zoning, Dewey Decimal Classification ranges, and physical shelf capacity monitoring.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setEditingShelfId(null);
+              setShelfCode(`SEC-${String(shelves.length + 1).padStart(2, '0')}`);
+              setShelfSectionName('');
+              setShelfFloor('Ground Floor');
+              setShelfAisle('Aisle A');
+              setShelfDeweyRange('500 - 599');
+              setShelfCapacity(500);
+              setShelfCurrentCount(0);
+              setShelfSpecialization('CBC Textbooks & Reference');
+              setShowShelfModal(true);
+            }}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-center"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Shelf / Stack</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {shelves.map((sh) => (
-            <div key={sh.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                    {sh.code}
+            <div key={sh.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                      {sh.code}
+                    </span>
+                    <h4 className="font-bold text-base text-slate-900 mt-1">{sh.sectionName}</h4>
+                    <div className="text-xs text-slate-500">{sh.floor} · {sh.aisle}</div>
+                  </div>
+                  <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
+                    {sh.deweyRange}
                   </span>
-                  <h4 className="font-bold text-base text-slate-900 mt-1">{sh.sectionName}</h4>
-                  <div className="text-xs text-slate-500">{sh.floor} · {sh.aisle}</div>
                 </div>
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800">
-                  {sh.deweyRange}
-                </span>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span>Subject Area: <strong>{sh.categorySpecialization}</strong></span>
+                  <span className="font-mono font-bold text-purple-700">{sh.currentCount} / {sh.capacity} Books</span>
+                </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span>Subject Area: <strong>{sh.categorySpecialization}</strong></span>
-                <span className="font-mono font-bold text-purple-700">{sh.currentCount} / {sh.capacity} Books</span>
+              <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingShelfId(sh.id);
+                    setShelfCode(sh.code);
+                    setShelfSectionName(sh.sectionName);
+                    setShelfFloor(sh.floor);
+                    setShelfAisle(sh.aisle);
+                    setShelfDeweyRange(sh.deweyRange);
+                    setShelfCapacity(sh.capacity);
+                    setShelfCurrentCount(sh.currentCount);
+                    setShelfSpecialization(sh.categorySpecialization);
+                    setShowShelfModal(true);
+                  }}
+                  className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3" />
+                  <span>Edit</span>
+                </button>
+                {onDeleteShelf && (
+                  confirmDeleteShelfId === sh.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onDeleteShelf(sh.id);
+                          setConfirmDeleteShelfId(null);
+                        }}
+                        className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                      >
+                        Confirm Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteShelfId(null)}
+                        className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteShelfId(sh.id)}
+                      className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Delete</span>
+                    </button>
+                  )
+                )}
               </div>
             </div>
           ))}
         </div>
+
+        {/* Add / Edit Shelf Modal */}
+        {showShelfModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h4 className="font-bold text-sm text-slate-900">
+                  {editingShelfId ? 'Edit Shelf / Stack Location' : 'Add Shelf / Stack Location'}
+                </h4>
+                <button onClick={() => setShowShelfModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Shelf Code *</label>
+                  <input type="text" value={shelfCode} onChange={(e) => setShelfCode(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 font-mono" required />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Dewey Range</label>
+                  <input type="text" value={shelfDeweyRange} onChange={(e) => setShelfDeweyRange(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Section Name *</label>
+                <input type="text" value={shelfSectionName} onChange={(e) => setShelfSectionName(e.target.value)} placeholder="e.g. Junior Secondary STEM Stack" className="w-full border border-slate-300 rounded-lg p-2" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Floor</label>
+                  <input type="text" value={shelfFloor} onChange={(e) => setShelfFloor(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Aisle</label>
+                  <input type="text" value={shelfAisle} onChange={(e) => setShelfAisle(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Subject Specialization</label>
+                <input type="text" value={shelfSpecialization} onChange={(e) => setShelfSpecialization(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Capacity</label>
+                  <input type="number" min={1} value={shelfCapacity} onChange={(e) => setShelfCapacity(Math.max(1, Number(e.target.value)))} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Current Count</label>
+                  <input type="number" min={0} value={shelfCurrentCount} onChange={(e) => setShelfCurrentCount(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setShowShelfModal(false)} className="px-3 py-1.5 text-slate-600 font-bold cursor-pointer">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!shelfCode.trim() || !shelfSectionName.trim()) return;
+                    if (editingShelfId && onUpdateShelf) {
+                      onUpdateShelf(editingShelfId, {
+                        code: shelfCode.trim(),
+                        sectionName: shelfSectionName.trim(),
+                        floor: shelfFloor.trim(),
+                        aisle: shelfAisle.trim(),
+                        deweyRange: shelfDeweyRange.trim(),
+                        capacity: shelfCapacity,
+                        currentCount: shelfCurrentCount,
+                        categorySpecialization: shelfSpecialization.trim()
+                      });
+                    } else if (onAddShelf) {
+                      onAddShelf({
+                        id: `sh-${Date.now()}`,
+                        code: shelfCode.trim(),
+                        sectionName: shelfSectionName.trim(),
+                        floor: shelfFloor.trim(),
+                        aisle: shelfAisle.trim(),
+                        deweyRange: shelfDeweyRange.trim(),
+                        capacity: shelfCapacity,
+                        currentCount: shelfCurrentCount,
+                        categorySpecialization: shelfSpecialization.trim()
+                      });
+                    }
+                    setShowShelfModal(false);
+                    setEditingShelfId(null);
+                  }}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg cursor-pointer"
+                >
+                  {editingShelfId ? 'Update Shelf' : 'Save Shelf'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1578,32 +2191,219 @@ export const CollectionViews: React.FC<CollectionViewsProps> = ({
             subtitle="Librarian administrative rights: Add, edit, or remove national curriculum portals, interactive labs, and research databases for learners and subject teachers."
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {digitalItems.map((dig) => (
-              <div key={dig.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between">
-                <div className={`p-6 bg-gradient-to-br ${dig.coverColor} text-white`}>
-                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
-                    {dig.fileType} · {dig.fileSize}
-                  </span>
-                  <h4 className="font-black text-base mt-3 leading-snug line-clamp-2">
-                    {dig.title}
-                  </h4>
-                  <div className="text-xs text-white/80 mt-1">By {dig.author}</div>
-                </div>
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingDigitalId(null);
+                  setDigTitle('');
+                  setDigAuthor('');
+                  setDigFileType('PDF');
+                  setDigFileSize('4.2 MB');
+                  setDigCategory('CBC Compendium');
+                  setDigAccessLevel('all');
+                  setDigReadUrl('#');
+                  setDigCoverColor('from-purple-700 to-indigo-800');
+                  setShowDigitalModal(true);
+                }}
+                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Digital E-Book / Item</span>
+              </button>
+            </div>
 
-                <div className="p-4 flex items-center justify-between text-xs gap-2">
-                  <span className="text-slate-500 font-mono text-[11px]">{dig.downloadCount} Reads</span>
-                  <button
-                    type="button"
-                    onClick={() => setReadingDigitalItem(dig)}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Read In-App</span>
-                  </button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {digitalItems.map((dig) => (
+                <div key={dig.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs flex flex-col justify-between">
+                  <div className={`p-6 bg-gradient-to-br ${dig.coverColor} text-white`}>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                      {dig.fileType} · {dig.fileSize}
+                    </span>
+                    <h4 className="font-black text-base mt-3 leading-snug line-clamp-2">
+                      {dig.title}
+                    </h4>
+                    <div className="text-xs text-white/80 mt-1">By {dig.author}</div>
+                  </div>
+
+                  <div className="p-4 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-500 font-mono text-[11px]">{dig.downloadCount} Reads</span>
+                      <button
+                        type="button"
+                        onClick={() => setReadingDigitalItem(dig)}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Read In-App</span>
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingDigitalId(dig.id);
+                          setDigTitle(dig.title);
+                          setDigAuthor(dig.author);
+                          setDigFileType(dig.fileType);
+                          setDigFileSize(dig.fileSize);
+                          setDigCategory(dig.category);
+                          setDigAccessLevel(dig.accessLevel);
+                          setDigReadUrl(dig.readUrl);
+                          setDigCoverColor(dig.coverColor);
+                          setShowDigitalModal(true);
+                        }}
+                        className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+
+                      {onDeleteDigitalItem && (
+                        confirmDeleteDigitalId === dig.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteDigitalItem(dig.id);
+                                setConfirmDeleteDigitalId(null);
+                              }}
+                              className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteDigitalId(null)}
+                              className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteDigitalId(dig.id)}
+                            className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Delete</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add / Edit Digital Item Modal */}
+            {showDigitalModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-3 text-xs">
+                  <div className="flex items-center justify-between border-b pb-3">
+                    <h4 className="font-bold text-sm text-slate-900">
+                      {editingDigitalId ? 'Edit Digital Library Item' : 'Add Digital E-Book / Compendium'}
+                    </h4>
+                    <button onClick={() => setShowDigitalModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Title *</label>
+                    <input type="text" value={digTitle} onChange={(e) => setDigTitle(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Author / Publisher *</label>
+                      <input type="text" value={digAuthor} onChange={(e) => setDigAuthor(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" required />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Format</label>
+                      <select value={digFileType} onChange={(e) => setDigFileType(e.target.value as DigitalLibraryItem['fileType'])} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                        <option value="PDF">PDF</option>
+                        <option value="EPUB">EPUB</option>
+                        <option value="Audiobook">Audiobook</option>
+                        <option value="Video">Video</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Category</label>
+                      <input type="text" value={digCategory} onChange={(e) => setDigCategory(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">File Size</label>
+                      <input type="text" value={digFileSize} onChange={(e) => setDigFileSize(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Access Level</label>
+                      <select value={digAccessLevel} onChange={(e) => setDigAccessLevel(e.target.value as DigitalLibraryItem['accessLevel'])} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                        <option value="all">All Library Members</option>
+                        <option value="students">Students</option>
+                        <option value="teachers">Teachers Only</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Cover Theme</label>
+                      <select value={digCoverColor} onChange={(e) => setDigCoverColor(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                        <option value="from-purple-700 to-indigo-800">Royal Purple</option>
+                        <option value="from-emerald-600 to-teal-800">Emerald Green</option>
+                        <option value="from-blue-600 to-cyan-800">Ocean Blue</option>
+                        <option value="from-amber-600 to-orange-700">Amber Gold</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">In-App Reader URL (Optional)</label>
+                    <input type="text" value={digReadUrl} onChange={(e) => setDigReadUrl(e.target.value)} placeholder="https://... or #" className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2 border-t">
+                    <button type="button" onClick={() => setShowDigitalModal(false)} className="px-3 py-1.5 text-slate-600 font-bold cursor-pointer">Cancel</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!digTitle.trim() || !digAuthor.trim()) return;
+                        if (editingDigitalId && onUpdateDigitalItem) {
+                          onUpdateDigitalItem(editingDigitalId, {
+                            title: digTitle.trim(),
+                            author: digAuthor.trim(),
+                            fileType: digFileType,
+                            fileSize: digFileSize.trim() || '3.0 MB',
+                            category: digCategory.trim() || 'CBC Compendium',
+                            accessLevel: digAccessLevel,
+                            readUrl: digReadUrl.trim() || '#',
+                            coverColor: digCoverColor
+                          });
+                        } else {
+                          onAddDigitalItem({
+                            id: `dig-${Date.now()}`,
+                            title: digTitle.trim(),
+                            author: digAuthor.trim(),
+                            fileType: digFileType,
+                            fileSize: digFileSize.trim() || '3.0 MB',
+                            category: digCategory.trim() || 'CBC Compendium',
+                            accessLevel: digAccessLevel,
+                            downloadCount: 0,
+                            readUrl: digReadUrl.trim() || '#',
+                            coverColor: digCoverColor,
+                            uploadedById: currentUser?.id
+                          });
+                        }
+                        setShowDigitalModal(false);
+                        setEditingDigitalId(null);
+                      }}
+                      className="px-4 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-black rounded-lg cursor-pointer"
+                    >
+                      {editingDigitalId ? 'Save Changes' : 'Add Digital Item'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
 

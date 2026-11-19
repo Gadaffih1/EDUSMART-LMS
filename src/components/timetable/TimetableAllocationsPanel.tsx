@@ -33,6 +33,12 @@ interface TimetableAllocationsPanelProps {
   onRefresh: () => Promise<void>;
 }
 
+const GRADE_BANDS = [
+  { label: 'Grades 1-3', min: 1, max: 3 },
+  { label: 'Grades 4-6', min: 4, max: 6 },
+  { label: 'Grades 7-9', min: 7, max: 9 },
+];
+
 export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps> = ({
   gradeSchedules,
   subjects,
@@ -48,6 +54,16 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
 }) => {
   const grades = useMemo(() => gradeSchedules.map((g) => g.grade).sort((a, b) => a - b), [gradeSchedules]);
   const [selectedGrade, setSelectedGrade] = useState<number>(grades[0] || 4);
+  const gradeBandOptions = useMemo(() => {
+    const bands = GRADE_BANDS.map((band) => ({
+      ...band,
+      grades: grades.filter((grade) => grade >= band.min && grade <= band.max),
+    })).filter((band) => band.grades.length > 0);
+    const otherGrades = grades.filter((grade) => grade < 1 || grade > 9);
+    if (otherGrades.length > 0) bands.push({ label: 'Other Grades', min: otherGrades[0], max: otherGrades[otherGrades.length - 1], grades: otherGrades });
+    return bands;
+  }, [grades]);
+  const selectedGradeBand = gradeBandOptions.find((band) => band.grades.includes(selectedGrade));
   const [subTab, setSubTab] = useState<'grade_template' | 'stream_allocations' | 'groups_joint'>('grade_template');
   const [selectedStream, setSelectedStream] = useState<string>('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -338,13 +354,29 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
       {/* Top Toolbar */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+            {gradeBandOptions.map((band) => (
+              <button
+                key={band.label}
+                type="button"
+                onClick={() => setSelectedGrade(band.grades[0])}
+                className={`px-2.5 py-1.5 text-xs font-semibold rounded-md cursor-pointer ${
+                  selectedGradeBand?.label === band.label
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {band.label}
+              </button>
+            ))}
+          </div>
           <label className="text-xs font-semibold text-slate-600">Grade Level:</label>
           <select
             value={selectedGrade}
             onChange={(e) => setSelectedGrade(Number(e.target.value))}
             className="px-3 py-1.5 text-xs font-bold border border-slate-200 rounded-lg bg-white"
           >
-            {grades.map((g) => (
+            {(selectedGradeBand?.grades || grades).map((g) => (
               <option key={g} value={g}>Grade {g}</option>
             ))}
           </select>
@@ -398,6 +430,9 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
       {/* Sub-view 1: Grade Template */}
       {subTab === 'grade_template' && (
         <div className="space-y-3">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-[11px] text-slate-600">
+            Weekly subject targets are configured independently for each grade. Generation schedules each stream around shared teacher and room availability, skips breaks and lunch, and preserves locked lessons when regenerating.
+          </div>
           {/* Add Subject to Grade Template Bar */}
           <form
             onSubmit={handleAddSubjectToGradeTemplate}

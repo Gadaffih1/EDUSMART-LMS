@@ -2984,17 +2984,32 @@ export const Storage = {
 
   saveExamTimetables(exams: ExamTimetableEntry[]): void {
     setToStorage(KEYS.EXAM_TIMETABLE, exams);
+    window.dispatchEvent(new CustomEvent('exam-timetables-updated', { detail: exams }));
   },
 
   addExamTimetableEntry(entry: Omit<ExamTimetableEntry, 'id'>): ExamTimetableEntry {
     const exams = this.getExamTimetables();
     const newEntry: ExamTimetableEntry = {
       ...entry,
-      id: `ett-${Date.now()}`
+      id: `ett-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
     };
     exams.push(newEntry);
     this.saveExamTimetables(exams);
     return newEntry;
+  },
+
+  updateExamTimetableEntry(id: string, updates: Partial<ExamTimetableEntry>): ExamTimetableEntry | null {
+    const exams = this.getExamTimetables();
+    const idx = exams.findIndex(e => e.id === id);
+    if (idx === -1) return null;
+    exams[idx] = { ...exams[idx], ...updates };
+    this.saveExamTimetables(exams);
+    return exams[idx];
+  },
+
+  deleteExamTimetableEntry(id: string): void {
+    const exams = this.getExamTimetables().filter(e => e.id !== id);
+    this.saveExamTimetables(exams);
   },
 
   getAllTimetableSlots(): TimetableSlot[] {
@@ -4045,6 +4060,7 @@ export const Storage = {
       documentRequestScope?: User['documentRequestScope'];
       delegatedPostEditorScope?: User['delegatedPostEditorScope'];
       doubleAccessConfig?: User['doubleAccessConfig'];
+      examInvigilationConfig?: User['examInvigilationConfig'];
       customPermissions?: Partial<RoleAccessRights>;
     }
   ): User | null {
@@ -4058,6 +4074,7 @@ export const Storage = {
       documentRequestScope: scopes?.documentRequestScope ?? users[idx].documentRequestScope,
       delegatedPostEditorScope: scopes?.delegatedPostEditorScope ?? users[idx].delegatedPostEditorScope,
       doubleAccessConfig: scopes?.doubleAccessConfig ?? users[idx].doubleAccessConfig,
+      examInvigilationConfig: scopes?.examInvigilationConfig ?? users[idx].examInvigilationConfig,
       customPermissions: scopes?.customPermissions ? { ...users[idx].customPermissions, ...scopes.customPermissions } : users[idx].customPermissions,
     };
 

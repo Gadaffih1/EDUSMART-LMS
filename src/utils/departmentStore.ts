@@ -18,8 +18,8 @@ const TEACHING_DEPARTMENT_SUBJECTS: Record<string, string[]> = {
   'Mathematics & Computational Sciences': ['Mathematics', 'Computer Studies'],
   'Pure & Integrated Sciences': ['Integrated Science', 'Agriculture and Nutrition', 'Agriculture', 'Nutrition'],
   'Technical & Applied Sciences': ['Pretechnical Education', 'Pre-Technical Studies', 'Business Studies'],
-  'Languages & Literature': ['English', 'Kiswahili', 'Library Lesson'],
-  'Pretechnical & Creative Arts': ['Creative Arts', 'Arts', 'Music', 'Pretechnical Education', 'Physical and Health Education'],
+  'Languages & Literature': ['English', 'Kiswahili', 'French', 'Library Lesson'],
+  'Pretechnical & Creative Arts': ['Creative Arts', 'Arts', 'Music', 'Swimming', 'Pretechnical Education', 'Physical and Health Education'],
   'Humanities & Social Sciences': ['Social Studies', 'Religious Education'],
   'Library & Information Services': ['Library Lesson'],
 };

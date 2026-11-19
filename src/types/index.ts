@@ -48,6 +48,7 @@ export interface RoleAccessRights {
   hasDoubleAccessRights: boolean;              // 4. Double Access rights for specific teachers
   canManageAllPostsCategoriesSections: boolean; // 5. Add, remove, edit posts, Categories, sections
   canAllocateStudentStreams?: boolean;         // 6. Allocate and transfer students across CBC streams (Admin, Grade Senior Teacher, or delegated Extra Role only)
+  canInvigilateExams?: boolean;                // 7. Exam Invigilation — assigned to specific grade/stream(s) during examinations
 }
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -79,11 +80,12 @@ export type PrimaryStream = typeof PRIMARY_STREAMS[number];
 export type JuniorStream = typeof JUNIOR_STREAMS[number];
 export type StreamName = PrimaryStream | JuniorStream;
 
-// Primary Subjects (Grades 1 to 6 - 8 subjects + PHE + Computer Studies)
+// Primary Subjects (Grades 1 to 6 - 8 subjects + PHE + Computer Studies + Library/Arts/Music/Nutrition/French/Swimming)
 export const PRIMARY_SUBJECTS = [
   'Mathematics',
   'English',
   'Kiswahili',
+  'French',
   'Integrated Science',
   'Computer Studies',
   'Agriculture and Nutrition',
@@ -94,14 +96,16 @@ export const PRIMARY_SUBJECTS = [
   'Music',
   'Nutrition',
   'Library Lesson',
+  'Swimming',
   'Physical and Health Education'
 ] as const;
 
-// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies + Library/Arts/Music/Nutrition)
+// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies + Library/Arts/Music/Nutrition/French/Swimming)
 export const JUNIOR_SUBJECTS = [
   'Mathematics',
   'English',
   'Kiswahili',
+  'French',
   'Integrated Science',
   'Computer Studies',
   'Agriculture and Nutrition',
@@ -113,6 +117,7 @@ export const JUNIOR_SUBJECTS = [
   'Arts',
   'Music',
   'Library Lesson',
+  'Swimming',
   'Pretechnical Education',
   'Pre-Technical Studies',
   'Business Studies',
@@ -194,6 +199,16 @@ export interface User {
     secondaryRole: UserRole;
     secondaryDesignation?: string;
     extraGrantedPermissions?: (keyof RoleAccessRights)[];
+  };
+  examInvigilationConfig?: {
+    enabled: boolean;
+    assignedStreams: Array<{
+      grade: GradeLevel;
+      stream: StreamName;
+      room?: string;
+      examSessionName?: string;
+    }>;
+    notes?: string;
   };
   // 🏢 MULTI-SCHOOL ASSIGNMENT & ACCOUNT STATUS (Super Admin Control)
   schoolId?: string;           // Assigned Tenant ID
@@ -1454,18 +1469,33 @@ export interface ParentCommunication {
   category: 'Academic Clinic' | 'Fee Advisory' | 'School Event' | 'Health & Safety' | 'General Notice';
 }
 
+export interface ExamStreamInvigilatorAssignment {
+  stream: StreamName;
+  teacherId?: string;
+  teacherName: string;
+  room: string;
+}
+
 export interface ExamTimetableEntry {
   id: string;
   grade: GradeLevel;
-  subject: SubjectName;
+  subject: SubjectName | string;
   examType: 'Opener Assessment' | 'Mid-Term Evaluation' | 'End-Term Summative' | 'KPSEA / KCSE National Mock';
+  examSeriesName?: string;
+  term?: string;
   examDate: string;
+  dayNumber?: number;
+  dayLabel?: string;
+  sessionLabel?: string;
   startTime: string;
   endTime: string;
   durationMinutes: number;
   room: string;
   invigilatorName: string;
+  streamInvigilators?: ExamStreamInvigilatorAssignment[];
   instructions: string;
+  scheduledBy?: string;
+  scheduledByRole?: string;
 }
 
 // ========================================================
@@ -1953,7 +1983,8 @@ export type ExtraAdminRoleType =
   | 'category_curator'        // 3. Add categories under different posts
   | 'double_access_teacher'   // 4. Double Access rights for specific teachers
   | 'cms_content_master'      // 5. Add, remove, edit posts, Categories, sections
-  | 'student_stream_allocator'; // 6. Allocate & transfer students across CBC streams (delegated extra role)
+  | 'student_stream_allocator'// 6. Allocate & transfer students across CBC streams (delegated extra role)
+  | 'exam_invigilation';      // 7. Exam Invigilation — assigned to stream(s) during school examinations
 
 export interface DocumentSubmissionRequest {
   id: string;

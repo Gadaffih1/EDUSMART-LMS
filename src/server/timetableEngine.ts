@@ -379,6 +379,8 @@ export function ensureTenantTimetableSeeded(
     Arts: 'rose',
     Music: 'pink',
     'Library Lesson': 'purple',
+    French: 'sky',
+    Swimming: 'cyan',
     'Physical and Health Education': 'teal',
   };
   for (const p of combinedPresets) {
@@ -399,12 +401,14 @@ export function ensureTenantTimetableSeeded(
     insSub.run(uid('ttsub'), tenantId, p.subject, code, dept, p.isPractical, p.roomType, colorMap[p.subject] || 'slate', now);
   }
 
-  // Ensure Library Lesson, Arts, Music, and Nutrition are always present in tt_subjects
+  // Ensure Library Lesson, Arts, Music, Nutrition, French, and Swimming are always present in tt_subjects
   const additionalSubjects: Array<[string, string, string, number, string, string]> = [
     ['Library Lesson', 'LIB', 'Library & Information Services', 0, 'library', 'purple'],
     ['Arts', 'ART', 'Creative Arts & Music', 1, 'art_room', 'rose'],
     ['Music', 'MUS', 'Creative Arts & Music', 1, 'art_room', 'pink'],
     ['Nutrition', 'NUT', 'Agriculture & Nutrition', 1, 'general', 'lime'],
+    ['French', 'FRE', 'Languages & Literature', 0, 'general', 'sky'],
+    ['Swimming', 'SWM', 'Creative Arts & Sports', 1, 'field', 'cyan'],
   ];
   for (const [subName, subCode, subDept, isPrac, rType, cTok] of additionalSubjects) {
     insSub.run(uid('ttsub'), tenantId, subName, subCode, subDept, isPrac, rType, cTok, now);

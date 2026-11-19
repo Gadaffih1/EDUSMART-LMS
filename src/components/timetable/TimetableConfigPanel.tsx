@@ -1080,7 +1080,7 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
             <span>06. Master Timetable Subjects ({subjects.length})</span>
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Add, edit, or remove curriculum subjects (including Library Lesson, Arts, Music, Nutrition) and assign their department and specialist room requirements.
+            Add, edit, or remove curriculum subjects (including Library Lesson, Arts, Music, Nutrition, French, Swimming) and assign their department and specialist room requirements.
           </p>
         </div>
 

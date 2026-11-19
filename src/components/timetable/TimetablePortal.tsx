@@ -29,6 +29,7 @@ import { TimetableTeachersPanel } from './TimetableTeachersPanel';
 import { TimetableDragDropEditor } from './TimetableDragDropEditor';
 import { TimetableVersionsAndReportsPanel } from './TimetableVersionsAndReportsPanel';
 import { TeacherLoadDashboard } from './TeacherLoadDashboard';
+import { ExamScheduleManager } from './ExamScheduleManager';
 import { ScrollableMatrixTableWrapper } from '../common/ResponsiveUIKit';
 import { 
   Calendar, 
@@ -2974,72 +2975,10 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           PERSPECTIVE 5: CBC ASSESSMENT & EXAM TIMETABLE
           ======================================================== */}
       {perspective === 'exams' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-6">
-              <div>
-                <h3 className="text-base font-extrabold text-slate-900">
-                  Official End of Term & CBC Formative Assessment Timetable
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Scheduled assessment papers, invigilator assignments, duration, and test protocols for Grade {selectedGrade}.
-                </p>
-              </div>
-              <span className="text-xs font-mono bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1 rounded-lg font-bold">
-                Term 3 2026 Assessment
-              </span>
-            </div>
-
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                  <tr>
-                    <th className="py-2.5 px-4">Date</th>
-                    <th className="py-2.5 px-4">Time Window</th>
-                    <th className="py-2.5 px-4">Assessment Paper / Subject</th>
-                    <th className="py-2.5 px-4">Duration</th>
-                    <th className="py-2.5 px-4">Invigilator</th>
-                    <th className="py-2.5 px-4">Room</th>
-                    <th className="py-2.5 px-4 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {activeGradeExams.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400 italic">
-                        No examination dates configured yet for Grade {selectedGrade}.
-                      </td>
-                    </tr>
-                  ) : (
-                    activeGradeExams.map(exam => (
-                      <tr key={exam.id} className="hover:bg-slate-50">
-                        <td className="py-2.5 px-4 font-bold text-slate-900">{exam.examDate}</td>
-                        <td className="py-2.5 px-4 font-mono text-slate-600">{exam.startTime} – {exam.endTime}</td>
-                        <td className="py-2.5 px-4 font-bold text-rose-900">{exam.subject}</td>
-                        <td className="py-2.5 px-4 font-medium text-slate-700">{exam.durationMinutes} mins</td>
-                        <td className="py-2.5 px-4 text-slate-700">{exam.invigilatorName}</td>
-                        <td className="py-2.5 px-4 font-mono text-[11px] text-slate-600">{exam.room}</td>
-                        <td className="py-2.5 px-4 text-right">
-                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                            Scheduled
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <strong>Assessment Code of Conduct:</strong> All learners must report to their assigned examination desks 15 minutes before the first bell. Geometrical instruments, clear water bottles, and stationery pouches are permitted. Electronic gadgets are prohibited.
-              </div>
-            </div>
-
-          </div>
-        </div>
+        <ExamScheduleManager
+          currentUser={currentUser}
+          defaultGrade={selectedGrade}
+        />
       )}
 
       {/* ========================================================

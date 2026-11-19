@@ -21,6 +21,7 @@ import { TimetablePortal } from '../timetable/TimetablePortal';
 import { FacultyAllocationManager } from '../timetable/FacultyAllocationManager';
 import { FixedLessonsManager } from '../timetable/FixedLessonsManager';
 import { TimetableAutoGeneratorModal } from '../timetable/TimetableAutoGeneratorModal';
+import { ExamScheduleManager } from '../timetable/ExamScheduleManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ResultUploadManager } from './ResultUploadManager';
@@ -666,7 +667,12 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
           TAB 1: ASSESSMENT CALENDAR & SCHEDULES
           ======================================================== */}
       {activeTab === 'assessments' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 print:m-0 print:border-none print:shadow-none">
+        <div className="space-y-6">
+          <ExamScheduleManager
+            currentUser={currentUser}
+            defaultGrade={selectedGrade}
+          />
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6 print:hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-3">
               <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-2xs shrink-0">
@@ -748,7 +754,8 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
               </tbody>
             </table>
           </div>
-        </section>
+          </section>
+        </div>
       )}
 
       {/* ========================================================

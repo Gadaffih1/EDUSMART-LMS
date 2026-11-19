@@ -4,7 +4,9 @@ import {
   UserRole, 
   RoleAccessRights, 
   ExtraAdminRoleType,
-  GradeLevel 
+  GradeLevel,
+  StreamName,
+  getStreamsForGrade
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { 
@@ -31,7 +33,10 @@ import {
   ChevronDown,
   ChevronRight,
   Save,
-  RotateCcw
+  RotateCcw,
+  ClipboardCheck,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 interface ExtraRolesManagerProps {
@@ -64,6 +69,14 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
   const [configDoubleAccessSecondaryRole, setConfigDoubleAccessSecondaryRole] = useState<UserRole>('dean_of_studies');
   const [configDoubleAccessSecondaryTitle, setConfigDoubleAccessSecondaryTitle] = useState<string>('');
   const [configDoubleAccessExtraPerms, setConfigDoubleAccessExtraPerms] = useState<string[]>(['canAccessAcademicReports', 'canEditCommentWriteUps']);
+  const [configInvigilationStreams, setConfigInvigilationStreams] = useState<
+    Array<{ grade: GradeLevel; stream: StreamName; room?: string; examSessionName?: string }>
+  >([]);
+  const [configInvigilationNotes, setConfigInvigilationNotes] = useState<string>('');
+  const [newInvigGrade, setNewInvigGrade] = useState<GradeLevel>(4);
+  const [newInvigStream, setNewInvigStream] = useState<StreamName>('Dove');
+  const [newInvigRoom, setNewInvigRoom] = useState<string>('');
+  const [newInvigSession, setNewInvigSession] = useState<string>('Term 3 Examinations');
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToast({ message, type });
@@ -95,6 +108,19 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
     setConfigDoubleAccessExtraPerms(
       (targetUser.doubleAccessConfig?.extraGrantedPermissions as string[]) || ['canAccessAcademicReports', 'canEditCommentWriteUps']
     );
+
+    // Exam Invigilation Stream Assignments
+    setConfigInvigilationStreams(
+      targetUser.examInvigilationConfig?.assignedStreams
+        ? [...targetUser.examInvigilationConfig.assignedStreams]
+        : []
+    );
+    setConfigInvigilationNotes(targetUser.examInvigilationConfig?.notes || '');
+    const defaultGrade: GradeLevel = targetUser.grade || 4;
+    const defaultStreams = getStreamsForGrade(defaultGrade);
+    setNewInvigGrade(defaultGrade);
+    setNewInvigStream(defaultStreams[0]);
+    setNewInvigRoom(`Grade ${defaultGrade} ${defaultStreams[0]} Exam Room`);
   };
 
   const handleToggleExtraRole = (roleKey: ExtraAdminRoleType) => {
@@ -129,6 +155,11 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
         secondaryRole: configDoubleAccessSecondaryRole,
         secondaryDesignation: configDoubleAccessSecondaryTitle.trim() || undefined,
         extraGrantedPermissions: configDoubleAccessExtraPerms as (keyof RoleAccessRights)[]
+      },
+      examInvigilationConfig: {
+        enabled: configRoles.includes('exam_invigilation'),
+        assignedStreams: configRoles.includes('exam_invigilation') ? configInvigilationStreams : [],
+        notes: configInvigilationNotes.trim() || undefined,
       }
     });
 
@@ -156,8 +187,23 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
         }
       : user.doubleAccessConfig;
 
+    const invigilationConfig = roleKey === 'exam_invigilation'
+      ? {
+          enabled: !hasRole,
+          assignedStreams: !hasRole
+            ? (user.examInvigilationConfig?.assignedStreams?.length
+                ? user.examInvigilationConfig.assignedStreams
+                : user.grade && user.stream
+                ? [{ grade: user.grade, stream: user.stream, room: `Grade ${user.grade} ${user.stream} Exam Room`, examSessionName: 'Term Examinations' }]
+                : [])
+            : [],
+          notes: user.examInvigilationConfig?.notes,
+        }
+      : user.examInvigilationConfig;
+
     Storage.assignExtraRolesToUser(user.id, updatedRoles, {
-      doubleAccessConfig: doubleConfig
+      doubleAccessConfig: doubleConfig,
+      examInvigilationConfig: invigilationConfig,
     });
 
     setUsers(Storage.getUsers());
@@ -177,6 +223,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
       case 'double_access_teacher': return '4. Double Access Rights';
       case 'cms_content_master': return '5. CMS & Section Master';
       case 'student_stream_allocator': return '6. Student Stream Allocator';
+      case 'exam_invigilation': return '7. Exam Invigilation';
       default: return role;
     }
   };
@@ -200,6 +247,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
   const countDoubleAccessTeachers = users.filter(u => u.extraRoles?.includes('double_access_teacher') || u.doubleAccessConfig?.enabled).length;
   const countCMSMasters = users.filter(u => u.extraRoles?.includes('cms_content_master')).length;
   const countStreamAllocators = users.filter(u => u.extraRoles?.includes('student_stream_allocator')).length;
+  const countExamInvigilators = users.filter(u => u.extraRoles?.includes('exam_invigilation') || u.examInvigilationConfig?.enabled).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -228,7 +276,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                 <span>Authoritative Institutional Governance</span>
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                6 Extra Admin Roles
+                7 Extra Admin Roles
               </span>
             </div>
 
@@ -237,7 +285,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
             </h2>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              As System Administrator, assign these 6 dedicated extra administrative roles independently to specific staff members without altering their baseline school roles.
+              As System Administrator, assign these 7 dedicated extra roles (including per-stream Exam Invigilation) independently to specific staff members without altering their baseline school roles.
             </p>
           </div>
 
@@ -273,8 +321,8 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
         </div>
       </div>
 
-      {/* 6 EXTRA ROLES MATRIX METRICS STRIP */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+      {/* 7 EXTRA ROLES MATRIX METRICS STRIP */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         
         {/* Role 1 */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
@@ -371,6 +419,22 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
             <p className="text-[11px] text-slate-500 mt-0.5">Delegate CBC student stream allocation (Admin & Senior Teacher native)</p>
           </div>
         </div>
+
+        {/* Role 7: Exam Invigilation */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="w-8 h-8 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold text-xs">
+              <ClipboardCheck className="w-4 h-4" />
+            </span>
+            <span className="text-xs font-mono font-black text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full">
+              {countExamInvigilators} Invigilators
+            </span>
+          </div>
+          <div>
+            <h4 className="font-bold text-xs text-slate-900 leading-tight">7. Exam Invigilation</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">Assign teachers to invigilate specific grade streams during exams</p>
+          </div>
+        </div>
       </div>
 
       {/* FILTER & SEARCH BAR */}
@@ -420,6 +484,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
               <option value="double_access_teacher">4. Double Access Teachers</option>
               <option value="cms_content_master">5. CMS & Section Masters</option>
               <option value="student_stream_allocator">6. Student Stream Allocators</option>
+              <option value="exam_invigilation">7. Exam Invigilators</option>
               <option value="none">No Extra Roles Assigned</option>
             </select>
           </div>
@@ -482,6 +547,12 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                     <span className="text-[10px] mt-0.5">6. Streams</span>
                   </div>
                 </th>
+                <th className="py-3 px-2 text-center" title="7. Exam Invigilation — assign teacher to invigilate specific streams during exams">
+                  <div className="flex flex-col items-center">
+                    <ClipboardCheck className="w-4 h-4 text-teal-700" />
+                    <span className="text-[10px] mt-0.5">7. Invigilate</span>
+                  </div>
+                </th>
                 <th className="py-3 px-4 text-right">Scope Actions</th>
               </tr>
             </thead>
@@ -497,6 +568,9 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                 const hasStreamAllocatorRole = userExtraRoles.includes('student_stream_allocator') || hasNativeStreamRole;
                 const isEligibleForStreamExtraRole = user.role !== 'student' && user.role !== 'parent' && !hasNativeStreamRole;
                 const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher'].includes(user.role);
+                const isInvigilatorEligible = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'librarian'].includes(user.role);
+                const hasExamInvigilationRole = userExtraRoles.includes('exam_invigilation') || Boolean(user.examInvigilationConfig?.enabled);
+                const assignedInvigStreams = user.examInvigilationConfig?.assignedStreams || [];
 
                 return (
                   <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
@@ -518,6 +592,14 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                           <div className="text-[11px] text-slate-400 font-mono">{user.email}</div>
                           {user.designation && (
                             <div className="text-[10px] text-slate-500 italic">{user.designation}</div>
+                          )}
+                          {hasExamInvigilationRole && (
+                            <div className="text-[10px] font-semibold text-teal-800 mt-0.5">
+                              Invigilator:{' '}
+                              {assignedInvigStreams.length > 0
+                                ? assignedInvigStreams.map((s) => `G${s.grade} ${s.stream}`).join(', ')
+                                : 'Enabled (click Configure Scope to assign stream)'}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -608,6 +690,22 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                       />
                     </td>
 
+                    {/* 7. Exam Invigilation */}
+                    <td className="py-3 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={hasExamInvigilationRole}
+                        disabled={!isInvigilatorEligible}
+                        onChange={() => handleQuickToggleRole(user, 'exam_invigilation')}
+                        className="w-4 h-4 text-teal-700 rounded border-slate-300 focus:ring-teal-600 cursor-pointer disabled:opacity-30"
+                        title={
+                          isInvigilatorEligible
+                            ? 'Toggle: Exam Invigilation role (configure exact Grade/Stream under Configure Scope)'
+                            : 'Only teaching and academic staff can be assigned Exam Invigilation'
+                        }
+                      />
+                    </td>
+
                     {/* Scope Actions */}
                     <td className="py-3 px-4 text-right">
                       <button
@@ -676,6 +774,9 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                     { key: 'cms_content_master' as ExtraAdminRoleType, label: '5. Add, remove, edit posts, Categories, sections', icon: '👑', color: 'border-rose-300 bg-rose-50/50 text-rose-900' },
                     ...(configuringUser.role !== 'student' && configuringUser.role !== 'parent'
                       ? [{ key: 'student_stream_allocator' as ExtraAdminRoleType, label: '6. Student Stream Allocator (CBC Stream Assignment Hub)', icon: '🏫', color: 'border-sky-300 bg-sky-50/50 text-sky-900' }]
+                      : []),
+                    ...(['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'librarian'].includes(configuringUser.role)
+                      ? [{ key: 'exam_invigilation' as ExtraAdminRoleType, label: '7. Exam Invigilation (Assign Teacher to Stream(s) During Exams)', icon: '📝', color: 'border-teal-300 bg-teal-50/60 text-teal-950' }]
                       : []),
                   ].map(({ key, label, icon, color }) => {
                     const isSelected = configRoles.includes(key);
@@ -924,6 +1025,170 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                   <p className="text-[11px] text-sky-900 leading-relaxed">
                     By default, only the <strong>System Administrator</strong> and <strong>Grade Senior Teachers</strong> can access the Student Stream Assignment Hub. Assigning this extra role delegates full student stream allocation &amp; transfer access to this staff member without modifying their baseline school role.
                   </p>
+                </div>
+              )}
+
+              {/* SECTION FOR ROLE 7: EXAM INVIGILATION STREAM ASSIGNMENT */}
+              {configRoles.includes('exam_invigilation') && (
+                <div className="p-4 bg-teal-50/60 rounded-2xl border border-teal-200 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h5 className="text-xs font-bold text-teal-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <ClipboardCheck className="w-3.5 h-3.5 text-teal-700" />
+                      <span>Role 7 Scope: Exam Invigilation Stream Assignments</span>
+                    </h5>
+                    <span className="text-[10px] bg-teal-200 text-teal-950 font-bold px-2 py-0.5 rounded uppercase">
+                      {configInvigilationStreams.length} Stream{configInvigilationStreams.length === 1 ? '' : 's'} Assigned
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-teal-900 leading-relaxed">
+                    Assign this teacher to specific <strong>Grade &amp; Stream</strong> examination rooms. The Dean of Studies and Deputy Head Teacher Exam Scheduler will automatically link these invigilation assignments when producing per-grade exam schedules.
+                  </p>
+
+                  {/* Add Stream Assignment Form */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end bg-white p-3 rounded-xl border border-teal-200 text-xs">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Grade</label>
+                      <select
+                        value={newInvigGrade}
+                        onChange={(e) => {
+                          const g = Number(e.target.value) as GradeLevel;
+                          setNewInvigGrade(g);
+                          const stList = getStreamsForGrade(g);
+                          setNewInvigStream(stList[0]);
+                          setNewInvigRoom(`Grade ${g} ${stList[0]} Exam Room`);
+                        }}
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg bg-white font-semibold"
+                      >
+                        {([1, 2, 3, 4, 5, 6, 7, 8, 9] as GradeLevel[]).map((g) => (
+                          <option key={g} value={g}>Grade {g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Stream</label>
+                      <select
+                        value={newInvigStream}
+                        onChange={(e) => {
+                          const s = e.target.value as StreamName;
+                          setNewInvigStream(s);
+                          setNewInvigRoom(`Grade ${newInvigGrade} ${s} Exam Room`);
+                        }}
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg bg-white font-semibold"
+                      >
+                        {getStreamsForGrade(newInvigGrade).map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Exam Room</label>
+                      <input
+                        type="text"
+                        value={newInvigRoom}
+                        onChange={(e) => setNewInvigRoom(e.target.value)}
+                        placeholder="e.g. Room 4A"
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg bg-white"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Exam Session</label>
+                      <input
+                        type="text"
+                        value={newInvigSession}
+                        onChange={(e) => setNewInvigSession(e.target.value)}
+                        placeholder="Term 3 Exams"
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg bg-white"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const exists = configInvigilationStreams.some(
+                            (x) => x.grade === newInvigGrade && x.stream === newInvigStream
+                          );
+                          if (exists) return;
+                          setConfigInvigilationStreams([
+                            ...configInvigilationStreams,
+                            {
+                              grade: newInvigGrade,
+                              stream: newInvigStream,
+                              room: newInvigRoom.trim() || `Grade ${newInvigGrade} ${newInvigStream} Exam Room`,
+                              examSessionName: newInvigSession.trim() || 'Term Examinations',
+                            },
+                          ]);
+                        }}
+                        className="w-full px-2.5 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Assign</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Assigned Streams List */}
+                  {configInvigilationStreams.length > 0 ? (
+                    <div className="bg-white rounded-xl border border-teal-200 divide-y divide-slate-100">
+                      {configInvigilationStreams.map((item, idx) => {
+                        const conflictingHolder = users.find(
+                          (u) =>
+                            u.id !== configuringUser.id &&
+                            (u.extraRoles?.includes('exam_invigilation') || u.examInvigilationConfig?.enabled) &&
+                            (u.examInvigilationConfig?.assignedStreams || []).some(
+                              (s) => s.grade === item.grade && s.stream === item.stream
+                            )
+                        );
+                        return (
+                          <div key={`${item.grade}-${item.stream}-${idx}`} className="px-3 py-2 flex items-center justify-between text-xs gap-2">
+                            <div>
+                              <span className="font-bold text-slate-900">
+                                Grade {item.grade} {item.stream}
+                              </span>
+                              <span className="text-slate-500 ml-2 font-mono text-[11px]">
+                                · {item.room || `Grade ${item.grade} ${item.stream} Room`}
+                              </span>
+                              {item.examSessionName && (
+                                <span className="text-teal-700 ml-2 text-[11px]">({item.examSessionName})</span>
+                              )}
+                              {conflictingHolder && (
+                                <div className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                                  Note: {conflictingHolder.name} is also listed for Grade {item.grade} {item.stream}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setConfigInvigilationStreams(
+                                  configInvigilationStreams.filter((_, i) => i !== idx)
+                                )
+                              }
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                              title="Remove stream invigilation assignment"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-teal-800 italic bg-white/80 rounded-xl border border-dashed border-teal-300 px-3 py-2.5">
+                      No specific streams assigned yet. Select a Grade &amp; Stream above and click Assign.
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-teal-950 uppercase mb-1">Invigilation Duty Notes (Optional)</label>
+                    <input
+                      type="text"
+                      value={configInvigilationNotes}
+                      onChange={(e) => setConfigInvigilationNotes(e.target.value)}
+                      placeholder="e.g. Collect sealed exam packets from Dean's Office 20 mins before start"
+                      className="w-full px-3 py-1.5 text-xs border border-teal-200 rounded-lg bg-white"
+                    />
+                  </div>
                 </div>
               )}
             </div>

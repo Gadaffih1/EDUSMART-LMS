@@ -23,6 +23,8 @@ const DEFAULT_PRIMARY_WEEKLY_LESSONS: Record<string, { periodsPerWeek: number; r
   arts: { periodsPerWeek: 2, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
   music: { periodsPerWeek: 2, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
   nutrition: { periodsPerWeek: 2 },
+  french: { periodsPerWeek: 2 },
+  swimming: { periodsPerWeek: 1, requiresSpecialistFacility: true, preferredFacilityType: 'sports_field' },
 };
 
 const DEFAULT_JUNIOR_WEEKLY_LESSONS: Record<string, { periodsPerWeek: number; requiresSpecialistFacility?: boolean; preferredFacilityType?: SubjectCurriculumDemand['preferredFacilityType'] }> = {
@@ -40,6 +42,8 @@ const DEFAULT_JUNIOR_WEEKLY_LESSONS: Record<string, { periodsPerWeek: number; re
   arts: { periodsPerWeek: 2, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
   music: { periodsPerWeek: 2, requiresSpecialistFacility: true, preferredFacilityType: 'art_studio' },
   nutrition: { periodsPerWeek: 2 },
+  french: { periodsPerWeek: 2 },
+  swimming: { periodsPerWeek: 1, requiresSpecialistFacility: true, preferredFacilityType: 'sports_field' },
 };
 
 function readDemand(key: string): SubjectCurriculumDemand[] {
@@ -68,6 +72,10 @@ export function getCurriculumDemandForGrade(grade: GradeLevel): SubjectCurriculu
             ? 'Music'
             : subjLower === 'nutrition'
             ? 'Nutrition'
+            : subjLower === 'french'
+            ? 'French'
+            : subjLower === 'swimming'
+            ? 'Swimming'
             : null;
         if (displayName) {
           merged.push({

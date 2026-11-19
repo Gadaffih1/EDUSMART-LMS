@@ -30,6 +30,7 @@ import { TimetableDragDropEditor } from './TimetableDragDropEditor';
 import { TimetableVersionsAndReportsPanel } from './TimetableVersionsAndReportsPanel';
 import { TeacherLoadDashboard } from './TeacherLoadDashboard';
 import { ExamScheduleManager } from './ExamScheduleManager';
+import { ClassicTimetableSheet } from './ClassicTimetableSheet';
 import { ScrollableMatrixTableWrapper } from '../common/ResponsiveUIKit';
 import { 
   Calendar, 
@@ -286,7 +287,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [reliefBookingSlot, setReliefBookingSlot] = useState<TimetableSlot | null>(null);
   const [showCaptureModal, setShowCaptureModal] = useState<boolean>(false);
   const [captureModalMode, setCaptureModalMode] = useState<'daily' | 'weekly'>('daily');
-  const [teacherViewMode, setTeacherViewMode] = useState<'daily' | 'weekly'>('daily');
+  const [teacherViewMode, setTeacherViewMode] = useState<'daily' | 'weekly'>('weekly');
+  const [classGridLayout, setClassGridLayout] = useState<'classic_sheet' | 'period_cards'>('classic_sheet');
   const [selectedTeacherDay, setSelectedTeacherDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>(() => {
     const todayIndex = new Date().getDay();
     if (todayIndex >= 1 && todayIndex <= 5) {
@@ -1841,6 +1843,68 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           PERSPECTIVE 1: WEEKLY MASTER GRID VIEW
           ======================================================== */}
       {perspective === 'grid' && (
+        <div className="space-y-3">
+          {/* Sheet Layout Switcher */}
+          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 print:hidden">
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-slate-900 text-sm">
+                Grade {selectedGrade} ({selectedStream}) Routine Timetable
+              </h3>
+              <span className="text-[11px] text-slate-400">·</span>
+              <span className="text-[11px] text-slate-500 font-medium">
+                11-Lesson Matrix (8:20 – 15:40) · Mo–Fri
+              </span>
+            </div>
+
+            <div className="inline-flex items-center rounded-xl bg-slate-100 p-1 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setClassGridLayout('classic_sheet')}
+                className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                  classGridLayout === 'classic_sheet'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Official Sheet (11-Lesson)
+              </button>
+              <button
+                type="button"
+                onClick={() => setClassGridLayout('period_cards')}
+                className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                  classGridLayout === 'period_cards'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Period Cards View
+              </button>
+            </div>
+          </div>
+
+          {classGridLayout === 'classic_sheet' ? (
+            <ClassicTimetableSheet
+              mode="class"
+              slots={displayedSlots}
+              grade={selectedGrade}
+              stream={selectedStream}
+              canEdit={canEdit}
+              onSelectSlot={(slot) => setSelectedSlotForDetail(slot)}
+              onAddSlot={(day, academicPeriod) => {
+                setSlotToEdit(null);
+                setFormDay(day);
+                setFormPeriod(academicPeriod);
+                setFormSubject(availableSubjects[0]);
+                setFormTeacherName(currentUser.name || 'Mr. David Kiprono');
+                setFormRoomName(`Classroom ${selectedGrade}-${selectedStream}`);
+                setFormIsRemedial(false);
+                setFormStrandTopic('');
+                setFormNotes('');
+                setFormConflictWarning(null);
+                setShowEditModal(true);
+              }}
+            />
+          ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
           
           <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/50">
@@ -1850,7 +1914,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </h3>
               <span className="text-[11px] text-slate-500">·</span>
               <span className="text-[11px] text-slate-500 font-medium">
-                8 Academic Periods + Breaks & Physical Education
+                Academic Periods + Breaks &amp; Physical Education
               </span>
             </div>
 
@@ -2056,6 +2120,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </tbody>
             </table>
           </ScrollableMatrixTableWrapper>
+        </div>
+          )}
         </div>
       )}
 
@@ -2647,113 +2713,13 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   </div>
                 </div>
 
-                {/* Weekly Grid Table */}
-                <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-900 text-white font-bold border-b border-slate-800">
-                      <tr>
-                        <th className="py-3 px-3.5 w-28 text-center uppercase tracking-wider font-extrabold text-[11px]">
-                          Day
-                        </th>
-                        {[1, 2, 3, 4, 5, 6, 7, 8].map(pNum => {
-                          const bell = bellSchedule.find(b => b.period === pNum && !b.isBreak);
-                          return (
-                            <th key={pNum} className="py-3 px-2.5 text-center min-w-[130px] border-l border-slate-800">
-                              <div className="font-black text-white">Period {pNum}</div>
-                              <div className="text-[10px] text-slate-400 font-mono font-normal">
-                                {bell ? `${bell.startTime}–${bell.endTime}` : ''}
-                              </div>
-                            </th>
-                          );
-                        })}
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-slate-200 bg-white">
-                      {DAYS_OF_WEEK.map(d => {
-                        const daySlots = teacherSlots.filter(s => s.dayOfWeek === d);
-
-                        return (
-                          <tr key={d} className="hover:bg-slate-50/60 transition-colors">
-                            {/* Day Header */}
-                            <td className="py-3 px-3.5 font-black text-slate-900 text-center bg-slate-100 border-r border-slate-200">
-                              <div className="text-xs">{d}</div>
-                              <div className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded mt-1">
-                                {daySlots.length} classes
-                              </div>
-                            </td>
-
-                            {/* Periods 1 to 8 */}
-                            {[1, 2, 3, 4, 5, 6, 7, 8].map(pNum => {
-                              const slot = daySlots.find(s => s.period === pNum);
-
-                              if (slot) {
-                                return (
-                                  <td 
-                                    key={pNum} 
-                                    className={`p-2 border-l border-slate-200 align-top ${
-                                      slot.isReliefCover ? 'bg-amber-50/60' : 'bg-indigo-50/30'
-                                    }`}
-                                  >
-                                    <div className="space-y-1">
-                                      <div className="flex items-center justify-between">
-                                        <span className="font-black text-slate-900 text-[11px] bg-white border border-slate-200 px-1.5 py-0.2 rounded shadow-2xs">
-                                          Gr {slot.grade} {slot.stream}
-                                        </span>
-                                        {slot.isReliefCover && (
-                                          <span className="text-[9px] font-extrabold uppercase bg-amber-200 text-amber-900 px-1 rounded">
-                                            Relief
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      <div className="font-bold text-emerald-800 text-[11px] truncate">
-                                        {slot.subject}
-                                      </div>
-
-                                      <div className="text-[10px] text-slate-500 font-mono truncate">
-                                        {slot.roomName || 'Room'}
-                                      </div>
-
-                                      <div className="flex items-center gap-1 pt-0.5">
-                                        <button
-                                          onClick={() => setSelectedSlotForDetail(slot)}
-                                          className="text-[10px] font-bold text-indigo-600 hover:text-indigo-900 cursor-pointer"
-                                        >
-                                          Dossier
-                                        </button>
-                                        {isExecutiveLeadership && (
-                                          <>
-                                            <span className="text-slate-300">·</span>
-                                            <button
-                                              onClick={() => setReliefBookingSlot(slot)}
-                                              className="text-[10px] font-bold text-amber-700 hover:text-amber-900 cursor-pointer"
-                                            >
-                                              Relief
-                                            </button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </td>
-                                );
-                              }
-
-                              // Free Period
-                              return (
-                                <td key={pNum} className="p-2 border-l border-slate-200 text-center bg-slate-50/30 align-middle">
-                                  <span className="text-[10px] font-semibold text-slate-400 italic">
-                                    Free / Prep
-                                  </span>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                {/* Official 11-Lesson Horizontal Teacher Timetable Sheet (Mo–Fri × LESSON 1–11) */}
+                <ClassicTimetableSheet
+                  mode="teacher"
+                  slots={teacherSlots}
+                  teacherName={selectedTeacher || currentUser.name}
+                  onSelectSlot={(slot) => setSelectedSlotForDetail(slot)}
+                />
 
               </div>
             )}

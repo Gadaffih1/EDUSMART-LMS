@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { useTenant } from '../../context/TenantContext';
+import { ClassicTimetableSheet } from './ClassicTimetableSheet';
 
 interface TeacherTimetableCaptureModalProps {
   isOpen: boolean;
@@ -447,91 +448,13 @@ export const TeacherTimetableCaptureModal: React.FC<TeacherTimetableCaptureModal
                 </div>
               </div>
 
-              {/* Master Weekly Matrix Table */}
-              <div className="border-2 border-slate-200 rounded-2xl overflow-x-auto shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-900 text-white font-black border-b border-slate-800">
-                    <tr>
-                      <th className="py-3 px-3.5 w-24 text-center uppercase tracking-wider text-[11px]">
-                        Day
-                      </th>
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(pNum => {
-                        const bell = bellSchedule.find(b => b.period === pNum && !b.isBreak);
-                        return (
-                          <th key={pNum} className="py-2.5 px-2 text-center min-w-[120px] border-l border-slate-800">
-                            <div className="font-black text-white text-xs">P{pNum}</div>
-                            <div className="text-[10px] text-slate-400 font-mono font-normal">
-                              {bell ? `${bell.startTime}–${bell.endTime}` : ''}
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {DAYS_OF_WEEK.map(d => {
-                      const daySlotsForWeek = teacherSlots.filter(s => s.dayOfWeek === d);
-
-                      return (
-                        <tr key={d} className="hover:bg-slate-50/50">
-                          {/* Day Row Header */}
-                          <td className="py-3 px-3.5 font-black text-slate-900 text-center bg-slate-100 border-r border-slate-200 align-middle">
-                            <div className="text-xs font-black">{d}</div>
-                            <div className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded mt-1">
-                              {daySlotsForWeek.length} lessons
-                            </div>
-                          </td>
-
-                          {/* Periods 1 to 8 */}
-                          {[1, 2, 3, 4, 5, 6, 7, 8].map(pNum => {
-                            const slot = daySlotsForWeek.find(s => s.period === pNum);
-
-                            if (slot) {
-                              return (
-                                <td 
-                                  key={pNum} 
-                                  className={`p-2 border-l border-slate-200 align-top ${
-                                    slot.isReliefCover ? 'bg-amber-50' : 'bg-indigo-50/40'
-                                  }`}
-                                >
-                                  <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-black text-slate-900 text-[11px] bg-white border border-slate-300 px-1.5 py-0.5 rounded shadow-2xs">
-                                        Gr {slot.grade} {slot.stream}
-                                      </span>
-                                      {slot.isReliefCover && (
-                                        <span className="text-[9px] font-extrabold uppercase bg-amber-200 text-amber-900 px-1 rounded">
-                                          Relief
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="font-extrabold text-emerald-800 text-[11px] leading-tight">
-                                      {slot.subject}
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 font-mono">
-                                      {slot.roomName || 'Room'}
-                                    </div>
-                                  </div>
-                                </td>
-                              );
-                            }
-
-                            // Free / Prep Period Cell
-                            return (
-                              <td key={pNum} className="p-2 border-l border-slate-200 text-center bg-slate-50/40 align-middle">
-                                <span className="text-[10px] font-semibold text-slate-400 italic">
-                                  Free / Prep
-                                </span>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {/* Official 11-Lesson Horizontal Teacher Timetable Sheet */}
+              <ClassicTimetableSheet
+                mode="teacher"
+                slots={teacherSlots}
+                teacherName={teacherName}
+                hideToolbar={true}
+              />
 
             </div>
           )}

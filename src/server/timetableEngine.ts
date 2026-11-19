@@ -166,17 +166,17 @@ const JUNIOR_SUBJECT_PRESETS: Array<{
 ];
 
 const DEFAULT_BELL_PERIODS = [
-  { periodNumber: 1, label: 'Lesson 1', kind: 'lesson', startTime: '08:00', endTime: '08:40', sortOrder: 1 },
-  { periodNumber: 2, label: 'Lesson 2', kind: 'lesson', startTime: '08:40', endTime: '09:20', sortOrder: 2 },
-  { periodNumber: 0, label: 'Morning Short Break', kind: 'break', startTime: '09:20', endTime: '09:35', sortOrder: 3 },
-  { periodNumber: 3, label: 'Lesson 3', kind: 'lesson', startTime: '09:35', endTime: '10:15', sortOrder: 4 },
-  { periodNumber: 4, label: 'Lesson 4', kind: 'lesson', startTime: '10:15', endTime: '10:55', sortOrder: 5 },
-  { periodNumber: 0, label: 'Tea & Health Break', kind: 'break', startTime: '10:55', endTime: '11:20', sortOrder: 6 },
-  { periodNumber: 5, label: 'Lesson 5', kind: 'lesson', startTime: '11:20', endTime: '12:00', sortOrder: 7 },
-  { periodNumber: 6, label: 'Lesson 6', kind: 'lesson', startTime: '12:00', endTime: '12:40', sortOrder: 8 },
-  { periodNumber: 0, label: 'Lunch & Clubs', kind: 'lunch', startTime: '12:40', endTime: '13:55', sortOrder: 9 },
-  { periodNumber: 7, label: 'Lesson 7', kind: 'lesson', startTime: '13:55', endTime: '14:35', sortOrder: 10 },
-  { periodNumber: 8, label: 'Lesson 8', kind: 'lesson', startTime: '14:35', endTime: '15:15', sortOrder: 11 },
+  { periodNumber: 1, label: 'Lesson 1', kind: 'lesson', startTime: '08:20', endTime: '09:00', sortOrder: 1 },
+  { periodNumber: 2, label: 'Lesson 2', kind: 'lesson', startTime: '09:00', endTime: '09:40', sortOrder: 2 },
+  { periodNumber: 3, label: 'Lesson 3', kind: 'lesson', startTime: '09:40', endTime: '10:20', sortOrder: 3 },
+  { periodNumber: 0, label: 'Break', kind: 'break', startTime: '10:20', endTime: '11:00', sortOrder: 4 },
+  { periodNumber: 4, label: 'Lesson 5', kind: 'lesson', startTime: '11:00', endTime: '11:40', sortOrder: 5 },
+  { periodNumber: 5, label: 'Lesson 6', kind: 'lesson', startTime: '11:40', endTime: '12:20', sortOrder: 6 },
+  { periodNumber: 6, label: 'Lesson 7', kind: 'lesson', startTime: '12:20', endTime: '13:00', sortOrder: 7 },
+  { periodNumber: 0, label: 'Lunch', kind: 'lunch', startTime: '13:00', endTime: '13:40', sortOrder: 8 },
+  { periodNumber: 7, label: 'Lesson 9', kind: 'lesson', startTime: '13:40', endTime: '14:20', sortOrder: 9 },
+  { periodNumber: 8, label: 'Lesson 10', kind: 'lesson', startTime: '14:20', endTime: '15:00', sortOrder: 10 },
+  { periodNumber: 9, label: 'Lesson 11', kind: 'lesson', startTime: '15:00', endTime: '15:40', sortOrder: 11 },
 ];
 
 export function safeJsonParse<T>(raw: any, fallback: T): T {

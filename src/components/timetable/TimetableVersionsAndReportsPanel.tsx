@@ -17,10 +17,11 @@ import {
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
-import { User } from '../../types';
+import { User, GradeLevel, StreamName, SubjectName, TimetableSlot } from '../../types';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { TTWorkspacePayload, ttApiFetch } from './timetableTypes';
+import { ClassicTimetableSheet } from './ClassicTimetableSheet';
 
 interface TimetableVersionsAndReportsPanelProps {
   workspace: TTWorkspacePayload;
@@ -850,6 +851,70 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
                 </span>
               </div>
             </div>
+
+            {/* Official 11-Lesson Horizontal Timetable Sheet Preview for Individual Class or Teacher */}
+            {selectedReport === 'class' && classOptions.length > 0 && (() => {
+              const targetClass =
+                reportClassKey !== 'ALL'
+                  ? classOptions.find((c) => `${c.grade}|${c.stream}` === reportClassKey) || classOptions[0]
+                  : classOptions[0];
+              const sheetSlots: TimetableSlot[] = (activeVersion?.entries || [])
+                .filter((e) => e.grade === targetClass.grade && e.stream === targetClass.stream)
+                .map((e) => ({
+                  id: e.id,
+                  grade: e.grade as GradeLevel,
+                  stream: e.stream as StreamName,
+                  dayOfWeek: e.dayOfWeek as TimetableSlot['dayOfWeek'],
+                  period: e.periodNumber,
+                  startTime: '08:20',
+                  endTime: '09:00',
+                  subject: e.subjectName as SubjectName,
+                  teacherName: (e.teacherNames || []).join(' / ') || 'Faculty',
+                  roomName: e.roomName || 'Classroom',
+                }));
+              return (
+                <ClassicTimetableSheet
+                  mode="class"
+                  slots={sheetSlots}
+                  grade={targetClass.grade as GradeLevel}
+                  stream={targetClass.stream}
+                  termLabel={`${config.term} ${config.academicYear}`}
+                />
+              );
+            })()}
+
+            {selectedReport === 'teacher' && teachers.length > 0 && (() => {
+              const targetTeacher =
+                reportTeacherId !== 'ALL'
+                  ? teachers.find((t) => t.id === reportTeacherId) || teachers[0]
+                  : teachers[0];
+              const sheetSlots: TimetableSlot[] = (activeVersion?.entries || [])
+                .filter(
+                  (e) =>
+                    e.teacherIds.includes(targetTeacher.id) ||
+                    e.teacherNames.some((n) => n.toLowerCase() === targetTeacher.teacherName.toLowerCase())
+                )
+                .map((e) => ({
+                  id: e.id,
+                  grade: e.grade as GradeLevel,
+                  stream: e.stream as StreamName,
+                  dayOfWeek: e.dayOfWeek as TimetableSlot['dayOfWeek'],
+                  period: e.periodNumber,
+                  startTime: '08:20',
+                  endTime: '09:00',
+                  subject: e.subjectName as SubjectName,
+                  teacherName: (e.teacherNames || []).join(' / ') || targetTeacher.teacherName,
+                  roomName: e.roomName || 'Classroom',
+                }));
+              return (
+                <ClassicTimetableSheet
+                  mode="teacher"
+                  slots={sheetSlots}
+                  teacherName={targetTeacher.teacherName}
+                  termLabel={`${config.term} ${config.academicYear}`}
+                />
+              );
+            })()}
 
             {/* Report Preview Table */}
             <div className="border border-slate-200 rounded-lg overflow-x-auto max-h-[420px]">

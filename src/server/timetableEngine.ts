@@ -95,7 +95,29 @@ export const ALL_WORKING_DAYS = [
   'Saturday',
 ] as const;
 
-const PRIMARY_SUBJECT_PRESETS: Array<{
+const LOWER_PRIMARY_SUBJECT_PRESETS: Array<{
+  subject: string;
+  weekly: number;
+  single: number;
+  double: number;
+  triple: number;
+  roomType: string;
+  maxPerDay: number;
+  minSpacingDays: number;
+  isPractical: number;
+}> = [
+  { subject: 'Mathematics', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
+  { subject: 'English', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
+  { subject: 'Kiswahili', weekly: 4, single: 4, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
+  { subject: 'Integrated Science', weekly: 4, single: 4, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
+  { subject: 'Religious Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 0 },
+  { subject: 'Creative Arts', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'art_room', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
+  { subject: 'Music', weekly: 2, single: 2, double: 0, triple: 0, roomType: 'art_room', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
+  { subject: 'Physical and Health Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'field', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
+  { subject: 'Library Lesson', weekly: 1, single: 1, double: 0, triple: 0, roomType: 'library', maxPerDay: 1, minSpacingDays: 2, isPractical: 0 },
+];
+
+const UPPER_PRIMARY_SUBJECT_PRESETS: Array<{
   subject: string;
   weekly: number;
   single: number;
@@ -115,7 +137,8 @@ const PRIMARY_SUBJECT_PRESETS: Array<{
   { subject: 'Agriculture and Nutrition', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
   { subject: 'Computer Studies', weekly: 2, single: 0, double: 1, triple: 0, roomType: 'computer_lab', maxPerDay: 2, minSpacingDays: 2, isPractical: 1 },
   { subject: 'Creative Arts', weekly: 3, single: 1, double: 1, triple: 0, roomType: 'art_room', maxPerDay: 2, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Physical and Health Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'field', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
+  { subject: 'Physical and Health Education', weekly: 2, single: 2, double: 0, triple: 0, roomType: 'field', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
+  { subject: 'Library Lesson', weekly: 1, single: 1, double: 0, triple: 0, roomType: 'library', maxPerDay: 1, minSpacingDays: 2, isPractical: 0 },
 ];
 
 const JUNIOR_SUBJECT_PRESETS: Array<{
@@ -340,7 +363,7 @@ export function ensureTenantTimetableSeeded(
     `INSERT OR IGNORE INTO tt_subjects (id, tenant_id, name, code, department, is_practical, requires_room_type, color_token, is_active, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
   );
-  const combinedPresets = [...PRIMARY_SUBJECT_PRESETS, ...JUNIOR_SUBJECT_PRESETS];
+  const combinedPresets = [...LOWER_PRIMARY_SUBJECT_PRESETS, ...UPPER_PRIMARY_SUBJECT_PRESETS, ...JUNIOR_SUBJECT_PRESETS];
   const colorMap: Record<string, string> = {
     Mathematics: 'blue',
     English: 'emerald',
@@ -621,7 +644,12 @@ export function ensureTenantTimetableSeeded(
     }
 
     for (const grade of gradeList) {
-      const presets = grade <= 6 ? PRIMARY_SUBJECT_PRESETS : JUNIOR_SUBJECT_PRESETS;
+      const presets =
+        grade <= 3
+          ? LOWER_PRIMARY_SUBJECT_PRESETS
+          : grade <= 6
+          ? UPPER_PRIMARY_SUBJECT_PRESETS
+          : JUNIOR_SUBJECT_PRESETS;
       const streams = gradeStreamsMap.get(grade) || [];
 
       presets.forEach((p, subIdx) => {
@@ -1253,6 +1281,14 @@ export function validateTimetableVersion(
   // Subject distribution tracking
   const classSubjectDayCount = new Map<string, Map<string, number>>(); // `${grade}|${stream}|${subject}|${day}` -> unique block count
 
+  const validLessonPeriodSet = new Set(
+    periods.filter((p) => p.kind === 'lesson' && p.periodNumber > 0).map((p) => p.periodNumber)
+  );
+  const roomIdByNameLower = new Map<string, string>();
+  for (const r of roomMap.values()) {
+    roomIdByNameLower.set(String(r.name || '').trim().toLowerCase(), String(r.id));
+  }
+
   for (const e of entries) {
     const day = String(e.day_of_week);
     const period = Number(e.period_number);
@@ -1260,6 +1296,17 @@ export function validateTimetableVersion(
     const stream = String(e.stream);
     const blockEventKey = e.joint_lesson_id ? `jl:${e.joint_lesson_id}` : String(e.session_block_id);
     const teacherIds = safeJsonParse<string[]>(e.teacher_ids_json, []);
+
+    if (validLessonPeriodSet.size > 0 && !validLessonPeriodSet.has(period)) {
+      pushConflict(
+        'error',
+        'LESSON_ON_NON_TEACHING_SLOT',
+        `Break/Lunch/Non-teaching slot violation: Grade ${grade} ${stream} · ${e.subject_name} is placed on ${day} Period ${period}, which is not an active teaching lesson period.`,
+        day,
+        period,
+        { grade, stream, subject: e.subject_name, isLocked: Number(e.is_locked) === 1 }
+      );
+    }
 
     const cKey = `${grade}|${stream}|${day}|${period}`;
     const cList = classSlotEntries.get(cKey) || [];
@@ -1328,9 +1375,14 @@ export function validateTimetableVersion(
       }
     }
 
-    // Room slot & availability
-    if (e.room_id) {
-      const rid = String(e.room_id);
+    // Room slot & availability (resolve by room_id OR case-insensitive room_name so shared facilities never double-book)
+    const resolvedRoomId = e.room_id
+      ? String(e.room_id)
+      : e.room_name
+      ? roomIdByNameLower.get(String(e.room_name).trim().toLowerCase()) || null
+      : null;
+    if (resolvedRoomId) {
+      const rid = resolvedRoomId;
       const rsKey = `${rid}|${day}|${period}`;
       if (!roomSlotEvents.has(rsKey)) roomSlotEvents.set(rsKey, new Map());
       roomSlotEvents.get(rsKey)!.set(blockEventKey, e);
@@ -2123,11 +2175,24 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
       classSubjDays: new Map(),
     };
 
+    const validLessonPeriods = new Set(
+      periods.filter((p) => p.kind === 'lesson' && p.periodNumber > 0).map((p) => p.periodNumber)
+    );
+    const roomByNameLower = new Map<string, string>();
+    for (const r of roomsList) {
+      roomByNameLower.set(r.name.trim().toLowerCase(), r.id);
+    }
+
     const lockedCountsByAllocOrJoint = new Map<string, number>();
 
+    // Treat every preserved locked lesson as a shared resource reservation BEFORE solver placement:
+    // reserves participating teachers, shared facility/room, and class/stream slot while strictly excluding break/lunch slots.
     for (const le of lockedEntries) {
       const day = String(le.day_of_week);
       const period = Number(le.period_number);
+      if (validLessonPeriods.size > 0 && !validLessonPeriods.has(period)) {
+        continue; // Never honor a corrupted entry sitting on a break/lunch period
+      }
       const grade = Number(le.grade);
       const stream = String(le.stream);
       const tIds = safeJsonParse<string[]>(le.teacher_ids_json, []);
@@ -2140,7 +2205,12 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
           state.teacherWeekTotal.set(tid, (state.teacherWeekTotal.get(tid) || 0) + 1);
         }
       }
-      if (le.room_id) state.roomBusy.add(`${le.room_id}|${day}|${period}`);
+      const lockedRoomId = le.room_id
+        ? String(le.room_id)
+        : le.room_name
+        ? roomByNameLower.get(String(le.room_name).trim().toLowerCase()) || null
+        : null;
+      if (lockedRoomId) state.roomBusy.add(`${lockedRoomId}|${day}|${period}`);
       state.classAnyBusy.add(`${grade}|${stream}|${day}|${period}`);
       if (!le.group_id || le.group_name === 'Whole Class') {
         state.classWholeBusy.add(`${grade}|${stream}|${day}|${period}`);
@@ -2154,6 +2224,56 @@ async function runTimetableGenerationWorker(jobId: string): Promise<void> {
         if (!state.classSubjDays.has(sdKey)) state.classSubjDays.set(sdKey, new Map());
         state.classSubjDays.get(sdKey)!.set(day, (state.classSubjDays.get(sdKey)!.get(day) || 0) + Number(le.block_length || 1));
       }
+    }
+
+    // Also reserve any tenant-level fixed shared anchor lessons (edusmart_fixed_lessons_v1)
+    // so shared rooms, teachers, and streams never collide with school-wide locked anchors.
+    try {
+      const fixedRows = db
+        .prepare(
+          `SELECT payload_json FROM collections_store
+           WHERE collection_key = 'edusmart_fixed_lessons_v1' AND tenant_id = ? AND deleted_at IS NULL`
+        )
+        .all(tenantId) as Array<{ payload_json: string }>;
+      const teacherIdByUserOrName = new Map<string, string>();
+      for (const tp of db.prepare(`SELECT id, user_id, teacher_name FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]) {
+        teacherIdByUserOrName.set(String(tp.id), String(tp.id));
+        if (tp.user_id) teacherIdByUserOrName.set(String(tp.user_id), String(tp.id));
+        if (tp.teacher_name) teacherIdByUserOrName.set(String(tp.teacher_name).trim().toLowerCase(), String(tp.id));
+      }
+      for (const row of fixedRows) {
+        const fl = safeJsonParse<any>(row.payload_json, null);
+        if (!fl || fl.isActive === false) continue;
+        const day = String(fl.day || fl.dayOfWeek || '');
+        const period = Number(fl.period || fl.periodNumber || 0);
+        if (!day || !period || (validLessonPeriods.size > 0 && !validLessonPeriods.has(period))) continue;
+        const tId =
+          teacherIdByUserOrName.get(String(fl.teacherId || '')) ||
+          teacherIdByUserOrName.get(String(fl.teacherName || '').trim().toLowerCase());
+        if (tId) {
+          state.teacherBusy.add(`${tId}|${day}|${period}`);
+          const tdKey = `${tId}|${day}`;
+          if (!state.teacherDayPeriods.has(tdKey)) state.teacherDayPeriods.set(tdKey, new Set());
+          if (!state.teacherDayPeriods.get(tdKey)!.has(period)) {
+            state.teacherDayPeriods.get(tdKey)!.add(period);
+            state.teacherWeekTotal.set(tId, (state.teacherWeekTotal.get(tId) || 0) + 1);
+          }
+        }
+        const fRoomId = fl.roomId
+          ? String(fl.roomId)
+          : fl.roomName || fl.facilityName
+          ? roomByNameLower.get(String(fl.roomName || fl.facilityName).trim().toLowerCase()) || null
+          : null;
+        if (fRoomId) state.roomBusy.add(`${fRoomId}|${day}|${period}`);
+        if (fl.grade && fl.stream) {
+          const g = Number(fl.grade);
+          const s = String(fl.stream);
+          state.classAnyBusy.add(`${g}|${s}|${day}|${period}`);
+          state.classWholeBusy.add(`${g}|${s}|${day}|${period}`);
+        }
+      }
+    } catch {
+      // ignore if collections_store has no fixed lessons
     }
 
     // Filter out units already covered by locked entries

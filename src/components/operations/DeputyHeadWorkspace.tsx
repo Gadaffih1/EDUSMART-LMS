@@ -54,6 +54,7 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
+import { TeacherLoadDashboard } from '../timetable/TeacherLoadDashboard';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
@@ -97,6 +98,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
     | 'discipline' 
     | 'online_discipline' 
     | 'staff_duty' 
+    | 'teacher_load'
     | 'timetable' 
     | 'work_ledger' 
     | 'sanatorium' 
@@ -126,7 +128,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['analytics', 'results_upload', 'reports_moderation', 'operations', 'discipline', 'online_discipline', 'staff_duty', 'staff_appraisal', 'timetable', 'work_ledger', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
+        if (['analytics', 'results_upload', 'reports_moderation', 'operations', 'discipline', 'online_discipline', 'staff_duty', 'staff_appraisal', 'teacher_load', 'timetable', 'work_ledger', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
           setActiveTab(tab as DeputyTab);
         } else if (tab === 'attendance' || tab === 'roll_call') {
           setActiveTab('staff_duty');
@@ -441,6 +443,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
         { id: 'reports_moderation', label: 'Reports & Write-Ups Moderation', icon: FileCheck2, badge: 'Republish', badgeColor: 'bg-blue-600' },
         { id: 'results_upload', label: 'CBC Assessment Results Hub', icon: Upload, badge: 'Upload / Assign', badgeColor: 'bg-emerald-600' },
         { id: 'work_ledger', label: 'Staff Work Entry Audit', icon: FileCheck2, badge: workLogs.length },
+        { id: 'teacher_load', label: 'Teacher Load Dashboard', icon: BarChart3 },
         { id: 'timetable', label: 'Curriculum Master Timetable', icon: CalendarDays },
         { id: 'reporting_hub', label: 'Institutional Reporting Hub', icon: BarChart3 }
       ]
@@ -1650,6 +1653,16 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           ======================================================== */}
       {activeTab === 'staff_appraisal' && (
         <SchoolStaffAppraisal currentUser={currentUser} />
+      )}
+
+      {/* ========================================================
+          TAB: TEACHER LOAD DASHBOARD (DEPUTY HEAD WORKLOAD BALANCE)
+          ======================================================== */}
+      {activeTab === 'teacher_load' && (
+        <TeacherLoadDashboard
+          currentUser={currentUser}
+          onOpenTimetableEditor={() => setActiveTab('timetable')}
+        />
       )}
 
       {/* ========================================================

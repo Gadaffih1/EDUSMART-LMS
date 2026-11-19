@@ -34,9 +34,9 @@ interface TimetableAllocationsPanelProps {
 }
 
 const GRADE_BANDS = [
-  { label: 'Grades 1-3', min: 1, max: 3 },
-  { label: 'Grades 4-6', min: 4, max: 6 },
-  { label: 'Grades 7-9', min: 7, max: 9 },
+  { label: 'Grades 1-3', subtitle: 'Lower Primary', min: 1, max: 3 },
+  { label: 'Grades 4-6', subtitle: 'Upper Primary', min: 4, max: 6 },
+  { label: 'Grades 7-9', subtitle: 'Junior School', min: 7, max: 9 },
 ];
 
 export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps> = ({
@@ -60,10 +60,11 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
       grades: grades.filter((grade) => grade >= band.min && grade <= band.max),
     })).filter((band) => band.grades.length > 0);
     const otherGrades = grades.filter((grade) => grade < 1 || grade > 9);
-    if (otherGrades.length > 0) bands.push({ label: 'Other Grades', min: otherGrades[0], max: otherGrades[otherGrades.length - 1], grades: otherGrades });
+    if (otherGrades.length > 0) bands.push({ label: 'Other Grades', subtitle: 'Extended', min: otherGrades[0], max: otherGrades[otherGrades.length - 1], grades: otherGrades });
     return bands;
   }, [grades]);
   const selectedGradeBand = gradeBandOptions.find((band) => band.grades.includes(selectedGrade));
+  const [applyEditsToWholeBand, setApplyEditsToWholeBand] = useState<boolean>(true);
   const [subTab, setSubTab] = useState<'grade_template' | 'stream_allocations' | 'groups_joint'>('grade_template');
   const [selectedStream, setSelectedStream] = useState<string>('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -119,16 +120,49 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
     (s) => s.grade === selectedGrade && s.stream === activeStream
   );
 
+  const activeTargetGrades = useMemo(() => {
+    if (applyEditsToWholeBand && selectedGradeBand && selectedGradeBand.grades.length > 0) {
+      return selectedGradeBand.grades;
+    }
+    return [selectedGrade];
+  }, [applyEditsToWholeBand, selectedGradeBand, selectedGrade]);
+
+  const bandSummary = useMemo(() => {
+    const activeRows = gradeTemplateRows.filter((r) => r.isActive);
+    const totalWeeklyFed = activeRows.reduce((acc, r) => acc + Number(r.requiredWeeklyPeriods || 0), 0);
+    const sched = gradeSchedules.find((g) => g.grade === selectedGrade);
+    const weeklyCapacity = sched ? sched.periodsPerDay * (sched.workingDays?.length || 5) : 40;
+    const bandStreamsCount = studentGroups.filter(
+      (g) => g.isWholeClass && activeTargetGrades.includes(g.grade)
+    ).length;
+    return {
+      subjectCount: activeRows.length,
+      totalWeeklyFed,
+      weeklyCapacity,
+      bandStreamsCount,
+    };
+  }, [gradeTemplateRows, gradeSchedules, selectedGrade, studentGroups, activeTargetGrades]);
+
   const handleSaveGradeRow = async (row: TTGradeAllocationItem) => {
     setBusyId(row.id);
     setStatusMsg(null);
     try {
       await ttApiFetch('/api/timetable/allocations/grade', {
         method: 'PUT',
-        body: JSON.stringify(row),
+        body: JSON.stringify({
+          ...row,
+          targetGrades: activeTargetGrades,
+        }),
       });
       await onRefresh();
-      setStatusMsg({ type: 'ok', text: `Saved Grade ${row.grade} template for ${row.subjectName}.` });
+      const scopeLabel =
+        activeTargetGrades.length > 1 && selectedGradeBand
+          ? `${selectedGradeBand.label} (Grades ${activeTargetGrades.join(', ')})`
+          : `Grade ${row.grade}`;
+      setStatusMsg({
+        type: 'ok',
+        text: `Saved ${row.subjectName} (${row.requiredWeeklyPeriods} lessons/wk) for ${scopeLabel}.`,
+      });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Failed to save grade allocation.' });
     } finally {
@@ -148,6 +182,7 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
         method: 'PUT',
         body: JSON.stringify({
           grade: selectedGrade,
+          targetGrades: activeTargetGrades,
           subjectName: subjName,
           requiredWeeklyPeriods: periodsCount,
           singleLessons: periodsCount,
@@ -162,9 +197,13 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
       });
       setAddTplSubject('');
       await onRefresh();
+      const scopeLabel =
+        activeTargetGrades.length > 1 && selectedGradeBand
+          ? selectedGradeBand.label
+          : `Grade ${selectedGrade}`;
       setStatusMsg({
         type: 'ok',
-        text: `Added "${subjName}" (${periodsCount}p/wk) to Grade ${selectedGrade} template. Click "Apply Template" to sync streams.`,
+        text: `Added "${subjName}" (${periodsCount} lessons/wk) to ${scopeLabel}. Click "Apply Template" to sync streams while preserving stream-assigned teachers.`,
       });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Could not add subject to grade template.' });
@@ -177,10 +216,14 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
     setBusyId(row.id);
     setStatusMsg(null);
     try {
-      await ttApiFetch(`/api/timetable/allocations/grade/${row.id}`, { method: 'DELETE' });
+      const qs =
+        activeTargetGrades.length > 1 ? `?bandGrades=${encodeURIComponent(activeTargetGrades.join(','))}` : '';
+      await ttApiFetch(`/api/timetable/allocations/grade/${row.id}${qs}`, { method: 'DELETE' });
       setConfirmRemoveGradeAllocId(null);
       await onRefresh();
-      setStatusMsg({ type: 'ok', text: `Removed "${row.subjectName}" from Grade ${row.grade} template.` });
+      const scopeLabel =
+        activeTargetGrades.length > 1 && selectedGradeBand ? selectedGradeBand.label : `Grade ${row.grade}`;
+      setStatusMsg({ type: 'ok', text: `Removed "${row.subjectName}" from ${scopeLabel} template.` });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Could not remove subject allocation.' });
     } finally {
@@ -207,14 +250,26 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
     setBusyId('apply-tpl');
     setStatusMsg(null);
     try {
-      const res = await ttApiFetch<{ ok: boolean; updatedCount: number }>('/api/timetable/allocations/apply-template', {
-        method: 'POST',
-        body: JSON.stringify({ grade: selectedGrade, overwriteOverridden }),
-      });
+      const res = await ttApiFetch<{ ok: boolean; updatedCount: number; gradesSynced?: number[] }>(
+        '/api/timetable/allocations/apply-template',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            grade: selectedGrade,
+            grades: activeTargetGrades,
+            overwriteOverridden,
+            overwriteTeachers: false,
+          }),
+        }
+      );
       await onRefresh();
+      const scopeLabel =
+        activeTargetGrades.length > 1 && selectedGradeBand
+          ? `${selectedGradeBand.label} (Grades ${activeTargetGrades.join(', ')})`
+          : `Grade ${selectedGrade}`;
       setStatusMsg({
         type: 'ok',
-        text: `Applied Grade ${selectedGrade} template across streams (${res.updatedCount} allocations synced).`,
+        text: `Applied ${scopeLabel} subject & weekly lesson template across all streams (${res.updatedCount} stream allocations synced; each stream's assigned teacher preserved).`,
       });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Template propagation failed.' });
@@ -478,15 +533,30 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
         </div>
 
         {subTab === 'grade_template' && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedGradeBand && selectedGradeBand.grades.length > 1 && (
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={applyEditsToWholeBand}
+                  onChange={(e) => setApplyEditsToWholeBand(e.target.checked)}
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                />
+                <span>Sync across all of {selectedGradeBand.label}</span>
+              </label>
+            )}
             <button
               type="button"
               disabled={busyId === 'apply-tpl'}
               onClick={() => handleApplyTemplateToStreams(false)}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Copy className="w-3.5 h-3.5" />
-              <span>Apply Template to All Grade {selectedGrade} Streams</span>
+              <span>
+                {applyEditsToWholeBand && selectedGradeBand && selectedGradeBand.grades.length > 1
+                  ? `Apply ${selectedGradeBand.label} Template to All Streams`
+                  : `Apply Template to All Grade ${selectedGrade} Streams`}
+              </span>
             </button>
           </div>
         )}
@@ -495,8 +565,46 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
       {/* Sub-view 1: Grade Template */}
       {subTab === 'grade_template' && (
         <div className="space-y-3">
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-[11px] text-slate-600">
-            Weekly subject targets are configured independently for each grade. Generation schedules each stream around shared teacher and room availability, skips breaks and lunch, and preserves locked lessons when regenerating.
+          {/* Grade-Band Allocation Summary Strip */}
+          <div className="bg-white border border-slate-200 rounded-xl divide-y sm:divide-y-0 sm:divide-x divide-slate-200 grid grid-cols-1 sm:grid-cols-4 text-xs">
+            <div className="p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Active Band Scope</div>
+              <div className="font-bold text-slate-900 mt-0.5">
+                {selectedGradeBand ? `${selectedGradeBand.label} · ${selectedGradeBand.subtitle}` : `Grade ${selectedGrade}`}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {applyEditsToWholeBand && selectedGradeBand && selectedGradeBand.grades.length > 1
+                  ? `Edits feed Grades ${selectedGradeBand.grades.join(', ')}`
+                  : `Editing Grade ${selectedGrade} only`}
+              </div>
+            </div>
+            <div className="p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Listed Subjects</div>
+              <div className="font-mono tabular-nums font-bold text-base text-slate-900 mt-0.5">
+                {bandSummary.subjectCount}
+              </div>
+              <div className="text-[11px] text-slate-500">Active in band curriculum</div>
+            </div>
+            <div className="p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Weekly Lessons Fed</div>
+              <div
+                className={`font-mono tabular-nums font-bold text-base mt-0.5 ${
+                  bandSummary.totalWeeklyFed > bandSummary.weeklyCapacity ? 'text-rose-700' : 'text-emerald-700'
+                }`}
+              >
+                {bandSummary.totalWeeklyFed} / {bandSummary.weeklyCapacity} periods
+              </div>
+              <div className="text-[11px] text-slate-500">Teaching slots (breaks &amp; lunch excluded)</div>
+            </div>
+            <div className="p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Shared Resources &amp; Streams</div>
+              <div className="font-mono tabular-nums font-bold text-base text-slate-900 mt-0.5">
+                {bandSummary.bandStreamsCount} streams
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Locked lessons, breaks &amp; rooms reserved collision-free
+              </div>
+            </div>
           </div>
           {/* Add Subject to Grade Template Bar */}
           <form

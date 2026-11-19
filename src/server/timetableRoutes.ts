@@ -1095,21 +1095,28 @@ export function registerTimetableRoutes(app: Express): void {
     const db = getDb();
     const { configId } = ensureTenantTimetableSeeded(db, tenantId, req.authSession!.userId);
     const b = req.body || {};
-    if (!b.grade || !b.subjectName) {
-      res.status(400).json({ error: 'Grade and subjectName are required.' });
+    const targetGradesRaw: number[] = Array.isArray(b.targetGrades) && b.targetGrades.length > 0
+      ? Array.from(new Set<number>(b.targetGrades.map((g: any) => Number(g)).filter((g: number) => Number.isFinite(g) && g >= 1 && g <= 12)))
+      : b.grade
+      ? [Number(b.grade)]
+      : [];
+
+    if (targetGradesRaw.length === 0 || !b.subjectName) {
+      res.status(400).json({ error: 'Target grade(s) and subjectName are required.' });
       return;
     }
 
-    const grade = Number(b.grade);
     const subjectName = String(b.subjectName).trim();
     const isActive = b.isActive !== false;
 
-    const gradeSched = db
-      .prepare(`SELECT periods_per_day, working_days_json, assembly_period FROM tt_grade_schedules WHERE config_id = ? AND grade = ?`)
-      .get(configId, grade) as any;
-    if (!gradeSched) {
-      res.status(400).json({ error: `Grade ${grade} is not an active configured grade in timetable setup.` });
-      return;
+    for (const g of targetGradesRaw) {
+      const gradeSched = db
+        .prepare(`SELECT periods_per_day, working_days_json, assembly_period FROM tt_grade_schedules WHERE config_id = ? AND grade = ?`)
+        .get(configId, g) as any;
+      if (!gradeSched) {
+        res.status(400).json({ error: `Grade ${g} is not an active configured grade in timetable setup.` });
+        return;
+      }
     }
 
     const activeSubjectCount = (db.prepare(`SELECT COUNT(*) as c FROM tt_subjects WHERE tenant_id = ? AND is_active = 1`).get(tenantId) as any)?.c || 0;
@@ -1153,9 +1160,7 @@ export function registerTimetableRoutes(app: Express): void {
     }
 
     const now = new Date().toISOString();
-    const id = b.id || uid('ttga');
-
-    db.prepare(
+    const upsertStmt = db.prepare(
       `INSERT INTO tt_grade_subject_allocations
          (id, tenant_id, config_id, grade, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, default_room_id, teacher_ids_json, student_group_label, is_active, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1171,35 +1176,47 @@ export function registerTimetableRoutes(app: Express): void {
          preferred_periods_json = excluded.preferred_periods_json,
          required_room_type = excluded.required_room_type,
          default_room_id = excluded.default_room_id,
-         teacher_ids_json = excluded.teacher_ids_json,
+         teacher_ids_json = CASE WHEN json_array_length(excluded.teacher_ids_json) > 0 THEN excluded.teacher_ids_json ELSE tt_grade_subject_allocations.teacher_ids_json END,
          student_group_label = excluded.student_group_label,
          is_active = excluded.is_active,
          updated_at = excluded.updated_at`
-    ).run(
-      id,
-      tenantId,
-      configId,
-      grade,
-      String(b.subjectName).trim(),
-      required,
-      single,
-      dbl,
-      triple,
-      String(b.patternPreference || 'spread'),
-      Math.max(1, Number(b.maxPerDay || 1)),
-      Math.max(0, Number(b.minSpacingDays || 0)),
-      JSON.stringify(Array.isArray(b.preferredDays) ? b.preferredDays : []),
-      JSON.stringify(Array.isArray(b.preferredPeriods) ? b.preferredPeriods : []),
-      String(b.requiredRoomType || 'general'),
-      b.defaultRoomId || null,
-      JSON.stringify(teacherIds),
-      String(b.studentGroupLabel || 'Whole Class'),
-      b.isActive === false ? 0 : 1,
-      now
     );
 
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const targetGrade of targetGradesRaw) {
+        const rowId = targetGradesRaw.length === 1 && b.id ? String(b.id) : uid('ttga');
+        upsertStmt.run(
+          rowId,
+          tenantId,
+          configId,
+          targetGrade,
+          subjectName,
+          required,
+          single,
+          dbl,
+          triple,
+          String(b.patternPreference || 'spread'),
+          Math.max(1, Number(b.maxPerDay || 1)),
+          Math.max(0, Number(b.minSpacingDays || 0)),
+          JSON.stringify(Array.isArray(b.preferredDays) ? b.preferredDays : []),
+          JSON.stringify(Array.isArray(b.preferredPeriods) ? b.preferredPeriods : []),
+          String(b.requiredRoomType || 'general'),
+          b.defaultRoomId || null,
+          JSON.stringify(teacherIds),
+          String(b.studentGroupLabel || 'Whole Class'),
+          b.isActive === false ? 0 : 1,
+          now
+        );
+      }
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+
     notifyMySqlTablesChanged(['tt_grade_subject_allocations']);
-    res.json({ ok: true });
+    res.json({ ok: true, gradesUpdated: targetGradesRaw });
   });
 
   app.delete('/api/timetable/allocations/grade/:id', requireAuth, (req: Request, res: Response) => {
@@ -1215,14 +1232,35 @@ export function registerTimetableRoutes(app: Express): void {
       res.status(404).json({ error: 'Grade subject allocation not found.' });
       return;
     }
-    db.prepare(`DELETE FROM tt_grade_subject_allocations WHERE id = ? AND tenant_id = ?`).run(req.params.id, tenantId);
-    db.prepare(
-      `DELETE FROM tt_stream_subject_allocations
-       WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(subject_name) = lower(?) AND is_overridden = 0`
-    ).run(existing.config_id, tenantId, existing.grade, existing.subject_name);
+
+    const bandGradesParam = String(req.query.bandGrades || '').trim();
+    const targetGrades = bandGradesParam
+      ? bandGradesParam
+          .split(',')
+          .map((x) => Number(x.trim()))
+          .filter((g) => Number.isFinite(g) && g >= 1 && g <= 12)
+      : [Number(existing.grade)];
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const g of targetGrades) {
+        db.prepare(
+          `DELETE FROM tt_grade_subject_allocations
+           WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(subject_name) = lower(?)`
+        ).run(existing.config_id, tenantId, g, existing.subject_name);
+        db.prepare(
+          `DELETE FROM tt_stream_subject_allocations
+           WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(subject_name) = lower(?) AND is_overridden = 0`
+        ).run(existing.config_id, tenantId, g, existing.subject_name);
+      }
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
 
     notifyMySqlTablesChanged(['tt_grade_subject_allocations', 'tt_stream_subject_allocations']);
-    res.json({ ok: true });
+    res.json({ ok: true, gradesUpdated: targetGrades });
   });
 
   app.delete('/api/timetable/allocations/stream/:id', requireAuth, (req: Request, res: Response) => {
@@ -1243,97 +1281,147 @@ export function registerTimetableRoutes(app: Express): void {
 
     const db = getDb();
     const { configId } = ensureTenantTimetableSeeded(db, tenantId, req.authSession!.userId);
-    const { grade, overwriteOverridden = false } = req.body || {};
-    if (!grade) {
-      res.status(400).json({ error: 'Target grade is required.' });
+    const { grade, grades, overwriteOverridden = false, overwriteTeachers = false } = req.body || {};
+
+    const targetGrades: number[] = Array.isArray(grades) && grades.length > 0
+      ? Array.from(new Set<number>(grades.map((g: any) => Number(g)).filter((g: number) => Number.isFinite(g) && g >= 1 && g <= 12)))
+      : grade
+      ? [Number(grade)]
+      : [];
+
+    if (targetGrades.length === 0) {
+      res.status(400).json({ error: 'Target grade or grade band list is required.' });
       return;
     }
 
-    const targetGrade = Number(grade);
-    const gradeTemplates = db
-      .prepare(`SELECT * FROM tt_grade_subject_allocations WHERE config_id = ? AND grade = ?`)
-      .all(configId, targetGrade) as any[];
-    const wholeGroups = db
-      .prepare(`SELECT * FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND is_whole_class = 1`)
-      .all(tenantId, targetGrade) as any[];
+    // Build lookup of stream-specific subject teachers from academic hierarchy so stream teacher assignments are strictly honored
+    const ttTeacherByUserId = new Map<string, string>();
+    for (const tp of db.prepare(`SELECT id, user_id FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]) {
+      ttTeacherByUserId.set(String(tp.user_id), String(tp.id));
+    }
+    const explicitStreamTeacherMap = new Map<string, string>();
+    try {
+      const gtaRows = db
+        .prepare(
+          `SELECT gta.teacher_id, gta.subject_name, g.grade_number, g.name as grade_name, s.name as stream_name
+           FROM grade_teacher_assignments gta
+           JOIN grades g ON g.id = gta.grade_id
+           JOIN streams s ON s.id = gta.stream_id
+           WHERE gta.school_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL`
+        )
+        .all(tenantId) as any[];
+      for (const r of gtaRows) {
+        const gNum = Number(r.grade_number || String(r.grade_name || '').match(/\d+/)?.[0] || 0);
+        const ttTid = ttTeacherByUserId.get(String(r.teacher_id));
+        if (gNum > 0 && r.stream_name && ttTid) {
+          explicitStreamTeacherMap.set(
+            `${gNum}::${String(r.stream_name).toLowerCase()}::${String(r.subject_name).toLowerCase()}`,
+            ttTid
+          );
+        }
+      }
+    } catch {
+      // ignore if hierarchy tables not yet populated
+    }
 
     const now = new Date().toISOString();
     let updatedCount = 0;
 
     db.exec('BEGIN IMMEDIATE');
     try {
-      for (const wg of wholeGroups) {
-        const stream = String(wg.stream);
-        for (const tpl of gradeTemplates) {
-          const existing = db
-            .prepare(
-              `SELECT id, is_overridden FROM tt_stream_subject_allocations
-               WHERE config_id = ? AND grade = ? AND stream = ? AND lower(subject_name) = lower(?) AND (group_id = ? OR group_id IS NULL)`
-            )
-            .get(configId, targetGrade, stream, String(tpl.subject_name), String(wg.id)) as any;
+      for (const targetGrade of targetGrades) {
+        const gradeTemplates = db
+          .prepare(`SELECT * FROM tt_grade_subject_allocations WHERE config_id = ? AND grade = ?`)
+          .all(configId, targetGrade) as any[];
+        const wholeGroups = db
+          .prepare(`SELECT * FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND is_whole_class = 1`)
+          .all(tenantId, targetGrade) as any[];
 
-          if (existing && Number(existing.is_overridden) === 1 && !overwriteOverridden) {
-            continue; // Respect explicit stream override unless requested
-          }
+        for (const wg of wholeGroups) {
+          const stream = String(wg.stream);
+          for (const tpl of gradeTemplates) {
+            const existing = db
+              .prepare(
+                `SELECT id, is_overridden, teacher_ids_json FROM tt_stream_subject_allocations
+                 WHERE config_id = ? AND grade = ? AND stream = ? AND lower(subject_name) = lower(?) AND (group_id = ? OR group_id IS NULL)`
+              )
+              .get(configId, targetGrade, stream, String(tpl.subject_name), String(wg.id)) as any;
 
-          if (existing) {
-            db.prepare(
-              `UPDATE tt_stream_subject_allocations
-               SET inherited_from_id = ?, is_overridden = 0, required_weekly_periods = ?, single_lessons = ?, double_lessons = ?, triple_lessons = ?,
-                   pattern_preference = ?, max_per_day = ?, min_spacing_days = ?, preferred_days_json = ?, preferred_periods_json = ?,
-                   required_room_type = ?, room_id = COALESCE(?, room_id), teacher_ids_json = CASE WHEN json_array_length(?) > 0 THEN ? ELSE teacher_ids_json END,
-                   is_active = ?, updated_at = ?
-               WHERE id = ?`
-            ).run(
-              tpl.id,
-              tpl.required_weekly_periods,
-              tpl.single_lessons,
-              tpl.double_lessons,
-              tpl.triple_lessons,
-              tpl.pattern_preference,
-              tpl.max_per_day,
-              tpl.min_spacing_days,
-              tpl.preferred_days_json,
-              tpl.preferred_periods_json,
-              tpl.required_room_type,
-              tpl.default_room_id,
-              tpl.teacher_ids_json,
-              tpl.teacher_ids_json,
-              tpl.is_active,
-              now,
-              existing.id
+            if (existing && Number(existing.is_overridden) === 1 && !overwriteOverridden) {
+              continue; // Respect explicit stream override unless requested
+            }
+
+            const linkedStreamTeacher = explicitStreamTeacherMap.get(
+              `${targetGrade}::${stream.toLowerCase()}::${String(tpl.subject_name).toLowerCase()}`
             );
-          } else {
-            db.prepare(
-              `INSERT INTO tt_stream_subject_allocations
-                 (id, tenant_id, config_id, grade, stream, group_id, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            ).run(
-              uid('ttsa'),
-              tenantId,
-              configId,
-              targetGrade,
-              stream,
-              String(wg.id),
-              tpl.subject_name,
-              tpl.id,
-              tpl.required_weekly_periods,
-              tpl.single_lessons,
-              tpl.double_lessons,
-              tpl.triple_lessons,
-              tpl.pattern_preference,
-              tpl.max_per_day,
-              tpl.min_spacing_days,
-              tpl.preferred_days_json,
-              tpl.preferred_periods_json,
-              tpl.required_room_type,
-              tpl.default_room_id,
-              tpl.teacher_ids_json,
-              tpl.is_active,
-              now
-            );
+            const fallbackTeachersJson = linkedStreamTeacher
+              ? JSON.stringify([linkedStreamTeacher])
+              : String(tpl.teacher_ids_json || '[]');
+
+            if (existing) {
+              const existingTeachers = safeJsonParse<string[]>(existing.teacher_ids_json, []).filter(Boolean);
+              const resolvedTeachersJson =
+                !overwriteTeachers && existingTeachers.length > 0
+                  ? JSON.stringify(existingTeachers)
+                  : fallbackTeachersJson;
+
+              db.prepare(
+                `UPDATE tt_stream_subject_allocations
+                 SET inherited_from_id = ?, is_overridden = 0, required_weekly_periods = ?, single_lessons = ?, double_lessons = ?, triple_lessons = ?,
+                     pattern_preference = ?, max_per_day = ?, min_spacing_days = ?, preferred_days_json = ?, preferred_periods_json = ?,
+                     required_room_type = ?, room_id = COALESCE(?, room_id), teacher_ids_json = ?,
+                     is_active = ?, updated_at = ?
+                 WHERE id = ?`
+              ).run(
+                tpl.id,
+                tpl.required_weekly_periods,
+                tpl.single_lessons,
+                tpl.double_lessons,
+                tpl.triple_lessons,
+                tpl.pattern_preference,
+                tpl.max_per_day,
+                tpl.min_spacing_days,
+                tpl.preferred_days_json,
+                tpl.preferred_periods_json,
+                tpl.required_room_type,
+                tpl.default_room_id,
+                resolvedTeachersJson,
+                tpl.is_active,
+                now,
+                existing.id
+              );
+            } else {
+              db.prepare(
+                `INSERT INTO tt_stream_subject_allocations
+                   (id, tenant_id, config_id, grade, stream, group_id, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+              ).run(
+                uid('ttsa'),
+                tenantId,
+                configId,
+                targetGrade,
+                stream,
+                String(wg.id),
+                tpl.subject_name,
+                tpl.id,
+                tpl.required_weekly_periods,
+                tpl.single_lessons,
+                tpl.double_lessons,
+                tpl.triple_lessons,
+                tpl.pattern_preference,
+                tpl.max_per_day,
+                tpl.min_spacing_days,
+                tpl.preferred_days_json,
+                tpl.preferred_periods_json,
+                tpl.required_room_type,
+                tpl.default_room_id,
+                fallbackTeachersJson,
+                tpl.is_active,
+                now
+              );
+            }
+            updatedCount++;
           }
-          updatedCount++;
         }
       }
       writeAudit(
@@ -1343,7 +1431,7 @@ export function registerTimetableRoutes(app: Express): void {
         req.authSession!.userId,
         String(req.authSession!.user.name || 'Admin'),
         String(req.authSession!.role),
-        { grade: targetGrade, updatedCount, overwriteOverridden }
+        { grades: targetGrades, updatedCount, overwriteOverridden, overwriteTeachers }
       );
       db.exec('COMMIT');
     } catch (e) {
@@ -1352,7 +1440,7 @@ export function registerTimetableRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(['tt_stream_subject_allocations', 'tt_audit_logs']);
-    res.json({ ok: true, updatedCount });
+    res.json({ ok: true, updatedCount, gradesSynced: targetGrades });
   });
 
   app.put('/api/timetable/allocations/stream', requireAuth, (req: Request, res: Response) => {

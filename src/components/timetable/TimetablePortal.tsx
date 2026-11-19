@@ -28,6 +28,7 @@ import { TimetableAllocationsPanel } from './TimetableAllocationsPanel';
 import { TimetableTeachersPanel } from './TimetableTeachersPanel';
 import { TimetableDragDropEditor } from './TimetableDragDropEditor';
 import { TimetableVersionsAndReportsPanel } from './TimetableVersionsAndReportsPanel';
+import { TeacherLoadDashboard } from './TeacherLoadDashboard';
 import { ScrollableMatrixTableWrapper } from '../common/ResponsiveUIKit';
 import { 
   Calendar, 
@@ -72,7 +73,8 @@ import {
   Sliders,
   UserCog,
   FileSpreadsheet,
-  LayoutGrid
+  LayoutGrid,
+  BarChart3
 } from 'lucide-react';
 
 interface TimetablePortalProps {
@@ -124,7 +126,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         'hod',
       ].includes(String(currentUser.role || '').toLowerCase()));
 
-  type SuiteTabId = 'published' | 'config' | 'allocations' | 'teachers' | 'editor' | 'approvals';
+  type SuiteTabId = 'published' | 'config' | 'allocations' | 'teachers' | 'load_dashboard' | 'editor' | 'approvals';
   const [suiteTab, setSuiteTab] = useState<SuiteTabId>('published');
   const [ttWorkspace, setTtWorkspace] = useState<TTWorkspacePayload | null>(null);
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
@@ -1257,6 +1259,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 { id: 'config', label: '1. Config, Subjects & Depts', icon: Sliders },
                 { id: 'allocations', label: '2. Allocations & Groups', icon: Layers },
                 { id: 'teachers', label: '3. Teachers & Limits', icon: UserCog },
+                { id: 'load_dashboard', label: 'Teacher Load Dashboard', icon: BarChart3 },
                 { id: 'editor', label: '4. Auto-Solver & Editor', icon: Sparkles },
                 { id: 'approvals', label: '5. Approvals & Reports', icon: FileSpreadsheet },
               ] as const
@@ -1339,6 +1342,17 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   config={ttWorkspace.config}
                   periods={ttWorkspace.periods}
                   onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'load_dashboard' && (
+                <TeacherLoadDashboard
+                  currentUser={currentUser}
+                  workspace={ttWorkspace}
+                  onOpenTimetableEditor={() => setSuiteTab('editor')}
+                  onRefreshWorkspace={async () => {
                     await loadWorkspace(ttWorkspace.activeVersion?.id);
                   }}
                 />

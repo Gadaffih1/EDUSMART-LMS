@@ -113,36 +113,80 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [tempBellSchedule, setTempBellSchedule] = useState<BellPeriodDef[]>([]);
 
   const { currentTenant } = useTenant();
+  const ADMIN_SUITE_ROLES = [
+    'admin',
+    'head_teacher',
+    'deputy_head',
+    'dean_of_studies',
+    'curriculum_coordinator',
+    'school_admin_staff',
+    'senior_teacher',
+    'hod',
+  ];
+  const heldUserRoles = [
+    String(currentUser.role || '').toLowerCase(),
+    ...(Array.isArray(currentUser.assignedRoles)
+      ? currentUser.assignedRoles.map((r) => String(r || '').toLowerCase())
+      : []),
+    ...(currentUser.doubleAccessConfig?.enabled && currentUser.doubleAccessConfig.secondaryRole
+      ? [String(currentUser.doubleAccessConfig.secondaryRole).toLowerCase()]
+      : []),
+  ];
   const isTimetableAdminUser =
     !readOnly &&
     (currentUser.accessScope === 'super_admin_only' ||
-      [
-        'admin',
-        'head_teacher',
-        'deputy_head',
-        'dean_of_studies',
-        'curriculum_coordinator',
-        'school_admin_staff',
-        'senior_teacher',
-        'hod',
-      ].includes(String(currentUser.role || '').toLowerCase()));
+      heldUserRoles.some((r) => ADMIN_SUITE_ROLES.includes(r)));
 
   type SuiteTabId = 'published' | 'config' | 'allocations' | 'teachers' | 'load_dashboard' | 'editor' | 'approvals';
   const [suiteTab, setSuiteTab] = useState<SuiteTabId>('published');
   const [ttWorkspace, setTtWorkspace] = useState<TTWorkspacePayload | null>(null);
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [resettingWorkspace, setResettingWorkspace] = useState(false);
+  const [showResetPanel, setShowResetPanel] = useState(false);
+  const [resetBanner, setResetBanner] = useState<string | null>(null);
 
   const loadWorkspace = async (versionId?: string) => {
     if (!isTimetableAdminUser) return;
     setLoadingWorkspace(true);
+    setWorkspaceError(null);
     try {
       const qs = versionId ? `?versionId=${encodeURIComponent(versionId)}` : '';
       const data = await ttApiFetch<TTWorkspacePayload>(`/api/timetable/workspace${qs}`);
       setTtWorkspace(data);
-    } catch {
-      // Fallback to local state if session/network not yet hydrated
+    } catch (err: any) {
+      setWorkspaceError(err?.message || 'Unable to sync the timetable workspace. Click Retry or Reset & Enable.');
     } finally {
       setLoadingWorkspace(false);
+    }
+  };
+
+  const handleResetTimetableWorkspace = async (resetAllocations: boolean) => {
+    if (!isTimetableAdminUser) return;
+    setResettingWorkspace(true);
+    setWorkspaceError(null);
+    setResetBanner(null);
+    try {
+      const res = await ttApiFetch<{ ok: boolean; versionId: string; versionName: string }>(
+        '/api/timetable/workspace/reset',
+        {
+          method: 'POST',
+          body: JSON.stringify({ resetAllocations }),
+        }
+      );
+      setShowResetPanel(false);
+      await loadWorkspace(res.versionId);
+      await loadPublishedBackendSchedule();
+      setResetBanner(
+        resetAllocations
+          ? `Timetable workspace reset to clean CBC grade-band defaults and unlocked (${res.versionName}). All suite sections are enabled.`
+          : `Timetable unlocked on a fresh editable draft (${res.versionName}). All suite sections are enabled and ready.`
+      );
+      window.setTimeout(() => setResetBanner(null), 7000);
+    } catch (err: any) {
+      setWorkspaceError(err?.message || 'Failed to reset timetable workspace.');
+    } finally {
+      setResettingWorkspace(false);
     }
   };
 
@@ -1252,53 +1296,155 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           INTELLIGENT TIMETABLE MANAGEMENT SUITE NAVIGATION (ADMIN)
           ======================================================== */}
       {isTimetableAdminUser && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1">
-            {(
-              [
-                { id: 'published', label: 'Published Views', icon: LayoutGrid },
-                { id: 'config', label: '1. Config, Subjects & Depts', icon: Sliders },
-                { id: 'allocations', label: '2. Allocations & Groups', icon: Layers },
-                { id: 'teachers', label: '3. Teachers & Limits', icon: UserCog },
-                { id: 'load_dashboard', label: 'Teacher Load Dashboard', icon: BarChart3 },
-                { id: 'editor', label: '4. Auto-Solver & Editor', icon: Sparkles },
-                { id: 'approvals', label: '5. Approvals & Reports', icon: FileSpreadsheet },
-              ] as const
-            ).map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => {
-                    setSuiteTab(tab.id);
-                    if (tab.id !== 'published' && !ttWorkspace) {
-                      loadWorkspace();
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                    suiteTab === tab.id
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
+        <div className="bg-white border border-slate-200 rounded-2xl p-2 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1">
+              {(
+                [
+                  { id: 'published', label: 'Published Views', icon: LayoutGrid },
+                  { id: 'config', label: '1. Config, Subjects & Depts', icon: Sliders },
+                  { id: 'allocations', label: '2. Allocations & Groups', icon: Layers },
+                  { id: 'teachers', label: '3. Teachers & Limits', icon: UserCog },
+                  { id: 'load_dashboard', label: 'Teacher Load Dashboard', icon: BarChart3 },
+                  { id: 'editor', label: '4. Auto-Solver & Editor', icon: Sparkles },
+                  { id: 'approvals', label: '5. Approvals & Reports', icon: FileSpreadsheet },
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setSuiteTab(tab.id);
+                      if (tab.id !== 'published' && (!ttWorkspace || workspaceError)) {
+                        loadWorkspace();
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      suiteTab === tab.id
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2 px-1">
+              {loadingWorkspace && (
+                <span className="text-[11px] font-mono text-slate-500">Syncing...</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowResetPanel((v) => !v)}
+                disabled={resettingWorkspace}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${resettingWorkspace ? 'animate-spin' : ''}`} />
+                <span>Reset &amp; Enable Suite</span>
+              </button>
+            </div>
           </div>
-          {loadingWorkspace && (
-            <span className="text-[11px] font-mono text-slate-500 px-2">Syncing workspace...</span>
+
+          {showResetPanel && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="text-xs text-slate-700">
+                <div className="font-bold text-slate-900">Reset &amp; Enable Timetable Management Suite</div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Unlocks read-only/published states onto a fresh editable draft, clears stuck solver jobs, and re-syncs all subjects, departments, and HoD links.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={resettingWorkspace}
+                  onClick={() => handleResetTimetableWorkspace(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer disabled:opacity-50"
+                >
+                  {resettingWorkspace ? 'Resetting...' : 'Unlock Fresh Draft (Keep Allocations)'}
+                </button>
+                <button
+                  type="button"
+                  disabled={resettingWorkspace}
+                  onClick={() => handleResetTimetableWorkspace(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer disabled:opacity-50"
+                >
+                  Reset to CBC Defaults
+                </button>
+                <button
+                  type="button"
+                  disabled={resettingWorkspace}
+                  onClick={() => setShowResetPanel(false)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {resetBanner && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl px-3.5 py-2 text-xs font-semibold flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{resetBanner}</span>
+              </div>
+              <button type="button" onClick={() => setResetBanner(null)} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
       )}
 
       {isTimetableAdminUser && suiteTab !== 'published' && (
         <div className="space-y-4">
-          {!ttWorkspace ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-xs text-slate-500">
-              Loading {currentTenant.name} intelligent timetable workspace...
+          {suiteTab === 'load_dashboard' ? (
+            <TeacherLoadDashboard
+              currentUser={currentUser}
+              workspace={ttWorkspace}
+              onOpenTimetableEditor={() => setSuiteTab('editor')}
+              onRefreshWorkspace={async () => {
+                await loadWorkspace(ttWorkspace?.activeVersion?.id);
+              }}
+            />
+          ) : !ttWorkspace ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-3">
+              {workspaceError ? (
+                <>
+                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-rose-50 text-rose-600">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div className="text-sm font-bold text-slate-900">Timetable Workspace Sync Interrupted</div>
+                  <p className="text-xs text-rose-700 max-w-md mx-auto">{workspaceError}</p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => loadWorkspace()}
+                      disabled={loadingWorkspace}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white hover:bg-slate-800 cursor-pointer disabled:opacity-50"
+                    >
+                      {loadingWorkspace ? 'Retrying...' : 'Retry Sync'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleResetTimetableWorkspace(false)}
+                      disabled={resettingWorkspace}
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                    >
+                      {resettingWorkspace ? 'Resetting...' : 'Reset & Enable Workspace'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-slate-500">
+                  Loading {currentTenant.name} intelligent timetable workspace...
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -1343,17 +1489,6 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   config={ttWorkspace.config}
                   periods={ttWorkspace.periods}
                   onRefresh={async () => {
-                    await loadWorkspace(ttWorkspace.activeVersion?.id);
-                  }}
-                />
-              )}
-
-              {suiteTab === 'load_dashboard' && (
-                <TeacherLoadDashboard
-                  currentUser={currentUser}
-                  workspace={ttWorkspace}
-                  onOpenTimetableEditor={() => setSuiteTab('editor')}
-                  onRefreshWorkspace={async () => {
                     await loadWorkspace(ttWorkspace.activeVersion?.id);
                   }}
                 />

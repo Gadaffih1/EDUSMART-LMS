@@ -237,7 +237,7 @@ export function registerTimetableRoutes(app: Express): void {
 
     // Auto-link any department missing hod_user_id when a tenant HoD user already belongs to that department
     const tenantUsersForHod = db
-      .prepare(`SELECT id, name, role, payload_json FROM users WHERE school_id = ? AND status = 'active'`)
+      .prepare(`SELECT id, name, role, payload_json FROM users WHERE school_id = ? AND is_active = 1`)
       .all(tenantId) as any[];
     const hodUsersByDept = new Map<string, { id: string; name: string }>();
     for (const u of tenantUsersForHod) {
@@ -453,6 +453,98 @@ export function registerTimetableRoutes(app: Express): void {
       allocationIssues,
       streamLoadSummary,
       auditLogs,
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // 1b. RESET & RE-ENABLE TIMETABLE WORKSPACE (Fresh Editable Draft + Optional CBC Allocation Reset)
+  // ------------------------------------------------------------------
+  app.post('/api/timetable/workspace/reset', requireAuth, (req: Request, res: Response) => {
+    const tenantId = resolveAuthorizedTenantId(req, res);
+    if (!tenantId) return;
+    if (!requireTimetableAdmin(req, res)) return;
+
+    const db = getDb();
+    const actorId = req.authSession!.userId;
+    const actorName = String(req.authSession!.user?.name || 'Administrator');
+    const actorRole = String(req.authSession!.role || 'admin');
+    const resetAllocations = Boolean(req.body?.resetAllocations);
+    const now = new Date().toISOString();
+
+    const { configId } = ensureTenantTimetableSeeded(db, tenantId, actorId);
+
+    let newVerId = '';
+    let nextNum = 1;
+    let newName = '';
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // 1. Cancel any stale queued or running generation jobs so the Auto-Solver is never stuck
+      db.prepare(
+        `UPDATE tt_generation_jobs
+         SET status = 'cancelled', stage_message = 'Cleared during timetable workspace reset', completed_at = ?
+         WHERE tenant_id = ? AND status IN ('queued', 'running')`
+      ).run(now, tenantId);
+
+      // 2. Optionally reset grade & stream allocations to clean CBC Grade-Band defaults (Grades 1-3, 4-6, 7-9)
+      if (resetAllocations) {
+        db.prepare(`DELETE FROM tt_stream_subject_allocations WHERE config_id = ? AND tenant_id = ?`).run(configId, tenantId);
+        db.prepare(`DELETE FROM tt_grade_subject_allocations WHERE config_id = ? AND tenant_id = ?`).run(configId, tenantId);
+      }
+
+      // 3. Create a fresh unlocked editable Draft version and make it active
+      const maxVer = (db.prepare(`SELECT MAX(version_number) as m FROM tt_versions WHERE config_id = ?`).get(configId) as any)?.m || 0;
+      nextNum = Number(maxVer) + 1;
+      newVerId = uid('ttver');
+      newName = resetAllocations
+        ? `Reset CBC Master Draft v${nextNum}`
+        : `Fresh Editable Draft v${nextNum}`;
+
+      db.prepare(
+        `INSERT INTO tt_versions
+           (id, tenant_id, config_id, version_number, name, status, metrics_json, review_comments, created_by, created_by_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'draft', '{}', '', ?, ?, ?, ?)`
+      ).run(newVerId, tenantId, configId, nextNum, newName, actorId, actorName, now, now);
+
+      db.prepare(`UPDATE tt_configs SET active_version_id = ?, updated_by = ?, updated_at = ? WHERE id = ?`).run(
+        newVerId,
+        actorId,
+        now,
+        configId
+      );
+
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+
+    // 4. Re-seed any missing subjects (incl. French, Swimming, Library Lesson, Arts, Music, Nutrition), departments, teachers, and (if cleared) allocations
+    ensureTenantTimetableSeeded(db, tenantId, actorId);
+    validateTimetableVersion(db, newVerId);
+    writeAudit(tenantId, newVerId, 'WORKSPACE_RESET', actorId, actorName, actorRole, {
+      resetAllocations,
+      versionNumber: nextNum,
+      versionName: newName,
+    });
+    notifyMySqlTablesChanged([
+      'tt_configs',
+      'tt_versions',
+      'tt_generation_jobs',
+      'tt_subjects',
+      'tt_departments',
+      'tt_grade_subject_allocations',
+      'tt_stream_subject_allocations',
+      'tt_validation_conflicts',
+      'tt_audit_logs',
+    ]);
+
+    res.json({
+      ok: true,
+      versionId: newVerId,
+      versionNumber: nextNum,
+      versionName: newName,
+      resetAllocations,
     });
   });
 
@@ -2437,7 +2529,7 @@ export function registerTimetableRoutes(app: Express): void {
   app.post('/api/timetable/versions/:id/approve', requireAuth, (req: Request, res: Response) => {
     const tenantId = resolveAuthorizedTenantId(req, res);
     if (!tenantId) return;
-    if (!req.authSession!.isSuperAdmin && !APPROVER_ROLES.has(String(req.authSession!.role || '').toLowerCase())) {
+    if (!req.authSession!.isSuperAdmin && !sessionHasAnyRole(req.authSession, APPROVER_ROLES)) {
       res.status(403).json({ error: 'Only authorized school officials (Admin, Head Teacher, Deputy Head, Dean of Studies) may approve timetables.' });
       return;
     }
@@ -2472,7 +2564,7 @@ export function registerTimetableRoutes(app: Express): void {
   app.post('/api/timetable/versions/:id/reject', requireAuth, (req: Request, res: Response) => {
     const tenantId = resolveAuthorizedTenantId(req, res);
     if (!tenantId) return;
-    if (!req.authSession!.isSuperAdmin && !APPROVER_ROLES.has(String(req.authSession!.role || '').toLowerCase())) {
+    if (!req.authSession!.isSuperAdmin && !sessionHasAnyRole(req.authSession, APPROVER_ROLES)) {
       res.status(403).json({ error: 'Only authorized school officials may reject timetable reviews.' });
       return;
     }
@@ -2490,7 +2582,7 @@ export function registerTimetableRoutes(app: Express): void {
   app.post('/api/timetable/versions/:id/publish', requireAuth, (req: Request, res: Response) => {
     const tenantId = resolveAuthorizedTenantId(req, res);
     if (!tenantId) return;
-    if (!req.authSession!.isSuperAdmin && !APPROVER_ROLES.has(String(req.authSession!.role || '').toLowerCase())) {
+    if (!req.authSession!.isSuperAdmin && !sessionHasAnyRole(req.authSession, APPROVER_ROLES)) {
       res.status(403).json({ error: 'Only authorized school officials may publish timetables.' });
       return;
     }
@@ -2544,7 +2636,7 @@ export function registerTimetableRoutes(app: Express): void {
   app.post('/api/timetable/versions/:id/withdraw', requireAuth, (req: Request, res: Response) => {
     const tenantId = resolveAuthorizedTenantId(req, res);
     if (!tenantId) return;
-    if (!req.authSession!.isSuperAdmin && !APPROVER_ROLES.has(String(req.authSession!.role || '').toLowerCase())) {
+    if (!req.authSession!.isSuperAdmin && !sessionHasAnyRole(req.authSession, APPROVER_ROLES)) {
       res.status(403).json({ error: 'Only authorized school officials may withdraw published timetables.' });
       return;
     }

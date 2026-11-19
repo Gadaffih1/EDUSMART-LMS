@@ -284,6 +284,30 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
     }
   };
 
+  const handleUnlockEditableDraft = async () => {
+    if (!activeVersion) return;
+    setBusyAction(true);
+    setFeedback(null);
+    try {
+      const res = await ttApiFetch<{ id: string; name: string }>(
+        `/api/timetable/versions/${activeVersion.id}/restore`,
+        {
+          method: 'POST',
+          body: JSON.stringify({}),
+        }
+      );
+      setFeedback({
+        type: 'ok',
+        title: `Unlocked editable draft "${res.name}". Auto-Solver and Drag & Drop editing are now enabled.`,
+      });
+      await onRefresh(res.id);
+    } catch (err: any) {
+      setFeedback({ type: 'err', title: err?.message || 'Unable to create an editable draft from this version.' });
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
   const handleToggleLock = async (entry: TTEntryItem) => {
     if (!activeVersion || isLockedVersion) return;
     try {
@@ -504,6 +528,17 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {isLockedVersion && (
+              <button
+                type="button"
+                disabled={busyAction}
+                onClick={handleUnlockEditableDraft}
+                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Unlock className="w-3.5 h-3.5" />
+                <span>Unlock Editable Draft</span>
+              </button>
+            )}
             <button
               type="button"
               disabled={busyAction || isLockedVersion || (activeJob?.status === 'running' || activeJob?.status === 'queued')}
@@ -712,8 +747,19 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         <div className="xl:col-span-9 bg-white border border-slate-200 rounded-xl overflow-hidden">
           {isLockedVersion && (
-            <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs font-semibold text-amber-900">
-              This timetable version is {activeVersion.status.toUpperCase()} and read-only. Restore it as a new Draft in Approvals & Reports to make changes.
+            <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-xs font-semibold text-amber-900 flex flex-wrap items-center justify-between gap-2">
+              <span>
+                This timetable version is <strong>{activeVersion.status.toUpperCase()}</strong> and read-only. Unlock a fresh editable draft to auto-generate or drag lessons.
+              </span>
+              <button
+                type="button"
+                disabled={busyAction}
+                onClick={handleUnlockEditableDraft}
+                className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <Unlock className="w-3 h-3 text-emerald-400" />
+                <span>Unlock as Editable Draft</span>
+              </button>
             </div>
           )}
 

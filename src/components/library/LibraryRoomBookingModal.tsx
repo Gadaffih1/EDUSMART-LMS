@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   User, 
   LibraryRoom, 
@@ -93,21 +94,43 @@ function timesOverlap(startA: string, endA: string, startB: string, endB: string
   return Math.max(a1, b1) < Math.min(a2, b2);
 }
 
+const FALLBACK_LIBRARY_ROOM: LibraryRoom = {
+  id: 'room-main-hall',
+  name: 'Main Library Reading Hall',
+  type: 'Reading Hall',
+  capacity: 60,
+  location: 'Ground Floor · Central Wing',
+  features: ['Quiet Reading Tables', 'Reference Encyclopedias & Atlases'],
+  description: 'Spacious school library reading and research hall for guided lessons and CBC study sessions.',
+};
+
 export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = ({
   currentUser,
   isOpen,
   onClose,
   onBookingSuccess
 }) => {
-  const rooms = useMemo(() => Storage.getLibraryRooms(), []);
+  const safeUserId = currentUser?.id || 'faculty-user';
+  const safeUserName = currentUser?.name || 'Subject Teacher';
+  const safeUserRole = currentUser?.role || 'teacher';
+
+  const [roomsList, setRoomsList] = useState<LibraryRoom[]>(() => {
+    const loaded = Storage.getLibraryRooms();
+    return Array.isArray(loaded) && loaded.length > 0 ? loaded : [FALLBACK_LIBRARY_ROOM];
+  });
+  const rooms = useMemo(
+    () => (roomsList.length > 0 ? roomsList : [FALLBACK_LIBRARY_ROOM]),
+    [roomsList]
+  );
   const [activeTab, setActiveTab] = useState<'book' | 'matrix' | 'my_bookings'>('book');
 
   // Bookings & timetable state
   const [allBookings, setAllBookings] = useState<LibraryRoomBooking[]>(() => Storage.getLibraryRoomBookings());
   const [timetableSlots, setTimetableSlots] = useState<LibraryTimetableSlot[]>(() => Storage.getLibraryTimetable());
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   // Form inputs
-  const [selectedRoomId, setSelectedRoomId] = useState<string>(rooms[0]?.id || 'room-main-hall');
+  const [selectedRoomId, setSelectedRoomId] = useState<string>(rooms[0]?.id || FALLBACK_LIBRARY_ROOM.id);
   const [bookingDate, setBookingDate] = useState<string>(() => {
     // Default to tomorrow or next weekday
     const d = new Date();
@@ -117,10 +140,12 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   const [selectedPeriodNum, setSelectedPeriodNum] = useState<number>(3);
   
   // Requester fields
-  const [teacherName, setTeacherName] = useState(currentUser.name);
-  const [subject, setSubject] = useState<string>(currentUser.assignedSubjects?.[0] || 'Integrated Science');
-  const [grade, setGrade] = useState<GradeLevel>((currentUser.grade as GradeLevel) || 4);
-  const [stream, setStream] = useState<string>(currentUser.stream ? `Grade ${currentUser.grade || 4} ${currentUser.stream}` : 'Grade 4 Dove');
+  const [teacherName, setTeacherName] = useState(safeUserName);
+  const [subject, setSubject] = useState<string>(currentUser?.assignedSubjects?.[0] || 'Integrated Science');
+  const [grade, setGrade] = useState<GradeLevel>((currentUser?.grade as GradeLevel) || 4);
+  const [stream, setStream] = useState<string>(
+    currentUser?.stream ? `Grade ${currentUser?.grade || 4} ${currentUser.stream}` : 'Grade 4 Dove'
+  );
   const [purpose, setPurpose] = useState('CBC Research & Digital Learning Practicum');
   const [learnersCount, setLearnersCount] = useState<number>(32);
   const [equipmentNeeded, setEquipmentNeeded] = useState<string[]>([
@@ -136,19 +161,30 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
 
   // Sync with storage events
   React.useEffect(() => {
+    const handleRoomsUpdate = () => {
+      const loaded = Storage.getLibraryRooms();
+      setRoomsList(Array.isArray(loaded) && loaded.length > 0 ? loaded : [FALLBACK_LIBRARY_ROOM]);
+    };
     const handleBookingsUpdate = () => setAllBookings(Storage.getLibraryRoomBookings());
     const handleTimetableUpdate = () => setTimetableSlots(Storage.getLibraryTimetable());
 
+    window.addEventListener('library-rooms-updated', handleRoomsUpdate);
     window.addEventListener('library-room-bookings-updated', handleBookingsUpdate);
     window.addEventListener('library-timetable-updated', handleTimetableUpdate);
+    window.addEventListener('edusmart:data-changed', handleRoomsUpdate);
+    window.addEventListener('edusmart:data-changed', handleBookingsUpdate);
     return () => {
+      window.removeEventListener('library-rooms-updated', handleRoomsUpdate);
       window.removeEventListener('library-room-bookings-updated', handleBookingsUpdate);
       window.removeEventListener('library-timetable-updated', handleTimetableUpdate);
+      window.removeEventListener('edusmart:data-changed', handleRoomsUpdate);
+      window.removeEventListener('edusmart:data-changed', handleBookingsUpdate);
     };
   }, []);
 
-  // Selected Room Object
-  const selectedRoom = rooms.find(r => r.id === selectedRoomId) || rooms[0];
+  // Selected Room Object (guaranteed non-undefined)
+  const selectedRoom: LibraryRoom =
+    rooms.find(r => r && r.id === selectedRoomId) || rooms[0] || FALLBACK_LIBRARY_ROOM;
 
   // Derive day of week from selected booking date
   const selectedDayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' = useMemo(() => {
@@ -178,19 +214,20 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     booking?: LibraryRoomBooking;
     reason?: string;
   } => {
+    const safeRoomName = (roomName || '').toLowerCase();
     // 1. Check Library Lessons from timetable
     // A library lesson occurs if:
     // - slot day matches
     // - slot venue matches roomName OR session is general library session held in that venue
     // - time interval overlaps
-    const conflictingLesson = timetableSlots.find(slot => {
-      if (slot.dayOfWeek !== day) return false;
+    const conflictingLesson = (Array.isArray(timetableSlots) ? timetableSlots : []).find(slot => {
+      if (!slot || slot.dayOfWeek !== day) return false;
+      const safeVenue = (slot.venue || '').toLowerCase();
       
       const venueMatches = 
-        slot.venue.toLowerCase().includes(roomName.toLowerCase()) || 
-        roomName.toLowerCase().includes(slot.venue.toLowerCase()) ||
-        (roomName.includes('Main') && slot.venue.includes('Main')) ||
-        (roomName.includes('Digital') && slot.venue.includes('Digital'));
+        (safeVenue && safeRoomName && (safeVenue.includes(safeRoomName) || safeRoomName.includes(safeVenue))) ||
+        (safeRoomName.includes('main') && safeVenue.includes('main')) ||
+        (safeRoomName.includes('digital') && safeVenue.includes('digital'));
 
       if (!venueMatches) return false;
 
@@ -206,8 +243,8 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     }
 
     // 2. Check existing confirmed bookings
-    const conflictingBooking = allBookings.find(b => {
-      if (b.status === 'cancelled') return false;
+    const conflictingBooking = (Array.isArray(allBookings) ? allBookings : []).find(b => {
+      if (!b || b.status === 'cancelled') return false;
       if (b.date !== dateStr) return false;
       if (b.roomId !== roomId && b.roomName !== roomName) return false;
       return timesOverlap(period.startTime, period.endTime, b.startTime, b.endTime);
@@ -276,9 +313,9 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
       startTime: selectedPeriod.displayTime.split(' - ')[0],
       endTime: selectedPeriod.displayTime.split(' - ')[1],
       periodLabel: selectedPeriod.label,
-      bookedByUserId: currentUser.id,
+      bookedByUserId: safeUserId,
       bookedByName: teacherName,
-      bookedByRole: currentUser.role,
+      bookedByRole: safeUserRole,
       grade,
       stream,
       subject,
@@ -296,8 +333,8 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     Storage.addLibraryAuditLog({
       id: `aud-${Date.now()}`,
       action: 'Library Room Reserved',
-      performedBy: currentUser.name,
-      role: currentUser.role,
+      performedBy: safeUserName,
+      role: safeUserRole,
       timestamp: new Date().toISOString(),
       details: `Booked "${selectedRoom.name}" on ${bookingDate} (${selectedPeriod.label}) for ${stream} - ${purpose}`
     });
@@ -310,24 +347,27 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   };
 
   const handleCancelBooking = (id: string) => {
-    if (confirm('Are you sure you want to cancel this library room reservation? The spot will immediately become available for others.')) {
-      Storage.cancelLibraryRoomBooking(id);
-      setAllBookings(Storage.getLibraryRoomBookings());
-    }
+    Storage.cancelLibraryRoomBooking(id);
+    setAllBookings(Storage.getLibraryRoomBookings());
+    setConfirmCancelId(null);
   };
 
   // Filtered bookings
-  const displayedBookings = allBookings.filter(b => {
+  const displayedBookings = (Array.isArray(allBookings) ? allBookings : []).filter(b => {
+    if (!b) return false;
     if (bookingsFilter === 'mine') {
-      return b.bookedByUserId === currentUser.id || b.bookedByName === currentUser.name;
+      return b.bookedByUserId === safeUserId || b.bookedByName === safeUserName;
     }
     return true;
   });
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-6 overflow-y-auto"
+      onClick={onClose}
+    >
       <div 
         className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl my-auto overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -371,7 +411,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
           <div className="flex items-center gap-2 text-purple-900">
             <span className="font-semibold text-slate-600">Active User:</span>
             <span className="font-black bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs">
-              {currentUser.name} ({currentUser.role === 'librarian' ? 'Head Librarian' : 'Subject Teacher'})
+              {safeUserName} ({safeUserRole === 'librarian' ? 'Head Librarian' : 'Subject Teacher'})
             </span>
           </div>
 
@@ -1058,13 +1098,33 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
 
                         {bk.status === 'confirmed' && (
                           <div className="flex items-center gap-2 self-start sm:self-auto">
-                            <button
-                              onClick={() => handleCancelBooking(bk.id)}
-                              className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Cancel</span>
-                            </button>
+                            {confirmCancelId === bk.id ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelBooking(bk.id)}
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Confirm Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmCancelId(null)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Keep
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmCancelId(bk.id)}
+                                className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Cancel</span>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1073,7 +1133,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                         <div>
                           <span className="text-[11px] text-slate-400 font-medium">Booked By:</span>
                           <div className="font-bold text-slate-900">{bk.bookedByName}</div>
-                          <div className="text-[10px] text-purple-700 capitalize">{bk.bookedByRole.replace('_', ' ')}</div>
+                          <div className="text-[10px] text-purple-700 capitalize">{(bk.bookedByRole || 'teacher').replace(/_/g, ' ')}</div>
                         </div>
 
                         <div>
@@ -1108,4 +1168,6 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

@@ -2072,7 +2072,58 @@ export const Storage = {
 
   // Library Rooms & Room Booking Portal
   getLibraryRooms(): LibraryRoom[] {
-    return getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, []);
+    const defaultRooms: LibraryRoom[] = [
+      {
+        id: 'room-main-hall',
+        name: 'Main Library Reading Hall',
+        type: 'Reading Hall',
+        capacity: 60,
+        location: 'Ground Floor · Central Wing',
+        features: ['Quiet Reading Tables', 'Reference Encyclopedias & Atlases', 'Ceiling Projector & Screen'],
+        description: 'Spacious main reading and research hall ideal for full-class literacy sessions, guided reading, and CBC investigations.',
+      },
+      {
+        id: 'room-digital-av',
+        name: 'Digital Research & AV Lab',
+        type: 'Multimedia & ICT Suite',
+        capacity: 40,
+        location: 'First Floor · Digital Wing',
+        features: ['Interactive Smart Screen', 'High-Speed CBC Tablets', 'Audio Headsets (Language lab)'],
+        description: 'Equipped with interactive smart displays, digital library terminals, and audio-visual screening facilities.',
+      },
+      {
+        id: 'room-seminar-a',
+        name: 'Collaborative Seminar Room A',
+        type: 'Seminar Room',
+        capacity: 32,
+        location: 'First Floor · East Wing',
+        features: ['Magnetic Whiteboards & Markers', 'Interactive Smart Screen', 'Group Discussion Tables'],
+        description: 'Flexible seminar space designed for group debates, CBC project presentations, and subject club workshops.',
+      },
+      {
+        id: 'room-seminar-b',
+        name: 'Collaborative Seminar Room B',
+        type: 'Seminar Room',
+        capacity: 28,
+        location: 'First Floor · West Wing',
+        features: ['Magnetic Whiteboards & Markers', 'Ceiling Projector & Screen', 'CBC Science Experiment Trays'],
+        description: 'Dedicated group study and STEM inquiry room for collaborative problem-solving and small-group clinics.',
+      },
+      {
+        id: 'room-reference-wing',
+        name: 'Quiet Reference & Periodicals Wing',
+        type: 'Reference Suite',
+        capacity: 24,
+        location: 'Ground Floor · North Mezzanine',
+        features: ['Reference Encyclopedias & Atlases', 'High-Speed CBC Tablets', 'Quiet Study Carrels'],
+        description: 'Quiet academic reference wing tailored for focused research, exam revision, and teacher resource preparation.',
+      },
+    ];
+    const stored = getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, []);
+    const validStored = Array.isArray(stored)
+      ? stored.filter((r): r is LibraryRoom => Boolean(r && typeof r === 'object' && r.id && r.name))
+      : [];
+    return validStored.length > 0 ? validStored : defaultRooms;
   },
   saveLibraryRooms(rooms: LibraryRoom[]): void {
     setToStorage(KEYS.LIBRARY_ROOMS, rooms);

@@ -12,9 +12,12 @@ import {
   PRIMARY_STREAMS
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { exportToPdf } from '../../utils/pdfExport';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { PrintReportModal } from '../common/PrintReportModal';
+import { SharedExecutiveReportsPanel } from './SharedExecutiveReportsPanel';
 import { 
   FileText, 
   Download, 
@@ -57,9 +60,32 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
   defaultPeriod = 'Monthly',
   onClose
 }) => {
+  const { currentTenant } = useTenant();
   const isParent = currentUser.role === 'parent';
   const isStudent = currentUser.role === 'student';
-  const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
+  const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator', 'head_teacher', 'admin'].includes(currentUser.role);
+
+  const [hubSection, setHubSection] = useState<'academic' | 'shared_executive'>('academic');
+  const [sharedExecCount, setSharedExecCount] = useState<number>(0);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadCount = async () => {
+      try {
+        const res = await ClientDataStore.apiFetchExecutiveReports(currentTenant.id);
+        if (active) setSharedExecCount(res.reports.length);
+      } catch {
+        // ignore unauthenticated/network errors
+      }
+    };
+    void loadCount();
+    const onExecUpdate = () => void loadCount();
+    window.addEventListener('executive-reports-updated', onExecUpdate);
+    return () => {
+      active = false;
+      window.removeEventListener('executive-reports-updated', onExecUpdate);
+    };
+  }, [currentTenant.id]);
 
   // Period Type
   const [periodType, setPeriodType] = useState<'Monthly' | 'Termly' | 'Annually'>(defaultPeriod);
@@ -368,9 +394,12 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
 <body>
   <div class="header">
     <div style="display: flex; justify-content: center; margin-bottom: 12px;">
-      <img src="/edusmart-logo.svg" alt="Edu-Smart PORTAL by Gadsa Systems" style="width: 130px; height: auto;" />
+      ${(currentTenant.customLogoBase64 || currentTenant.logoUrl)
+        ? `<div style="width: 80px; height: 80px; border-radius: 12px; border: 1px solid #cbd5e1; background: #ffffff; padding: 6px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;"><img src="${currentTenant.customLogoBase64 || currentTenant.logoUrl}" alt="${currentTenant.name}" style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block;" /></div>`
+        : `<div style="width: 64px; height: 64px; border-radius: 12px; background: #0f172a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px;">${currentTenant.name.slice(0, 2).toUpperCase()}</div>`
+      }
     </div>
-    <div class="school-title">Edu-Smart PORTAL · By Gadsa Systems</div>
+    <div class="school-title">${currentTenant.name}</div>
     <div class="report-title">${aggregatedStudentData.periodLabel}</div>
     <div class="sub">Official Learner Progress Report & Academic Competency Dossier</div>
   </div>
@@ -495,11 +524,51 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
         </div>
       )}
 
+      {/* Hub Section Switcher: Academic Reports vs Shared Head Teacher & BoM Reports */}
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs inline-flex flex-wrap gap-1.5 print:hidden">
+        <button
+          type="button"
+          onClick={() => setHubSection('academic')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+            hubSection === 'academic'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Academic &amp; Learner Reports
+        </button>
+        <button
+          type="button"
+          onClick={() => setHubSection('shared_executive')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+            hubSection === 'shared_executive'
+              ? 'bg-emerald-700 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <span>Shared Head Teacher &amp; BoM Reports</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+              hubSection === 'shared_executive'
+                ? 'bg-white text-emerald-800'
+                : 'bg-emerald-100 text-emerald-800'
+            }`}
+          >
+            {sharedExecCount}
+          </span>
+        </button>
+      </div>
+
+      {hubSection === 'shared_executive' ? (
+        <SharedExecutiveReportsPanel currentUser={currentUser} />
+      ) : (
+        <>
+
       {/* Main Hub Control Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+            <TenantSchoolLogo variant="horizontal" size="xs" />
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">· Centralized Reporting Hub</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
@@ -811,7 +880,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           <div className="p-6 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs shrink-0">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
               </div>
               <div>
                 <div className="text-[11px] font-bold text-amber-600 uppercase tracking-widest">
@@ -1134,7 +1203,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
             <div className="flex items-center gap-4">
               <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs shrink-0">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
               </div>
               <div>
                 <div className="text-xs font-bold text-emerald-700 uppercase tracking-widest">
@@ -1171,8 +1240,8 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
               Learning Area Performance Distribution
             </h4>
-            <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-              <table className="w-full text-left">
+            <div className="border border-slate-200 rounded-xl overflow-x-auto text-xs">
+              <table className="w-full text-left min-w-[540px]">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Subject</th>
@@ -1305,6 +1374,8 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
           principalRemarks="Certified and confirmed by School Leadership Administration."
           showSignatures={true}
         />
+      )}
+        </>
       )}
     </div>
   );

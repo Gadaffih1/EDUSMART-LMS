@@ -137,6 +137,27 @@ const CBC_STRAND_TOPICS: Record<string, string[]> = {
     'Adolescent Health, Hygiene & Wellness',
     'Preventive Healthcare & Disease Vectors',
     'Mental Health, Stress Management & Resilience'
+  ],
+  'Library Lesson': [
+    'Information Literacy & Reference Catalogue Skills',
+    'Guided Extensive Reading & Book Review',
+    'CBC Digital Research & Citation Ethics',
+    'Storytelling, Comprehension & Vocabulary Mastery'
+  ],
+  'Arts': [
+    'Drawing, Perspective & Visual Composition',
+    'Sculpture, Clay Modelling & Applied Crafts',
+    'Printmaking, Collage & Colour Harmony'
+  ],
+  'Music': [
+    'Kenyan Folk Songs, Rhythm & Percussion',
+    'Vocal Harmony, Sight-Reading & Pitch',
+    'Instrumental Ensemble & Musical Appreciation'
+  ],
+  'Nutrition': [
+    'Balanced Diets & Micronutrient Health',
+    'Food Hygiene, Preservation & Safe Preparation',
+    'Meal Planning for Growing Learners'
   ]
 };
 
@@ -280,16 +301,34 @@ export function generateAutomatedTimetable(
   // ========================================================
   // STEP 2: BUILD TEACHER ALLOCATION LOOKUP
   // ========================================================
-  // Map<`${grade}-${stream}-${subject}`, User>
+  // Map<`${grade}-${stream}-${subject}`, User> — strictly 1 teacher per subject per stream
   const allocationMap = new Map<string, User>();
 
+  // Priority 1: Explicit grade + specific stream + subject links
   teachers.forEach(teacher => {
+    const explicitAllocs = teacher.assignedSubjectAllocations || [];
+    explicitAllocs.forEach(a => {
+      const key = `${a.grade}-${a.stream}-${a.subject}`;
+      if (!allocationMap.has(key)) {
+        allocationMap.set(key, teacher);
+      }
+    });
+  });
+
+  // Priority 2: Legacy fallback only when no explicit link exists for that slot
+  teachers.forEach(teacher => {
+    if (teacher.assignedSubjectAllocations && teacher.assignedSubjectAllocations.length > 0) {
+      return;
+    }
     const streams = teacher.assignedStreams || [];
     const subjects = teacher.assignedSubjects || [];
 
     streams.forEach(as => {
       subjects.forEach(sub => {
-        allocationMap.set(`${as.grade}-${as.stream}-${sub}`, teacher);
+        const key = `${as.grade}-${as.stream}-${sub}`;
+        if (!allocationMap.has(key)) {
+          allocationMap.set(key, teacher);
+        }
       });
     });
 

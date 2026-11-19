@@ -11,12 +11,13 @@ import {
   getSubjectsForGrade 
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
+import { canDeleteEResource } from '../../utils/resourcePermissions';
 import { 
   FolderPlus, 
   Upload, 
   FileText, 
   Image as ImageIcon, 
-  Download, 
   Trash2, 
   Eye, 
   EyeOff, 
@@ -32,7 +33,12 @@ import {
   X,
   ExternalLink,
   Layers,
-  Award
+  Award,
+  Video,
+  Volume2,
+  Loader2,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 
 interface TeacherLessonFileManagerProps {
@@ -140,10 +146,12 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
   const [uploadSubject, setUploadSubject] = useState<SubjectName>('Mathematics');
   const [uploadStream, setUploadStream] = useState<string>('all');
   const [uploadTerm, setUploadTerm] = useState<1 | 2 | 3>(1);
-  const [uploadFileType, setUploadFileType] = useState<'pdf' | 'image' | 'doc' | 'slides'>('pdf');
+  const [uploadFileType, setUploadFileType] = useState<'pdf' | 'image' | 'video' | 'audio' | 'doc' | 'slides'>('pdf');
   const [uploadFileName, setUploadFileName] = useState('');
   const [uploadFileSize, setUploadFileSize] = useState('1.5 MB');
   const [uploadFileUrl, setUploadFileUrl] = useState('');
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadIsVisible, setUploadIsVisible] = useState(true);
 
   // CBC Auto-Tagging Fields
@@ -188,30 +196,52 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
     setTags(generatedTags);
   }, [uploadSubject, uploadGrade, uploadTerm]);
 
-  // Handle local file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle local file selection (Video, Audio, PDF, Images/Pictures, Docs)
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUploadError(null);
     setUploadFileName(file.name);
-    setUploadFileSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
+    const sizeLabel =
+      file.size < 1024 * 1024
+        ? `${Math.max(1, Math.round(file.size / 1024))} KB`
+        : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+    setUploadFileSize(sizeLabel);
 
-    if (file.type.startsWith('image/')) {
+    const ext = file.name.toLowerCase().split('.').pop() || '';
+    if (file.type.startsWith('video/') || ['mp4', 'webm', 'mov', 'ogv', 'm4v', '3gp', 'mkv', 'avi'].includes(ext)) {
+      setUploadFileType('video');
+    } else if (file.type.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'weba', 'flac', 'amr'].includes(ext)) {
+      setUploadFileType('audio');
+    } else if (file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif', 'heic', 'heif'].includes(ext)) {
       setUploadFileType('image');
+    } else if (ext === 'ppt' || ext === 'pptx') {
+      setUploadFileType('slides');
+    } else if (ext === 'doc' || ext === 'docx' || ext === 'txt') {
+      setUploadFileType('doc');
     } else {
       setUploadFileType('pdf');
     }
 
     if (!uploadTitle.trim()) {
-      const cleanTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-      setUploadTitle(cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1));
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      setUploadTitle(cleanTitle ? cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1) : file.name);
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setUploadFileUrl(event.target?.result as string || '');
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingFile(true);
+    setUploadFileUrl('');
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'lesson-resource');
+      setUploadFileUrl(uploaded.url);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to upload lesson file from device to server.';
+      setUploadError(msg);
+      setToastMessage(msg);
+      setTimeout(() => setToastMessage(null), 4000);
+    } finally {
+      setIsUploadingFile(false);
+    }
   };
 
   // Add custom tag
@@ -232,14 +262,31 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
   const handleSaveFile = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!uploadTitle.trim()) {
-      alert('Please enter a lesson resource title');
+    if (isUploadingFile) {
+      setToastMessage('Please wait for the file upload to complete...');
+      setTimeout(() => setToastMessage(null), 2500);
       return;
     }
 
-    const fallbackUrl = uploadFileType === 'image'
-      ? 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200&auto=format&fit=crop&q=80'
-      : 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=1200&auto=format&fit=crop&q=80';
+    if (!uploadTitle.trim()) {
+      setToastMessage('Please enter a lesson resource title');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    if (!uploadFileUrl) {
+      setUploadError('Please select a Video, Audio, PDF, Document, or Image/Picture file from your device first.');
+      return;
+    }
+
+    const extFallback =
+      uploadFileType === 'image'
+        ? 'jpg'
+        : uploadFileType === 'video'
+        ? 'mp4'
+        : uploadFileType === 'audio'
+        ? 'mp3'
+        : 'pdf';
 
     const newFile: TeacherLessonFile = {
       id: `lfile-${Date.now()}`,
@@ -247,10 +294,10 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
       teacherName: currentUser.name,
       title: uploadTitle.trim(),
       description: uploadDescription.trim() || `CBC Lesson Resource for ${uploadSubject} Grade ${uploadGrade}`,
-      fileName: uploadFileName || `${uploadTitle.replace(/\s+/g, '_')}.${uploadFileType === 'image' ? 'png' : 'pdf'}`,
+      fileName: uploadFileName || `${uploadTitle.replace(/\s+/g, '_')}.${extFallback}`,
       fileType: uploadFileType,
       fileSize: uploadFileSize || '1.8 MB',
-      fileUrl: uploadFileUrl || fallbackUrl,
+      fileUrl: uploadFileUrl,
       subject: uploadSubject,
       grade: uploadGrade,
       stream: uploadStream === 'all' ? undefined : (uploadStream as StreamName),
@@ -273,7 +320,8 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
     setUploadDescription('');
     setUploadFileName('');
     setUploadFileUrl('');
-    setToastMessage(`🎉 Uploaded "${newFile.title}" with automatic CBC curriculum tags!`);
+    setUploadError(null);
+    setToastMessage(`Uploaded "${newFile.title}" with automatic CBC curriculum tags!`);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
@@ -286,8 +334,13 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  // Delete file
+  // Delete file (strictly uploader or System Administrator only)
   const handleDeleteFile = (file: TeacherLessonFile) => {
+    if (!canDeleteEResource(currentUser, file)) {
+      setToastMessage('Only the user who uploaded this E-resource or the System Administrator may delete it.');
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
     if (confirm(`Are you sure you want to delete "${file.title}"?`)) {
       Storage.deleteTeacherLessonFile(file.id);
       setToastMessage('Resource removed from repository.');
@@ -349,7 +402,7 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
             Lesson Resource & File Manager
           </h2>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-            Upload and organize pedagogical resources (PDFs, worksheets, apparatus diagrams, high-resolution visual charts). Every resource is automatically tagged with CBC Strands, Sub-strands, Core Competencies, and Values.
+            Upload and organize E-resources directly from your device — Videos, Audio lessons, PDF documents, and Images/Pictures. Every resource is automatically tagged with CBC Strands, Sub-strands, Core Competencies, and Values.
           </p>
         </div>
 
@@ -429,8 +482,12 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
             >
               <option value="all">All Formats</option>
+              <option value="video">Video Lessons</option>
+              <option value="audio">Audio Lessons</option>
               <option value="pdf">PDF Documents</option>
-              <option value="image">Diagrams / Images</option>
+              <option value="image">Images / Pictures</option>
+              <option value="doc">Word / Text Docs</option>
+              <option value="slides">Slides</option>
             </select>
           </div>
         </div>
@@ -486,11 +543,23 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
-                      file.fileType === 'pdf' 
+                      file.fileType === 'video'
+                        ? 'bg-purple-50 text-purple-600 border border-purple-200'
+                        : file.fileType === 'audio'
+                        ? 'bg-teal-50 text-teal-600 border border-teal-200'
+                        : file.fileType === 'pdf'
                         ? 'bg-rose-50 text-rose-600 border border-rose-200'
                         : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
                     }`}>
-                      {file.fileType === 'pdf' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                      {file.fileType === 'video' ? (
+                        <Video className="w-5 h-5" />
+                      ) : file.fileType === 'audio' ? (
+                        <Volume2 className="w-5 h-5" />
+                      ) : file.fileType === 'image' ? (
+                        <ImageIcon className="w-5 h-5" />
+                      ) : (
+                        <FileText className="w-5 h-5" />
+                      )}
                     </div>
                     <div>
                       <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 block">
@@ -566,22 +635,12 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
                   <button
                     type="button"
                     onClick={() => setPreviewFile(file)}
-                    className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                    title="Preview resource"
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] transition-colors cursor-pointer inline-flex items-center gap-1"
+                    title="Preview resource in-app (Download restricted)"
                   >
                     <Eye className="w-3.5 h-3.5" />
+                    <span>View</span>
                   </button>
-
-                  <a
-                    href={file.fileUrl}
-                    download={file.fileName}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors cursor-pointer"
-                    title="Download file"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </a>
 
                   <button
                     type="button"
@@ -596,14 +655,23 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
                     {file.isVisibleToStudents ? <CheckCircle2 className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteFile(file)}
-                    className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
-                    title="Delete resource"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canDeleteEResource(currentUser, file) ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteFile(file)}
+                      className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                      title="Delete resource"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <span
+                      className="p-1.5 rounded-xl bg-slate-100 text-slate-400 inline-flex items-center"
+                      title="Only the uploader or System Administrator can delete this E-resource"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -639,29 +707,40 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
 
             <form onSubmit={handleSaveFile} className="space-y-5 text-xs">
               {/* File Drop Area */}
-              <div 
-                onClick={() => fileInputRef.current?.click()}
+              <div
+                onClick={() => !isUploadingFile && fileInputRef.current?.click()}
                 className="border-2 border-dashed border-blue-200 hover:border-blue-500 rounded-2xl p-6 text-center cursor-pointer bg-blue-50/40 hover:bg-blue-50/80 transition-all space-y-2 group"
               >
-                <input 
+                <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                  accept="video/*,audio/*,image/*,application/pdf,.pdf,.mp4,.webm,.mov,.ogv,.m4v,.3gp,.mkv,.mp3,.wav,.ogg,.m4a,.aac,.flac,.png,.jpg,.jpeg,.webp,.gif,.svg,.heic,.doc,.docx,.ppt,.pptx"
                   className="hidden"
                 />
                 <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-md group-hover:scale-105 transition-transform">
-                  <Upload className="w-6 h-6" />
+                  {isUploadingFile ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
                 </div>
                 <div>
                   <span className="font-bold text-slate-800 text-sm block">
-                    {uploadFileName || 'Click to select PDF or image file from device'}
+                    {isUploadingFile
+                      ? `Uploading ${uploadFileName} to server...`
+                      : uploadFileName
+                      ? `${uploadFileName} (${uploadFileSize}) — Ready!`
+                      : 'Click to upload Video, Audio, PDF, or Image/Picture from device'}
                   </span>
                   <span className="text-slate-400 text-[11px] block mt-0.5">
-                    Supports CBC PDF handouts, apparatus charts, PNG/JPG worksheets (up to 25MB)
+                    Supports MP4/WebM/MOV videos, MP3/WAV/M4A audio, PDF documents, and JPG/PNG/WebP images (up to 60 MB)
                   </span>
                 </div>
               </div>
+
+              {uploadError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
 
               {/* Title & Description */}
               <div className="space-y-3">
@@ -868,10 +947,11 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black rounded-xl shadow-lg transition-transform active:scale-95 flex items-center gap-2 cursor-pointer"
+                  disabled={isUploadingFile}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 text-white font-black rounded-xl shadow-lg transition-transform active:scale-95 flex items-center gap-2 cursor-pointer"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>Save to Repository</span>
+                  {isUploadingFile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  <span>{isUploadingFile ? 'Uploading File...' : 'Save to Repository'}</span>
                 </button>
               </div>
 
@@ -889,7 +969,15 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  {previewFile.fileType === 'pdf' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                  {previewFile.fileType === 'video' ? (
+                    <Video className="w-5 h-5" />
+                  ) : previewFile.fileType === 'audio' ? (
+                    <Volume2 className="w-5 h-5" />
+                  ) : previewFile.fileType === 'image' ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-base">{previewFile.title}</h3>
@@ -907,30 +995,60 @@ export const TeacherLessonFileManager: React.FC<TeacherLessonFileManagerProps> =
               </button>
             </div>
 
-            <div className="h-96 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center relative">
+            <div
+              className="h-96 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center relative select-none"
+              onContextMenu={(e) => e.preventDefault()}
+            >
               {previewFile.fileType === 'image' ? (
-                <img 
-                  src={previewFile.fileUrl} 
-                  alt={previewFile.title} 
-                  className="w-full h-full object-contain"
+                <img
+                  src={previewFile.fileUrl}
+                  alt={previewFile.title}
+                  draggable={false}
+                  className="w-full h-full object-contain pointer-events-none"
+                />
+              ) : previewFile.fileType === 'video' ? (
+                <video
+                  controls
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  playsInline
+                  preload="metadata"
+                  src={previewFile.fileUrl}
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : previewFile.fileType === 'audio' ? (
+                <div className="w-full max-w-md p-6 text-center text-white space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center mx-auto">
+                    <Volume2 className="w-8 h-8" />
+                  </div>
+                  <div className="font-bold text-sm truncate">{previewFile.fileName}</div>
+                  <audio
+                    controls
+                    controlsList="nodownload"
+                    onContextMenu={(e) => e.preventDefault()}
+                    preload="metadata"
+                    src={previewFile.fileUrl}
+                    className="w-full"
+                  />
+                </div>
+              ) : previewFile.fileType === 'pdf' ? (
+                <iframe
+                  src={previewFile.fileUrl.includes('#') ? previewFile.fileUrl : `${previewFile.fileUrl}#toolbar=0&navpanes=0`}
+                  title={previewFile.title}
+                  className="w-full h-full bg-white"
                 />
               ) : (
                 <div className="text-center text-white space-y-3 p-6">
                   <FileText className="w-16 h-16 text-blue-400 mx-auto" />
                   <div className="font-bold text-lg">{previewFile.fileName}</div>
                   <p className="text-xs text-slate-300 max-w-md mx-auto">
-                    KICD CBC pedagogical document ready for classroom viewing and offline printing.
+                    KICD CBC pedagogical document protected for in-app classroom viewing only. Downloading shared E-resources is restricted.
                   </p>
-                  <a
-                    href={previewFile.fileUrl}
-                    download={previewFile.fileName}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download PDF Handout</span>
-                  </a>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 border border-amber-400/40 text-amber-200 font-bold text-xs rounded-xl">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Download Restricted · View-Only</span>
+                  </div>
                 </div>
               )}
             </div>

@@ -4,7 +4,9 @@ import {
   WorkEntryLog 
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { ClientDataStore } from '../../utils/clientDataStore';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { 
   Camera, 
   MapPin, 
@@ -32,6 +34,7 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
   currentUser,
   onSuccess
 }) => {
+  const { currentTenant } = useTenant();
   // Helper to split full name into first and last name
   const nameParts = (currentUser.name || '').trim().split(' ');
   const initialFirst = nameParts[0] || 'Teacher';
@@ -97,22 +100,17 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
   // 4. Strictly Work Email (Auto-filled when staff number is filled & cannot be edited)
   const [email, setEmail] = useState<string>(currentUser.email || `${currentUser.id.replace('usr-teach-', '')}@edusmart.ac.ke`);
 
-  // 5. Sign-In Location & Geo Stamp (Auto-filled to "current" & cannot be edited)
-  const [signInLocation, setSignInLocation] = useState<string>('EduSmart Main Campus, Staffroom Block A · Nairobi Grounds');
+  // 5. Sign-In Location & Live Geolocation Stamp (Captures actual physical place name, NEVER campus name)
+  const [signInLocation, setSignInLocation] = useState<string>('');
   const [geoCoords, setGeoCoords] = useState<{
     latitude: number;
     longitude: number;
     accuracy?: number;
     address: string;
     verifiedCampus: boolean;
-  }>({
-    latitude: -1.2921,
-    longitude: 36.8219,
-    accuracy: 5,
-    address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
-    verifiedCampus: true
-  });
+  } | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   // When staff number is filled, let all the other fields be auto-filled and locked against manual edits
   useEffect(() => {
@@ -137,45 +135,66 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
     setStaffLookupSuccess(true);
   }, [staffNo, currentUser]);
 
-  // Real or Simulated Geolocation trigger (Auto-resolves to current live GPS)
+  // Real Live Geolocation + Reverse Geocoding to actual physical place name
   const requestGeoLocation = () => {
     setIsLocating(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = Number(position.coords.latitude.toFixed(4));
-          const lng = Number(position.coords.longitude.toFixed(4));
-          const acc = Math.round(position.coords.accuracy);
-          setGeoCoords({
-            latitude: lat,
-            longitude: lng,
-            accuracy: acc,
-            address: `Current Verified GPS: ${lat}°, ${lng}° (Campus Duty Perimeter Verified)`,
-            verifiedCampus: true
-          });
-          setSignInLocation(`EduSmart Main Campus, Staffroom Block A · [GPS: ${lat}°, ${lng}°]`);
-          setIsLocating(false);
-        },
-        () => {
-          // Fallback to high-accuracy current institutional stamp
-          setGeoCoords({
-            latitude: -1.2921,
-            longitude: 36.8219,
-            accuracy: 5,
-            address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
-            verifiedCampus: true
-          });
-          setSignInLocation('EduSmart Main Campus, Staffroom Block A · Nairobi Grounds');
-          setIsLocating(false);
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
+    setGeoError(null);
+    if (!('geolocation' in navigator)) {
+      setGeoCoords(null);
+      setSignInLocation('');
+      setGeoError('Device geolocation API is unavailable in this browser. Live GPS location is strictly required to submit work entries.');
       setIsLocating(false);
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = Number(position.coords.latitude.toFixed(6));
+        const lng = Number(position.coords.longitude.toFixed(6));
+        const acc = Math.round(position.coords.accuracy || 10);
+        let actualPlaceName = `GPS Coordinates (${lat.toFixed(5)}°, ${lng.toFixed(5)}°)`;
+
+        try {
+          const res = await fetch(`/api/geocode/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`, {
+            credentials: 'include',
+            headers: ClientDataStore.getAuthHeaders(),
+          });
+          if (res.ok) {
+            const payload = await res.json();
+            if (payload?.locationName) {
+              actualPlaceName = String(payload.locationName);
+            }
+          }
+        } catch {
+          // Retain raw coordinates label when geocoder cannot be reached; never substitute campus name
+        }
+
+        setGeoCoords({
+          latitude: lat,
+          longitude: lng,
+          accuracy: acc,
+          address: `${actualPlaceName} · GPS ${lat.toFixed(5)}°, ${lng.toFixed(5)}° (±${acc}m)`,
+          verifiedCampus: true,
+        });
+        setSignInLocation(actualPlaceName);
+        setGeoError(null);
+        setIsLocating(false);
+      },
+      (err) => {
+        setGeoCoords(null);
+        setSignInLocation('');
+        setGeoError(
+          err?.code === 1
+            ? 'Location permission denied. Enable device location access and click Capture Live GPS — campus names are not accepted.'
+            : 'Unable to acquire live GPS signal. Move to an open area and click Capture Live GPS.'
+        );
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
-  // Auto-set Sign-In Location & Geo Stamp to "current" on mount
+  // Auto-capture live geographic location on mount
   useEffect(() => {
     requestGeoLocation();
   }, []);
@@ -292,7 +311,11 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
 
       ctx.fillStyle = '#A7F3D0';
       ctx.font = '10px monospace';
-      ctx.fillText(`GEO: -1.2921, 36.8219`, 150, 250);
+      ctx.fillText(
+        geoCoords ? `GEO: ${geoCoords.latitude.toFixed(4)}, ${geoCoords.longitude.toFixed(4)}` : 'GEO: UNVERIFIED',
+        150,
+        250
+      );
       ctx.fillText(`${signDateDay}/${signDateMonth}/${signDateYear} ${signTimeHour}:${signTimeMinute} ${signTimeAmPm}`, 150, 268);
 
       const url = canvas.toDataURL('image/png');
@@ -309,9 +332,13 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
     };
   }, []);
 
-  // Form submission handler
+  // Form submission handler (strictly requires live GPS geolocation)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!geoCoords || !signInLocation.trim()) {
+      setGeoError('Live GPS geolocation is required before submitting your work entry.');
+      return;
+    }
 
     if (!photoDataUrl) {
       // Auto-capture digital staff photo snapshot if teacher didn't open live camera
@@ -365,10 +392,10 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
           ======================================================== */}
       <div className="bg-[#ecedf3] rounded-3xl p-3 sm:p-6 shadow-md border border-slate-300/80">
         
-        {/* Top Cover Logo Badge (Official Institutional Cover Header) */}
+        {/* Top Cover Logo Badge (Tenant School Logo) */}
         <div className="flex justify-center -mt-8 sm:-mt-10 mb-4">
           <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-amber-400 flex flex-col items-center">
-            <EduSmartGadsaLogo variant="full" size="md" />
+            <TenantSchoolLogo variant="full" size="md" />
           </div>
         </div>
 
@@ -379,14 +406,14 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
           <div className="p-6 sm:p-8 border-b border-slate-200 bg-white text-center relative">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-blue-900 text-xs font-bold uppercase tracking-wider mb-2">
               <Building2 className="w-3.5 h-3.5 text-blue-700" />
-              <span>EduSmart Institutional Portal · By Gadsa Systems</span>
+              <span>{currentTenant.name} · {currentTenant.code}</span>
             </div>
             
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#2C3345] tracking-tight">
               Work Entry Sign-In Form (Teacher)
             </h1>
             <p className="text-xs text-slate-500 mt-2 max-w-xl mx-auto">
-              Please complete this official sign-in form to log duty attendance, verify compound presence, and confirm staff clock-in.
+              Please complete this official sign-in form to log duty attendance, capture verified live GPS street/locality location, and confirm staff clock-in.
             </p>
 
             <div className="w-24 h-1 bg-amber-500 mx-auto mt-4 rounded-full" />
@@ -428,7 +455,9 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                 </div>
                 <div className="flex justify-between items-center pt-1">
                   <span className="text-slate-500">Geo Stamp:</span>
-                  <span className="text-[11px] font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">Verified On-Campus</span>
+                  <span className="text-[11px] font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                    {submissionSuccess.geoStamp ? `${submissionSuccess.geoStamp.latitude.toFixed(4)}°, ${submissionSuccess.geoStamp.longitude.toFixed(4)}°` : 'Live GPS Verified'}
+                  </span>
                 </div>
               </div>
 
@@ -706,17 +735,21 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                 </div>
               </div>
 
-              {/* FIELD 5: Sign-In Location* & Geo Stamp (Auto-filled to "current" & cannot be edited) */}
+              {/* FIELD 5: Sign-In Location* & Live Reverse-Geocoded Geo Stamp (Captures actual geographic place name, never campus name) */}
               <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                 <div className="flex items-center justify-between flex-wrap gap-1">
                   <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Sign-In Location & Geo Stamp</span>
+                    <span>Sign-In Physical Location &amp; Live GPS Stamp</span>
                     <span className="text-rose-600 font-bold">*</span>
                   </label>
-                  <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
-                    <Lock className="w-3 h-3 text-emerald-600" />
-                    <span>Locked: Auto-stamped (Current Location)</span>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 font-bold ${
+                    geoCoords
+                      ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                      : 'text-rose-800 bg-rose-50 border-rose-200'
+                  }`}>
+                    <Lock className="w-3 h-3" />
+                    <span>{isLocating ? 'Acquiring Live GPS...' : geoCoords ? 'Locked: Live Street/Locality GPS' : 'GPS Permission Required'}</span>
                   </span>
                 </div>
 
@@ -726,36 +759,42 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                   readOnly
                   disabled
                   value={signInLocation}
-                  placeholder="Sign-In Location (Current)"
+                  placeholder={isLocating ? 'Detecting actual physical location...' : 'Enable GPS to capture actual geographic location'}
                   className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-not-allowed select-none shadow-2xs focus:outline-none"
-                  title="Sign-In Location is auto-set to current and cannot be edited"
+                  title="Sign-In Location is captured directly from your device GPS and reverse-geocoded; manual edits and campus placeholders are blocked"
                 />
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-950 font-mono">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                    <span>Geo Stamp: {geoCoords.latitude}°, {geoCoords.longitude}° (±{geoCoords.accuracy}m)</span>
+                {geoCoords ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-950 font-mono">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>Geo Stamp: {geoCoords.latitude.toFixed(5)}°, {geoCoords.longitude.toFixed(5)}° (±{geoCoords.accuracy}m)</span>
+                    </div>
+                    <span className="text-emerald-800 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300 self-start sm:self-auto flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-emerald-600" />
+                      <span>Live Geographic Place Verified</span>
+                    </span>
                   </div>
-                  <span className="text-emerald-800 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300 self-start sm:self-auto flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-emerald-600" />
-                    <span>Verified Current Campus Location</span>
-                  </span>
-                </div>
+                ) : (
+                  <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-800 font-medium">
+                    {geoError || 'Waiting for device GPS location permission. Submission is restricted until actual geographic coordinates are captured.'}
+                  </div>
+                )}
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5 gap-2">
                   <div className="flex items-center gap-1">
                     <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span>Location & coordinates are auto-stamped to current institution boundary and cannot be edited.</span>
+                    <span>Captures real street, neighbourhood &amp; town from GPS (never school/campus name). Cannot be manually edited.</span>
                   </div>
                   <button
                     type="button"
                     onClick={requestGeoLocation}
                     disabled={isLocating}
                     className="px-2.5 py-1 bg-white hover:bg-slate-100 text-emerald-800 text-[10px] font-bold rounded-lg border border-slate-300 flex items-center gap-1 shadow-2xs transition-colors shrink-0 cursor-pointer"
-                    title="Refresh current live GPS reading"
+                    title="Capture current live GPS reading"
                   >
                     <Compass className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
-                    <span>{isLocating ? 'Pinging GPS...' : 'Refresh GPS'}</span>
+                    <span>{isLocating ? 'Locating...' : 'Capture Live GPS'}</span>
                   </button>
                 </div>
               </div>
@@ -857,11 +896,17 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
               <div className="pt-6 border-t border-slate-200">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 hover:from-blue-800 hover:to-indigo-950 text-white font-black text-sm tracking-wide shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                  disabled={isSubmitting || isLocating || !geoCoords || !signInLocation.trim()}
+                  className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 hover:from-blue-800 hover:to-indigo-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm tracking-wide shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
                 >
                   <FileCheck2 className="w-5 h-5 text-amber-400" />
-                  <span>{isSubmitting ? 'Submitting Work Entry...' : 'Submit Work Entry Sign-In Form'}</span>
+                  <span>
+                    {isSubmitting
+                      ? 'Submitting Work Entry...'
+                      : !geoCoords
+                      ? 'Live GPS Location Required to Submit'
+                      : 'Submit Work Entry Sign-In Form'}
+                  </span>
                 </button>
                 <div className="text-center mt-2.5 text-[11px] text-slate-400">
                   All fields marked with an asterisk (<span className="text-rose-600 font-bold">*</span>) are mandatory and audited by Academic Leadership.
@@ -871,15 +916,15 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
             </form>
           )}
 
-          {/* Form Footer Stamp */}
+          {/* Form Footer Stamp (Tenant School Logo) */}
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
             <div className="flex items-center gap-2">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-              <span>· Work Entry Sign-In Portal (Teacher Protocol)</span>
+              <TenantSchoolLogo variant="horizontal" size="xs" />
+              <span>· Work Entry Sign-In Portal</span>
             </div>
             <div className="flex items-center gap-2 text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Secured with SSL Geo-Verification & Biometric Audit</span>
+              <span>Secured with SSL Geo-Verification &amp; Biometric Audit</span>
             </div>
           </div>
 
@@ -894,9 +939,9 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full border border-slate-300 overflow-hidden print:m-0 print:border-none print:shadow-none">
             
             {/* Modal Header */}
-            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between print:hidden">
               <div className="flex items-center gap-2">
-                <EduSmartGadsaLogo variant="horizontal" size="xs" />
+                <TenantSchoolLogo variant="horizontal" size="xs" />
                 <span className="font-extrabold text-xs uppercase tracking-wider text-slate-800 ml-2">
                   Official Lesson Work Entry Slip
                 </span>
@@ -914,10 +959,10 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
             <div className="p-6 space-y-4 bg-white text-xs">
               <div className="text-center pb-3 border-b-2 border-slate-900 space-y-1">
                 <div className="flex justify-center mb-1">
-                  <EduSmartGadsaLogo variant="full" size="sm" />
+                  <TenantSchoolLogo variant="full" size="sm" />
                 </div>
                 <div className="text-[11px] font-bold text-blue-900 uppercase tracking-widest">
-                  Edu-Smart PORTAL · By Gadsa Systems
+                  {currentTenant.name} · {currentTenant.motto || currentTenant.code}
                 </div>
                 <h3 className="text-lg font-black text-slate-900 uppercase">
                   Staff Lesson Work Entry Sign-In Slip
@@ -964,7 +1009,7 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
                 </div>
                 {submissionSuccess.geoStamp && (
                   <div className="font-mono text-[10px] text-emerald-800">
-                    GPS Coordinates: {submissionSuccess.geoStamp.latitude}°, {submissionSuccess.geoStamp.longitude}° (Verified Campus)
+                    GPS Coordinates: {submissionSuccess.geoStamp.latitude.toFixed(5)}°, {submissionSuccess.geoStamp.longitude.toFixed(5)}° (Live Geolocation Verified)
                   </div>
                 )}
               </div>

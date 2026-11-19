@@ -34,18 +34,25 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
-import { 
+import {
   HeartPulse,
   Bus,
   Trophy,
-  Menu
+  Menu,
+  UserCheck
 } from 'lucide-react';
 
 interface HODWorkspaceProps {
   currentUser: User;
+  onSwitchToClassTeacher?: () => void;
+  onSwitchToSubjectTeacher?: () => void;
 }
 
-export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
+export const HODWorkspace: React.FC<HODWorkspaceProps> = ({
+  currentUser,
+  onSwitchToClassTeacher,
+  onSwitchToSubjectTeacher,
+}) => {
   const deptName = currentUser.department || 'Sciences & Mathematics';
 
   // Map subjects belonging to this department
@@ -156,8 +163,8 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>
@@ -173,9 +180,33 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
           </div>
         </div>
 
-        <div className="text-right text-xs hidden md:block">
-          <div className="font-bold text-white">{currentUser.name}</div>
-          <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/31204/ED'}</div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onSwitchToClassTeacher && (
+            <button
+              type="button"
+              onClick={onSwitchToClassTeacher}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-xs border border-emerald-400/40 transition-colors cursor-pointer whitespace-nowrap"
+              title="Switch to Class Teacher workspace with full rights to your assigned class"
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>Switch as Class Teacher</span>
+            </button>
+          )}
+          {onSwitchToSubjectTeacher && (
+            <button
+              type="button"
+              onClick={onSwitchToSubjectTeacher}
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs border border-indigo-400/40 transition-colors cursor-pointer whitespace-nowrap"
+              title="Switch to Subject Teacher workspace"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Subject Teacher</span>
+            </button>
+          )}
+          <div className="text-right text-xs hidden md:block">
+            <div className="font-bold text-white">{currentUser.name}</div>
+            <div className="text-[10px] text-slate-400 font-mono">{currentUser.tscNumber || 'TSC/31204/ED'}</div>
+          </div>
         </div>
       </header>
 
@@ -276,8 +307,32 @@ export const HODWorkspace: React.FC<HODWorkspaceProps> = ({ currentUser }) => {
             </span>
           </div>
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
-            <table className="w-full text-left">
+          {/* Mobile Stacked Work Entry Audit Cards */}
+          <div className="md:hidden space-y-2.5 text-xs">
+            {deptWorkLogs.map((log) => (
+              <div key={`hod-mob-${log.id}`} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-slate-900">{log.teacherName}</div>
+                    <div className="text-[11px] font-semibold text-indigo-700">
+                      Grade {log.grade} {log.stream} · {log.subject}
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase shrink-0">
+                    Audited
+                  </span>
+                </div>
+                <div className="text-slate-700 font-medium">{log.topicTaught}</div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/70">
+                  <span className="font-mono">{log.date} · {log.time}</span>
+                  <span className="font-mono font-bold text-slate-800">{log.learnersPresent} learners</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto text-xs">
+            <table className="w-full text-left min-w-[680px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3">Date / Time</th>

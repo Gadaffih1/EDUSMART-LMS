@@ -1,15 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   User, 
   LibraryRoom, 
   LibraryRoomBooking, 
   LibraryTimetableSlot,
+  TimetableSlot,
   GradeLevel,
   StreamName,
   SubjectName,
-  PRIMARY_STREAMS
+  PRIMARY_STREAMS,
+  PRIMARY_SUBJECTS,
+  JUNIOR_SUBJECTS
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { listSubjects } from '../../utils/catalogStore';
+import { ttApiFetch } from '../timetable/timetableTypes';
 import { 
   Calendar, 
   Clock, 
@@ -32,7 +38,11 @@ import {
   Tv,
   Tablet,
   LayoutGrid,
-  FileText
+  FileText,
+  Pencil,
+  Plus,
+  Building2,
+  RotateCcw
 } from 'lucide-react';
 
 interface LibraryRoomBookingModalProps {
@@ -93,21 +103,71 @@ function timesOverlap(startA: string, endA: string, startB: string, endB: string
   return Math.max(a1, b1) < Math.min(a2, b2);
 }
 
+const FALLBACK_LIBRARY_ROOM: LibraryRoom = {
+  id: 'room-main-hall',
+  name: 'Main Library Reading Hall',
+  type: 'Reading Hall',
+  capacity: 60,
+  location: 'Ground Floor · Central Wing',
+  features: ['Quiet Reading Tables', 'Reference Encyclopedias & Atlases'],
+  description: 'Spacious school library reading and research hall for guided lessons and CBC study sessions.',
+};
+
 export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = ({
   currentUser,
   isOpen,
   onClose,
   onBookingSuccess
 }) => {
-  const rooms = useMemo(() => Storage.getLibraryRooms(), []);
-  const [activeTab, setActiveTab] = useState<'book' | 'matrix' | 'my_bookings'>('book');
+  const safeUserId = currentUser?.id || 'faculty-user';
+  const safeUserName = currentUser?.name || 'Subject Teacher';
+  const safeUserRole = currentUser?.role || 'teacher';
+  const isLibrarianOrAdmin = safeUserRole === 'librarian' || safeUserRole === 'admin';
+
+  const [roomsList, setRoomsList] = useState<LibraryRoom[]>(() => {
+    const loaded = Storage.getLibraryRooms();
+    return Array.isArray(loaded) && loaded.length > 0 ? loaded : [FALLBACK_LIBRARY_ROOM];
+  });
+  const rooms = useMemo(
+    () => (roomsList.length > 0 ? roomsList : [FALLBACK_LIBRARY_ROOM]),
+    [roomsList]
+  );
+  const [activeTab, setActiveTab] = useState<'book' | 'matrix' | 'my_bookings' | 'manage_rooms'>('book');
 
   // Bookings & timetable state
   const [allBookings, setAllBookings] = useState<LibraryRoomBooking[]>(() => Storage.getLibraryRoomBookings());
   const [timetableSlots, setTimetableSlots] = useState<LibraryTimetableSlot[]>(() => Storage.getLibraryTimetable());
+  const [masterTimetableSlots, setMasterTimetableSlots] = useState<TimetableSlot[]>(() => Storage.getAllTimetableSlots());
+  const [publishedMasterLibLessons, setPublishedMasterLibLessons] = useState<
+    Array<LibraryTimetableSlot & { source: 'master_timetable'; periodNumber?: number }>
+  >([]);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [confirmDeleteBookingId, setConfirmDeleteBookingId] = useState<string | null>(null);
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [editBkRoomId, setEditBkRoomId] = useState<string>('');
+  const [editBkDate, setEditBkDate] = useState<string>('');
+  const [editBkPeriodNum, setEditBkPeriodNum] = useState<number>(3);
+  const [editBkTeacher, setEditBkTeacher] = useState<string>('');
+  const [editBkSubject, setEditBkSubject] = useState<string>('');
+  const [editBkStream, setEditBkStream] = useState<string>('');
+  const [editBkPurpose, setEditBkPurpose] = useState<string>('');
+  const [editBkLearners, setEditBkLearners] = useState<number>(30);
+  const [editBkStatus, setEditBkStatus] = useState<'confirmed' | 'cancelled'>('confirmed');
+  const [editBkNotes, setEditBkNotes] = useState<string>('');
+
+  // Librarian Room Management states
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [roomNameInput, setRoomNameInput] = useState('');
+  const [roomTypeInput, setRoomTypeInput] = useState('Seminar Room');
+  const [roomCapacityInput, setRoomCapacityInput] = useState<number>(30);
+  const [roomLocationInput, setRoomLocationInput] = useState('');
+  const [roomFeaturesInput, setRoomFeaturesInput] = useState('Interactive Smart Screen, Reference Tables');
+  const [roomDescInput, setRoomDescInput] = useState('');
+  const [confirmDeleteRoomId, setConfirmDeleteRoomId] = useState<string | null>(null);
+  const [roomActionNotice, setRoomActionNotice] = useState<string | null>(null);
 
   // Form inputs
-  const [selectedRoomId, setSelectedRoomId] = useState<string>(rooms[0]?.id || 'room-main-hall');
+  const [selectedRoomId, setSelectedRoomId] = useState<string>(rooms[0]?.id || FALLBACK_LIBRARY_ROOM.id);
   const [bookingDate, setBookingDate] = useState<string>(() => {
     // Default to tomorrow or next weekday
     const d = new Date();
@@ -117,10 +177,12 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   const [selectedPeriodNum, setSelectedPeriodNum] = useState<number>(3);
   
   // Requester fields
-  const [teacherName, setTeacherName] = useState(currentUser.name);
-  const [subject, setSubject] = useState<string>(currentUser.assignedSubjects?.[0] || 'Integrated Science');
-  const [grade, setGrade] = useState<GradeLevel>((currentUser.grade as GradeLevel) || 4);
-  const [stream, setStream] = useState<string>(currentUser.stream ? `Grade ${currentUser.grade || 4} ${currentUser.stream}` : 'Grade 4 Dove');
+  const [teacherName, setTeacherName] = useState(safeUserName);
+  const [subject, setSubject] = useState<string>(currentUser?.assignedSubjects?.[0] || 'Integrated Science');
+  const [grade, setGrade] = useState<GradeLevel>((currentUser?.grade as GradeLevel) || 4);
+  const [stream, setStream] = useState<string>(
+    currentUser?.stream ? `Grade ${currentUser?.grade || 4} ${currentUser.stream}` : 'Grade 4 Dove'
+  );
   const [purpose, setPurpose] = useState('CBC Research & Digital Learning Practicum');
   const [learnersCount, setLearnersCount] = useState<number>(32);
   const [equipmentNeeded, setEquipmentNeeded] = useState<string[]>([
@@ -129,25 +191,174 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   ]);
   const [notes, setNotes] = useState('');
   const [bookingSubmitted, setBookingSubmitted] = useState<LibraryRoomBooking | null>(null);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   // Filter for my bookings
   const [bookingsFilter, setBookingsFilter] = useState<'all' | 'mine'>('all');
 
-  // Sync with storage events
-  React.useEffect(() => {
+  // Sync with storage events & published Master Timetable Library Lessons
+  useEffect(() => {
+    const handleRoomsUpdate = () => {
+      const loaded = Storage.getLibraryRooms();
+      setRoomsList(Array.isArray(loaded) && loaded.length > 0 ? loaded : [FALLBACK_LIBRARY_ROOM]);
+    };
     const handleBookingsUpdate = () => setAllBookings(Storage.getLibraryRoomBookings());
     const handleTimetableUpdate = () => setTimetableSlots(Storage.getLibraryTimetable());
+    const handleMasterTimetableUpdate = () => setMasterTimetableSlots(Storage.getAllTimetableSlots());
 
+    window.addEventListener('library-rooms-updated', handleRoomsUpdate);
     window.addEventListener('library-room-bookings-updated', handleBookingsUpdate);
     window.addEventListener('library-timetable-updated', handleTimetableUpdate);
+    window.addEventListener('timetable-updated', handleMasterTimetableUpdate);
+    window.addEventListener('edusmart:data-changed', handleRoomsUpdate);
+    window.addEventListener('edusmart:data-changed', handleBookingsUpdate);
+    window.addEventListener('edusmart:data-changed', handleTimetableUpdate);
+    window.addEventListener('edusmart:data-changed', handleMasterTimetableUpdate);
     return () => {
+      window.removeEventListener('library-rooms-updated', handleRoomsUpdate);
       window.removeEventListener('library-room-bookings-updated', handleBookingsUpdate);
       window.removeEventListener('library-timetable-updated', handleTimetableUpdate);
+      window.removeEventListener('timetable-updated', handleMasterTimetableUpdate);
+      window.removeEventListener('edusmart:data-changed', handleRoomsUpdate);
+      window.removeEventListener('edusmart:data-changed', handleBookingsUpdate);
+      window.removeEventListener('edusmart:data-changed', handleTimetableUpdate);
+      window.removeEventListener('edusmart:data-changed', handleMasterTimetableUpdate);
     };
   }, []);
 
-  // Selected Room Object
-  const selectedRoom = rooms.find(r => r.id === selectedRoomId) || rooms[0];
+  // Fetch published Master Timetable Library Lesson entries whenever the modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pub = await ttApiFetch<{
+          published?: boolean;
+          periods?: Array<{ periodNumber: number; kind: string; startTime: string; endTime: string }>;
+          entries?: Array<{
+            id: string;
+            dayOfWeek: string;
+            periodNumber: number;
+            grade: number;
+            stream: string;
+            subjectName: string;
+            teacherNames?: string[];
+            roomName?: string;
+          }>;
+        }>('/api/timetable/published');
+        if (cancelled || !pub?.published || !Array.isArray(pub.entries)) return;
+        const periodMap = new Map<number, { startTime: string; endTime: string }>();
+        for (const p of pub.periods || []) {
+          if (p.kind === 'lesson' && p.periodNumber > 0) {
+            periodMap.set(p.periodNumber, { startTime: p.startTime, endTime: p.endTime });
+          }
+        }
+        const mapped = pub.entries
+          .filter((e) => String(e.subjectName || '').toLowerCase().includes('library'))
+          .map((e) => {
+            const tm = periodMap.get(e.periodNumber) || BOOKING_PERIODS.find((bp) => bp.periodNum === e.periodNumber);
+            const day = DAYS_OF_WEEK.includes(e.dayOfWeek as any)
+              ? (e.dayOfWeek as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday')
+              : 'Monday';
+            return {
+              id: `mt-pub-${e.id}`,
+              dayOfWeek: day,
+              startTime: tm?.startTime || '08:00',
+              endTime: tm?.endTime || '08:40',
+              grade: Number(e.grade || 4) as GradeLevel,
+              stream: `Grade ${e.grade} ${e.stream}`.trim(),
+              teacherInCharge: (e.teacherNames || []).join(', ') || 'Subject Teacher',
+              sessionType: 'Library Reading Period' as const,
+              venue:
+                e.roomName && e.roomName.toLowerCase().includes('library')
+                  ? e.roomName
+                  : 'Main Library Reading Hall',
+              source: 'master_timetable' as const,
+              periodNumber: e.periodNumber,
+            };
+          });
+        setPublishedMasterLibLessons(mapped);
+      } catch {
+        // Gracefully rely on local Storage master timetable & library timetable
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // Unified list of scheduled Library Lessons (Master Timetable Library Lesson slots + Library Timetable)
+  const linkedLibraryLessons = useMemo(() => {
+    type LinkedLesson = LibraryTimetableSlot & {
+      source: 'master_timetable' | 'library_timetable';
+      periodNumber?: number;
+    };
+    const byKey = new Map<string, LinkedLesson>();
+    const makeKey = (day: string, startTime: string, grade: number, stream: string) =>
+      `${day.toLowerCase()}::${parseTimeToMinutes(startTime)}::${grade}::${stream.toLowerCase().replace(/^grade\s*\d+\s*/i, '').trim()}`;
+
+    // 1. Published Master Timetable Library Lesson entries (authoritative backend)
+    for (const item of publishedMasterLibLessons) {
+      byKey.set(makeKey(item.dayOfWeek, item.startTime, Number(item.grade), item.stream), item);
+    }
+
+    // 2. Local Master Timetable Library Lesson slots (Storage.getAllTimetableSlots)
+    for (const slot of Array.isArray(masterTimetableSlots) ? masterTimetableSlots : []) {
+      if (!slot || !String(slot.subject || '').toLowerCase().includes('library')) continue;
+      const day = DAYS_OF_WEEK.includes(slot.dayOfWeek as any)
+        ? (slot.dayOfWeek as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday')
+        : 'Monday';
+      const streamLabel = String(slot.stream || '').toLowerCase().startsWith('grade')
+        ? String(slot.stream)
+        : `Grade ${slot.grade} ${slot.stream}`;
+      const k = makeKey(day, slot.startTime, Number(slot.grade), streamLabel);
+      if (!byKey.has(k)) {
+        byKey.set(k, {
+          id: `mt-local-${slot.id}`,
+          dayOfWeek: day,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          grade: slot.grade,
+          stream: streamLabel,
+          teacherInCharge: slot.teacherName || 'Subject Teacher',
+          sessionType: 'Library Reading Period',
+          venue:
+            slot.roomName && slot.roomName.toLowerCase().includes('library')
+              ? slot.roomName
+              : 'Main Library Reading Hall',
+          source: 'master_timetable',
+          periodNumber: slot.period,
+        });
+      }
+    }
+
+    // 3. Dedicated Library Timetable slots (including mt-lib-* synced entries)
+    for (const slot of Array.isArray(timetableSlots) ? timetableSlots : []) {
+      if (!slot) continue;
+      const k = makeKey(slot.dayOfWeek, slot.startTime, Number(slot.grade), slot.stream || '');
+      if (!byKey.has(k)) {
+        byKey.set(k, {
+          ...slot,
+          source: String(slot.id || '').startsWith('mt-lib-') ? 'master_timetable' : 'library_timetable',
+        });
+      }
+    }
+
+    return Array.from(byKey.values());
+  }, [publishedMasterLibLessons, masterTimetableSlots, timetableSlots]);
+
+  // All assignable school subjects (includes Library Lesson, Arts, Music, Nutrition & Master Timetable custom subjects)
+  const assignableSubjects = useMemo(() => {
+    const set = new Set<string>([...PRIMARY_SUBJECTS, ...JUNIOR_SUBJECTS]);
+    for (const s of listSubjects()) {
+      if (s?.name) set.add(s.name);
+    }
+    return Array.from(set).sort();
+  }, [isOpen]);
+
+  // Selected Room Object (guaranteed non-undefined)
+  const selectedRoom: LibraryRoom =
+    rooms.find(r => r && r.id === selectedRoomId) || rooms[0] || FALLBACK_LIBRARY_ROOM;
 
   // Derive day of week from selected booking date
   const selectedDayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' = useMemo(() => {
@@ -164,7 +375,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
 
   const selectedPeriod = BOOKING_PERIODS.find(p => p.periodNum === selectedPeriodNum) || BOOKING_PERIODS[2];
 
-  // Helper function to check if a specific slot has a conflict with a Library Lesson or existing Booking
+  // Helper function to check if a specific slot has a conflict with a Library Lesson (Master Timetable or Library Schedule) or existing Booking
   const checkSlotStatus = (
     roomId: string, 
     roomName: string, 
@@ -173,40 +384,58 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     period: BookingPeriod
   ): {
     status: 'lesson_conflict' | 'already_booked' | 'available';
-    lesson?: LibraryTimetableSlot;
+    lesson?: LibraryTimetableSlot & { source?: 'master_timetable' | 'library_timetable'; periodNumber?: number };
     booking?: LibraryRoomBooking;
     reason?: string;
   } => {
-    // 1. Check Library Lessons from timetable
-    // A library lesson occurs if:
-    // - slot day matches
-    // - slot venue matches roomName OR session is general library session held in that venue
-    // - time interval overlaps
-    const conflictingLesson = timetableSlots.find(slot => {
-      if (slot.dayOfWeek !== day) return false;
-      
-      const venueMatches = 
-        slot.venue.toLowerCase().includes(roomName.toLowerCase()) || 
-        roomName.toLowerCase().includes(slot.venue.toLowerCase()) ||
-        (roomName.includes('Main') && slot.venue.includes('Main')) ||
-        (roomName.includes('Digital') && slot.venue.includes('Digital'));
+    const safeRoomName = (roomName || '').toLowerCase();
+    const isDefaultMainRoom =
+      safeRoomName.includes('main') ||
+      safeRoomName.includes('reading') ||
+      roomId === rooms[0]?.id;
+
+    // 1. Check Library Lessons (linked from Master Timetable + Library Timetable)
+    const conflictingLesson = linkedLibraryLessons.find(slot => {
+      if (!slot || slot.dayOfWeek !== day) return false;
+      const safeVenue = (slot.venue || '').toLowerCase().trim();
+      const isGenericLibraryVenue =
+        !safeVenue ||
+        safeVenue === 'library' ||
+        safeVenue === 'school library' ||
+        safeVenue.startsWith('classroom');
+
+      const venueMatches =
+        (isGenericLibraryVenue && isDefaultMainRoom) ||
+        (safeVenue && safeRoomName && (safeVenue.includes(safeRoomName) || safeRoomName.includes(safeVenue))) ||
+        (safeRoomName.includes('main') && safeVenue.includes('main')) ||
+        (safeRoomName.includes('digital') && safeVenue.includes('digital'));
 
       if (!venueMatches) return false;
 
+      if (typeof slot.periodNumber === 'number' && slot.periodNumber === period.periodNum) {
+        return true;
+      }
       return timesOverlap(period.startTime, period.endTime, slot.startTime, slot.endTime);
     });
 
     if (conflictingLesson) {
+      const originLabel =
+        conflictingLesson.source === 'master_timetable'
+          ? 'Master Timetable Library Lesson'
+          : 'Scheduled Library Lesson';
+      const classLabel = conflictingLesson.stream?.toLowerCase().includes('grade')
+        ? conflictingLesson.stream
+        : `Grade ${conflictingLesson.grade} ${conflictingLesson.stream}`;
       return {
         status: 'lesson_conflict',
         lesson: conflictingLesson,
-        reason: `Scheduled Library Lesson in progress: Grade ${conflictingLesson.grade} ${conflictingLesson.stream} (${conflictingLesson.sessionType} - Led by ${conflictingLesson.teacherInCharge})`
+        reason: `${originLabel} in progress: ${classLabel} (${conflictingLesson.sessionType} - Led by ${conflictingLesson.teacherInCharge})`
       };
     }
 
     // 2. Check existing confirmed bookings
-    const conflictingBooking = allBookings.find(b => {
-      if (b.status === 'cancelled') return false;
+    const conflictingBooking = (Array.isArray(allBookings) ? allBookings : []).find(b => {
+      if (!b || b.status === 'cancelled') return false;
       if (b.date !== dateStr) return false;
       if (b.roomId !== roomId && b.roomName !== roomName) return false;
       return timesOverlap(period.startTime, period.endTime, b.startTime, b.endTime);
@@ -232,6 +461,20 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     selectedPeriod
   );
 
+  // Summary of free vs occupied slots for selected room & day (for quick-select Free Slots Finder)
+  const daySlotBreakdown = useMemo(() => {
+    const items = BOOKING_PERIODS.map((period) => ({
+      period,
+      check: checkSlotStatus(selectedRoom.id, selectedRoom.name, selectedDayOfWeek, bookingDate, period),
+    }));
+    return {
+      items,
+      freeCount: items.filter((i) => i.check.status === 'available').length,
+      lessonCount: items.filter((i) => i.check.status === 'lesson_conflict').length,
+      bookedCount: items.filter((i) => i.check.status === 'already_booked').length,
+    };
+  }, [selectedRoom.id, selectedRoom.name, selectedDayOfWeek, bookingDate, linkedLibraryLessons, allBookings]);
+
   // Available equipment options
   const equipmentOptions = [
     'Interactive Smart Screen',
@@ -251,15 +494,16 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
 
   const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
+    setBookingError(null);
 
     // Guard: strictly forbid spots with library lessons or existing bookings
     if (currentSlotConflict.status !== 'available') {
-      alert(`Cannot book: ${currentSlotConflict.reason}`);
+      setBookingError(`Cannot book: ${currentSlotConflict.reason}`);
       return;
     }
 
     if (learnersCount > selectedRoom.capacity) {
-      alert(`Learners count (${learnersCount}) exceeds room capacity (${selectedRoom.capacity}). Please select a larger room or reduce count.`);
+      setBookingError(`Learners count (${learnersCount}) exceeds room capacity (${selectedRoom.capacity}). Please select a larger room or reduce count.`);
       return;
     }
 
@@ -274,9 +518,9 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
       startTime: selectedPeriod.displayTime.split(' - ')[0],
       endTime: selectedPeriod.displayTime.split(' - ')[1],
       periodLabel: selectedPeriod.label,
-      bookedByUserId: currentUser.id,
+      bookedByUserId: safeUserId,
       bookedByName: teacherName,
-      bookedByRole: currentUser.role,
+      bookedByRole: safeUserRole,
       grade,
       stream,
       subject,
@@ -294,8 +538,8 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     Storage.addLibraryAuditLog({
       id: `aud-${Date.now()}`,
       action: 'Library Room Reserved',
-      performedBy: currentUser.name,
-      role: currentUser.role,
+      performedBy: safeUserName,
+      role: safeUserRole,
       timestamp: new Date().toISOString(),
       details: `Booked "${selectedRoom.name}" on ${bookingDate} (${selectedPeriod.label}) for ${stream} - ${purpose}`
     });
@@ -308,24 +552,194 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   };
 
   const handleCancelBooking = (id: string) => {
-    if (confirm('Are you sure you want to cancel this library room reservation? The spot will immediately become available for others.')) {
-      Storage.cancelLibraryRoomBooking(id);
-      setAllBookings(Storage.getLibraryRoomBookings());
+    const target = allBookings.find(b => b.id === id);
+    Storage.cancelLibraryRoomBooking(id);
+    if (target) {
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Room Booking Cancelled',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Cancelled room booking ${target.bookingRef} (${target.roomName} on ${target.date})`
+      });
     }
+    setAllBookings(Storage.getLibraryRoomBookings());
+    setConfirmCancelId(null);
+  };
+
+  const handleDeleteBooking = (id: string) => {
+    const target = allBookings.find(b => b.id === id);
+    Storage.deleteLibraryRoomBooking(id);
+    if (target) {
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Room Booking Deleted',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Permanently removed booking ${target.bookingRef} (${target.roomName} on ${target.date})`
+      });
+    }
+    setAllBookings(Storage.getLibraryRoomBookings());
+    setConfirmDeleteBookingId(null);
+    if (editingBookingId === id) setEditingBookingId(null);
+  };
+
+  const startEditBooking = (bk: LibraryRoomBooking) => {
+    setEditingBookingId(bk.id);
+    setEditBkRoomId(bk.roomId);
+    setEditBkDate(bk.date);
+    const matchedPeriod = BOOKING_PERIODS.find(p => p.label === bk.periodLabel || p.displayTime.startsWith(bk.startTime));
+    setEditBkPeriodNum(matchedPeriod?.periodNum || 3);
+    setEditBkTeacher(bk.bookedByName);
+    setEditBkSubject(bk.subject || '');
+    setEditBkStream(bk.stream || '');
+    setEditBkPurpose(bk.purpose);
+    setEditBkLearners(bk.learnersCount);
+    setEditBkStatus(bk.status);
+    setEditBkNotes(bk.notes || '');
+  };
+
+  const handleSaveBookingEdit = (id: string) => {
+    const rm = rooms.find(r => r.id === editBkRoomId) || selectedRoom;
+    const per = BOOKING_PERIODS.find(p => p.periodNum === editBkPeriodNum) || BOOKING_PERIODS[2];
+    const dayIdx = editBkDate ? new Date(editBkDate + 'T00:00:00').getDay() : 1;
+    const dayMap: Record<number, 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'> = {
+      1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday'
+    };
+    const dayOfWeek = dayMap[dayIdx] || 'Monday';
+
+    Storage.updateLibraryRoomBooking(id, {
+      roomId: rm.id,
+      roomName: rm.name,
+      roomCapacity: rm.capacity,
+      date: editBkDate,
+      dayOfWeek,
+      startTime: per.displayTime.split(' - ')[0],
+      endTime: per.displayTime.split(' - ')[1],
+      periodLabel: per.label,
+      bookedByName: editBkTeacher.trim() || safeUserName,
+      subject: editBkSubject.trim(),
+      stream: editBkStream.trim(),
+      purpose: editBkPurpose.trim() || 'Library Session',
+      learnersCount: Math.max(1, Number(editBkLearners) || 1),
+      status: editBkStatus,
+      notes: editBkNotes.trim()
+    });
+    Storage.addLibraryAuditLog({
+      id: `aud-${Date.now()}`,
+      action: 'Room Booking Updated',
+      performedBy: safeUserName,
+      role: safeUserRole,
+      timestamp: new Date().toISOString(),
+      details: `Edited room booking for "${rm.name}" on ${editBkDate} (${per.label})`
+    });
+    setAllBookings(Storage.getLibraryRoomBookings());
+    setEditingBookingId(null);
+  };
+
+  const resetRoomForm = () => {
+    setEditingRoomId(null);
+    setRoomNameInput('');
+    setRoomTypeInput('Seminar Room');
+    setRoomCapacityInput(30);
+    setRoomLocationInput('');
+    setRoomFeaturesInput('Interactive Smart Screen, Reference Tables');
+    setRoomDescInput('');
+  };
+
+  const handleSaveRoom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!roomNameInput.trim()) return;
+    const features = roomFeaturesInput
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (editingRoomId) {
+      Storage.updateLibraryRoom(editingRoomId, {
+        name: roomNameInput.trim(),
+        type: roomTypeInput.trim() || 'Reading Hall',
+        capacity: Math.max(1, Number(roomCapacityInput) || 20),
+        location: roomLocationInput.trim() || 'Library Wing',
+        features,
+        description: roomDescInput.trim() || 'Dedicated library learning space.'
+      });
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Library Room Updated',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Updated library venue "${roomNameInput.trim()}" (Capacity: ${roomCapacityInput})`
+      });
+      setRoomActionNotice(`Updated room "${roomNameInput.trim()}".`);
+    } else {
+      const newRoom: LibraryRoom = {
+        id: `room-${Date.now()}`,
+        name: roomNameInput.trim(),
+        type: roomTypeInput.trim() || 'Seminar Room',
+        capacity: Math.max(1, Number(roomCapacityInput) || 20),
+        location: roomLocationInput.trim() || 'Library Wing',
+        features,
+        description: roomDescInput.trim() || 'Dedicated library learning space.'
+      };
+      Storage.addLibraryRoom(newRoom);
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Library Room Added',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Added new library venue "${newRoom.name}" (Capacity: ${newRoom.capacity})`
+      });
+      setRoomActionNotice(`Added new library room "${newRoom.name}".`);
+    }
+    setRoomsList(Storage.getLibraryRooms());
+    resetRoomForm();
+    setTimeout(() => setRoomActionNotice(null), 4000);
+  };
+
+  const handleDeleteRoom = (id: string) => {
+    const target = rooms.find(r => r.id === id);
+    Storage.deleteLibraryRoom(id);
+    if (target) {
+      Storage.addLibraryAuditLog({
+        id: `aud-${Date.now()}`,
+        action: 'Library Room Removed',
+        performedBy: safeUserName,
+        role: safeUserRole,
+        timestamp: new Date().toISOString(),
+        details: `Removed library room "${target.name}"`
+      });
+      setRoomActionNotice(`Removed room "${target.name}".`);
+      setTimeout(() => setRoomActionNotice(null), 4000);
+    }
+    const nextRooms = Storage.getLibraryRooms();
+    setRoomsList(nextRooms);
+    if (selectedRoomId === id && nextRooms[0]) {
+      setSelectedRoomId(nextRooms[0].id);
+    }
+    setConfirmDeleteRoomId(null);
   };
 
   // Filtered bookings
-  const displayedBookings = allBookings.filter(b => {
+  const displayedBookings = (Array.isArray(allBookings) ? allBookings : []).filter(b => {
+    if (!b) return false;
     if (bookingsFilter === 'mine') {
-      return b.bookedByUserId === currentUser.id || b.bookedByName === currentUser.name;
+      return b.bookedByUserId === safeUserId || b.bookedByName === safeUserName;
     }
     return true;
   });
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-6 overflow-y-auto"
+      onClick={onClose}
+    >
       <div 
         className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl my-auto overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -369,7 +783,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
           <div className="flex items-center gap-2 text-purple-900">
             <span className="font-semibold text-slate-600">Active User:</span>
             <span className="font-black bg-white px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs">
-              {currentUser.name} ({currentUser.role === 'librarian' ? 'Head Librarian' : 'Subject Teacher'})
+              {safeUserName} ({safeUserRole === 'librarian' ? 'Head Librarian' : 'Subject Teacher'})
             </span>
           </div>
 
@@ -416,6 +830,20 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
             <FileText className="w-4 h-4 text-purple-600" />
             <span>3. Active Reservations ({allBookings.filter(b => b.status === 'confirmed').length})</span>
           </button>
+
+          {isLibrarianOrAdmin && (
+            <button
+              onClick={() => setActiveTab('manage_rooms')}
+              className={`px-4 py-2.5 font-bold text-xs rounded-t-xl transition-all flex items-center gap-2 cursor-pointer border-t border-x ${
+                activeTab === 'manage_rooms'
+                  ? 'bg-white text-purple-900 border-slate-200 -mb-px font-black shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-100/60'
+              }`}
+            >
+              <Building2 className="w-4 h-4 text-purple-600" />
+              <span>4. Manage Rooms ({rooms.length})</span>
+            </button>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -520,6 +948,21 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
               ) : (
                 /* Booking Form */
                 <form onSubmit={handleConfirmBooking} className="space-y-6 text-xs">
+                  {bookingError && (
+                    <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-800 rounded-2xl text-xs font-bold flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{bookingError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setBookingError(null)}
+                        className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   
                   {/* Step 1: Choose Room */}
                   <div className="space-y-3">
@@ -612,8 +1055,12 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                         >
                           {BOOKING_PERIODS.map(p => {
                             const statusCheck = checkSlotStatus(selectedRoom.id, selectedRoom.name, selectedDayOfWeek, bookingDate, p);
-                            let tag = '';
-                            if (statusCheck.status === 'lesson_conflict') tag = ' [🚫 Lesson in Room]';
+                            let tag = ' [✅ FREE]';
+                            if (statusCheck.status === 'lesson_conflict') {
+                              tag = statusCheck.lesson?.source === 'master_timetable'
+                                ? ' [🚫 Master TT Library Lesson]'
+                                : ' [🚫 Library Lesson]';
+                            }
                             if (statusCheck.status === 'already_booked') tag = ' [⚠️ Already Booked]';
                             return (
                               <option key={p.periodNum} value={p.periodNum}>
@@ -625,6 +1072,66 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                         <div className="text-[11px] text-slate-500 mt-1">
                           Active slot: <span className="font-bold text-slate-800">{selectedPeriod.displayTime}</span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* FREE SLOTS FINDER (LINKED TO MASTER TIMETABLE LIBRARY LESSONS) */}
+                    <div className="bg-white border border-purple-200 rounded-2xl p-3.5 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-900">
+                          <BookOpen className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Free Slots Finder · {selectedDayOfWeek} ({selectedRoom.name})</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            {daySlotBreakdown.freeCount} Free
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800">
+                            {daySlotBreakdown.lessonCount} Library Lessons
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                            {daySlotBreakdown.bookedCount} Booked
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Automatically synced with Master Timetable <strong>Library Lesson</strong> schedules. Click any green <strong className="text-emerald-700">FREE</strong> period below to reserve for another teacher:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {daySlotBreakdown.items.map(({ period, check }) => {
+                          const isSelected = period.periodNum === selectedPeriodNum;
+                          const isFree = check.status === 'available';
+                          const isLesson = check.status === 'lesson_conflict';
+                          return (
+                            <button
+                              key={period.periodNum}
+                              type="button"
+                              onClick={() => setSelectedPeriodNum(period.periodNum)}
+                              title={check.reason || `Free slot: ${period.displayTime}`}
+                              className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                                isSelected
+                                  ? 'ring-2 ring-purple-600 border-purple-600 ' +
+                                    (isFree
+                                      ? 'bg-emerald-600 text-white'
+                                      : isLesson
+                                      ? 'bg-rose-600 text-white'
+                                      : 'bg-amber-600 text-white')
+                                  : isFree
+                                  ? 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100'
+                                  : isLesson
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 opacity-80'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200 opacity-85'
+                              }`}
+                            >
+                              <span className="font-mono">P{period.periodNum}</span>
+                              <span>·</span>
+                              <span>{period.startTime}</span>
+                              <span className="uppercase text-[9px] font-black">
+                                {isFree ? 'FREE' : isLesson ? 'LIB LESSON' : 'BOOKED'}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -703,12 +1210,18 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                         </label>
                         <input
                           type="text"
+                          list="library-booking-subjects-datalist"
                           value={subject}
                           onChange={(e) => setSubject(e.target.value)}
-                          placeholder="e.g. Science & Tech, Math, English"
+                          placeholder="e.g. Library Lesson, Arts, Music, Nutrition, Science"
                           className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900"
                           required
                         />
+                        <datalist id="library-booking-subjects-datalist">
+                          {assignableSubjects.map((sub) => (
+                            <option key={sub} value={sub} />
+                          ))}
+                        </datalist>
                       </div>
 
                       <div>
@@ -849,19 +1362,30 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
           {/* TAB 2: WEEKLY SPOT AVAILABILITY MATRIX */}
           {activeTab === 'matrix' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <h4 className="font-black text-sm text-slate-900">
-                    Comprehensive Library Timetable & Spot Availability Grid
+                    Weekly Library Timetable &amp; Free Slot Availability Grid
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Live overview of scheduled curriculum library reading lessons vs open spots available for booking.
+                    Linked directly to Master Timetable <strong>Library Lesson</strong> schedules so free slots for other teachers stand out clearly.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedRoomId}
+                    onChange={(e) => setSelectedRoomId(e.target.value)}
+                    className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-800"
+                  >
+                    {rooms.map((rm) => (
+                      <option key={rm.id} value={rm.id}>
+                        {rm.name}
+                      </option>
+                    ))}
+                  </select>
                   <span className="flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" /> Lesson (Locked)
+                    <span className="w-2 h-2 rounded-full bg-rose-500" /> Library Lesson (Locked)
                   </span>
                   <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
                     <span className="w-2 h-2 rounded-full bg-amber-500" /> Booked
@@ -875,13 +1399,21 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
               {/* Day-by-Day Slot Matrix */}
               <div className="space-y-4">
                 {DAYS_OF_WEEK.map((day) => {
+                  const dayFreeTotal = BOOKING_PERIODS.slice(0, 10).filter(
+                    (p) => checkSlotStatus(selectedRoom.id, selectedRoom.name, day, bookingDate, p).status === 'available'
+                  ).length;
                   return (
                     <div key={day} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
-                      <div className="bg-slate-900 text-white px-4 py-2.5 font-black text-xs flex items-center justify-between">
+                      <div className="bg-slate-900 text-white px-4 py-2.5 font-black text-xs flex items-center justify-between gap-2">
                         <span className="uppercase tracking-wider">{day} Schedule</span>
-                        <span className="text-[11px] text-purple-300 font-semibold">
-                          {selectedRoom.name}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
+                            {dayFreeTotal} Free Slots
+                          </span>
+                          <span className="text-[11px] text-purple-300 font-semibold">
+                            {selectedRoom.name}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="p-4 grid grid-cols-2 sm:grid-cols-5 gap-2.5">
@@ -915,7 +1447,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                                 {isLesson ? (
                                   <div>
                                     <span className="px-1.5 py-0.5 rounded bg-rose-200 text-rose-800 font-bold text-[9px]">
-                                      LESSON
+                                      {status.lesson?.source === 'master_timetable' ? 'MASTER TT LESSON' : 'LIBRARY LESSON'}
                                     </span>
                                     <div className="font-bold text-[10px] mt-1 text-rose-900 truncate">
                                       {status.lesson?.stream}
@@ -1039,24 +1571,214 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                           </div>
                         </div>
 
-                        {bk.status === 'confirmed' && (
-                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+                          {isLibrarianOrAdmin && (
                             <button
-                              onClick={() => handleCancelBooking(bk.id)}
-                              className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              type="button"
+                              onClick={() => editingBookingId === bk.id ? setEditingBookingId(null) : startEditBooking(bk)}
+                              className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Cancel</span>
+                              <Pencil className="w-3 h-3" />
+                              <span>{editingBookingId === bk.id ? 'Close Edit' : 'Edit'}</span>
+                            </button>
+                          )}
+
+                          {bk.status === 'confirmed' && (isLibrarianOrAdmin || bk.bookedByUserId === safeUserId || bk.bookedByName === safeUserName) && (
+                            confirmCancelId === bk.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelBooking(bk.id)}
+                                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Confirm Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmCancelId(null)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Keep
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmCancelId(bk.id)}
+                                className="px-2.5 py-1 text-amber-700 hover:bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Cancel</span>
+                              </button>
+                            )
+                          )}
+
+                          {isLibrarianOrAdmin && bk.status === 'cancelled' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                Storage.updateLibraryRoomBooking(bk.id, { status: 'confirmed' });
+                                setAllBookings(Storage.getLibraryRoomBookings());
+                              }}
+                              className="px-2.5 py-1 text-emerald-700 hover:bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Restore</span>
+                            </button>
+                          )}
+
+                          {isLibrarianOrAdmin && (
+                            confirmDeleteBookingId === bk.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBooking(bk.id)}
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Confirm Delete
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteBookingId(null)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBookingId(bk.id)}
+                                className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      {editingBookingId === bk.id && isLibrarianOrAdmin && (
+                        <div className="mt-3 p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3 text-xs">
+                          <div className="font-black text-indigo-950 text-xs">Edit Room Booking ({bk.bookingRef})</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Room</label>
+                              <select
+                                value={editBkRoomId}
+                                onChange={(e) => setEditBkRoomId(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              >
+                                {rooms.map(r => (
+                                  <option key={r.id} value={r.id}>{r.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Date</label>
+                              <input
+                                type="date"
+                                value={editBkDate}
+                                onChange={(e) => setEditBkDate(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Period</label>
+                              <select
+                                value={editBkPeriodNum}
+                                onChange={(e) => setEditBkPeriodNum(Number(e.target.value))}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              >
+                                {BOOKING_PERIODS.map(p => (
+                                  <option key={p.periodNum} value={p.periodNum}>{p.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Teacher / Requester</label>
+                              <input
+                                type="text"
+                                value={editBkTeacher}
+                                onChange={(e) => setEditBkTeacher(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Class / Stream</label>
+                              <input
+                                type="text"
+                                value={editBkStream}
+                                onChange={(e) => setEditBkStream(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Subject</label>
+                              <input
+                                type="text"
+                                list="library-booking-subjects-datalist"
+                                value={editBkSubject}
+                                onChange={(e) => setEditBkSubject(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Purpose</label>
+                              <input
+                                type="text"
+                                value={editBkPurpose}
+                                onChange={(e) => setEditBkPurpose(e.target.value)}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Learners</label>
+                              <input
+                                type="number"
+                                min={1}
+                                value={editBkLearners}
+                                onChange={(e) => setEditBkLearners(Number(e.target.value))}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-600 mb-1">Status</label>
+                              <select
+                                value={editBkStatus}
+                                onChange={(e) => setEditBkStatus(e.target.value as 'confirmed' | 'cancelled')}
+                                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white text-xs"
+                              >
+                                <option value="confirmed">Confirmed</option>
+                                <option value="cancelled">Cancelled</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingBookingId(null)}
+                              className="px-3 py-1.5 text-slate-600 font-bold text-xs cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveBookingEdit(bk.id)}
+                              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                            >
+                              Save Changes
                             </button>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       <div className="pt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                         <div>
                           <span className="text-[11px] text-slate-400 font-medium">Booked By:</span>
                           <div className="font-bold text-slate-900">{bk.bookedByName}</div>
-                          <div className="text-[10px] text-purple-700 capitalize">{bk.bookedByRole.replace('_', ' ')}</div>
+                          <div className="text-[10px] text-purple-700 capitalize">{(bk.bookedByRole || 'teacher').replace(/_/g, ' ')}</div>
                         </div>
 
                         <div>
@@ -1087,8 +1809,174 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
             </div>
           )}
 
+          {/* TAB 4: LIBRARIAN ROOM MANAGEMENT */}
+          {activeTab === 'manage_rooms' && isLibrarianOrAdmin && (
+            <div className="space-y-5">
+              {roomActionNotice && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>{roomActionNotice}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveRoom} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-black text-sm text-slate-900 flex items-center gap-1.5">
+                    <Plus className="w-4 h-4 text-purple-600" />
+                    <span>{editingRoomId ? 'Edit Library Room / Venue' : 'Add New Library Room / Learning Space'}</span>
+                  </h4>
+                  {editingRoomId && (
+                    <button type="button" onClick={resetRoomForm} className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer">
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Room Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={roomNameInput}
+                      onChange={(e) => setRoomNameInput(e.target.value)}
+                      placeholder="e.g. Storytelling & Reading Amphitheatre"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Room Type</label>
+                    <input
+                      type="text"
+                      value={roomTypeInput}
+                      onChange={(e) => setRoomTypeInput(e.target.value)}
+                      placeholder="e.g. Reading Hall / Seminar Room"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Capacity (Learners)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={roomCapacityInput}
+                      onChange={(e) => setRoomCapacityInput(Number(e.target.value))}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Location / Wing</label>
+                    <input
+                      type="text"
+                      value={roomLocationInput}
+                      onChange={(e) => setRoomLocationInput(e.target.value)}
+                      placeholder="e.g. First Floor · South Wing"
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Features (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={roomFeaturesInput}
+                      onChange={(e) => setRoomFeaturesInput(e.target.value)}
+                      className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Description</label>
+                  <input
+                    type="text"
+                    value={roomDescInput}
+                    onChange={(e) => setRoomDescInput(e.target.value)}
+                    placeholder="Brief description of intended learning activities..."
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white text-xs"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs rounded-xl cursor-pointer"
+                  >
+                    {editingRoomId ? 'Update Room' : '+ Add Library Room'}
+                  </button>
+                </div>
+              </form>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {rooms.map(rm => (
+                  <div key={rm.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex flex-col justify-between gap-3">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-black text-slate-900 text-sm">{rm.name}</div>
+                          <div className="text-[11px] text-purple-700 font-semibold">{rm.type} · 📍 {rm.location}</div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
+                          Cap: {rm.capacity}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1.5">{rm.description}</p>
+                    </div>
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingRoomId(rm.id);
+                          setRoomNameInput(rm.name);
+                          setRoomTypeInput(rm.type);
+                          setRoomCapacityInput(rm.capacity);
+                          setRoomLocationInput(rm.location);
+                          setRoomFeaturesInput((rm.features || []).join(', '));
+                          setRoomDescInput(rm.description);
+                        }}
+                        className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Edit</span>
+                      </button>
+                      {rooms.length > 1 && (
+                        confirmDeleteRoomId === rm.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRoom(rm.id)}
+                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              Confirm Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteRoomId(null)}
+                              className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteRoomId(rm.id)}
+                            className="px-2.5 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remove</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

@@ -1,44 +1,101 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Tenant, TenantContextType } from '../types/tenant';
-import { SyncEngine } from '../utils/syncEngine';
+import { ClientDataStore } from '../utils/clientDataStore';
 import { mergeDurableSchools, removeDurableSchool, saveDurableSchool } from '../utils/schoolRegistry';
-import { isRemoteDataActive } from '../utils/supabaseHydrate';
+import { INITIAL_TENANTS } from '../data/tenantsData';
 
-const TENANT_STORAGE_KEY = 'edusmart_active_tenant_id';
 const ALL_TENANTS_STORAGE_KEY = 'edusmart_all_tenants_registry';
 
-const TenantContext = createContext<TenantContextType | undefined>(undefined);
+export const TenantContext = createContext<TenantContextType | undefined>(undefined);
+
+const PRESET_LOGO_BY_ID = new Map<string, string>(
+  INITIAL_TENANTS
+    .map((t): [string, string] => [t.id, t.logoUrl || ''])
+    .filter(([, logo]) => Boolean(logo))
+);
+
+function ensureTenantLogoRetained(tenant: Tenant): Tenant {
+  const presetLogo = PRESET_LOGO_BY_ID.get(tenant.id);
+  if (!tenant.logoUrl && presetLogo) {
+    return { ...tenant, logoUrl: presetLogo };
+  }
+  return tenant;
+}
+
+function applyTenantUpdatePreservingLogo(existing: Tenant, updates: Partial<Tenant>): Tenant {
+  const hasExplicitCustomLogoKey = Object.prototype.hasOwnProperty.call(updates, 'customLogoBase64');
+  const nextCustomLogo = hasExplicitCustomLogoKey
+    ? typeof updates.customLogoBase64 === 'string' && updates.customLogoBase64.trim()
+      ? updates.customLogoBase64.trim()
+      : undefined
+    : existing.customLogoBase64;
+
+  const nextLogoUrl =
+    typeof updates.logoUrl === 'string' && updates.logoUrl.trim()
+      ? updates.logoUrl.trim()
+      : existing.logoUrl || PRESET_LOGO_BY_ID.get(existing.id) || '';
+
+  const merged: Tenant = {
+    ...existing,
+    ...updates,
+    logoUrl: nextLogoUrl,
+    customLogoBase64: nextCustomLogo,
+  };
+  if (!merged.customLogoBase64) {
+    delete merged.customLogoBase64;
+  }
+  return merged;
+}
+
+function loadTenantsFromStore(): Tenant[] {
+  const stored = ClientDataStore.getCollection<Tenant[]>(ALL_TENANTS_STORAGE_KEY, []);
+  if (Array.isArray(stored) && stored.length > 0) {
+    return mergeDurableSchools(stored).map(ensureTenantLogoRetained);
+  }
+  const fallbackTenants = ClientDataStore.getCollection<Tenant[]>('tenants', []);
+  if (Array.isArray(fallbackTenants) && fallbackTenants.length > 0) {
+    return mergeDurableSchools(fallbackTenants).map(ensureTenantLogoRetained);
+  }
+  return mergeDurableSchools(INITIAL_TENANTS).map(ensureTenantLogoRetained);
+}
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [allTenants, setAllTenants] = useState<Tenant[]>(() => {
-    try {
-      const stored = localStorage.getItem(ALL_TENANTS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          if (isRemoteDataActive()) return parsed;
-          return parsed as Tenant[];
-        }
-      }
-    } catch {
-      // Fallback
-    }
-    return mergeDurableSchools([]);
-  });
+  const [allTenants, setAllTenants] = useState<Tenant[]>(loadTenantsFromStore);
 
   const [currentTenantId, setCurrentTenantId] = useState<string>(() => {
-    try {
-      const storedId = localStorage.getItem(TENANT_STORAGE_KEY);
-      if (storedId && allTenants.some(t => t.id === storedId)) {
-        return storedId;
-      }
-    } catch {
-      // Fallback
+    const sessionTenant = ClientDataStore.getSessionUser()?.schoolId || ClientDataStore.getActiveTenantId();
+    const loaded = loadTenantsFromStore();
+    if (sessionTenant && loaded.some((t) => t.id === sessionTenant)) {
+      return sessionTenant;
     }
-    return allTenants[0]?.id || 'tenant-staustins';
+    return loaded[0]?.id || 'tenant-riara';
   });
 
-  const currentTenant = allTenants.find(t => t.id === currentTenantId) || allTenants[0] || {
+  // React to backend hydration and real-time SSE tenant updates
+  useEffect(() => {
+    const syncTenants = () => {
+      const next = loadTenantsFromStore();
+      setAllTenants(next);
+      const activeId = ClientDataStore.getActiveTenantId() || ClientDataStore.getSessionUser()?.schoolId;
+      if (activeId && next.some((t) => t.id === activeId)) {
+        setCurrentTenantId(activeId);
+      }
+    };
+    const onDataChanged = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === ALL_TENANTS_STORAGE_KEY || key === 'tenants' || key === 'edusmart_school_registry_v1') {
+        syncTenants();
+      }
+    };
+    window.addEventListener('tenants-synced', syncTenants);
+    window.addEventListener('edusmart:data-changed', onDataChanged);
+    return () => {
+      window.removeEventListener('tenants-synced', syncTenants);
+      window.removeEventListener('edusmart:data-changed', onDataChanged);
+    };
+  }, []);
+
+  const currentTenant = allTenants.find((t) => t.id === currentTenantId) || allTenants[0] || {
     id: '',
     name: '',
     shortName: '',
@@ -66,97 +123,119 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     totalFaculty: 0,
   };
 
-  const switchTenant = (tenantId: string) => {
-    const target = allTenants.find(t => t.id === tenantId);
-    if (target) {
-      setCurrentTenantId(tenantId);
+  const switchTenant = async (tenantId: string): Promise<void> => {
+    const target = allTenants.find((t) => t.id === tenantId);
+    if (!target) return;
+
+    setCurrentTenantId(tenantId);
+    ClientDataStore.setActiveTenantId(tenantId);
+
+    const existingUser = ClientDataStore.getSessionUser();
+    if (existingUser && ClientDataStore.isSuperAdmin()) {
+      ClientDataStore.setSessionUser({ ...existingUser, schoolId: tenantId });
+    }
+
+    window.dispatchEvent(new CustomEvent('tenant-changed', { detail: target }));
+
+    // If super admin session is active, persist active tenant context server-side
+    if (ClientDataStore.isSuperAdmin()) {
       try {
-        SyncEngine.persistItem(TENANT_STORAGE_KEY, tenantId);
-        window.dispatchEvent(new CustomEvent('tenant-changed', { detail: target }));
-      } catch (err) {
-        console.error('Failed to persist tenant selection:', err);
+        await fetch('/api/auth/switch-tenant', {
+          method: 'POST',
+          credentials: 'include',
+          headers: ClientDataStore.getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ schoolId: tenantId, tenantId }),
+        });
+        await ClientDataStore.hydrateFromBackend(true);
+      } catch {
+        // Ignore network errors while switching tenant view
       }
+    } else if (ClientDataStore.getSessionUser()) {
+      void ClientDataStore.loadSchoolSettings(tenantId).catch(() => {});
     }
   };
 
   const updateTenantBranding = (updates: Partial<Tenant>, tenantId?: string) => {
     const targetId = tenantId || currentTenant.id;
-    setAllTenants(prev => {
-      const updated = prev.map(t => (t.id === targetId ? { ...t, ...updates } : t));
-      try {
-        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
-        saveDurableSchool(updated.find((tenant) => tenant.id === targetId) || { ...updates, id: targetId } as Tenant);
-        window.dispatchEvent(new CustomEvent('tenant-branding-updated', { detail: { tenantId: targetId, updates } }));
-      } catch (err) {
-        console.error('Failed to save updated tenant branding:', err);
+    setAllTenants((prev) => {
+      const updated = prev.map((t) =>
+        t.id === targetId ? applyTenantUpdatePreservingLogo(t, updates) : t
+      );
+      ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
+      const savedTenant = updated.find((tenant) => tenant.id === targetId);
+      if (savedTenant) saveDurableSchool(savedTenant);
+      if (ClientDataStore.getSessionUser()) {
+        const hasExplicitClearCustom =
+          Object.prototype.hasOwnProperty.call(updates, 'customLogoBase64') && !updates.customLogoBase64;
+        const payloadUpdates: Record<string, any> = {
+          ...updates,
+          ...(savedTenant?.logoUrl ? { logoUrl: savedTenant.logoUrl } : {}),
+          ...(savedTenant?.customLogoBase64 ? { customLogoBase64: savedTenant.customLogoBase64 } : {}),
+          ...(hasExplicitClearCustom ? { clearCustomLogo: true } : {}),
+        };
+        void ClientDataStore.saveSchoolSettings({ tenantId: targetId, tenantUpdates: payloadUpdates }).catch(() => {});
       }
+      window.dispatchEvent(new CustomEvent('tenant-branding-updated', { detail: { tenantId: targetId, updates } }));
       return updated;
     });
   };
 
   const registerTenant = (newTenant: Tenant) => {
-    setAllTenants(prev => {
-      // Check if already exists
-      const exists = prev.some(t => t.id === newTenant.id || t.code === newTenant.code);
-      const updated = exists 
-        ? prev.map(t => (t.id === newTenant.id ? { ...t, ...newTenant } : t))
-        : [...prev, newTenant];
-      try {
-        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
-        saveDurableSchool(newTenant);
-        window.dispatchEvent(new CustomEvent('tenant-registered', { detail: newTenant }));
-      } catch (err) {
-        console.error('Failed to save registered tenant:', err);
-      }
+    setAllTenants((prev) => {
+      const exists = prev.some((t) => t.id === newTenant.id || t.code === newTenant.code);
+      const updated = exists
+        ? prev.map((t) => (t.id === newTenant.id ? applyTenantUpdatePreservingLogo(t, newTenant) : t))
+        : [...prev, ensureTenantLogoRetained(newTenant)];
+      ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
+      const saved = updated.find((t) => t.id === newTenant.id) || newTenant;
+      saveDurableSchool(saved);
+      window.dispatchEvent(new CustomEvent('tenant-registered', { detail: saved }));
       return updated;
     });
   };
 
   const updateTenant = (tenantId: string, updates: Partial<Tenant>) => {
-    setAllTenants(prev => {
-      const updated = prev.map(t => (t.id === tenantId ? { ...t, ...updates } : t));
-      try {
-        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
-        const saved = updated.find((tenant) => tenant.id === tenantId);
-        if (saved) saveDurableSchool(saved);
-        window.dispatchEvent(new CustomEvent('tenant-updated', { detail: { tenantId, updates } }));
-      } catch (err) {
-        console.error('Failed to update tenant:', err);
+    setAllTenants((prev) => {
+      const updated = prev.map((t) =>
+        t.id === tenantId ? applyTenantUpdatePreservingLogo(t, updates) : t
+      );
+      ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
+      const saved = updated.find((tenant) => tenant.id === tenantId);
+      if (saved) saveDurableSchool(saved);
+      if (ClientDataStore.getSessionUser()) {
+        const hasExplicitClearCustom =
+          Object.prototype.hasOwnProperty.call(updates, 'customLogoBase64') && !updates.customLogoBase64;
+        const payloadUpdates: Record<string, any> = {
+          ...updates,
+          ...(saved?.logoUrl ? { logoUrl: saved.logoUrl } : {}),
+          ...(saved?.customLogoBase64 ? { customLogoBase64: saved.customLogoBase64 } : {}),
+          ...(hasExplicitClearCustom ? { clearCustomLogo: true } : {}),
+        };
+        void ClientDataStore.saveSchoolSettings({ tenantId, tenantUpdates: payloadUpdates }).catch(() => {});
       }
+      window.dispatchEvent(new CustomEvent('tenant-updated', { detail: { tenantId, updates } }));
       return updated;
     });
   };
 
   const deleteTenant = (tenantId: string) => {
-    setAllTenants(prev => {
+    setAllTenants((prev) => {
       if (prev.length <= 1) {
-        alert('Cannot remove the only registered school tenant.');
+        console.warn('Cannot remove the only registered school tenant.');
         return prev;
       }
-      const updated = prev.filter(t => t.id !== tenantId);
-      try {
-        SyncEngine.persistItem(ALL_TENANTS_STORAGE_KEY, JSON.stringify(updated));
-        removeDurableSchool(tenantId);
-        if (currentTenantId === tenantId) {
-          const nextId = updated[0]?.id || 'tenant-staustins';
-          setCurrentTenantId(nextId);
-          SyncEngine.persistItem(TENANT_STORAGE_KEY, nextId);
-        }
-        window.dispatchEvent(new CustomEvent('tenant-deleted', { detail: { tenantId } }));
-      } catch (err) {
-        console.error('Failed to delete tenant:', err);
+      const updated = prev.filter((t) => t.id !== tenantId);
+      ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
+      removeDurableSchool(tenantId);
+      if (currentTenantId === tenantId) {
+        const nextId = updated[0]?.id || 'tenant-riara';
+        setCurrentTenantId(nextId);
+        ClientDataStore.setActiveTenantId(nextId);
       }
+      window.dispatchEvent(new CustomEvent('tenant-deleted', { detail: { tenantId } }));
       return updated;
     });
   };
-
-  useEffect(() => {
-    try {
-      if (currentTenant.id) SyncEngine.persistItem(TENANT_STORAGE_KEY, currentTenant.id);
-    } catch {
-      // Ignore
-    }
-  }, [currentTenant.id]);
 
   return (
     <TenantContext.Provider
@@ -168,7 +247,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         registerTenant,
         updateTenant,
         deleteTenant,
-        isMultiTenancyEnabled: true
+        isMultiTenancyEnabled: true,
       }}
     >
       {children}

@@ -1,3 +1,5 @@
+import { ClientDataStore } from './clientDataStore';
+
 export type DepartmentKind = 'teaching' | 'non_teaching';
 
 export interface SchoolDepartment {
@@ -12,11 +14,12 @@ export interface SchoolDepartment {
 
 const TEACHING_DEPARTMENT_SUBJECTS: Record<string, string[]> = {
   'Mathematics & Computational Sciences': ['Mathematics', 'Computer Studies'],
-  'Pure & Integrated Sciences': ['Integrated Science', 'Agriculture and Nutrition', 'Agriculture'],
+  'Pure & Integrated Sciences': ['Integrated Science', 'Agriculture and Nutrition', 'Agriculture', 'Nutrition'],
   'Technical & Applied Sciences': ['Pretechnical Education', 'Pre-Technical Studies', 'Business Studies'],
-  'Languages & Literature': ['English', 'Kiswahili'],
-  'Pretechnical & Creative Arts': ['Creative Arts', 'Pretechnical Education', 'Physical and Health Education'],
+  'Languages & Literature': ['English', 'Kiswahili', 'Library Lesson'],
+  'Pretechnical & Creative Arts': ['Creative Arts', 'Arts', 'Music', 'Pretechnical Education', 'Physical and Health Education'],
   'Humanities & Social Sciences': ['Social Studies', 'Religious Education'],
+  'Library & Information Services': ['Library Lesson'],
 };
 
 const NON_TEACHING_DEPARTMENT_ACTIVITIES: Record<string, string[]> = {
@@ -35,28 +38,17 @@ const SEEDED_KEY = 'edusmart_school_departments_seeded_v1';
 const KIND_KEY = 'edusmart_department_kinds_v1';
 
 function readAll(): SchoolDepartment[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const rows = ClientDataStore.getCollection<SchoolDepartment[]>(STORAGE_KEY, []);
+  return Array.isArray(rows) ? rows : [];
 }
 
 function writeAll(rows: SchoolDepartment[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+  ClientDataStore.setCollection(STORAGE_KEY, rows);
 }
 
 function readIds(key: string): string[] {
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const rows = ClientDataStore.getCollection<string[]>(key, []);
+  return Array.isArray(rows) ? rows : [];
 }
 
 export function listDepartments(schoolId: string): SchoolDepartment[] {
@@ -97,36 +89,26 @@ function seedRows(schoolId: string, existing: SchoolDepartment[]): SchoolDepartm
 export function ensureDepartments(schoolId: string): SchoolDepartment[] {
   const seeded = readIds(SEEDED_KEY);
   let rows = readAll();
-  if (!seeded.includes(schoolId)) {
+  if (!seeded.includes(schoolId) && !rows.some((r) => r.schoolId === schoolId)) {
     rows = [...rows, ...seedRows(schoolId, rows)];
     writeAll(rows);
-    localStorage.setItem(SEEDED_KEY, JSON.stringify([...seeded, schoolId]));
+    ClientDataStore.setCollection(SEEDED_KEY, [...seeded, schoolId]);
   }
   const migrated = readIds(KIND_KEY);
   if (!migrated.includes(schoolId)) {
+    let changed = false;
     rows = rows.map((row) => {
       if (row.schoolId !== schoolId || row.kind) {
         return { ...row, subjects: row.subjects || [], activities: row.activities || [] };
       }
       const subjects = TEACHING_DEPARTMENT_SUBJECTS[row.name];
-      if (subjects) return { ...row, kind: 'teaching' as const, subjects, activities: [] };
+      if (subjects) { changed = true; return { ...row, kind: 'teaching' as const, subjects, activities: [] }; }
       const activities = NON_TEACHING_DEPARTMENT_ACTIVITIES[row.name];
-      if (activities) return { ...row, kind: 'non_teaching' as const, subjects: [], activities };
+      if (activities) { changed = true; return { ...row, kind: 'non_teaching' as const, subjects: [], activities }; }
       return { ...row, subjects: row.subjects || [], activities: row.activities || [] };
     });
-    if (!rows.some((row) => row.schoolId === schoolId && row.name.toLowerCase() === 'transport & fleet')) {
-      rows.push({
-        id: `dept-${schoolId}-transport`,
-        schoolId,
-        name: 'Transport & Fleet',
-        kind: 'non_teaching',
-        subjects: [],
-        activities: NON_TEACHING_DEPARTMENT_ACTIVITIES['Transport & Fleet'],
-        createdAt: new Date().toISOString(),
-      });
-    }
-    writeAll(rows);
-    localStorage.setItem(KIND_KEY, JSON.stringify([...migrated, schoolId]));
+    if (changed) writeAll(rows);
+    ClientDataStore.setCollection(KIND_KEY, [...migrated, schoolId]);
   }
   return listDepartments(schoolId);
 }
@@ -148,7 +130,7 @@ export function createDepartment(schoolId: string, name: string): SchoolDepartme
   };
   writeAll([...rows, created]);
   const seeded = readIds(SEEDED_KEY);
-  if (!seeded.includes(schoolId)) localStorage.setItem(SEEDED_KEY, JSON.stringify([...seeded, schoolId]));
+  if (!seeded.includes(schoolId)) ClientDataStore.setCollection(SEEDED_KEY, [...seeded, schoolId]);
   return created;
 }
 

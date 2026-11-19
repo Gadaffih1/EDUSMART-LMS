@@ -14,9 +14,11 @@ import {
   HeartPulse,
   KeyRound,
   School,
+  Settings,
   Shield,
   ShieldCheck,
   SlidersHorizontal,
+  Smartphone,
   Trophy,
   UserPlus,
   Users,
@@ -28,6 +30,13 @@ import {
 
 export type AdminActionTab =
   | 'overview'
+  | 'grade_management'
+  | 'stream_management'
+  | 'student_stream_allocation'
+  | 'senior_assignments'
+  | 'class_assignments'
+  | 'grade_performance'
+  | 'consolidated_reports'
   | 'grades'
   | 'students'
   | 'departments'
@@ -51,7 +60,9 @@ export type AdminActionTab =
   | 'cocurricular'
   | 'oversight'
   | 'reports'
-  | 'operations';
+  | 'pwa_analytics'
+  | 'operations'
+  | 'school_settings';
 
 interface ActionItem {
   id: AdminActionTab;
@@ -69,6 +80,7 @@ interface SchoolActionMenuProps {
   onCloseMobile: () => void;
   userCount: number;
   workLogCount: number;
+  canAllocateStreams?: boolean;
 }
 
 export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
@@ -80,16 +92,32 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
   onCloseMobile,
   userCount,
   workLogCount,
+  canAllocateStreams = false,
 }) => {
   const groups: { title: string; items: ActionItem[] }[] = [
     {
       title: 'School',
       items: [
         { id: 'overview', label: 'Dashboard Overview', icon: School },
-        { id: 'grades', label: 'Grades & Streams', icon: GraduationCap },
+        { id: 'school_settings', label: 'School Settings & Profile', icon: Settings },
+        { id: 'grades', label: 'Grades & Streams Directory', icon: GraduationCap },
         { id: 'students', label: 'Students', icon: IdCard },
         { id: 'departments', label: 'Departments', icon: Building2 },
         { id: 'analytics', label: 'Attendance & Academic KPIs', icon: BarChart3 },
+      ],
+    },
+    {
+      title: 'Academic Structure',
+      items: [
+        { id: 'grade_management', label: 'Grade Management', icon: GraduationCap },
+        { id: 'stream_management', label: 'Stream Management', icon: Users },
+        ...(canAllocateStreams
+          ? [{ id: 'student_stream_allocation' as AdminActionTab, label: 'Student Stream Allocations', icon: Users, badge: 'CBC' }]
+          : []),
+        { id: 'senior_assignments', label: 'Senior Teacher Assignments', icon: ShieldCheck },
+        { id: 'class_assignments', label: 'Class Teacher Assignments', icon: ClipboardCheck },
+        { id: 'grade_performance', label: 'Grade Performance', icon: BarChart3 },
+        { id: 'consolidated_reports', label: 'Consolidated Reports', icon: FileSpreadsheet },
       ],
     },
     {
@@ -115,7 +143,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
         { id: 'doc_requests', label: 'Document Requests Hub', icon: FileText },
         { id: 'staff_appraisal', label: 'Staff Appraisal (TSC TPAD)', icon: Award },
         { id: 'passwords', label: 'Grade Passwords Management', icon: KeyRound },
-        { id: 'virtual_rooms', label: 'Google Meet Room Links', icon: Video },
+        { id: 'virtual_rooms', label: 'Virtual Classroom Monitoring', icon: Video },
         { id: 'work_entry_audit', label: 'Work Entry Sign-Ins', icon: FileText, badge: String(workLogCount) },
       ],
     },
@@ -134,6 +162,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       items: [
         { id: 'oversight', label: 'Executive Oversight & Logs', icon: BarChart3 },
         { id: 'reports', label: 'Reports & Dossiers', icon: FileSpreadsheet },
+        { id: 'pwa_analytics', label: 'Mobile PWA & App Installs', icon: Smartphone },
         { id: 'operations', label: 'Finance, Procurement, Stores & HR', icon: Building2 },
       ],
     },
@@ -144,7 +173,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       {mobileOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-slate-900/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/45 backdrop-blur-[1px] lg:hidden"
           aria-label="Close action menu"
           onClick={onCloseMobile}
         />
@@ -152,7 +181,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
       <aside
         id="school-action-menu"
         aria-label="School actions"
-        className={`fixed top-16 bottom-0 left-0 z-30 flex w-72 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:sticky lg:top-16 lg:z-10 lg:h-[calc(100vh-4rem)] lg:max-h-[calc(100vh-4rem)] lg:translate-x-0 ${
+        className={`fixed top-14 sm:top-16 bottom-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 lg:sticky lg:top-16 lg:z-10 lg:h-[calc(100vh-4rem)] lg:max-h-[calc(100vh-4rem)] lg:translate-x-0 lg:shadow-none ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${collapsed ? 'lg:w-[4.5rem]' : 'lg:w-72'}`}
       >
@@ -175,14 +204,14 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
           <button
             type="button"
             onClick={onCloseMobile}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 lg:hidden"
             aria-label="Close action menu"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <nav id="school-action-list" className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+        <nav id="school-action-list" className="flex-1 space-y-4 overflow-y-auto px-2 py-3 pb-6">
           {groups.map((group) => (
             <div key={group.title}>
               <p className={`px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${collapsed ? 'lg:sr-only' : ''}`}>
@@ -202,7 +231,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
                       }}
                       aria-current={isActive ? 'page' : undefined}
                       title={item.label}
-                      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-bold transition-colors ${
+                      className={`flex min-h-[40px] w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-bold transition-colors ${
                         collapsed ? 'lg:justify-center lg:px-0' : ''
                       } ${
                         isActive

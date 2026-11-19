@@ -20,6 +20,7 @@ import { ComputerLabModule } from '../teacher/ComputerLabModule';
 import { CBATaskMappingModule } from './CBATaskMappingModule';
 import { SchoolStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { CurriculumReportWriterModule } from './CurriculumReportWriterModule';
+import { canAccessTeacherLabs } from '../../utils/teacherAssignmentScope';
 import { 
   Compass, 
   BookOpen, 
@@ -75,13 +76,40 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
   const [selectedTerm, setSelectedTerm] = useState<1 | 2 | 3>(2);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  const [allocationRevision, setAllocationRevision] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setAllocationRevision((v) => v + 1);
+    window.addEventListener('users-updated', bump);
+    window.addEventListener('edusmart:data-changed', bump);
+    return () => {
+      window.removeEventListener('users-updated', bump);
+      window.removeEventListener('edusmart:data-changed', bump);
+    };
+  }, []);
+
+  const hasLabAccess = React.useMemo(
+    () => canAccessTeacherLabs(currentUser),
+    [currentUser, allocationRevision]
+  );
+
+  useEffect(() => {
+    if (!hasLabAccess && activeTab === 'computer_lab') {
+      setActiveTab('pacing');
+    }
+  }, [hasLabAccess, activeTab]);
+
   useEffect(() => {
     const handleNavEvent = (e: Event) => {
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['pacing', 'schemes', 'cba_mapping', 'cba_moderation', 'appraisal', 'computer_lab', 'doc_requests', 'directives', 'reports_suite'].includes(tab)) {
+        if (['pacing', 'schemes', 'cba_mapping', 'cba_moderation', 'appraisal', 'doc_requests', 'directives', 'reports_suite'].includes(tab)) {
           setActiveTab(tab as any);
+        } else if (tab === 'computer_lab') {
+          if (canAccessTeacherLabs(currentUser)) {
+            setActiveTab('computer_lab');
+          }
         } else if (tab === 'reports' || tab === 'report' || tab === 'curriculum_reports') {
           setActiveTab('reports_suite');
         } else if (tab === 'schemes_of_work') {
@@ -93,7 +121,7 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
     };
     window.addEventListener('workspace-nav-tab', handleNavEvent);
     return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
-  }, []);
+  }, [currentUser]);
 
   // Storage Data State
   const [syllabusTracking, setSyllabusTracking] = useState<CoordinatorSyllabusTopic[]>(() => Storage.getCoordinatorSyllabusTracking());
@@ -664,15 +692,17 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
             <span>5. Teacher Appraisal (TSC TPAD)</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('computer_lab')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'computer_lab' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Laptop className="w-3.5 h-3.5" />
-            <span>6. Computer Lab & Scratch Coding</span>
-          </button>
+          {hasLabAccess && (
+            <button
+              onClick={() => setActiveTab('computer_lab')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'computer_lab' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Laptop className="w-3.5 h-3.5" />
+              <span>6. Computer Lab & Scratch Coding</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab('doc_requests')}
@@ -1217,21 +1247,31 @@ export const CurriculumCoordinatorWorkspace: React.FC<CurriculumCoordinatorWorks
             TAB 6: COMPUTER LAB MODULE INTEGRATION
             ======================================================== */}
         {activeTab === 'computer_lab' && (
-          <div className="space-y-4">
-            <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
-              <div>
-                <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-                  <Laptop className="w-4 h-4 text-indigo-600" />
-                  <span>Executive Oversight: Computer Lab & Scratch Coding Studio</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Review classroom Scratch demonstrations, challenge library distribution, and STEM integration.
-                </p>
+          hasLabAccess ? (
+            <div className="space-y-4">
+              <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                    <Laptop className="w-4 h-4 text-indigo-600" />
+                    <span>Computer Lab & Scratch Coding Studio</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Review classroom Scratch demonstrations, challenge library distribution, and STEM integration.
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <ComputerLabModule currentUser={currentUser} />
-          </div>
+              <ComputerLabModule currentUser={currentUser} />
+            </div>
+          ) : (
+            <div className="bg-white rounded-3xl p-8 border border-rose-200 shadow-xs text-center space-y-3 max-w-xl mx-auto">
+              <AlertCircle className="w-10 h-10 text-rose-600 mx-auto" />
+              <h3 className="text-lg font-black text-slate-900">Computer Laboratory Access Restricted</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Only subject teachers assigned <strong>Integrated Science</strong> or <strong>Computer Studies</strong> may access the Computer Laboratory.
+              </p>
+            </div>
+          )
         )}
 
         {/* ========================================================

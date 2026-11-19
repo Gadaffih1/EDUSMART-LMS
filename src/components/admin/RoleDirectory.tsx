@@ -18,6 +18,8 @@ import {
 import { findSystemRole, listSystemRoles } from '../../utils/systemRoles';
 import { listSchoolParents, listSchoolStudents } from '../../utils/schoolDirectoryStore';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
+import { getUserRoles, normalizeAssignedRoleList } from '../../utils/subjectTeacherSwitch';
 import { UserMinus, UserPlus } from 'lucide-react';
 
 interface RoleDirectoryProps {
@@ -95,18 +97,36 @@ function activitiesFor(seat: RoleSeat): ActivityItem[] {
     .sort((a, b) => a.at.localeCompare(b.at));
 }
 
-function applyAccount(user: User, role: string, startedAt: string, inherited?: KeptRoleProfile): User | null {
+async function applyAccount(
+  user: User,
+  role: string,
+  startedAt: string,
+  inherited?: KeptRoleProfile,
+  keepPrimaryRole = false
+): Promise<User | null> {
   const roleDef = findSystemRole(role);
+  const nextPrimaryRole = (keepPrimaryRole && user.role ? user.role : role) as UserRole;
+  const mergedRoles = normalizeAssignedRoleList(
+    nextPrimaryRole,
+    [...getUserRoles(user), role as UserRole],
+    user.doubleAccessConfig
+  );
   const updates: Partial<User> = {
-    role: role as UserRole,
+    role: nextPrimaryRole,
+    assignedRoles: mergedRoles,
     roleStartedAt: startedAt,
     roleReleasedAt: undefined,
-    password: roleDef ? rolePassword(roleDef.passwordPrefix) : user.password,
+    ...(!keepPrimaryRole && roleDef ? { password: rolePassword(roleDef.passwordPrefix) } : {}),
   };
   if (inherited?.designation) updates.designation = inherited.designation;
   if (inherited?.department) updates.department = inherited.department;
   if (inherited && inherited.subjects.length > 0) updates.assignedSubjects = inherited.subjects as SubjectName[];
-  const saved = Storage.updateUser(user.id, updates);
+  let saved = Storage.updateUser(user.id, updates);
+  try {
+    saved = await ClientDataStore.apiUpdateUser(user.id, updates);
+  } catch {
+    // fallback to cached Storage update
+  }
   if (saved) saveProvisionedAccount(saved);
   return saved;
 }
@@ -205,41 +225,56 @@ export const RoleDirectory: React.FC<RoleDirectoryProps> = ({ schoolId, users, o
 
   const candidates = (seat: RoleSeat) => schoolUsers.filter((user) => isDirectoryRole(user.role) && openHolder(seat)?.userId !== user.id);
 
-  const onRemove = (seat: RoleSeat, holder: RoleSeatHolder) => {
+  const onRemove = async (seat: RoleSeat, holder: RoleSeatHolder) => {
     const user = users.find((item) => item.id === holder.userId);
     if (!user) return;
     const confirmed = window.confirm(`Remove ${user.name} from this role? The role keeps their data and activities.`);
     if (!confirmed) return;
     releaseRoleSeat(schoolId, seat.id, keptProfile(user));
-    const saved = Storage.updateUser(user.id, { roleReleasedAt: new Date().toISOString() });
+    const remainingRoles = getUserRoles(user).filter((r) => r !== (seat.role as UserRole));
+    const updates: Partial<User> = {
+      roleReleasedAt: new Date().toISOString(),
+      ...(remainingRoles.length > 0
+        ? {
+            role: remainingRoles.includes(user.role) ? user.role : remainingRoles[0],
+            assignedRoles: remainingRoles,
+          }
+        : {}),
+    };
+    let saved = Storage.updateUser(user.id, updates);
+    try {
+      saved = await ClientDataStore.apiUpdateUser(user.id, updates);
+    } catch {
+      // fallback
+    }
     if (saved) saveProvisionedAccount(saved);
     onChanged(`${user.name} was removed from the role. Their records stayed on the seat.`);
   };
 
-  const onAssignVacant = (seat: RoleSeat) => {
+  const onAssignVacant = async (seat: RoleSeat) => {
     const user = users.find((item) => item.id === assignUserId[seat.id]);
     if (!user) return;
     const previous = [...seat.holders].reverse().find((holder) => holder.kept);
     const assigned = assignUserToSeat(schoolId, seat.id, user, keptProfile(user));
     if (!assigned) return;
     const started = openHolder(assigned)?.startedAt || new Date().toISOString();
-    applyAccount(user, seat.role, started, previous?.kept);
+    await applyAccount(user, seat.role, started, previous?.kept, false);
     onChanged(`${user.name} now holds this role. Earlier records stay visible, and their start point is marked.`);
   };
 
-  const onMove = (seat: RoleSeat, holder: RoleSeatHolder) => {
+  const onMove = async (seat: RoleSeat, holder: RoleSeatHolder) => {
     const role = moveRole[seat.id];
     const user = users.find((item) => item.id === holder.userId);
     if (!user || !role || role === seat.role) return;
     const assigned = assignUserToRole(schoolId, role, user, keptProfile(user));
     const started = openHolder(assigned)?.startedAt || new Date().toISOString();
     const previous = [...assigned.holders].reverse().find((item) => item.userId !== user.id && item.kept);
-    applyAccount(user, role, started, previous?.kept);
+    await applyAccount(user, role, started, previous?.kept, true);
     const roleName = roles.find((item) => item.slug === role)?.name || role;
-    onChanged(`${user.name} was assigned to ${roleName}. The previous role kept its records.`);
+    onChanged(`${user.name} was assigned to ${roleName}. Their existing role permissions remain active.`);
   };
 
-  const onAddStaffToRole = (event: React.FormEvent) => {
+  const onAddStaffToRole = async (event: React.FormEvent) => {
     event.preventDefault();
     const user = staffPool.find((item) => item.id === addStaffId);
     if (!user || !addRole) return;
@@ -250,10 +285,10 @@ export const RoleDirectory: React.FC<RoleDirectoryProps> = ({ schoolId, users, o
     const assigned = assignUserToRole(schoolId, addRole, user, keptProfile(user));
     const started = openHolder(assigned)?.startedAt || new Date().toISOString();
     const previous = [...assigned.holders].reverse().find((item) => item.userId !== user.id && item.kept);
-    applyAccount(user, addRole, started, previous?.kept);
+    await applyAccount(user, addRole, started, previous?.kept, true);
     const roleName = roles.find((item) => item.slug === addRole)?.name || addRole;
     setAddStaffId('');
-    onChanged(`${user.name} was added to ${roleName} from the staff list.`);
+    onChanged(`${user.name} was added to ${roleName} as an additional role.`);
   };
 
   return (

@@ -190,6 +190,13 @@ export interface BroadcastNotice {
   targetAudience: 'all' | 'landing_only' | 'portals_only';
 }
 
+export interface VirtualLabPublicPolicy {
+  publicAccessMode: 'subscription_required';
+  requirePaidSubscriptionOnPublicPage: boolean;
+  allowFreePublicDemo: boolean;
+  freeForMemberSchools: boolean;
+}
+
 export interface GlobalPlatformSettings {
   platformName: string;
   platformTagline: string;
@@ -197,6 +204,7 @@ export interface GlobalPlatformSettings {
   maintenanceMode: boolean;
   allowPublicRegistration: boolean;
   primaryBrandColor: string;
+  virtualLabPolicy?: VirtualLabPublicPolicy;
 }
 
 export interface ClassTeacherModulePolicy {

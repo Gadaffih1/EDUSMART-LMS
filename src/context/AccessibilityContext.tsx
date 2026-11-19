@@ -244,21 +244,32 @@ interface AccessibilityContextType {
   getWorkspaceAriaLabel: (workspaceId: string, fallback?: string) => string;
 }
 
+import { ClientDataStore } from '../utils/clientDataStore';
+
 const AccessibilityContext = createContext<AccessibilityContextType | undefined>(undefined);
 
 export const AccessibilityProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [preferences, setPreferences] = useState<AccessibilityPreferences>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return { ...DEFAULT_PREFERENCES, ...parsed };
-      }
-    } catch {
-      // Fallback
+    const saved = ClientDataStore.getPreference<Partial<AccessibilityPreferences> | null>(STORAGE_KEY, null);
+    if (saved && typeof saved === 'object') {
+      return { ...DEFAULT_PREFERENCES, ...saved };
     }
     return DEFAULT_PREFERENCES;
   });
+
+  useEffect(() => {
+    const onDataChange = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'user_preferences') {
+        const saved = ClientDataStore.getPreference<Partial<AccessibilityPreferences> | null>(STORAGE_KEY, null);
+        if (saved && typeof saved === 'object') {
+          setPreferences({ ...DEFAULT_PREFERENCES, ...saved });
+        }
+      }
+    };
+    window.addEventListener('edusmart:data-changed', onDataChange);
+    return () => window.removeEventListener('edusmart:data-changed', onDataChange);
+  }, []);
 
   const [announcement, setAnnouncement] = useState<{ message: string; politeness: 'polite' | 'assertive' }>({
     message: '',
@@ -312,38 +323,41 @@ export const AccessibilityProvider: React.FC<{ children: ReactNode }> = ({ child
       root.classList.remove('enhanced-focus');
     }
 
-    // Save to localStorage
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    } catch {
-      // Ignore
-    }
+    // Persist only when user changes preferences (avoid auto-pushing on initial hydration)
   }, [preferences]);
 
-  const toggleHighContrast = useCallback(() => {
+  const updateAndPersist = useCallback((updater: (prev: AccessibilityPreferences) => AccessibilityPreferences) => {
     setPreferences(prev => {
+      const next = updater(prev);
+      ClientDataStore.setPreference(STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const toggleHighContrast = useCallback(() => {
+    updateAndPersist(prev => {
       const next = !prev.highContrast;
       announce(next ? 'High Contrast Mode activated' : 'High Contrast Mode deactivated');
       return { ...prev, highContrast: next };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const setHighContrast = useCallback((value: boolean) => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       announce(value ? 'High Contrast Mode enabled' : 'High Contrast Mode disabled');
       return { ...prev, highContrast: value };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const setFontSize = useCallback((size: number) => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       announce(`Font size adjusted to ${size} percent`);
       return { ...prev, fontSize: size };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const increaseFontSize = useCallback(() => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       const steps = [100, 110, 125, 140];
       const currentIndex = steps.indexOf(prev.fontSize);
       const nextIndex = currentIndex === -1 ? 0 : Math.min(steps.length - 1, currentIndex + 1);
@@ -351,10 +365,10 @@ export const AccessibilityProvider: React.FC<{ children: ReactNode }> = ({ child
       announce(`Font size increased to ${nextSize} percent`);
       return { ...prev, fontSize: nextSize };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const decreaseFontSize = useCallback(() => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       const steps = [100, 110, 125, 140];
       const currentIndex = steps.indexOf(prev.fontSize);
       const nextIndex = currentIndex === -1 ? 0 : Math.max(0, currentIndex - 1);
@@ -362,43 +376,43 @@ export const AccessibilityProvider: React.FC<{ children: ReactNode }> = ({ child
       announce(`Font size decreased to ${nextSize} percent`);
       return { ...prev, fontSize: nextSize };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const toggleScreenReaderMode = useCallback(() => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       const next = !prev.screenReaderMode;
       announce(next ? 'Screen-reader friendly navigation labels enabled across all LMS workspaces' : 'Standard navigation labels restored');
       return { ...prev, screenReaderMode: next };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const setScreenReaderMode = useCallback((value: boolean) => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       announce(value ? 'Screen reader labels activated' : 'Screen reader labels deactivated');
       return { ...prev, screenReaderMode: value };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const toggleReducedMotion = useCallback(() => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       const next = !prev.reducedMotion;
       announce(next ? 'Reduced motion enabled' : 'Animation effects restored');
       return { ...prev, reducedMotion: next };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const toggleEnhancedFocus = useCallback(() => {
-    setPreferences(prev => {
+    updateAndPersist(prev => {
       const next = !prev.enhancedFocus;
       announce(next ? 'Enhanced focus outlines enabled' : 'Standard focus outlines restored');
       return { ...prev, enhancedFocus: next };
     });
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const resetToDefaults = useCallback(() => {
-    setPreferences(DEFAULT_PREFERENCES);
+    updateAndPersist(() => DEFAULT_PREFERENCES);
     announce('All accessibility settings have been reset to default values.');
-  }, [announce]);
+  }, [announce, updateAndPersist]);
 
   const isCustomized = 
     preferences.highContrast || 

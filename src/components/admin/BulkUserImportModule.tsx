@@ -1790,7 +1790,7 @@ ADM/2026/0503,Amina Fatuma Hassan,7,Mara,Female,Hassan Omar,+254733000333,hassan
               {activeReceipt.recordsSample && activeReceipt.recordsSample.length > 0 && (
                 <div className="space-y-2">
                   <h5 className="font-bold text-slate-900">Sample Records Included in this Onboarding Batch:</h5>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-xl overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200 text-left text-[11px]">
                       <thead className="bg-slate-100 font-bold text-slate-700">
                         <tr>

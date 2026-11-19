@@ -47,6 +47,7 @@ export interface RoleAccessRights {
   canAddCategoriesToPosts: boolean;            // 3. Add categories under different posts
   hasDoubleAccessRights: boolean;              // 4. Double Access rights for specific teachers
   canManageAllPostsCategoriesSections: boolean; // 5. Add, remove, edit posts, Categories, sections
+  canAllocateStudentStreams?: boolean;         // 6. Allocate and transfer students across CBC streams (Admin, Grade Senior Teacher, or delegated Extra Role only)
 }
 
 export type GradeLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -89,10 +90,14 @@ export const PRIMARY_SUBJECTS = [
   'Social Studies',
   'Religious Education',
   'Creative Arts',
+  'Arts',
+  'Music',
+  'Nutrition',
+  'Library Lesson',
   'Physical and Health Education'
 ] as const;
 
-// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies)
+// Junior School Subjects (Grades 7 to 9 - 9 subjects + PHE + Computer Studies + Library/Arts/Music/Nutrition)
 export const JUNIOR_SUBJECTS = [
   'Mathematics',
   'English',
@@ -101,9 +106,13 @@ export const JUNIOR_SUBJECTS = [
   'Computer Studies',
   'Agriculture and Nutrition',
   'Agriculture',
+  'Nutrition',
   'Social Studies',
   'Religious Education',
   'Creative Arts',
+  'Arts',
+  'Music',
+  'Library Lesson',
   'Pretechnical Education',
   'Pre-Technical Studies',
   'Business Studies',
@@ -128,17 +137,29 @@ export function getSubjectsForGrade(grade: GradeLevel): SubjectName[] {
   return [...JUNIOR_SUBJECTS];
 }
 
+export interface SubjectStreamAllocation {
+  id?: string;
+  grade: GradeLevel;
+  stream: StreamName;
+  subject: SubjectName;
+  gradeId?: string;
+  streamId?: string;
+  periodsPerWeek?: number;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
   password?: string;
   role: UserRole;
+  assignedRoles?: UserRole[]; // Multi-role assignment: user can hold >1 institutional role simultaneously
   grade?: GradeLevel; // Exactly 1 grade for student
   stream?: StreamName; // Exactly 1 stream for student, or assigned stream for class teacher
   className?: string;
-  assignedStreams?: { grade: GradeLevel; stream: StreamName }[]; // For teachers who teach multiple streams
-  assignedSubjects?: SubjectName[]; // For teachers who teach multiple subjects
+  assignedStreams?: { grade: GradeLevel; stream: StreamName }[]; // Derived unique streams from subject allocations
+  assignedSubjects?: SubjectName[]; // Derived unique subjects from subject allocations
+  assignedSubjectAllocations?: SubjectStreamAllocation[]; // Explicit Grade + Specific Stream + Subject links (max 1 teacher per subject/stream)
   assignedActivities?: string[]; // For non-teaching staff, such as drivers
   department?: string; // For HOD (e.g. 'Sciences & Mathematics', 'Languages', 'Humanities')
   childrenIds?: string[]; // For Parent (IDs of student children)
@@ -158,7 +179,7 @@ export interface User {
   roleReleasedAt?: string; // Set when they are removed from a role; their seat data stays
   customPermissions?: Partial<RoleAccessRights>;
   // 🛡️ EXTRA ADMINISTRATOR ASSIGNMENTS:
-  extraRoles?: ('document_requester' | 'delegated_post_editor' | 'category_curator' | 'double_access_teacher' | 'cms_content_master')[];
+  extraRoles?: ExtraAdminRoleType[];
   documentRequestScope?: {
     allowedUserIds?: string[]; // Specific users they can request docs from (or empty/['*'] for any)
     allowedRoles?: UserRole[];
@@ -204,6 +225,11 @@ export interface LessonNote {
   keyTakeaways: string[];
   diagramUrl?: string;
   diagramCaption?: string;
+  documentUrl?: string; // Uploaded PDF/document file path
+  documentName?: string;
+  documentMimeType?: string;
+  documentSize?: string;
+  uploadedById?: string;
   author: string;
   createdAt: string;
 }
@@ -215,9 +241,13 @@ export interface VideoLesson {
   subject: SubjectName;
   title: string;
   durationMinutes: number;
-  videoUrl: string; // Secure embedded educational video
+  videoUrl: string; // Secure embedded educational video or device-uploaded file URL
   videoThumbnail?: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: string;
   keyPoints: string[];
+  uploadedById?: string;
   teacherName: string;
   createdAt: string;
 }
@@ -230,8 +260,12 @@ export interface AudioLesson {
   title: string;
   durationMinutes: number;
   audioUrl: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: string;
   transcript: string;
   keyPoints: string[];
+  uploadedById?: string;
   teacherName: string;
   createdAt: string;
 }
@@ -243,9 +277,13 @@ export interface LessonImage {
   subject: SubjectName;
   title: string;
   imageUrl: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: string;
   caption: string;
   category?: 'diagram' | 'chart' | 'infographic' | 'illustration';
   tags?: string[];
+  uploadedById?: string;
   teacherName: string;
   createdAt: string;
 }
@@ -258,6 +296,7 @@ export interface ELink {
   category: 'Curriculum & Reference' | 'Science & STEM' | 'KICD & Open Access' | 'Literature & Languages' | 'Digital Library & Research' | 'General Learning';
   gradeLevel?: GradeLevel | 'All Grades';
   subject?: SubjectName | 'Cross-Curricular';
+  uploadedById?: string;
   addedBy: string;
   addedByRole: 'Librarian' | 'Teacher' | 'Admin';
   createdAt: string;
@@ -277,12 +316,14 @@ export interface Quiz {
   id: string;
   topicId: string;
   grade: GradeLevel;
+  stream?: StreamName;
   subject: SubjectName;
   title: string;
   passPercentage: number;
   timeLimitMinutes: number;
   questions: QuizQuestion[];
   teacherName: string;
+  teacherId?: string;
   createdAt: string;
 }
 
@@ -1060,6 +1101,7 @@ export interface DigitalLibraryItem {
   downloadCount: number;
   readUrl: string;
   coverColor: string;
+  uploadedById?: string;
 }
 
 export interface ReadingProgrammeMember {
@@ -1174,13 +1216,90 @@ export interface AppNotification {
   message: string;
   category: NotificationCategory;
   targetRole?: UserRole | 'all';
+  targetRoles?: string[];
   targetGrade?: GradeLevel;
   targetStream?: StreamName;
   targetUserId?: string;
+  targetUserIds?: string[];
+  targetDepartments?: string[];
   urgency: 'normal' | 'high' | 'urgent';
   linkTab?: string;
   createdAt: string;
   readByUserIds: string[];
+}
+
+export type ExecutiveReportCategory =
+  | 'bom_report'
+  | 'academic_report'
+  | 'department_review'
+  | 'discipline_safety'
+  | 'finance_operations'
+  | 'parent_briefing'
+  | 'general_report';
+
+export type ExecutiveReportShareTargetType =
+  | 'bom'
+  | 'teachers'
+  | 'departments'
+  | 'parents'
+  | 'individual'
+  | 'group';
+
+export interface ExecutiveReportSection {
+  id: string;
+  heading: string;
+  body: string;
+}
+
+export interface ExecutiveReportShare {
+  id: string;
+  reportId: string;
+  schoolId: string;
+  targetType: ExecutiveReportShareTargetType;
+  targetId: string;
+  targetLabel: string;
+  targetMeta?: Record<string, any>;
+  sharedById: string;
+  sharedByName: string;
+  sharedNote?: string;
+  createdAt: string;
+}
+
+export interface ExecutiveReport {
+  id: string;
+  schoolId: string;
+  title: string;
+  category: ExecutiveReportCategory;
+  classification: string;
+  reportingPeriod: string;
+  term?: string;
+  academicYear?: string;
+  summary?: string;
+  sections: ExecutiveReportSection[];
+  certifiedBy: string;
+  directorateLabel: string;
+  status: 'draft' | 'published';
+  createdById: string;
+  createdByName: string;
+  updatedById?: string;
+  updatedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+  shares: ExecutiveReportShare[];
+  matchedReasons?: string[];
+}
+
+export interface ExecutiveReportGroup {
+  id: string;
+  schoolId: string;
+  name: string;
+  description?: string;
+  memberUserIds: string[];
+  memberRoles: string[];
+  isBuiltIn?: boolean;
+  createdById?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LearnerBadge {
@@ -1833,7 +1952,8 @@ export type ExtraAdminRoleType =
   | 'delegated_post_editor'   // 2. Edit posts by specific users
   | 'category_curator'        // 3. Add categories under different posts
   | 'double_access_teacher'   // 4. Double Access rights for specific teachers
-  | 'cms_content_master';     // 5. Add, remove, edit posts, Categories, sections
+  | 'cms_content_master'      // 5. Add, remove, edit posts, Categories, sections
+  | 'student_stream_allocator'; // 6. Allocate & transfer students across CBC streams (delegated extra role)
 
 export interface DocumentSubmissionRequest {
   id: string;
@@ -1953,7 +2073,7 @@ export interface TeacherLessonFile {
   title: string;
   description?: string;
   fileName: string;
-  fileType: 'pdf' | 'image' | 'doc' | 'slides';
+  fileType: 'pdf' | 'image' | 'video' | 'audio' | 'doc' | 'slides';
   fileSize: string;
   fileUrl: string;
   subject: SubjectName;

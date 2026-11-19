@@ -555,19 +555,6 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                         <Volume2 className="w-3.5 h-3.5 text-slate-600" />
                         <span>{copiedShortcut === ws.id ? 'Announced!' : 'Hear Label'}</span>
                       </button>
-
-                      {onSwitchUser && (
-                        <button
-                          type="button"
-                          onClick={() => handleQuickSwitch(ws.role)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          title={`Switch demo account to ${ws.shortName}`}
-                          aria-label={`Switch to ${ws.name}`}
-                        >
-                          <span>Switch to Portal</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </button>
-                      )}
                     </div>
                   </div>
                 ))}

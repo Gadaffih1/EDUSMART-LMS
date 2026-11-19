@@ -471,8 +471,8 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>
@@ -1139,8 +1139,8 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           {/* Module Banner */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 print:border-none print:shadow-none">
             <div className="flex items-center gap-3">
-              <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-2xs shrink-0 hidden sm:block">
-                <EduSmartGadsaLogo variant="horizontal" size="xs" />
+              <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+                <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
               </div>
               <div>
                 <div className="flex items-center gap-2 text-xs font-semibold text-rose-700 uppercase tracking-wider mb-1">
@@ -1385,8 +1385,8 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
             </div>
           )}
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left text-xs">
+          <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs">
+            <table className="w-full text-left text-xs min-w-[600px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3">Week</th>

@@ -38,12 +38,14 @@ interface ExtraRolesManagerProps {
   currentUser: User;
   onNavigateToDocs?: () => void;
   onNavigateToCMS?: () => void;
+  onNavigateToStreamAllocation?: () => void;
 }
 
 export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({ 
   currentUser,
   onNavigateToDocs,
-  onNavigateToCMS
+  onNavigateToCMS,
+  onNavigateToStreamAllocation
 }) => {
   const [users, setUsers] = useState<User[]>(() => Storage.getUsers());
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,6 +176,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
       case 'category_curator': return '3. Category & Taxonomy Curator';
       case 'double_access_teacher': return '4. Double Access Rights';
       case 'cms_content_master': return '5. CMS & Section Master';
+      case 'student_stream_allocator': return '6. Student Stream Allocator';
       default: return role;
     }
   };
@@ -196,6 +199,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
   const countCategoryCurators = users.filter(u => u.extraRoles?.includes('category_curator')).length;
   const countDoubleAccessTeachers = users.filter(u => u.extraRoles?.includes('double_access_teacher') || u.doubleAccessConfig?.enabled).length;
   const countCMSMasters = users.filter(u => u.extraRoles?.includes('cms_content_master')).length;
+  const countStreamAllocators = users.filter(u => u.extraRoles?.includes('student_stream_allocator')).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -224,7 +228,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                 <span>Authoritative Institutional Governance</span>
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                5 Extra Admin Roles
+                6 Extra Admin Roles
               </span>
             </div>
 
@@ -233,11 +237,20 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
             </h2>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              As System Administrator, assign these 5 dedicated extra administrative roles independently to specific users, teachers, and faculty members without altering their baseline school roles.
+              As System Administrator, assign these 6 dedicated extra administrative roles independently to specific staff members without altering their baseline school roles.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            {onNavigateToStreamAllocation && (
+              <button
+                onClick={onNavigateToStreamAllocation}
+                className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Open Student Stream Allocations</span>
+              </button>
+            )}
             {onNavigateToDocs && (
               <button
                 onClick={onNavigateToDocs}
@@ -260,8 +273,8 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
         </div>
       </div>
 
-      {/* 5 EXTRA ROLES MATRIX METRICS STRIP */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* 6 EXTRA ROLES MATRIX METRICS STRIP */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         
         {/* Role 1 */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
@@ -342,6 +355,22 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
             <p className="text-[11px] text-slate-500 mt-0.5">Add/remove/edit all posts, categories & sections</p>
           </div>
         </div>
+
+        {/* Role 6 */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-xs">
+              <Users className="w-4 h-4" />
+            </span>
+            <span className="text-xs font-mono font-black text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full">
+              {countStreamAllocators} Delegated
+            </span>
+          </div>
+          <div>
+            <h4 className="font-bold text-xs text-slate-900 leading-tight">6. Stream Allocator</h4>
+            <p className="text-[11px] text-slate-500 mt-0.5">Delegate CBC student stream allocation (Admin & Senior Teacher native)</p>
+          </div>
+        </div>
       </div>
 
       {/* FILTER & SEARCH BAR */}
@@ -390,6 +419,7 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
               <option value="category_curator">3. Category Curators</option>
               <option value="double_access_teacher">4. Double Access Teachers</option>
               <option value="cms_content_master">5. CMS & Section Masters</option>
+              <option value="student_stream_allocator">6. Student Stream Allocators</option>
               <option value="none">No Extra Roles Assigned</option>
             </select>
           </div>
@@ -446,6 +476,12 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                     <span className="text-[10px] mt-0.5">5. CMS Master</span>
                   </div>
                 </th>
+                <th className="py-3 px-2 text-center" title="6. Student Stream Allocation (native to System Admin & Grade Senior Teacher; delegable as extra role to staff)">
+                  <div className="flex flex-col items-center">
+                    <Users className="w-4 h-4 text-sky-600" />
+                    <span className="text-[10px] mt-0.5">6. Streams</span>
+                  </div>
+                </th>
                 <th className="py-3 px-4 text-right">Scope Actions</th>
               </tr>
             </thead>
@@ -457,6 +493,9 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                 const hasCategoryRole = userExtraRoles.includes('category_curator') || user.role === 'admin';
                 const hasDoubleAccess = userExtraRoles.includes('double_access_teacher') || Boolean(user.doubleAccessConfig?.enabled);
                 const hasCMSRole = userExtraRoles.includes('cms_content_master') || user.role === 'admin';
+                const hasNativeStreamRole = user.role === 'admin' || user.role === 'senior_teacher';
+                const hasStreamAllocatorRole = userExtraRoles.includes('student_stream_allocator') || hasNativeStreamRole;
+                const isEligibleForStreamExtraRole = user.role !== 'student' && user.role !== 'parent' && !hasNativeStreamRole;
                 const isTeacher = ['teacher', 'class_teacher', 'hod', 'senior_teacher'].includes(user.role);
 
                 return (
@@ -551,6 +590,24 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                       />
                     </td>
 
+                    {/* 6. Student Stream Allocator */}
+                    <td className="py-3 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={hasStreamAllocatorRole}
+                        disabled={!isEligibleForStreamExtraRole}
+                        onChange={() => handleQuickToggleRole(user, 'student_stream_allocator')}
+                        className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer disabled:opacity-50"
+                        title={
+                          hasNativeStreamRole
+                            ? 'Native privilege for System Administrators and Grade Senior Teachers'
+                            : user.role === 'student' || user.role === 'parent'
+                              ? 'Not assignable to students or parents'
+                              : 'Toggle: Delegate Student Stream Allocation Hub access as an extra role'
+                        }
+                      />
+                    </td>
+
                     {/* Scope Actions */}
                     <td className="py-3 px-4 text-right">
                       <button
@@ -617,6 +674,9 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                     { key: 'category_curator' as ExtraAdminRoleType, label: '3. Add categories under different posts', icon: '🏷️', color: 'border-purple-300 bg-purple-50/50 text-purple-900' },
                     { key: 'double_access_teacher' as ExtraAdminRoleType, label: '4. Double Access rights for specific teachers', icon: '⚡', color: 'border-emerald-300 bg-emerald-50/50 text-emerald-900' },
                     { key: 'cms_content_master' as ExtraAdminRoleType, label: '5. Add, remove, edit posts, Categories, sections', icon: '👑', color: 'border-rose-300 bg-rose-50/50 text-rose-900' },
+                    ...(configuringUser.role !== 'student' && configuringUser.role !== 'parent'
+                      ? [{ key: 'student_stream_allocator' as ExtraAdminRoleType, label: '6. Student Stream Allocator (CBC Stream Assignment Hub)', icon: '🏫', color: 'border-sky-300 bg-sky-50/50 text-sky-900' }]
+                      : []),
                   ].map(({ key, label, icon, color }) => {
                     const isSelected = configRoles.includes(key);
                     return (
@@ -845,6 +905,24 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                   </div>
                   <p className="text-[11px] text-rose-900 leading-relaxed">
                     This user receives master authoring rights across the entire portal: creating announcements, removing old posts, editing any teacher's write-ups, adding/modifying categories, and configuring layout portal sections.
+                  </p>
+                </div>
+              )}
+
+              {/* SECTION FOR ROLE 6: STUDENT STREAM ALLOCATOR */}
+              {configRoles.includes('student_stream_allocator') && (
+                <div className="p-4 bg-sky-50/60 rounded-2xl border border-sky-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-bold text-sky-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-sky-600" />
+                      <span>Role 6 Privilege: Delegated Student Stream Allocator</span>
+                    </h5>
+                    <span className="text-[10px] bg-sky-200 text-sky-900 font-black px-2 py-0.5 rounded-full uppercase">
+                      CBC Stream Access
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-sky-900 leading-relaxed">
+                    By default, only the <strong>System Administrator</strong> and <strong>Grade Senior Teachers</strong> can access the Student Stream Assignment Hub. Assigning this extra role delegates full student stream allocation &amp; transfer access to this staff member without modifying their baseline school role.
                   </p>
                 </div>
               )}

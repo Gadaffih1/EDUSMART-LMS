@@ -48,6 +48,9 @@ export interface OfflineCacheStatus {
   bySubject: SubjectStorageSummary[];
 }
 
+import { ClientDataStore } from './clientDataStore';
+import { initPwaLifecycle } from './pwaManager';
+
 const STORAGE_KEY = 'edusmart_cbc_offline_cache_v2';
 const LAST_SYNC_KEY = 'edusmart_cbc_last_sync_timestamp';
 
@@ -377,22 +380,21 @@ export const OfflineCacheManager = {
    */
   getAllModules(): CachedCBCModule[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        // Initial Seed: Pre-cache frequently accessed modules automatically
+      const saved = ClientDataStore.getPreference<CachedCBCModule[] | null>(STORAGE_KEY, null);
+      if (!saved || !Array.isArray(saved) || saved.length === 0) {
         const seeded: CachedCBCModule[] = DEFAULT_CBC_CATALOG.map((item) => ({
           ...item,
           isCached: item.isFrequentlyAccessed,
           cachedAt: item.isFrequentlyAccessed ? new Date().toISOString() : undefined,
           lastAccessedAt: item.isFrequentlyAccessed ? new Date().toISOString() : undefined
         }));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-        localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+        ClientDataStore.setPreference(STORAGE_KEY, seeded);
+        ClientDataStore.setPreference(LAST_SYNC_KEY, new Date().toISOString());
         return seeded;
       }
-      return JSON.parse(raw);
+      return saved;
     } catch (e) {
-      console.warn('Failed to read CBC cache from localStorage:', e);
+      console.warn('Failed to read CBC cache from ClientDataStore:', e);
       return DEFAULT_CBC_CATALOG.map((item) => ({
         ...item,
         isCached: item.isFrequentlyAccessed
@@ -401,15 +403,15 @@ export const OfflineCacheManager = {
   },
 
   /**
-   * Saves modules to storage and dispatches update event
+   * Saves modules to database-backed user preferences and dispatches update event
    */
   saveModules(modules: CachedCBCModule[]): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(modules));
-      localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+      ClientDataStore.setPreference(STORAGE_KEY, modules);
+      ClientDataStore.setPreference(LAST_SYNC_KEY, new Date().toISOString());
       this.dispatchUpdateEvent();
     } catch (e) {
-      console.error('Failed to save CBC cache to localStorage:', e);
+      console.error('Failed to save CBC cache to ClientDataStore:', e);
     }
   },
 
@@ -435,7 +437,7 @@ export const OfflineCacheManager = {
     const cachedCount = cachedModules.length;
     const percentage = totalAvailable > 0 ? Math.round((cachedCount / totalAvailable) * 100) : 0;
     const totalSizeBytes = cachedModules.reduce((acc, m) => acc + (m.sizeBytes || 0), 0);
-    const lastSyncTimestamp = localStorage.getItem(LAST_SYNC_KEY) || new Date().toISOString();
+    const lastSyncTimestamp = ClientDataStore.getPreference<string>(LAST_SYNC_KEY, '') || new Date().toISOString();
 
     // Determine sync health
     let syncHealth: OfflineSyncHealth = 'partial';
@@ -619,20 +621,9 @@ export const OfflineCacheManager = {
   },
 
   /**
-   * Registers Service Worker in supported browsers
+   * Registers PWA Service Worker via centralized pwaManager lifecycle
    */
   registerServiceWorker(): void {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then((registration) => {
-            console.log('EduSmart CBC Service Worker registered successfully:', registration.scope);
-          })
-          .catch((error) => {
-            console.warn('EduSmart Service Worker registration note:', error);
-          });
-      });
-    }
+    initPwaLifecycle();
   }
 };

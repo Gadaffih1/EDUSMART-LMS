@@ -11,7 +11,15 @@ import {
   GradePassword
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { ClientDataStore } from '../../utils/clientDataStore';
+import {
+  canAccessStudentStreamAllocation,
+  getUserRoles,
+  normalizeAssignedRoleList,
+} from '../../utils/subjectTeacherSwitch';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
+import { GradeStreamManagementConsole, type AdminAcademicMode } from '../academic-hierarchy/GradeStreamManagementConsole';
+import { StudentStreamManager } from '../teacher/StudentStreamManager';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
@@ -19,12 +27,15 @@ import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { ReportingHub } from '../reports/ReportingHub';
+import { HeadTeacherReportsManager } from '../leadership/HeadTeacherReportsManager';
 import { ExtraRolesManager } from './ExtraRolesManager';
 import { CMSPostsSectionsHub } from './CMSPostsSectionsHub';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { SchoolStaffAppraisal, TeacherAppraisalPages } from './TeacherAppraisalPages';
 import { BulkUserImportModule } from './BulkUserImportModule';
 import { SchoolKpiAnalyticsCharts } from '../analytics/SchoolKpiAnalyticsCharts';
+import { PWAAnalyticsPanel } from './PWAAnalyticsPanel';
+import { AdminVirtualClassroomMonitor } from '../virtual-classroom/AdminVirtualClassroomMonitor';
 import { 
   Users, 
   Award,
@@ -56,7 +67,12 @@ import {
   SlidersHorizontal,
   Building2,
   ChevronLeft,
-  Menu
+  Menu,
+  Search,
+  Trash2,
+  UserCheck,
+  UserX,
+  AlertTriangle
 } from 'lucide-react';
 import { IntegratedOperationsHub } from '../operations/IntegratedOperationsHub';
 
@@ -77,6 +93,12 @@ import { StudentDirectoryPage } from './StudentDirectoryPage';
 import { GradeClassPages } from './GradeClassPages';
 import { DepartmentPages } from './DepartmentPages';
 import { RoleDirectory } from './RoleDirectory';
+import { SchoolSettingsPanel } from './SchoolSettingsPanel';
+import {
+  CollapsibleFilterBar,
+  MobileOverflowMenu,
+  ScrollableMatrixTableWrapper,
+} from '../common/ResponsiveUIKit';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -88,15 +110,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const isHeadTeacher = currentUser.role === 'head_teacher';
   const isDeputyHead = currentUser.role === 'deputy_head';
   const isDean = currentUser.role === 'dean_of_studies';
+  const canAllocateStreams = canAccessStudentStreamAllocation(currentUser);
 
   // Sub-tabs: Default to overview (Panel 3 School Dashboard)
   const defaultTab = 'overview';
   const [activeTab, setActiveTab] = useState<AdminActionTab>(() => {
-    const stored = sessionStorage.getItem('edusmart_school_admin_tab');
+    const stored = ClientDataStore.getPreference<string>('edusmart_school_admin_tab', defaultTab);
     return (stored as AdminActionTab) || defaultTab;
   });
   const openTab = (tab: AdminActionTab) => {
-    sessionStorage.setItem('edusmart_school_admin_tab', tab);
+    ClientDataStore.setPreference('edusmart_school_admin_tab', tab);
     setActiveTab(tab);
   };
   const [menuCollapsed, setMenuCollapsed] = useState(false);
@@ -119,11 +142,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   }, []);
 
   React.useEffect(() => {
+    ClientDataStore.apiFetchUsers({ schoolId: currentTenant.id }).catch(() => {});
+    ClientDataStore.loadSchoolSettings(currentTenant.id).catch(() => {});
+  }, [currentTenant.id]);
+
+  React.useEffect(() => {
     const handleNavEvent = (e: Event) => {
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['overview', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'operations'].includes(tab)) {
+        if (['overview', 'school_settings', 'grade_management', 'stream_management', 'senior_assignments', 'class_assignments', 'grade_performance', 'consolidated_reports', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
           openTab(tab as AdminActionTab);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
@@ -138,12 +166,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
   }, []);
 
+  const tenantUsers = React.useMemo(
+    () => allUsers.filter((u) => (u.schoolId || currentTenant.id) === currentTenant.id),
+    [allUsers, currentTenant.id]
+  );
+
+  // User Directory Filters & Management Modals
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'deactivated'>('all');
+  const [editSaving, setEditSaving] = useState(false);
+  const [createUserBusy, setCreateUserBusy] = useState(false);
+
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<User | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordBusy, setResetPasswordBusy] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState('');
+
+  const [deleteUserTarget, setDeleteUserTarget] = useState<User | null>(null);
+  const [deleteUserBusy, setDeleteUserBusy] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState('');
+
   // Edit User & Assign Role Modal State
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('student');
+  const [editAdditionalRoles, setEditAdditionalRoles] = useState<UserRole[]>([]);
   const [editGrade, setEditGrade] = useState<GradeLevel>(4);
   const [editStream, setEditStream] = useState<StreamName>('Dove');
   const [editIdNumber, setEditIdNumber] = useState('');
@@ -162,6 +212,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<UserRole | ''>('');
+  const [newAdditionalRoles, setNewAdditionalRoles] = useState<UserRole[]>([]);
   const [systemRoles] = useState(() => listSystemRoles());
   const [newGrade, setNewGrade] = useState<GradeLevel>(4);
   const [newStream, setNewStream] = useState<StreamName>('Dove');
@@ -184,58 +235,184 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const gatePasses = Storage.getGatePasses();
   const virtualClasses = Storage.getVirtualClasses();
 
-  // Open Edit User & Assign Role Modal
+  const filteredTenantUsers = React.useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return tenantUsers.filter((u) => {
+      const matchesSearch =
+        !q ||
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.admissionNumber && u.admissionNumber.toLowerCase().includes(q)) ||
+        (u.staffNumber && u.staffNumber.toLowerCase().includes(q)) ||
+        (u.tscNumber && u.tscNumber.toLowerCase().includes(q)) ||
+        (u.phone && u.phone.toLowerCase().includes(q));
+      const matchesRole = userRoleFilter === 'all' || getUserRoles(u).includes(userRoleFilter as UserRole);
+      const isUserActive = u.isActive !== false;
+      const matchesStatus =
+        userStatusFilter === 'all' ? true : userStatusFilter === 'active' ? isUserActive : !isUserActive;
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [tenantUsers, userSearch, userRoleFilter, userStatusFilter]);
+
+  // Open Edit User & Assign Role Modal (leave password blank unless changing)
   const handleOpenEditUserModal = (user: User) => {
     setEditingUser(user);
     setEditName(user.name);
     setEditEmail(user.email);
-    setEditPassword(user.password || '');
+    setEditPassword('');
     setEditRole(user.role);
+    setEditAdditionalRoles((user.assignedRoles || []).filter((r) => r !== user.role));
     setEditGrade(user.grade || 4);
     setEditStream(user.stream || 'Dove');
-    setEditIdNumber(user.admissionNumber || user.tscNumber || '');
+    setEditIdNumber(user.admissionNumber || user.staffNumber || user.tscNumber || '');
     setEditDepartment(user.department || '');
     setEditDesignation(user.designation || '');
-    // Load custom permissions or default from current role
     setEditCustomPermissions(user.customPermissions ? { ...user.customPermissions } : {});
   };
 
-  // Save Edited User and Role
-  const handleSaveUserRoleAndPermissions = (e: React.FormEvent) => {
+  // Save Edited User and Role directly via authoritative /api/users/:id endpoint
+  const handleSaveUserRoleAndPermissions = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || editSaving) return;
 
     if (!editEmail.includes('@')) {
       showToast('Please provide a valid email address.', 'error');
       return;
     }
 
-    const updates: Partial<User> = {
+    const trimmedPassword = editPassword.trim();
+    if (trimmedPassword.length > 0 && trimmedPassword.length < 4) {
+      showToast('New password must be at least 4 characters.', 'error');
+      return;
+    }
+
+    const roleMeta = systemRoles.find((r) => r.slug === editRole);
+    const allAssignedRoles = normalizeAssignedRoleList(
+      editRole,
+      editAdditionalRoles,
+      editingUser.doubleAccessConfig
+    );
+    const hasClassRole =
+      allAssignedRoles.includes('student') || allAssignedRoles.includes('class_teacher');
+    const hasHodRole = allAssignedRoles.includes('hod');
+    const hasTeachingStaffRole = allAssignedRoles.some((r) =>
+      [
+        'teacher',
+        'class_teacher',
+        'hod',
+        'senior_teacher',
+        'dean_of_studies',
+        'deputy_head',
+        'librarian',
+        'head_teacher',
+        'nurse',
+      ].includes(r)
+    );
+
+    const updates: Partial<User> & { password?: string } = {
       name: editName.trim(),
       email: editEmail.trim().toLowerCase(),
-      password: editPassword.trim(),
       role: editRole,
+      assignedRoles: allAssignedRoles,
+      schoolId: editingUser.schoolId || currentTenant.id,
       designation: editDesignation.trim(),
-      grade: ['student', 'class_teacher'].includes(editRole) ? editGrade : undefined,
-      stream: ['student', 'class_teacher'].includes(editRole) ? editStream : undefined,
-      department: editRole === 'hod' ? editDepartment : undefined,
-      admissionNumber: editRole === 'student' ? editIdNumber : undefined,
-      tscNumber: ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'dean_of_studies', 'deputy_head', 'librarian', 'head_teacher', 'nurse'].includes(editRole) ? editIdNumber : undefined,
+      grade: hasClassRole ? editGrade : undefined,
+      stream: hasClassRole ? editStream : undefined,
+      department: hasHodRole ? editDepartment : undefined,
+      admissionNumber: editRole === 'student' || roleMeta?.numberKind === 'admission' ? editIdNumber.trim() || undefined : undefined,
+      staffNumber: roleMeta?.numberKind === 'staff' ? editIdNumber.trim() || undefined : editingUser.staffNumber,
+      tscNumber: hasTeachingStaffRole ? (editIdNumber.trim() || undefined) : undefined,
       customPermissions: Object.keys(editCustomPermissions).length > 0 ? editCustomPermissions : undefined
     };
+    if (trimmedPassword.length > 0) {
+      updates.password = trimmedPassword;
+    }
 
     const previousRole = editingUser.role;
-    const updated = Storage.updateUser(editingUser.id, updates);
-    if (updated) {
+    setEditSaving(true);
+    try {
+      let updated = await ClientDataStore.apiUpdateUser(editingUser.id, updates);
       if (updated.role !== previousRole && isDirectoryRole(updated.role)) {
         const seat = assignUserToRole(currentTenant.id, updated.role, updated, keptProfile(editingUser));
         const started = [...seat.holders].reverse().find((holder) => !holder.endedAt)?.startedAt;
-        if (started) Storage.updateUser(updated.id, { roleStartedAt: started, roleReleasedAt: undefined });
+        if (started) {
+          updated = await ClientDataStore.apiUpdateUser(updated.id, { roleStartedAt: started, roleReleasedAt: undefined });
+        }
       }
-      saveProvisionedAccount(Storage.getUsers().find((user) => user.id === updated.id) || updated);
+      saveProvisionedAccount({ ...updated, ...(trimmedPassword ? { password: trimmedPassword } : {}) });
       setAllUsers(Storage.getUsers());
-      showToast(`User ${updated.name} successfully updated! Role assigned as ${editRole.replace('_', ' ').toUpperCase()}.`, 'success');
+      showToast(
+        `User ${updated.name} successfully updated! Assigned roles: ${allAssignedRoles
+          .map((r) => r.replace(/_/g, ' ').toUpperCase())
+          .join(' + ')}.`,
+        'success'
+      );
       setEditingUser(null);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed saving user details.', 'error');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleToggleUserActivation = async (user: User) => {
+    const nextStatus = user.isActive === false;
+    try {
+      await ClientDataStore.apiUpdateUser(user.id, { isActive: nextStatus });
+      setAllUsers(Storage.getUsers());
+      showToast(`Account for ${user.name} is now ${nextStatus ? 'ACTIVE' : 'DEACTIVATED'}.`, nextStatus ? 'success' : 'info');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed updating account status.', 'error');
+    }
+  };
+
+  const handleOpenResetPassword = (user: User) => {
+    setResetPasswordTarget(user);
+    setResetPasswordValue('');
+    setResetPasswordError('');
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordTarget || resetPasswordBusy) return;
+    const nextPass = resetPasswordValue.trim();
+    if (nextPass.length < 4) {
+      setResetPasswordError('Password must be at least 4 characters.');
+      return;
+    }
+    setResetPasswordBusy(true);
+    setResetPasswordError('');
+    try {
+      await ClientDataStore.apiResetUserPassword(resetPasswordTarget.id, nextPass);
+      saveProvisionedAccount({ ...resetPasswordTarget, password: nextPass });
+      showToast(`Password reset for ${resetPasswordTarget.name} (${resetPasswordTarget.email}).`, 'success');
+      setResetPasswordTarget(null);
+      setResetPasswordValue('');
+    } catch (err: any) {
+      setResetPasswordError(err?.message || 'Failed resetting password.');
+    } finally {
+      setResetPasswordBusy(false);
+    }
+  };
+
+  const handleOpenDeleteUser = (user: User) => {
+    setDeleteUserTarget(user);
+    setDeleteUserError('');
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteUserTarget || deleteUserBusy) return;
+    setDeleteUserBusy(true);
+    setDeleteUserError('');
+    try {
+      await ClientDataStore.apiDeleteUser(deleteUserTarget.id);
+      setAllUsers(Storage.getUsers());
+      showToast(`Removed user account ${deleteUserTarget.name} (${deleteUserTarget.email}).`, 'info');
+      setDeleteUserTarget(null);
+    } catch (err: any) {
+      setDeleteUserError(err?.message || 'Failed deleting user account.');
+    } finally {
+      setDeleteUserBusy(false);
     }
   };
 
@@ -245,6 +422,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     const effective = Storage.getUserEffectivePermissions({
       ...editingUser,
       role: editRole,
+      assignedRoles: normalizeAssignedRoleList(editRole, editAdditionalRoles, editingUser.doubleAccessConfig),
       customPermissions: editCustomPermissions
     });
     setEditCustomPermissions(prev => ({
@@ -274,14 +452,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
   // Reset all role permissions to factory defaults
   const handleResetAllRolePermissions = () => {
-    localStorage.removeItem('edusmart_role_permissions_v1');
+    Storage.resetRolePermissions();
     setRolePermissions(Storage.getRolePermissions());
     showToast('All role access permissions have been reset to factory defaults.', 'info');
   };
 
-  // Handle Create User
-  const handleCreateUser = (e: React.FormEvent) => {
+  // Handle Create User directly against /api/users
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (createUserBusy) return;
     setCreateUserError('');
     setCreateUserSuccess(false);
 
@@ -305,102 +484,120 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       return;
     }
 
+    const targetSchoolId = currentTenant?.id || 'tenant-riara';
+    const allAssignedRoles = normalizeAssignedRoleList(newRole as UserRole, newAdditionalRoles);
+    const hasClassRole =
+      allAssignedRoles.includes('student') || allAssignedRoles.includes('class_teacher');
+    const hasHodRole = allAssignedRoles.includes('hod');
+    const hasSubjectTeacherRole = allAssignedRoles.includes('teacher');
     const newUser: User = {
       id: `usr-${newRole}-${Date.now()}`,
       name: newName.trim(),
       email: newEmail.trim().toLowerCase(),
       password: newPassword,
       role: newRole as UserRole,
-      schoolId: currentTenant?.id || 'tenant-riara',
+      assignedRoles: allAssignedRoles,
+      schoolId: targetSchoolId,
       isActive: true,
-      grade: newRole === 'student' || newRole === 'class_teacher' ? newGrade : undefined,
-      stream: newRole === 'student' || newRole === 'class_teacher' ? newStream : undefined,
-      department: newRole === 'hod' ? newDepartment : undefined,
+      grade: hasClassRole ? newGrade : undefined,
+      stream: hasClassRole ? newStream : undefined,
+      department: hasHodRole ? newDepartment : undefined,
       childrenIds: newRole === 'parent' ? [newSelectedChildId] : undefined,
       admissionNumber: selectedRole.numberKind === 'admission' ? newIdNumber.trim() : undefined,
       staffNumber: selectedRole.numberKind === 'staff' ? newIdNumber.trim() : undefined,
       designation: selectedRole.name,
-      assignedSubjects: newRole === 'teacher' ? ['Mathematics', 'Integrated Science'] : undefined
+      assignedSubjects: hasSubjectTeacherRole ? ['Mathematics', 'Integrated Science'] : undefined
     };
 
-    // If creating a student and parent details are entered, interlink them
-    if (newRole === 'student' && newStudentParentName.trim()) {
-      const pName = newStudentParentName.trim();
-      const pPhone = newStudentParentPhone.trim();
-      const pRel = newStudentParentRel.trim() || 'Parent';
-      const cleanEmail = newStudentParentEmail.trim().toLowerCase() || `parent.${pName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
+    setCreateUserBusy(true);
+    try {
+      // If creating a student and parent details are entered, interlink them
+      if (newRole === 'student' && newStudentParentName.trim()) {
+        const pName = newStudentParentName.trim();
+        const pPhone = newStudentParentPhone.trim();
+        const pRel = newStudentParentRel.trim() || 'Parent';
+        const cleanEmail = newStudentParentEmail.trim().toLowerCase() || `parent.${pName.toLowerCase().replace(/[^a-z0-9]/g, '')}@parents.edusmart.ac.ke`;
 
-      const allExisting = Storage.getUsers();
-      const existingParent = allExisting.find(u => 
-        u.role === 'parent' && (
-          (cleanEmail && u.email.toLowerCase() === cleanEmail) ||
-          (pPhone && u.phone && u.phone.replace(/\D/g, '') === pPhone.replace(/\D/g, ''))
-        )
-      );
+        const existingParent = tenantUsers.find(u =>
+          u.role === 'parent' && (
+            (cleanEmail && u.email.toLowerCase() === cleanEmail) ||
+            (pPhone && u.phone && u.phone.replace(/\D/g, '') === pPhone.replace(/\D/g, ''))
+          )
+        );
 
-      if (existingParent) {
-        newUser.parentId = existingParent.id;
-        newUser.parentName = existingParent.name;
-        newUser.parentPhone = existingParent.phone;
-        newUser.parentEmail = existingParent.email;
-        newUser.parentRelationship = pRel;
-        const currentChildren = new Set(existingParent.childrenIds || []);
-        currentChildren.add(newUser.id);
-        existingParent.childrenIds = Array.from(currentChildren);
-        Storage.addUser(existingParent);
-        saveProvisionedAccount(existingParent);
-      } else {
-        const newParentUser: User = {
-          id: `usr-parent-${Date.now()}`,
-          name: pName,
-          email: cleanEmail,
-          password: 'parent2026',
-          role: 'parent',
-          schoolId: currentTenant?.id || 'tenant-riara',
-          isActive: true,
-          phone: pPhone || undefined,
-          childrenIds: [newUser.id],
-          designation: `${pRel} / Guardian`,
-        };
-        newUser.parentId = newParentUser.id;
-        newUser.parentName = newParentUser.name;
-        newUser.parentPhone = newParentUser.phone;
-        newUser.parentEmail = newParentUser.email;
-        newUser.parentRelationship = pRel;
-        Storage.addUser(newParentUser);
-        saveProvisionedAccount(newParentUser);
+        if (existingParent) {
+          newUser.parentId = existingParent.id;
+          newUser.parentName = existingParent.name;
+          newUser.parentPhone = existingParent.phone;
+          newUser.parentEmail = existingParent.email;
+          newUser.parentRelationship = pRel;
+          const currentChildren = new Set(existingParent.childrenIds || []);
+          currentChildren.add(newUser.id);
+          const updatedParent = await ClientDataStore.apiUpdateUser(existingParent.id, {
+            childrenIds: Array.from(currentChildren),
+          });
+          saveProvisionedAccount(updatedParent);
+        } else {
+          const parentPass = `pr@${new Date().getFullYear()}`;
+          const newParentUser: User = {
+            id: `usr-parent-${Date.now()}`,
+            name: pName,
+            email: cleanEmail,
+            password: parentPass,
+            role: 'parent',
+            schoolId: targetSchoolId,
+            isActive: true,
+            phone: pPhone || undefined,
+            childrenIds: [newUser.id],
+            designation: `${pRel} / Guardian`,
+          };
+          newUser.parentId = newParentUser.id;
+          newUser.parentName = newParentUser.name;
+          newUser.parentPhone = newParentUser.phone;
+          newUser.parentEmail = newParentUser.email;
+          newUser.parentRelationship = pRel;
+          const createdParent = await ClientDataStore.apiCreateUser(newParentUser);
+          saveProvisionedAccount({ ...createdParent, password: parentPass });
+        }
       }
-    }
 
-    // If creating a parent, bidirectional link to selected child
-    if (newRole === 'parent' && newSelectedChildId) {
-      const allExisting = Storage.getUsers();
-      const childStudent = allExisting.find(u => u.id === newSelectedChildId);
-      if (childStudent) {
-        childStudent.parentId = newUser.id;
-        childStudent.parentName = newUser.name;
-        childStudent.parentPhone = newUser.phone;
-        childStudent.parentEmail = newUser.email;
-        childStudent.parentRelationship = 'Parent';
-        Storage.addUser(childStudent);
-        saveProvisionedAccount(childStudent);
+      const createdUser = await ClientDataStore.apiCreateUser(newUser);
+      saveProvisionedAccount({ ...createdUser, password: newPassword });
+
+      // If creating a parent, bidirectional link to selected child
+      if (newRole === 'parent' && newSelectedChildId) {
+        const childStudent = tenantUsers.find(u => u.id === newSelectedChildId);
+        if (childStudent) {
+          const updatedStudent = await ClientDataStore.apiUpdateUser(childStudent.id, {
+            parentId: createdUser.id,
+            parentName: createdUser.name,
+            parentPhone: createdUser.phone,
+            parentEmail: createdUser.email,
+            parentRelationship: 'Parent',
+          });
+          saveProvisionedAccount(updatedStudent);
+        }
       }
-    }
 
-    Storage.addUser(newUser);
-    saveProvisionedAccount(newUser);
-    setAllUsers(Storage.getUsers());
-    setCreateUserSuccess(true);
-    setNewName('');
-    setNewEmail('');
-    setNewPassword('');
-    setNewRole('');
-    setNewIdNumber('');
-    setNewStudentParentName('');
-    setNewStudentParentPhone('');
-    setNewStudentParentEmail('');
-    setNewStudentParentRel('Parent');
-    setTimeout(() => setCreateUserSuccess(false), 3000);
+      setAllUsers(Storage.getUsers());
+      setCreateUserSuccess(true);
+      showToast(`Created ${createdUser.name} (${createdUser.email}).`, 'success');
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setNewRole('');
+      setNewAdditionalRoles([]);
+      setNewIdNumber('');
+      setNewStudentParentName('');
+      setNewStudentParentPhone('');
+      setNewStudentParentEmail('');
+      setNewStudentParentRel('Parent');
+      setTimeout(() => setCreateUserSuccess(false), 3000);
+    } catch (err: any) {
+      setCreateUserError(err?.message || 'Could not create user account on the database.');
+    } finally {
+      setCreateUserBusy(false);
+    }
   };
 
   // Update grade password
@@ -421,10 +618,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         onToggleCollapsed={() => setMenuCollapsed((open) => !open)}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
-        userCount={allUsers.length}
+        userCount={tenantUsers.length}
         workLogCount={workLogs.length}
+        canAllocateStreams={canAllocateStreams}
       />
       <div className="min-w-0 flex-1 px-4 py-6 space-y-6 sm:px-6 lg:px-8">
+      {actionToast && (
+        <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold shadow-xs ${
+          actionToast.type === 'error'
+            ? 'bg-rose-50 text-rose-900 border-rose-200'
+            : actionToast.type === 'info'
+            ? 'bg-blue-50 text-blue-900 border-blue-200'
+            : 'bg-emerald-50 text-emerald-950 border-emerald-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {actionToast.type === 'error' ? <AlertTriangle className="w-4 h-4 text-rose-600" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+            <span>{actionToast.message}</span>
+          </div>
+          <button type="button" onClick={() => setActionToast(null)} className="text-slate-500 hover:text-slate-800 cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Leadership & Admin Banner */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -436,11 +652,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 hidden sm:flex items-center justify-center">
-            <EduSmartGadsaLogo variant="horizontal" size="sm" />
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white font-bold text-xl flex sm:hidden items-center justify-center shadow-xs shrink-0">
-            <School className="w-6 h-6 text-emerald-400" />
+          <div className="bg-slate-50 p-1.5 sm:p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 flex items-center justify-center">
+            <TenantSchoolLogo variant="horizontal" size="sm" compactMobile />
           </div>
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
@@ -462,8 +675,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         {/* Quick summary stats */}
         <div className="flex items-center gap-3 text-xs">
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="text-slate-500 text-[10px] uppercase font-bold">Total Accounts</div>
-            <div className="text-base font-extrabold font-mono text-slate-900">{allUsers.length}</div>
+            <div className="text-slate-500 text-[10px] uppercase font-bold">School Accounts</div>
+            <div className="text-base font-extrabold font-mono text-slate-900">{tenantUsers.length}</div>
           </div>
           <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
             <div className="text-emerald-800 text-[10px] uppercase font-bold">Active Passes</div>
@@ -471,6 +684,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           </div>
         </div>
       </div>
+
+      {(activeTab === 'grade_management' ||
+        activeTab === 'stream_management' ||
+        activeTab === 'senior_assignments' ||
+        activeTab === 'class_assignments' ||
+        activeTab === 'grade_performance' ||
+        activeTab === 'consolidated_reports') && (
+        <GradeStreamManagementConsole
+          mode={
+            (activeTab === 'grade_management'
+              ? 'grades'
+              : activeTab === 'stream_management'
+              ? 'streams'
+              : activeTab) as AdminAcademicMode
+          }
+          onChangeMode={(nextMode) => {
+            const tabMap: Record<AdminAcademicMode, AdminActionTab> = {
+              grades: 'grade_management',
+              streams: 'stream_management',
+              senior_assignments: 'senior_assignments',
+              class_assignments: 'class_assignments',
+              grade_performance: 'grade_performance',
+              consolidated_reports: 'consolidated_reports',
+            };
+            openTab(tabMap[nextMode]);
+          }}
+        />
+      )}
+
+      {activeTab === 'student_stream_allocation' && canAllocateStreams && (
+        <StudentStreamManager currentUser={currentUser} />
+      )}
 
       {activeTab === 'grades' && (
         <GradeClassPages
@@ -520,13 +765,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             <div className="relative p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center gap-5">
                 {/* Crest Logo */}
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white p-2 shadow-xl border-2 border-amber-400/80 flex items-center justify-center shrink-0">
-                  {currentTenant.logoUrl ? (
-                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-full h-full object-contain" />
-                  ) : (
-                    <School className="w-10 h-10 text-blue-700" />
-                  )}
-                </div>
+                <TenantSchoolLogo
+                  variant="emblem"
+                  size="lg"
+                  className="border-2 border-amber-400/80 shadow-xl"
+                />
 
                 <div className="text-left space-y-1">
                   <div className="flex items-center gap-2">
@@ -768,13 +1011,274 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         </section>
       )}
 
+      {activeTab === 'pwa_analytics' && (
+        <section className="space-y-6">
+          <PWAAnalyticsPanel />
+        </section>
+      )}
+
+      {activeTab === 'school_settings' && (
+        <SchoolSettingsPanel schoolId={currentTenant.id} />
+      )}
+
       {activeTab === 'users' && (
-        <RoleDirectory
-          schoolId={currentTenant.id}
-          users={allUsers}
-          onEdit={handleOpenEditUserModal}
-          onChanged={(message) => { setAllUsers(Storage.getUsers()); showToast(message, 'success'); }}
-        />
+        <div className="space-y-6">
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  {currentTenant.name} — User Accounts Directory
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Create accounts, edit details & permissions, reset passwords, activate/deactivate, or remove accounts within your school.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => openTab('create_user')}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Create Account</span>
+              </button>
+            </div>
+
+            <CollapsibleFilterBar
+              searchValue={userSearch}
+              onSearchChange={setUserSearch}
+              searchPlaceholder="Search name, email, Adm/Staff #..."
+              activeFilterCount={(userRoleFilter !== 'all' ? 1 : 0) + (userStatusFilter !== 'all' ? 1 : 0)}
+              onClearFilters={() => {
+                setUserRoleFilter('all');
+                setUserStatusFilter('all');
+              }}
+              filters={
+                <>
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                    aria-label="Filter users by role"
+                    className="w-full min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="all">All School Roles</option>
+                    {systemRoles.map((role) => (
+                      <option key={role.id} value={role.slug}>{role.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'deactivated')}
+                    aria-label="Filter users by status"
+                    className="w-full min-h-[42px] px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="all">All Account Statuses</option>
+                    <option value="active">Active Only</option>
+                    <option value="deactivated">Deactivated Only</option>
+                  </select>
+                </>
+              }
+            />
+
+            {/* Mobile stacked user cards */}
+            <div className="md:hidden space-y-3">
+              {filteredTenantUsers.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 border border-slate-200 rounded-xl">
+                  No school user accounts match your current filters.
+                </div>
+              ) : (
+                filteredTenantUsers.map((u) => {
+                  const active = u.isActive !== false;
+                  const isSelf = u.id === currentUser.id;
+                  return (
+                    <div
+                      key={`mob-${u.id}`}
+                      className={`p-3.5 rounded-xl border border-slate-200 space-y-2.5 ${!active ? 'bg-rose-50/40' : 'bg-white'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-slate-900 truncate">{u.name}</div>
+                          <div className="text-[11px] font-mono text-slate-500 truncate">{u.email}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {active ? 'Active' : 'Off'}
+                          </span>
+                          <MobileOverflowMenu
+                            label={`Actions for ${u.name}`}
+                            items={[
+                              {
+                                label: 'Edit User & Roles',
+                                icon: <Edit2 className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenEditUserModal(u),
+                              },
+                              {
+                                label: 'Reset Password',
+                                icon: <KeyRound className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenResetPassword(u),
+                              },
+                              ...(!isSelf
+                                ? [
+                                    {
+                                      label: active ? 'Deactivate Account' : 'Activate Account',
+                                      icon: active ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />,
+                                      onClick: () => handleToggleUserActivation(u),
+                                    },
+                                    {
+                                      label: 'Remove Account',
+                                      icon: <Trash2 className="w-3.5 h-3.5" />,
+                                      danger: true,
+                                      onClick: () => handleOpenDeleteUser(u),
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {getUserRoles(u).map((roleSlug, idx) => (
+                          <span
+                            key={`mob-${u.id}-${roleSlug}`}
+                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                              idx === 0
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {roleSlug.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-100">
+                        <span className="font-mono">{u.admissionNumber || u.staffNumber || u.tscNumber || '—'}</span>
+                        {u.grade && (
+                          <span className="font-medium text-slate-500">
+                            Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-3">User &amp; Email</th>
+                    <th className="py-2.5 px-3">Role &amp; Class</th>
+                    <th className="py-2.5 px-3">ID / Contact</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTenantUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-400">
+                        No school user accounts match your current filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTenantUsers.map((u) => {
+                      const active = u.isActive !== false;
+                      const isSelf = u.id === currentUser.id;
+                      return (
+                        <tr key={u.id} className={`hover:bg-slate-50/80 ${!active ? 'bg-rose-50/30' : ''}`}>
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900">{u.name}</div>
+                            <div className="text-[11px] font-mono text-slate-500">{u.email}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-wrap gap-1">
+                              {getUserRoles(u).map((roleSlug, idx) => (
+                                <span
+                                  key={`${u.id}-${roleSlug}`}
+                                  className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                                    idx === 0
+                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}
+                                >
+                                  {roleSlug.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
+                            {u.grade && (
+                              <div className="text-[10px] text-slate-500 mt-0.5">
+                                Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">
+                            <div className="font-mono text-[11px]">{u.admissionNumber || u.staffNumber || u.tscNumber || '—'}</div>
+                            {u.phone && <div className="text-[10px] text-slate-400">{u.phone}</div>}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              type="button"
+                              disabled={isSelf}
+                              onClick={() => handleToggleUserActivation(u)}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
+                                active
+                                  ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                  : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                              }`}
+                              title={isSelf ? 'Current signed-in account' : active ? 'Click to deactivate' : 'Click to activate'}
+                            >
+                              {active ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                              <span>{active ? 'Active' : 'Deactivated'}</span>
+                            </button>
+                          </td>
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditUserModal(u)}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-indigo-700 cursor-pointer"
+                              title="Edit details, role & permissions"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenResetPassword(u)}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-amber-50 hover:text-amber-700 cursor-pointer"
+                              title="Reset password"
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSelf}
+                              onClick={() => handleOpenDeleteUser(u)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={isSelf ? 'Cannot delete your own active account' : 'Remove account'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <RoleDirectory
+            schoolId={currentTenant.id}
+            users={tenantUsers}
+            onEdit={handleOpenEditUserModal}
+            onChanged={(message) => { setAllUsers(Storage.getUsers()); showToast(message, 'success'); }}
+          />
+        </div>
       )}
 
 
@@ -842,7 +1346,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Account Role
+                Primary Account Role
               </label>
               <select
                 required
@@ -850,6 +1354,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 onChange={(e) => {
                   const slug = e.target.value as UserRole;
                   setNewRole(slug);
+                  setNewAdditionalRoles((prev) => prev.filter((r) => r !== slug));
                   const role = systemRoles.find((item) => item.slug === slug);
                   if (!role) {
                     setNewPassword('');
@@ -876,6 +1381,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 ))}
               </select>
             </div>
+
+            {newRole !== '' && (
+              <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Additional Assigned Roles (Optional Multi-Role Assignment)
+                  </span>
+                  <span className="text-[10px] font-mono text-indigo-700">
+                    {1 + newAdditionalRoles.length} role(s) selected
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {systemRoles
+                    .filter((role) => role.slug !== newRole)
+                    .map((role) => {
+                      const slug = role.slug as UserRole;
+                      const checked = newAdditionalRoles.includes(slug);
+                      return (
+                        <label
+                          key={role.id}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                            checked
+                              ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setNewAdditionalRoles((prev) =>
+                                prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug]
+                              )
+                            }
+                            className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                          />
+                          <span className="truncate">{role.name}</span>
+                        </label>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -906,8 +1454,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               )}
             </div>
 
-            {/* If Student or Class Teacher: select exactly 1 grade and 1 stream */}
-            {['student', 'class_teacher'].includes(newRole) && (
+            {/* If Student or Class Teacher (primary or additional): select 1 grade and 1 stream */}
+            {Boolean(newRole && normalizeAssignedRoleList(newRole, newAdditionalRoles).some((r) => r === 'student' || r === 'class_teacher')) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1003,8 +1551,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               </div>
             )}
 
-            {/* If HOD: Department selection */}
-            {newRole === 'hod' && (
+            {/* If HOD (primary or additional): Department selection */}
+            {Boolean(newRole && normalizeAssignedRoleList(newRole, newAdditionalRoles).includes('hod')) && (
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Department Assigned
@@ -1033,7 +1581,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   onChange={(e) => setNewSelectedChildId(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold"
                 >
-                  {allUsers.filter(u => u.role === 'student').map(s => (
+                  {tenantUsers.filter(u => u.role === 'student').map(s => (
                     <option key={s.id} value={s.id}>
                       {s.name} (Grade {s.grade} {s.stream}) - {s.admissionNumber}
                     </option>
@@ -1045,9 +1593,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             <div className="pt-2">
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+                disabled={createUserBusy}
+                className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
               >
-                Create Account & Provision Access
+                {createUserBusy ? 'Saving to Database…' : 'Create Account & Provision Access'}
               </button>
             </div>
           </form>
@@ -1078,8 +1627,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </p>
           </div>
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden max-w-2xl">
-            <table className="w-full text-left text-xs">
+          <div className="border border-slate-200 rounded-xl overflow-x-auto max-w-2xl">
+            <table className="w-full text-left text-xs min-w-[460px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-4">Grade Level</th>
@@ -1144,39 +1693,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       )}
 
       {/* ========================================================
-          TAB 4: GOOGLE MEET VIRTUAL ROOM LINKS
+          TAB 4: LIVEKIT VIRTUAL CLASSROOM MONITORING
           ======================================================== */}
-      {activeTab === 'virtual_rooms' && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Virtual Classroom Google Meet Links
-            </h2>
-            <p className="text-xs text-slate-500">
-              Configure active Google Meet meeting codes and URLs for each grade and stream.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {virtualClasses.map((vc) => (
-              <div key={vc.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">
-                    Grade {vc.grade} {vc.stream ? `(${vc.stream})` : ''} · {vc.subject}
-                  </span>
-                  <span className="text-[10px] font-mono uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
-                    Connected
-                  </span>
-                </div>
-                <div className="text-xs text-slate-600 font-mono break-all bg-white p-2.5 rounded border border-slate-200">
-                  {vc.googleMeetLink}
-                </div>
-                <div className="text-[11px] text-slate-500">Host: {vc.teacherName}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {activeTab === 'virtual_rooms' && <AdminVirtualClassroomMonitor />}
 
       {/* ========================================================
           TAB: WORK ENTRY SIGN-IN AUDIT (READ-ONLY)
@@ -1259,12 +1778,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900">
               Recent Teacher Work Entry Ledger (All Staff)
             </h3>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="md:hidden space-y-2.5">
+              {workLogs.map((log) => (
+                <div key={`mob-log-${log.id}`} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-900">{log.teacherName}</span>
+                    <span className="font-mono text-[11px] text-slate-500">{log.date}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="font-semibold text-emerald-700">{log.subject}</span>
+                    <span className="text-slate-500">Grade {log.grade} ({log.stream})</span>
+                    <span className="ml-auto font-mono font-bold text-slate-800">{log.learnersPresent} learners</span>
+                  </div>
+                  <p className="text-slate-700">{log.topicTaught}</p>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[600px]">
                 <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Date</th>
@@ -1291,12 +1826,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-xs space-y-4">
             <h3 className="text-sm font-bold text-slate-900">
               Campus Security Gate Exit Passes (Audit Ledger)
             </h3>
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs">
+            <div className="md:hidden space-y-2.5">
+              {gatePasses.map((gp) => (
+                <div key={`mob-gp-${gp.id}`} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900">{gp.studentName}</div>
+                      <div className="text-[11px] font-mono text-slate-500">{gp.gatePassCode} · Grade {gp.grade} ({gp.stream})</div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase ${
+                        gp.status === 'active'
+                          ? 'bg-amber-100 text-amber-800'
+                          : gp.status === 'departed'
+                          ? 'bg-purple-100 text-purple-800'
+                          : gp.status === 'returned'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {gp.status}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-200/70">
+                    <span>Guardian: {gp.guardianName} ({gp.guardianPhone})</span>
+                    <span className="font-mono">Dep: {gp.departureTime}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[680px]">
                 <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Pass Code</th>
@@ -1412,7 +1976,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           </div>
 
           {/* Role Access Matrix Table */}
-          <div className="border border-slate-200 rounded-xl overflow-x-auto">
+          <ScrollableMatrixTableWrapper hint="Swipe horizontally to view all 14 role permission columns">
             <table className="w-full text-left text-xs min-w-[900px]">
               <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-200">
                 <tr>
@@ -1600,7 +2164,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableMatrixTableWrapper>
         </section>
       )}
 
@@ -1612,6 +2176,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           currentUser={currentUser} 
           onNavigateToDocs={() => openTab('doc_requests')}
           onNavigateToCMS={() => openTab('cms_hub')}
+          onNavigateToStreamAllocation={canAllocateStreams ? () => openTab('student_stream_allocation') : undefined}
         />
       )}
 
@@ -1641,6 +2206,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           ======================================================== */}
       {activeTab === 'operations' && (
         <IntegratedOperationsHub currentUser={currentUser} />
+      )}
+
+      {activeTab === 'reports' && (
+        <div className="space-y-6">
+          <HeadTeacherReportsManager currentUser={currentUser} />
+          <ReportingHub currentUser={currentUser} />
+        </div>
       )}
 
       {/* ========================================================
@@ -1703,12 +2275,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      New Password <span className="text-[10px] font-normal text-slate-500">(optional — leave blank to keep existing)</span>
+                    </label>
                     <input
                       type="text"
                       value={editPassword}
                       onChange={(e) => setEditPassword(e.target.value)}
-                      required
+                      placeholder="Leave blank to preserve current password"
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                     />
                   </div>
@@ -1735,7 +2309,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     />
                   </div>
 
-                  {editRole === 'hod' && (
+                  {normalizeAssignedRoleList(editRole, editAdditionalRoles).includes('hod') && (
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
                       <select
@@ -1750,7 +2324,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     </div>
                   )}
 
-                  {['student', 'class_teacher'].includes(editRole) && (
+                  {normalizeAssignedRoleList(editRole, editAdditionalRoles).some((r) => r === 'student' || r === 'class_teacher') && (
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="block text-xs font-bold text-slate-700 mb-1">Grade</label>
@@ -1784,33 +2358,80 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
               {/* Role Assignment */}
               <div className="space-y-3 pt-4 border-t border-slate-200">
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between">
-                  <span>2. Assign Institutional Role (Authoritative Admin Control)</span>
-                  <span className="text-[10px] text-indigo-700 font-mono">15 Standard School Roles</span>
+                  <span>2. Assign Institutional Roles (Primary + Multi-Role Support)</span>
+                  <span className="text-[10px] text-indigo-700 font-mono">
+                    {1 + editAdditionalRoles.length} Role(s) Assigned
+                  </span>
                 </h4>
 
-                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-2">
-                  <select
-                    value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2 text-xs font-bold border border-indigo-300 rounded-lg bg-white text-indigo-950 focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="admin">System Administrator (Full Control over All Systems & Roles)</option>
-                    <option value="head_teacher">Head Teacher / Principal (School-Wide Management)</option>
-                    <option value="deputy_head">Deputy Head Teacher (Operations, Discipline & Full Report Moderation)</option>
-                    <option value="dean_of_studies">Dean of Studies (Academics, Curriculum & Full Report Moderation)</option>
-                    <option value="curriculum_coordinator">Curriculum Coordinator (Executive Leadership: CBC Curriculum, CBA & Syllabi)</option>
-                    <option value="senior_teacher">Senior Teacher (Supervision & Mentorship)</option>
-                    <option value="hod">Head of Department (Curriculum Moderation)</option>
-                    <option value="class_teacher">Class Teacher (Stream & Learner Dossiers)</option>
-                    <option value="teacher">Subject Teacher (Instruction & Grading)</option>
-                    <option value="nurse">School Sanatorium Nurse (Strictly Sanatorium Portal Only)</option>
-                    <option value="school_admin_staff">School Admin Staff (Front Office & Gate Passes)</option>
-                    <option value="librarian">School Librarian (Library Collections & Circulation)</option>
-                    <option value="transport_team">Transport Team (Fleet, Routes & Bus Chaperones)</option>
-                    <option value="cocurricular_team">Co-Curricular Team (Sports, Games & Club Patrons)</option>
-                    <option value="parent">Parent / Guardian (Children Records)</option>
-                    <option value="student">Learner / Student (Academic Materials & Tests)</option>
-                  </select>
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Primary Institutional Role
+                    </label>
+                    <select
+                      value={editRole}
+                      onChange={(e) => {
+                        const nextRole = e.target.value as UserRole;
+                        setEditRole(nextRole);
+                        setEditAdditionalRoles((prev) => prev.filter((r) => r !== nextRole));
+                      }}
+                      className="w-full px-3 py-2 text-xs font-bold border border-indigo-300 rounded-lg bg-white text-indigo-950 focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="admin">System Administrator (Full Control over All Systems & Roles)</option>
+                      <option value="head_teacher">Head Teacher / Principal (School-Wide Management)</option>
+                      <option value="deputy_head">Deputy Head Teacher (Operations, Discipline & Full Report Moderation)</option>
+                      <option value="dean_of_studies">Dean of Studies (Academics, Curriculum & Full Report Moderation)</option>
+                      <option value="curriculum_coordinator">Curriculum Coordinator (Executive Leadership: CBC Curriculum, CBA & Syllabi)</option>
+                      <option value="senior_teacher">Senior Teacher (Supervision & Mentorship)</option>
+                      <option value="hod">Head of Department (Curriculum Moderation)</option>
+                      <option value="class_teacher">Class Teacher (Stream & Learner Dossiers)</option>
+                      <option value="teacher">Subject Teacher (Instruction & Grading)</option>
+                      <option value="nurse">School Sanatorium Nurse (Strictly Sanatorium Portal Only)</option>
+                      <option value="school_admin_staff">School Admin Staff (Front Office & Gate Passes)</option>
+                      <option value="librarian">School Librarian (Library Collections & Circulation)</option>
+                      <option value="transport_team">Transport Team (Fleet, Routes & Bus Chaperones)</option>
+                      <option value="cocurricular_team">Co-Curricular Team (Sports, Games & Club Patrons)</option>
+                      <option value="parent">Parent / Guardian (Children Records)</option>
+                      <option value="student">Learner / Student (Academic Materials & Tests)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-700 mb-1.5">
+                      Additional Assigned Roles (Hold more than 1 role)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                      {systemRoles
+                        .filter((role) => role.slug !== editRole)
+                        .map((role) => {
+                          const slug = role.slug as UserRole;
+                          const checked = editAdditionalRoles.includes(slug);
+                          return (
+                            <label
+                              key={role.id}
+                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                                checked
+                                  ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  setEditAdditionalRoles((prev) =>
+                                    prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug]
+                                  )
+                                }
+                                className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                              />
+                              <span className="truncate">{role.name}</span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </div>
 
                   {/* Context notice based on chosen role */}
                   {editRole === 'nurse' && (
@@ -1875,6 +2496,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     const effective = Storage.getUserEffectivePermissions({
                       ...editingUser,
                       role: editRole,
+                      assignedRoles: normalizeAssignedRoleList(editRole, editAdditionalRoles, editingUser.doubleAccessConfig),
                       customPermissions: editCustomPermissions
                     });
                     const isChecked = effective[key];
@@ -1915,17 +2537,179 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  disabled={editSaving}
+                  className="px-5 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 disabled:opacity-60 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Save User & Apply Permissions</span>
+                  <span>{editSaving ? 'Saving…' : 'Save User & Apply Permissions'}</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* ========================================================
+          MODAL: RESET USER PASSWORD
+          ======================================================== */}
+      {resetPasswordTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Reset Account Password</h3>
+                  <p className="text-[11px] text-slate-500 font-mono">{resetPasswordTarget.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetPasswordTarget(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleConfirmResetPassword} className="p-5 space-y-4 text-xs">
+              <p className="text-slate-600">
+                Set a new database-retained password for <strong className="text-slate-900">{resetPasswordTarget.name}</strong>. Active sessions for this account will be revoked immediately.
+              </p>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">New Password (min 4 characters)</label>
+                <input
+                  type="text"
+                  required
+                  minLength={4}
+                  autoFocus
+                  value={resetPasswordValue}
+                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  placeholder="Enter new password..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              {resetPasswordError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold">
+                  {resetPasswordError}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordBusy}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {resetPasswordBusy ? 'Resetting…' : 'Reset Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: CONFIRM DELETE USER ACCOUNT
+          ======================================================== */}
+      {deleteUserTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-rose-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-950">Remove User Account</h3>
+                  <p className="text-[11px] text-rose-700 font-mono">{deleteUserTarget.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteUserTarget(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-xs">
+              <p className="text-slate-700 leading-relaxed">
+                Are you sure you want to permanently remove <strong className="text-slate-900">{deleteUserTarget.name}</strong> from <strong className="text-slate-900">{currentTenant.name}</strong>? Their sign-in credentials and sessions will be deleted across the database.
+              </p>
+              {deleteUserError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold">
+                  {deleteUserError}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteUserTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteUserBusy}
+                  onClick={handleConfirmDeleteUser}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {deleteUserBusy ? 'Removing…' : 'Remove Account'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav
+        aria-label="School admin mobile navigation"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-slate-200 shadow-lg pb-safe"
+      >
+        <div className="grid grid-cols-5 h-14">
+          {[
+            { id: 'overview' as AdminActionTab, label: 'Overview', icon: BarChart3 },
+            { id: 'users' as AdminActionTab, label: 'Users', icon: Users },
+            { id: 'grades' as AdminActionTab, label: 'Grades', icon: GraduationCap },
+            { id: 'operations' as AdminActionTab, label: 'Operations', icon: Building2 },
+          ].map((item) => {
+            const Icon = item.icon;
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => openTab(item.id)}
+                className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors cursor-pointer ${
+                  active ? 'text-indigo-700 bg-indigo-50/70' : 'text-slate-600'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="truncate max-w-[60px]">{item.label}</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold text-slate-600 cursor-pointer"
+          >
+            <Menu className="w-4 h-4" />
+            <span>Modules</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 };

@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  PlatformCustomizationState, 
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  PlatformCustomizationState,
   LandingHeaderConfig,
   LandingNavLink,
   LandingHeroConfig,
@@ -18,37 +18,165 @@ import {
   ClassTeacherModulePolicy,
   OperationsGovernancePolicy
 } from '../types/customization';
-import { SyncEngine } from '../utils/syncEngine';
+import { ClientDataStore } from '../utils/clientDataStore';
+import { DEFAULT_PLATFORM_CUSTOMIZATION } from '../data/defaultCustomization';
 
 const STORAGE_KEY = 'edusmart_platform_customization_v6';
 const PACK_KEY = 'edusmart_platform_customization_pack_v1';
 
 function customizationDefaults(): PlatformCustomizationState {
-  try {
-    const raw = localStorage.getItem(PACK_KEY);
-    if (raw) return JSON.parse(raw) as PlatformCustomizationState;
-  } catch {
-    // The pack is loaded from Supabase before the app renders.
+  const parsed = ClientDataStore.getCollection<Partial<PlatformCustomizationState> | null>(PACK_KEY, null);
+  if (parsed && parsed.landingPage && Object.keys(parsed.landingPage).length > 0) {
+    return {
+      ...DEFAULT_PLATFORM_CUSTOMIZATION,
+      ...parsed,
+      landingPage: {
+        ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage,
+        ...parsed.landingPage,
+        visibility: {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.visibility,
+          ...(parsed.landingPage.visibility || {}),
+        },
+        header: {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.header,
+          ...(parsed.landingPage.header || {}),
+        },
+        hero: {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.hero,
+          ...(parsed.landingPage.hero || {}),
+        },
+        about: {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.about,
+          ...(parsed.landingPage.about || {}),
+        },
+        contact: {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.contact,
+          ...(parsed.landingPage.contact || {}),
+        },
+        footer: {
+          ...DEFAULT_PLATFORM_CUSTOMIZATION.landingPage.footer,
+          ...(parsed.landingPage.footer || {}),
+        },
+      },
+    };
   }
+  return DEFAULT_PLATFORM_CUSTOMIZATION;
+}
+
+function hydrateCustomizationState(): PlatformCustomizationState {
+  const def = customizationDefaults();
+  const parsed = ClientDataStore.getCollection<Partial<PlatformCustomizationState> | null>(STORAGE_KEY, null);
+  if (!parsed || typeof parsed !== 'object') {
+    return def;
+  }
+
   return {
+    ...def,
+    ...parsed,
     landingPage: {
-      visibility: {} as LandingSectionsVisibility,
-      header: {} as LandingHeaderConfig,
-      hero: {} as LandingHeroConfig,
-      stats: [],
-      features: [],
-      about: {} as LandingAboutConfig,
-      testimonials: [],
-      pricing: [],
-      faqs: [],
-      contact: {} as LandingContactConfig,
-      footer: {} as LandingFooterConfig,
+      ...def.landingPage,
+      ...(parsed.landingPage || {}),
+      visibility: {
+        ...def.landingPage.visibility,
+        ...(parsed.landingPage?.visibility || {}),
+      },
+      header: {
+        ...def.landingPage.header,
+        ...(parsed.landingPage?.header || {}),
+        loginButtonLabel:
+          parsed.landingPage?.header?.loginButtonLabel && parsed.landingPage.header.loginButtonLabel !== 'School Login'
+            ? parsed.landingPage.header.loginButtonLabel
+            : 'Login',
+      },
+      hero: {
+        ...def.landingPage.hero,
+        ...(parsed.landingPage?.hero || {}),
+        mediaType: parsed.landingPage?.hero?.mediaType === 'video' ? 'video' : 'image',
+        primaryCta:
+          parsed.landingPage?.hero?.primaryCta && parsed.landingPage.hero.primaryCta !== 'School Login'
+            ? parsed.landingPage.hero.primaryCta
+            : 'Login',
+        heroImageUrl:
+          !parsed.landingPage?.hero?.heroImageUrl ||
+          parsed.landingPage?.hero?.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg' ||
+          parsed.landingPage?.hero?.heroImageUrl === '/gad@edusmart.jpeg'
+            ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
+            : parsed.landingPage.hero.heroImageUrl,
+        heroVideoPoster:
+          !parsed.landingPage?.hero?.heroVideoPoster ||
+          parsed.landingPage?.hero?.heroVideoPoster === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg'
+            ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
+            : parsed.landingPage.hero.heroVideoPoster,
+      },
+      stats:
+        Array.isArray(parsed.landingPage?.stats) && parsed.landingPage.stats.length > 0
+          ? parsed.landingPage.stats
+          : def.landingPage.stats,
+      features:
+        Array.isArray(parsed.landingPage?.features) && parsed.landingPage.features.length > 0
+          ? parsed.landingPage.features
+          : def.landingPage.features,
+      testimonials:
+        Array.isArray(parsed.landingPage?.testimonials) && parsed.landingPage.testimonials.length > 0
+          ? parsed.landingPage.testimonials
+          : def.landingPage.testimonials,
+      pricing:
+        Array.isArray(parsed.landingPage?.pricing) && parsed.landingPage.pricing.length > 0
+          ? parsed.landingPage.pricing
+          : def.landingPage.pricing,
+      faqs:
+        Array.isArray(parsed.landingPage?.faqs) && parsed.landingPage.faqs.length > 0
+          ? parsed.landingPage.faqs
+          : def.landingPage.faqs,
+      about: {
+        ...def.landingPage.about,
+        ...(parsed.landingPage?.about || {}),
+      },
+      contact: {
+        ...def.landingPage.contact,
+        ...(parsed.landingPage?.contact || {}),
+      },
+      footer: {
+        ...def.landingPage.footer,
+        ...(parsed.landingPage?.footer || {}),
+      },
     },
-    workspaces: [],
-    globalSettings: {} as GlobalPlatformSettings,
-    classTeacherPolicy: {} as ClassTeacherModulePolicy,
-    operationsPolicy: {} as OperationsGovernancePolicy,
-    schoolOverrides: {},
+    workspaces: (() => {
+      if (!parsed.workspaces || parsed.workspaces.length === 0) {
+        return def.workspaces;
+      }
+      const existingIds = new Set(parsed.workspaces.map((w: any) => w.id));
+      const merged = [...parsed.workspaces];
+      for (const defWs of def.workspaces) {
+        if (!existingIds.has(defWs.id)) {
+          merged.push(defWs);
+          existingIds.add(defWs.id);
+        }
+      }
+      return merged;
+    })(),
+    globalSettings: {
+      ...def.globalSettings,
+      ...(parsed.globalSettings || {}),
+      virtualLabPolicy: {
+        publicAccessMode: 'subscription_required',
+        requirePaidSubscriptionOnPublicPage: true,
+        allowFreePublicDemo: false,
+        freeForMemberSchools: true,
+        ...(def.globalSettings?.virtualLabPolicy || {}),
+        ...(parsed.globalSettings?.virtualLabPolicy || {}),
+      },
+    },
+    classTeacherPolicy: {
+      ...(DEFAULT_PLATFORM_CUSTOMIZATION.classTeacherPolicy as ClassTeacherModulePolicy),
+      ...(def.classTeacherPolicy || {}),
+      ...(parsed.classTeacherPolicy || {}),
+    },
+    operationsPolicy: {
+      ...(DEFAULT_PLATFORM_CUSTOMIZATION.operationsPolicy as OperationsGovernancePolicy),
+      ...(def.operationsPolicy || {}),
+      ...(parsed.operationsPolicy || {}),
+    },
   };
 }
 
@@ -98,482 +226,410 @@ interface PlatformCustomizationContextType {
 const PlatformCustomizationContext = createContext<PlatformCustomizationContextType | undefined>(undefined);
 
 export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [customization, setCustomization] = useState<PlatformCustomizationState>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return {
-          ...customizationDefaults(),
-          ...parsed,
-          landingPage: {
-            ...customizationDefaults().landingPage,
-            ...(parsed.landingPage || {}),
-            visibility: {
-              ...customizationDefaults().landingPage.visibility,
-              ...(parsed.landingPage?.visibility || {})
-            },
-            header: {
-              ...customizationDefaults().landingPage.header,
-              ...(parsed.landingPage?.header || {}),
-              loginButtonLabel: parsed.landingPage?.header?.loginButtonLabel && parsed.landingPage.header.loginButtonLabel !== 'School Login'
-                ? parsed.landingPage.header.loginButtonLabel
-                : 'Login',
-            },
-            hero: {
-              ...customizationDefaults().landingPage.hero,
-              ...(parsed.landingPage?.hero || {}),
-              mediaType: parsed.landingPage?.hero?.mediaType === 'video' ? 'image' : (parsed.landingPage?.hero?.mediaType || 'image'),
-              primaryCta: parsed.landingPage?.hero?.primaryCta && parsed.landingPage.hero.primaryCta !== 'School Login'
-                ? parsed.landingPage.hero.primaryCta
-                : 'Login',
-              heroImageUrl: (!parsed.landingPage?.hero?.heroImageUrl || parsed.landingPage?.hero?.heroImageUrl === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg' || parsed.landingPage?.hero?.heroImageUrl === '/gad@edusmart.jpeg')
-                ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
-                : parsed.landingPage.hero.heroImageUrl,
-              heroVideoPoster: (!parsed.landingPage?.hero?.heroVideoPoster || parsed.landingPage?.hero?.heroVideoPoster === '/src/assets/images/edusmart_campus_banner_1790859700873.jpg')
-                ? '/assets/aistudio/WhatsApp_Image_2026-10-22_at_13.45.08_2f8393b6.jpeg'
-                : parsed.landingPage.hero.heroVideoPoster
-            },
-            about: {
-              ...customizationDefaults().landingPage.about,
-              ...(parsed.landingPage?.about || {})
-            },
-            contact: {
-              ...customizationDefaults().landingPage.contact,
-              ...(parsed.landingPage?.contact || {})
-            },
-            footer: {
-              ...customizationDefaults().landingPage.footer,
-              ...(parsed.landingPage?.footer || {})
-            }
-          },
-          workspaces: (() => {
-            if (!parsed.workspaces || parsed.workspaces.length === 0) {
-              return customizationDefaults().workspaces;
-            }
-            const existingIds = new Set(parsed.workspaces.map((w: any) => w.id));
-            const merged = [...parsed.workspaces];
-            for (const defWs of customizationDefaults().workspaces) {
-              if (!existingIds.has(defWs.id)) {
-                merged.push(defWs);
-                existingIds.add(defWs.id);
-              }
-            }
-            return merged;
-          })(),
-          globalSettings: {
-            ...customizationDefaults().globalSettings,
-            ...(parsed.globalSettings || {})
-          },
-          classTeacherPolicy: {
-            ...customizationDefaults().classTeacherPolicy,
-            ...(parsed.classTeacherPolicy || {})
-          },
-          operationsPolicy: {
-            ...customizationDefaults().operationsPolicy,
-            ...(parsed.operationsPolicy || {})
-          }
-        };
-      }
-    } catch (e) {
-      console.error('Failed to load platform customization from localStorage', e);
-    }
-    return customizationDefaults();
-  });
+  const [customization, setCustomization] = useState<PlatformCustomizationState>(hydrateCustomizationState);
 
-  // Save to localStorage on changes
+  // Sync live updates from backend SSE stream / hydration without overwriting server on mount
   useEffect(() => {
-    try {
-      SyncEngine.persistItem(STORAGE_KEY, JSON.stringify(customization));
-    } catch (e) {
-      console.error('Failed to save platform customization to localStorage', e);
-    }
-  }, [customization]);
+    const handleSync = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === STORAGE_KEY || key === PACK_KEY) {
+        setCustomization(hydrateCustomizationState());
+      }
+    };
+    window.addEventListener('edusmart:data-changed', handleSync);
+    return () => window.removeEventListener('edusmart:data-changed', handleSync);
+  }, []);
+
+  const commitCustomization = useCallback((updater: (prev: PlatformCustomizationState) => PlatformCustomizationState) => {
+    setCustomization((prev) => {
+      const next = updater(prev);
+      ClientDataStore.setCollection(STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
 
   const updateLandingVisibility = (visibility: Partial<LandingSectionsVisibility>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         visibility: {
           ...prev.landingPage.visibility,
-          ...visibility
-        }
-      }
+          ...visibility,
+        },
+      },
     }));
   };
 
   const toggleSectionVisibility = (section: keyof LandingSectionsVisibility) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         visibility: {
           ...prev.landingPage.visibility,
-          [section]: !prev.landingPage.visibility[section]
-        }
-      }
+          [section]: !prev.landingPage.visibility[section],
+        },
+      },
     }));
   };
 
   const updateLandingHeader = (header: Partial<LandingHeaderConfig>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         header: {
           ...prev.landingPage.header,
-          ...header
-        }
-      }
+          ...header,
+        },
+      },
     }));
   };
 
   const addNavLink = (link: LandingNavLink) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         header: {
           ...prev.landingPage.header,
-          navLinks: [...prev.landingPage.header.navLinks, link]
-        }
-      }
+          navLinks: [...prev.landingPage.header.navLinks, link],
+        },
+      },
     }));
   };
 
   const updateNavLink = (id: string, link: Partial<LandingNavLink>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         header: {
           ...prev.landingPage.header,
-          navLinks: prev.landingPage.header.navLinks.map(l => l.id === id ? { ...l, ...link } : l)
-        }
-      }
+          navLinks: prev.landingPage.header.navLinks.map((l) => (l.id === id ? { ...l, ...link } : l)),
+        },
+      },
     }));
   };
 
   const removeNavLink = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         header: {
           ...prev.landingPage.header,
-          navLinks: prev.landingPage.header.navLinks.filter(l => l.id !== id)
-        }
-      }
+          navLinks: prev.landingPage.header.navLinks.filter((l) => l.id !== id),
+        },
+      },
     }));
   };
 
   const updateLandingHero = (hero: Partial<LandingHeroConfig>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         hero: {
           ...prev.landingPage.hero,
-          ...hero
-        }
-      }
+          ...hero,
+        },
+      },
     }));
   };
 
   const addTrustBadge = (badge: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         hero: {
           ...prev.landingPage.hero,
-          trustBadges: [...(prev.landingPage.hero.trustBadges || []), badge]
-        }
-      }
+          trustBadges: [...(prev.landingPage.hero.trustBadges || []), badge],
+        },
+      },
     }));
   };
 
   const removeTrustBadge = (index: number) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         hero: {
           ...prev.landingPage.hero,
-          trustBadges: prev.landingPage.hero.trustBadges.filter((_, i) => i !== index)
-        }
-      }
+          trustBadges: prev.landingPage.hero.trustBadges.filter((_, i) => i !== index),
+        },
+      },
     }));
   };
 
   const addFeature = (feature: LandingFeatureItem) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        features: [...prev.landingPage.features, feature]
-      }
+        features: [...prev.landingPage.features, feature],
+      },
     }));
   };
 
   const updateFeature = (id: string, feature: Partial<LandingFeatureItem>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        features: prev.landingPage.features.map(f => f.id === id ? { ...f, ...feature } : f)
-      }
+        features: prev.landingPage.features.map((f) => (f.id === id ? { ...f, ...feature } : f)),
+      },
     }));
   };
 
   const removeFeature = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        features: prev.landingPage.features.filter(f => f.id !== id)
-      }
+        features: prev.landingPage.features.filter((f) => f.id !== id),
+      },
     }));
   };
 
   const addStat = (stat: LandingStatItem) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        stats: [...prev.landingPage.stats, stat]
-      }
+        stats: [...prev.landingPage.stats, stat],
+      },
     }));
   };
 
   const updateStat = (id: string, stat: Partial<LandingStatItem>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        stats: prev.landingPage.stats.map(s => s.id === id ? { ...s, ...stat } : s)
-      }
+        stats: prev.landingPage.stats.map((s) => (s.id === id ? { ...s, ...stat } : s)),
+      },
     }));
   };
 
   const removeStat = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        stats: prev.landingPage.stats.filter(s => s.id !== id)
-      }
+        stats: prev.landingPage.stats.filter((s) => s.id !== id),
+      },
     }));
   };
 
   const updateAbout = (about: Partial<LandingAboutConfig>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         about: {
           ...prev.landingPage.about,
-          ...about
-        }
-      }
+          ...about,
+        },
+      },
     }));
   };
 
   const addTestimonial = (test: LandingTestimonialItem) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        testimonials: [...(prev.landingPage.testimonials || []), test]
-      }
+        testimonials: [...(prev.landingPage.testimonials || []), test],
+      },
     }));
   };
 
   const updateTestimonial = (id: string, test: Partial<LandingTestimonialItem>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        testimonials: (prev.landingPage.testimonials || []).map(t => t.id === id ? { ...t, ...test } : t)
-      }
+        testimonials: (prev.landingPage.testimonials || []).map((t) => (t.id === id ? { ...t, ...test } : t)),
+      },
     }));
   };
 
   const removeTestimonial = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        testimonials: (prev.landingPage.testimonials || []).filter(t => t.id !== id)
-      }
+        testimonials: (prev.landingPage.testimonials || []).filter((t) => t.id !== id),
+      },
     }));
   };
 
   const addPricingTier = (tier: LandingPricingTier) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        pricing: [...prev.landingPage.pricing, tier]
-      }
+        pricing: [...prev.landingPage.pricing, tier],
+      },
     }));
   };
 
   const updatePricingTier = (id: string, tier: Partial<LandingPricingTier>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        pricing: prev.landingPage.pricing.map(p => p.id === id ? { ...p, ...tier } : p)
-      }
+        pricing: prev.landingPage.pricing.map((p) => (p.id === id ? { ...p, ...tier } : p)),
+      },
     }));
   };
 
   const removePricingTier = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        pricing: prev.landingPage.pricing.filter(p => p.id !== id)
-      }
+        pricing: prev.landingPage.pricing.filter((p) => p.id !== id),
+      },
     }));
   };
 
   const addFaq = (faq: LandingFaqItem) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        faqs: [...(prev.landingPage.faqs || []), faq]
-      }
+        faqs: [...(prev.landingPage.faqs || []), faq],
+      },
     }));
   };
 
   const updateFaq = (id: string, faq: Partial<LandingFaqItem>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        faqs: (prev.landingPage.faqs || []).map(f => f.id === id ? { ...f, ...faq } : f)
-      }
+        faqs: (prev.landingPage.faqs || []).map((f) => (f.id === id ? { ...f, ...faq } : f)),
+      },
     }));
   };
 
   const removeFaq = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
-        faqs: (prev.landingPage.faqs || []).filter(f => f.id !== id)
-      }
+        faqs: (prev.landingPage.faqs || []).filter((f) => f.id !== id),
+      },
     }));
   };
 
   const updateContact = (contact: Partial<LandingContactConfig>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         contact: {
           ...prev.landingPage.contact,
-          ...contact
-        }
-      }
+          ...contact,
+        },
+      },
     }));
   };
 
   const updateFooter = (footer: Partial<LandingFooterConfig>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       landingPage: {
         ...prev.landingPage,
         footer: {
           ...prev.landingPage.footer,
-          ...footer
-        }
-      }
+          ...footer,
+        },
+      },
     }));
   };
 
   const updateWorkspace = (id: string, update: Partial<WorkspaceModuleConfig>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
-      workspaces: prev.workspaces.map(w => w.id === id ? { ...w, ...update } : w)
+      workspaces: prev.workspaces.map((w) => (w.id === id ? { ...w, ...update } : w)),
     }));
   };
 
   const toggleWorkspace = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
-      workspaces: prev.workspaces.map(w => w.id === id ? { ...w, enabled: !w.enabled } : w)
+      workspaces: prev.workspaces.map((w) => (w.id === id ? { ...w, enabled: !w.enabled } : w)),
     }));
   };
 
   const addCustomWorkspace = (workspace: WorkspaceModuleConfig) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
-      workspaces: [...prev.workspaces, { ...workspace, isCustomModule: true }]
+      workspaces: [...prev.workspaces, { ...workspace, isCustomModule: true }],
     }));
   };
 
   const removeCustomWorkspace = (id: string) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
-      workspaces: prev.workspaces.filter(w => w.id !== id)
+      workspaces: prev.workspaces.filter((w) => w.id !== id),
     }));
   };
 
   const updateGlobalSettings = (settings: Partial<GlobalPlatformSettings>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       globalSettings: {
         ...prev.globalSettings,
-        ...settings
-      }
+        ...settings,
+      },
     }));
   };
 
   const updateClassTeacherPolicy = (policy: Partial<ClassTeacherModulePolicy>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       classTeacherPolicy: {
         ...(prev.classTeacherPolicy || customizationDefaults().classTeacherPolicy!),
-        ...policy
-      }
+        ...policy,
+      },
     }));
   };
 
   const updateOperationsPolicy = (policy: Partial<OperationsGovernancePolicy>) => {
-    setCustomization(prev => ({
+    commitCustomization((prev) => ({
       ...prev,
       operationsPolicy: {
         ...(prev.operationsPolicy || customizationDefaults().operationsPolicy!),
-        ...policy
-      }
+        ...policy,
+      },
     }));
   };
 
-  const updateSchoolOverride = (schoolId: string, override: { disabledWorkspaceIds?: string[]; customNotice?: string }) => {
-    setCustomization(prev => ({
+  const updateSchoolOverride = (
+    schoolId: string,
+    override: { disabledWorkspaceIds?: string[]; customNotice?: string }
+  ) => {
+    commitCustomization((prev) => ({
       ...prev,
       schoolOverrides: {
         ...prev.schoolOverrides,
         [schoolId]: {
           ...(prev.schoolOverrides[schoolId] || {}),
-          ...override
-        }
-      }
+          ...override,
+        },
+      },
     }));
   };
 
   const resetToDefaults = () => {
-    setCustomization(customizationDefaults());
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (e) {
-      console.error(e);
-    }
+    commitCustomization(() => DEFAULT_PLATFORM_CUSTOMIZATION);
   };
 
   const exportConfiguration = () => {
@@ -584,7 +640,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
     try {
       const parsed = JSON.parse(jsonStr);
       if (parsed.landingPage && parsed.workspaces) {
-        setCustomization(parsed);
+        commitCustomization(() => parsed);
         return true;
       }
       return false;
@@ -595,7 +651,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
   };
 
   const isWorkspaceEnabled = (workspaceId: string, schoolId?: string): boolean => {
-    const ws = customization.workspaces.find(w => w.id === workspaceId);
+    const ws = customization.workspaces.find((w) => w.id === workspaceId);
     if (!ws || !ws.enabled) return false;
     if (schoolId && customization.schoolOverrides[schoolId]?.disabledWorkspaceIds?.includes(workspaceId)) {
       return false;
@@ -645,7 +701,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
         resetToDefaults,
         exportConfiguration,
         importConfiguration,
-        isWorkspaceEnabled
+        isWorkspaceEnabled,
       }}
     >
       {children}
@@ -653,7 +709,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
   );
 };
 
-export const usePlatformCustomization = () => {
+export const usePlatformCustomization = (): PlatformCustomizationContextType => {
   const context = useContext(PlatformCustomizationContext);
   if (!context) {
     throw new Error('usePlatformCustomization must be used within a PlatformCustomizationProvider');

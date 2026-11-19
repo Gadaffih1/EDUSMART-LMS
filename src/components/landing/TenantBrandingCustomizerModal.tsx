@@ -25,8 +25,10 @@ import { useTenant } from '../../context/TenantContext';
 import { Tenant } from '../../types/tenant';
 import { TenantPrintHeader, TenantPrintFooter } from '../common/TenantPrintHeader';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 
 interface TenantBrandingCustomizerModalProps {
@@ -98,6 +100,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
   });
 
   const [videoUploadError, setVideoUploadError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isVideoUploading, setIsVideoUploading] = useState<boolean>(false);
 
   const handleHeroVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,6 +108,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     if (!file) return;
 
     setVideoUploadError(null);
+    setUploadError(null);
     setIsVideoUploading(true);
 
     const objectUrl = URL.createObjectURL(file);
@@ -112,7 +116,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     tempVideo.preload = 'metadata';
     tempVideo.src = objectUrl;
 
-    tempVideo.onloadedmetadata = () => {
+    tempVideo.onloadedmetadata = async () => {
       URL.revokeObjectURL(objectUrl);
       const videoDuration = tempVideo.duration;
 
@@ -124,22 +128,19 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (loadEvt) => {
-        const base64 = loadEvt.target?.result as string;
+      try {
+        const uploaded = await ClientDataStore.uploadFile(file, 'tenant-hero-video');
         setFormData(prev => ({
           ...prev,
           heroMediaType: 'video',
-          heroVideoUrl: base64,
+          heroVideoUrl: uploaded.url,
           heroVideoBadge: '30s Campus Tour'
         }));
         setIsVideoUploading(false);
-      };
-      reader.onerror = () => {
-        setVideoUploadError('Failed to read video file.');
+      } catch (err: any) {
+        setVideoUploadError(err?.message || 'Failed to upload video file.');
         setIsVideoUploading(false);
-      };
-      reader.readAsDataURL(file);
+      }
     };
 
     tempVideo.onerror = () => {
@@ -149,48 +150,67 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
     };
   };
 
-  const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Please upload an image smaller than 5MB.");
+      setUploadError('Please upload a hero image smaller than 5MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const base64 = loadEvt.target?.result as string;
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'tenant-hero-image');
       setFormData(prev => ({
         ...prev,
         heroMediaType: 'image',
-        heroImageUrl: base64
+        heroImageUrl: uploaded.url
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to upload hero image.');
+    }
   };
 
   if (!isOpen) return null;
 
-  // Handle Logo File Upload (PNG, JPG, SVG)
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Logo File Upload (PNG, JPG, SVG) with resilient DataURL fallback
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("Please upload an image smaller than 2MB.");
+      setUploadError('Please upload a logo image smaller than 2MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const base64 = uploadEvent.target?.result as string;
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'school-logo');
       setFormData(prev => ({
         ...prev,
-        customLogoBase64: base64
+        customLogoBase64: uploaded.url
       }));
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('Failed to read selected logo file.'));
+          reader.readAsDataURL(file);
+        });
+        if (!dataUrl) {
+          setUploadError('Could not read the selected logo image.');
+          return;
+        }
+        setFormData(prev => ({
+          ...prev,
+          customLogoBase64: dataUrl
+        }));
+      } catch (readErr: any) {
+        setUploadError(readErr?.message || 'Failed to upload school logo.');
+      }
+    }
   };
 
   // Reset to Gadsa / EduSmart Default Emblem
@@ -317,6 +337,12 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
           {/* TAB 1: FORM EDITOR */}
           {activeTab === 'editor' && (
             <form onSubmit={handleSave} className="space-y-6 text-left max-w-4xl mx-auto">
+              {uploadError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
               
               {/* SECTION A: SCHOOL LOGO & CREST EMBLEM */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
@@ -335,23 +361,9 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
                       Hero Badge Preview
                     </span>
-                    <div className="bg-white rounded-2xl p-3 shadow-xl border border-amber-400/80 max-w-[130px] w-full flex flex-col items-center">
-                      {formData.customLogoBase64 ? (
-                        <img 
-                          src={formData.customLogoBase64} 
-                          alt="Custom School Logo" 
-                          className="w-16 h-16 object-contain"
-                        />
-                      ) : formData.logoUrl ? (
-                        <img 
-                          src={formData.logoUrl} 
-                          alt="School Logo" 
-                          className="w-16 h-16 object-contain"
-                        />
-                      ) : (
-                        <EduSmartGadsaLogo variant="full" size="sm" />
-                      )}
-                      <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase truncate max-w-full">
+                    <div className="bg-white rounded-2xl p-3 shadow-xl border border-amber-400/80 max-w-[148px] w-full flex flex-col items-center">
+                      <TenantSchoolLogo variant="full" size="md" tenantOverride={formData} className="border-0 shadow-none" />
+                      <div className="text-[9px] font-mono font-bold text-slate-700 mt-1.5 uppercase truncate max-w-full">
                         {formData.portalCardBadge || 'School Portal'}
                       </div>
                     </div>
@@ -1086,23 +1098,9 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                 <div className="relative z-10 flex flex-col items-center max-w-3xl w-full mx-auto">
                   
                   {/* 1. CUSTOMIZABLE LOGO EMBLEM BADGE */}
-                  <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-2xl border border-amber-400/80 mb-3 max-w-[140px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-transform">
-                    {formData.customLogoBase64 ? (
-                      <img 
-                        src={formData.customLogoBase64} 
-                        alt="Logo" 
-                        className="w-16 h-16 object-contain"
-                      />
-                    ) : formData.logoUrl ? (
-                      <img 
-                        src={formData.logoUrl} 
-                        alt="Logo" 
-                        className="w-16 h-16 object-contain"
-                      />
-                    ) : (
-                      <EduSmartGadsaLogo variant="full" size="sm" />
-                    )}
-                    <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase tracking-tight truncate max-w-full">
+                  <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-2xl border border-amber-400/80 mb-3 max-w-[160px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-transform">
+                    <TenantSchoolLogo variant="full" size="md" tenantOverride={formData} className="border-0 shadow-none" />
+                    <div className="text-[9px] font-mono font-bold text-slate-700 mt-1.5 uppercase tracking-tight truncate max-w-full">
                       {formData.portalCardBadge || 'By Gadsa Systems'}
                     </div>
                   </div>
@@ -1222,7 +1220,8 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                   <div className="text-xs font-black uppercase tracking-wider text-slate-800">
                     Formative Strand Assessment Summary:
                   </div>
-                  <table className="w-full text-xs border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[480px] text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-left">
                       <tr>
                         <th className="p-2.5">Learning Area / Subject</th>
@@ -1258,6 +1257,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                       </tr>
                     </tbody>
                   </table>
+                  </div>
                 </div>
 
                 {/* 2. OFFICIAL FOOTER WITH PRINCIPAL ENDORSEMENT & INSTITUTIONAL SEAL */}

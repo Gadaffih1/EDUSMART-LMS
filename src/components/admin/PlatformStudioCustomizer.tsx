@@ -59,6 +59,7 @@ import {
 } from '../../types/customization';
 import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 
 const AVAILABLE_ICONS = [
@@ -166,18 +167,21 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     setTimeout(() => setSaveToast(null), 2500);
   };
 
-  const handleSaveHeroSettings = () => {
+  const handleSaveHeroSettings = async () => {
     try {
-      localStorage.setItem('edusmart_platform_customization', JSON.stringify(customization));
-      localStorage.setItem('edusmart_platform_customization_v2', JSON.stringify(customization));
+      const ok = await ClientDataStore.pushNow('edusmart_platform_customization_v6');
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setHeroLastSavedAt(`Saved at ${timeStr}`);
       setHeroSaveSuccess(true);
-      triggerToast('Hero Section Copy & Calls To Action successfully saved and retained in persistent storage!');
+      triggerToast(
+        ok
+          ? 'Hero Section Copy & Calls To Action saved to central database!'
+          : 'Hero customization queued for database synchronization.'
+      );
       setTimeout(() => setHeroSaveSuccess(false), 3500);
     } catch (e) {
       console.error('Failed to persist hero customization:', e);
-      triggerToast('Hero settings active in session memory.');
+      triggerToast('Failed to save hero customization to central database.');
     }
   };
 
@@ -235,7 +239,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     tempVideo.preload = 'metadata';
     tempVideo.src = objectUrl;
 
-    tempVideo.onloadedmetadata = () => {
+    tempVideo.onloadedmetadata = async () => {
       URL.revokeObjectURL(objectUrl);
       const videoDuration = tempVideo.duration;
 
@@ -247,23 +251,20 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
         return;
       }
 
-      const reader = new FileReader();
-      reader.onload = (loadEvt) => {
-        const base64 = loadEvt.target?.result as string;
+      try {
+        const uploaded = await ClientDataStore.uploadFile(file, 'studio-hero-video');
         updateLandingHero({
           mediaType: 'video',
-          heroVideoUrl: base64,
+          heroVideoUrl: uploaded.url,
           videoMaxDuration: Math.min(30, Math.ceil(videoDuration)),
           videoBadgeLabel: '30s Custom Showcase'
         });
         setIsVideoUploading(false);
         triggerToast(`30s Video uploaded successfully (${Math.round(videoDuration)}s)`);
-      };
-      reader.onerror = () => {
-        setVideoUploadError('Failed to read video file.');
+      } catch (err: any) {
+        setVideoUploadError(err?.message || 'Failed to upload video file.');
         setIsVideoUploading(false);
-      };
-      reader.readAsDataURL(file);
+      }
     };
 
     tempVideo.onerror = () => {
@@ -273,7 +274,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
     };
   };
 
-  const handleHeroImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -282,16 +283,16 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const base64 = loadEvt.target?.result as string;
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'studio-hero-image');
       updateLandingHero({
         mediaType: 'image',
-        heroImageUrl: base64
+        heroImageUrl: uploaded.url
       });
       triggerToast('Hero banner image updated successfully!');
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      triggerToast(err?.message || 'Failed to upload hero banner image.');
+    }
   };
 
   const handleSaveFeature = () => {

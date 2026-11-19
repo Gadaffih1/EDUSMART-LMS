@@ -28,6 +28,7 @@ import {
 } from '../../types/financeOperations';
 import { User } from '../../types';
 import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 
 interface ProcurementPortalViewProps {
   currentUser: User;
@@ -1083,12 +1084,8 @@ export const ProcurementPortalView: React.FC<ProcurementPortalViewProps> = ({
                 style={{ borderColor: currentTenant.primaryColorHex || '#0f766e' }}
               >
                 {/* School Logo */}
-                <div className="flex justify-center mb-1">
-                  {currentTenant.customLogoBase64 ? (
-                    <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain" />
-                  ) : currentTenant.logoUrl ? (
-                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain" />
-                  ) : null}
+                <div className="flex justify-center mb-1.5">
+                  <TenantSchoolLogo variant="emblem" size="sm" />
                 </div>
                 <div className="font-black text-base font-serif uppercase tracking-tight text-slate-950">{currentTenant.name}</div>
                 <div className="text-[10px] font-serif italic text-slate-700">"{currentTenant.motto}" {currentTenant.taglineNotes ? `· ${currentTenant.taglineNotes}` : ''}</div>
@@ -1108,38 +1105,40 @@ export const ProcurementPortalView: React.FC<ProcurementPortalViewProps> = ({
                 <div><span className="text-slate-400">Due Date:</span> <strong className="text-slate-900">{selectedLpoForPrint.deliveryDueDate}</strong></div>
               </div>
 
-              <table className="w-full text-left border-collapse border border-slate-300 my-2">
-                <thead>
-                  <tr className="bg-slate-100 text-[10px]">
-                    <th className="p-1 border border-slate-300">Item</th>
-                    <th className="p-1 border border-slate-300">Qty</th>
-                    <th className="p-1 border border-slate-300">Rate</th>
-                    <th className="p-1 border border-slate-300 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedLpoForPrint.items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="p-1 border border-slate-300">{it.description}</td>
-                      <td className="p-1 border border-slate-300">{it.quantity} {it.unit}</td>
-                      <td className="p-1 border border-slate-300">KES {it.unitPrice.toLocaleString()}</td>
-                      <td className="p-1 border border-slate-300 text-right font-bold">KES {it.totalPrice.toLocaleString()}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse border border-slate-300 my-2 min-w-[360px]">
+                  <thead>
+                    <tr className="bg-slate-100 text-[10px]">
+                      <th className="p-1 border border-slate-300">Item</th>
+                      <th className="p-1 border border-slate-300">Qty</th>
+                      <th className="p-1 border border-slate-300">Rate</th>
+                      <th className="p-1 border border-slate-300 text-right">Total</th>
                     </tr>
-                  ))}
-                  <tr>
-                    <td colSpan={3} className="p-1 border border-slate-300 text-right font-bold">Subtotal:</td>
-                    <td className="p-1 border border-slate-300 text-right">KES {selectedLpoForPrint.subtotal.toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <td colSpan={3} className="p-1 border border-slate-300 text-right font-bold">16% VAT:</td>
-                    <td className="p-1 border border-slate-300 text-right">KES {selectedLpoForPrint.taxVat.toLocaleString()}</td>
-                  </tr>
-                  <tr className="bg-slate-50 font-black">
-                    <td colSpan={3} className="p-1 border border-slate-300 text-right">GRAND TOTAL:</td>
-                    <td className="p-1 border border-slate-300 text-right text-emerald-800">KES {selectedLpoForPrint.totalAmount.toLocaleString()}</td>
-                  </tr>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {selectedLpoForPrint.items.map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="p-1 border border-slate-300">{it.description}</td>
+                        <td className="p-1 border border-slate-300">{it.quantity} {it.unit}</td>
+                        <td className="p-1 border border-slate-300">KES {it.unitPrice.toLocaleString()}</td>
+                        <td className="p-1 border border-slate-300 text-right font-bold">KES {it.totalPrice.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td colSpan={3} className="p-1 border border-slate-300 text-right font-bold">Subtotal:</td>
+                      <td className="p-1 border border-slate-300 text-right">KES {selectedLpoForPrint.subtotal.toLocaleString()}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3} className="p-1 border border-slate-300 text-right font-bold">16% VAT:</td>
+                      <td className="p-1 border border-slate-300 text-right">KES {selectedLpoForPrint.taxVat.toLocaleString()}</td>
+                    </tr>
+                    <tr className="bg-slate-50 font-black">
+                      <td colSpan={3} className="p-1 border border-slate-300 text-right">GRAND TOTAL:</td>
+                      <td className="p-1 border border-slate-300 text-right text-emerald-800">KES {selectedLpoForPrint.totalAmount.toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               <div className="text-[10px] text-slate-500 pt-1">
                 Authorized By: <strong>{selectedLpoForPrint.authorizedBy}</strong> · Delivery to: {selectedLpoForPrint.deliveryLocation}

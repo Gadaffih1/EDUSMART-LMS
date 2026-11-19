@@ -20,7 +20,9 @@ import {
   Gift,
   Barcode,
   Info,
-  Sparkles
+  Sparkles,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { 
   LibraryBook, 
@@ -40,10 +42,14 @@ interface CirculationViewsProps {
   allUsers: User[];
   onIssueBook: (record: LibraryBorrowRecord) => void;
   onReturnBook: (recordId: string, remarks?: string) => void;
+  onUpdateBorrowRecord?: (id: string, updates: Partial<LibraryBorrowRecord>) => void;
+  onDeleteBorrowRecord?: (id: string) => void;
   onUpdateReservation: (id: string, updates: Partial<LibraryReservation>) => void;
   onAddReservation: (res: LibraryReservation) => void;
+  onDeleteReservation?: (id: string) => void;
   onUpdateFine: (id: string, updates: Partial<LibraryFine>) => void;
   onAddFine: (fine: LibraryFine) => void;
+  onDeleteFine?: (id: string) => void;
 }
 
 export const CirculationViews: React.FC<CirculationViewsProps> = ({
@@ -55,15 +61,28 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
   allUsers,
   onIssueBook,
   onReturnBook,
+  onUpdateBorrowRecord,
+  onDeleteBorrowRecord,
   onUpdateReservation,
   onAddReservation,
+  onDeleteReservation,
   onUpdateFine,
-  onAddFine
+  onAddFine,
+  onDeleteFine
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'student' | 'teacher'>('all');
   const [returnRemarks, setReturnRemarks] = useState('');
   const [selectedRecordForReturn, setSelectedRecordForReturn] = useState<LibraryBorrowRecord | null>(null);
+  const [circulationNotice, setCirculationNotice] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+
+  // Edit / Delete Borrow Record states
+  const [editingBorrow, setEditingBorrow] = useState<LibraryBorrowRecord | null>(null);
+  const [editBorrowCopyId, setEditBorrowCopyId] = useState('');
+  const [editBorrowDueDate, setEditBorrowDueDate] = useState('');
+  const [editBorrowStatus, setEditBorrowStatus] = useState<LibraryBorrowRecord['status']>('active');
+  const [editBorrowRemarks, setEditBorrowRemarks] = useState('');
+  const [confirmDeleteBorrowId, setConfirmDeleteBorrowId] = useState<string | null>(null);
 
   // Quick Return by Unique ID State
   const [quickReturnInput, setQuickReturnInput] = useState('');
@@ -82,10 +101,26 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
   });
   const [issueRemarks, setIssueRemarks] = useState('Circulation Desk Checkout');
 
-  // New Reservation Form
+  // Reservation Add / Edit / Delete states
   const [showResModal, setShowResModal] = useState(false);
+  const [editingResId, setEditingResId] = useState<string | null>(null);
+  const [confirmDeleteResId, setConfirmDeleteResId] = useState<string | null>(null);
   const [resBookId, setResBookId] = useState(books[0]?.id || '');
   const [resBorrowerId, setResBorrowerId] = useState(allUsers[0]?.id || '');
+  const [resExpiryDate, setResExpiryDate] = useState('2026-10-15');
+  const [resStatus, setResStatus] = useState<LibraryReservation['status']>('pending');
+  const [resNotes, setResNotes] = useState('Placed at Circulation Desk');
+
+  // Fine Add / Edit / Delete states
+  const [showFineModal, setShowFineModal] = useState(false);
+  const [editingFineId, setEditingFineId] = useState<string | null>(null);
+  const [confirmDeleteFineId, setConfirmDeleteFineId] = useState<string | null>(null);
+  const [fineBorrowerId, setFineBorrowerId] = useState('');
+  const [fineBookTitle, setFineBookTitle] = useState('');
+  const [fineDaysOverdue, setFineDaysOverdue] = useState<number>(5);
+  const [fineAmount, setFineAmount] = useState<number>(50);
+  const [fineAmountPaid, setFineAmountPaid] = useState<number>(0);
+  const [fineStatus, setFineStatus] = useState<LibraryFine['status']>('unpaid');
 
   // Active Loans for Quick Lookup
   const activeLoans = borrowRecords.filter(r => r.status !== 'returned');
@@ -111,15 +146,16 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
 
   const handleIssueSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setCirculationNotice(null);
     const bk = books.find(b => b.id === issueBookId);
     const user = allUsers.find(u => u.id === issueBorrowerId);
     if (!bk || !user) {
-      alert('Please select both a valid Book and a Borrower.');
+      setCirculationNotice({ type: 'error', text: 'Please select both a valid Book and a Borrower.' });
       return;
     }
 
     if (bk.copiesAvailable <= 0) {
-      alert('No available copies of this title currently.');
+      setCirculationNotice({ type: 'error', text: 'No available copies of this title currently.' });
       return;
     }
 
@@ -131,7 +167,7 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
     );
 
     if (duplicateActive) {
-      alert(`The Unique ID "${assignedCopyId}" is already held by another borrower! Please select/enter an available unique copy ID.`);
+      setCirculationNotice({ type: 'error', text: `The Unique ID "${assignedCopyId}" is already held by another borrower! Please select/enter an available unique copy ID.` });
       return;
     }
 
@@ -417,17 +453,71 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
-                        {r.status !== 'returned' ? (
-                          <button
-                            onClick={() => setSelectedRecordForReturn(r)}
-                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-2xs"
-                            title={`Return copy ${r.bookCopyId || r.bookTitle}`}
-                          >
-                            Return Copy
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 font-medium">Archived Return</span>
-                        )}
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          {r.status !== 'returned' ? (
+                            <button
+                              onClick={() => setSelectedRecordForReturn(r)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-2xs"
+                              title={`Return copy ${r.bookCopyId || r.bookTitle}`}
+                            >
+                              Return
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium px-1">Archived</span>
+                          )}
+
+                          {onUpdateBorrowRecord && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingBorrow(r);
+                                setEditBorrowCopyId(r.bookCopyId || '');
+                                setEditBorrowDueDate(r.dueDate);
+                                setEditBorrowStatus(r.status);
+                                setEditBorrowRemarks(r.remarks || '');
+                              }}
+                              className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                              title="Edit loan details"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+                          )}
+
+                          {onDeleteBorrowRecord && (
+                            confirmDeleteBorrowId === r.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onDeleteBorrowRecord(r.id);
+                                    setConfirmDeleteBorrowId(null);
+                                  }}
+                                  className="px-2 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteBorrowId(null)}
+                                  className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBorrowId(r.id)}
+                                className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                                title="Delete loan record"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Delete</span>
+                              </button>
+                            )
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -436,6 +526,63 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
             </table>
           </div>
         </div>
+
+        {/* MODAL: EDIT BORROW RECORD */}
+        {editingBorrow && onUpdateBorrowRecord && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h4 className="font-bold text-sm text-slate-900">Edit Loan Record</h4>
+                <button onClick={() => setEditingBorrow(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              </div>
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div className="font-bold text-slate-900">{editingBorrow.bookTitle}</div>
+                <div className="text-[11px] text-slate-500">Borrower: {editingBorrow.borrowerName}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Unique Copy ID</label>
+                  <input type="text" value={editBorrowCopyId} onChange={(e) => setEditBorrowCopyId(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Due Date</label>
+                  <input type="date" value={editBorrowDueDate} onChange={(e) => setEditBorrowDueDate(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Status</label>
+                <select value={editBorrowStatus} onChange={(e) => setEditBorrowStatus(e.target.value as LibraryBorrowRecord['status'])} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                  <option value="active">Active</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="returned">Returned</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
+                <input type="text" value={editBorrowRemarks} onChange={(e) => setEditBorrowRemarks(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setEditingBorrow(null)} className="px-3 py-1.5 text-slate-600 font-bold cursor-pointer">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdateBorrowRecord(editingBorrow.id, {
+                      bookCopyId: editBorrowCopyId.trim() || editingBorrow.bookCopyId,
+                      dueDate: editBorrowDueDate,
+                      status: editBorrowStatus,
+                      returnedDate: editBorrowStatus === 'returned' ? (editingBorrow.returnedDate || new Date().toISOString().split('T')[0]) : undefined,
+                      remarks: editBorrowRemarks.trim()
+                    });
+                    setEditingBorrow(null);
+                  }}
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-lg cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* MODAL: RETURN CONFIRMATION WITH UNIQUE ID */}
         {selectedRecordForReturn && (
@@ -535,6 +682,12 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
               </div>
 
               <form onSubmit={handleIssueSubmit} className="p-5 space-y-3.5 text-xs">
+                {circulationNotice && circulationNotice.type === 'error' && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{circulationNotice.text}</span>
+                  </div>
+                )}
                 {/* Book Selection */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Select Book Title *</label>
@@ -684,7 +837,15 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
           </div>
 
           <button
-            onClick={() => setShowResModal(true)}
+            onClick={() => {
+              setEditingResId(null);
+              setResBookId(books[0]?.id || '');
+              setResBorrowerId(allUsers.find(u => ['student', 'teacher'].includes(u.role))?.id || allUsers[0]?.id || '');
+              setResExpiryDate('2026-10-15');
+              setResStatus('pending');
+              setResNotes('Placed at Circulation Desk');
+              setShowResModal(true);
+            }}
             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -719,72 +880,162 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
                 )}
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                {res.status === 'pending' && (
+              <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div>
+                  {res.status === 'pending' && (
+                    <button
+                      onClick={() => onUpdateReservation(res.id, { status: 'ready_for_pickup' })}
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                    >
+                      Notify: Ready for Pickup →
+                    </button>
+                  )}
+                  {res.status === 'ready_for_pickup' && (
+                    <button
+                      onClick={() => onUpdateReservation(res.id, { status: 'fulfilled' })}
+                      className="text-xs font-bold text-blue-700 hover:text-blue-800 cursor-pointer"
+                    >
+                      Mark Fulfilled & Issued →
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => onUpdateReservation(res.id, { status: 'ready_for_pickup' })}
-                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800"
+                    type="button"
+                    onClick={() => {
+                      setEditingResId(res.id);
+                      setResBookId(res.bookId);
+                      setResBorrowerId(res.borrowerId);
+                      setResExpiryDate(res.expiryDate);
+                      setResStatus(res.status);
+                      setResNotes(res.notes || '');
+                      setShowResModal(true);
+                    }}
+                    className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                   >
-                    Notify: Ready for Pickup →
+                    <Pencil className="w-3 h-3" />
+                    <span>Edit</span>
                   </button>
-                )}
-                {res.status === 'ready_for_pickup' && (
-                  <button
-                    onClick={() => onUpdateReservation(res.id, { status: 'fulfilled' })}
-                    className="text-xs font-bold text-blue-700 hover:text-blue-800"
-                  >
-                    Mark Fulfilled & Issued →
-                  </button>
-                )}
+                  {onDeleteReservation && (
+                    confirmDeleteResId === res.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteReservation(res.id);
+                            setConfirmDeleteResId(null);
+                          }}
+                          className="px-2 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteResId(null)}
+                          className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteResId(res.id)}
+                        className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Remove</span>
+                      </button>
+                    )
+                  )}
+                </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Modal Place Hold */}
+        {/* Modal Place / Edit Hold */}
         {showResModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-4 text-xs">
               <div className="flex items-center justify-between border-b pb-3">
-                <h4 className="font-bold text-sm text-slate-900">Place Book Hold / Reservation</h4>
-                <button onClick={() => setShowResModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <h4 className="font-bold text-sm text-slate-900">
+                  {editingResId ? 'Edit Book Reservation' : 'Place Book Hold / Reservation'}
+                </h4>
+                <button onClick={() => setShowResModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              </div>
+
+              {!editingResId && (
+                <>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Select Book</label>
+                    <select
+                      value={resBookId}
+                      onChange={(e) => setResBookId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    >
+                      {books.map(b => (
+                        <option key={b.id} value={b.id}>{b.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Borrower</label>
+                    <select
+                      value={resBorrowerId}
+                      onChange={(e) => setResBorrowerId(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                    >
+                      {allUsers.filter(u => ['student', 'teacher', 'class_teacher'].includes(u.role)).map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Hold Expiry Date</label>
+                  <input type="date" value={resExpiryDate} onChange={(e) => setResExpiryDate(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Status</label>
+                  <select value={resStatus} onChange={(e) => setResStatus(e.target.value as LibraryReservation['status'])} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                    <option value="pending">Pending</option>
+                    <option value="ready_for_pickup">Ready for Pickup</option>
+                    <option value="fulfilled">Fulfilled</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Book</label>
-                <select
-                  value={resBookId}
-                  onChange={(e) => setResBookId(e.target.value)}
-                  className="w-full text-xs border border-slate-300 rounded-lg p-2"
-                >
-                  {books.map(b => (
-                    <option key={b.id} value={b.id}>{b.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Borrower</label>
-                <select
-                  value={resBorrowerId}
-                  onChange={(e) => setResBorrowerId(e.target.value)}
-                  className="w-full text-xs border border-slate-300 rounded-lg p-2"
-                >
-                  {allUsers.filter(u => ['student', 'teacher'].includes(u.role)).map(u => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                  ))}
-                </select>
+                <label className="block font-semibold text-slate-700 mb-1">Notes</label>
+                <input type="text" value={resNotes} onChange={(e) => setResNotes(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setShowResModal(false)}
-                  className="px-3 py-1.5 text-xs text-slate-600 font-bold"
+                  className="px-3 py-1.5 text-slate-600 font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => {
+                    if (editingResId) {
+                      onUpdateReservation(editingResId, {
+                        expiryDate: resExpiryDate,
+                        status: resStatus,
+                        notes: resNotes.trim()
+                      });
+                      setShowResModal(false);
+                      setEditingResId(null);
+                      return;
+                    }
                     const b = books.find(x => x.id === resBookId);
                     const u = allUsers.find(x => x.id === resBorrowerId);
                     if (b && u) {
@@ -794,19 +1045,19 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
                         bookTitle: b.title,
                         borrowerId: u.id,
                         borrowerName: u.name,
-                        borrowerRole: u.role as any,
+                        borrowerRole: u.role === 'student' ? 'student' : 'teacher',
                         grade: u.grade,
                         reservationDate: new Date().toISOString().split('T')[0],
-                        expiryDate: '2026-10-15',
-                        status: 'pending',
-                        notes: 'Placed at Circulation Desk'
+                        expiryDate: resExpiryDate,
+                        status: resStatus,
+                        notes: resNotes.trim() || 'Placed at Circulation Desk'
                       });
                       setShowResModal(false);
                     }
                   }}
-                  className="px-4 py-1.5 bg-amber-500 text-slate-950 font-black text-xs rounded-lg"
+                  className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-lg cursor-pointer"
                 >
-                  Confirm Hold
+                  {editingResId ? 'Save Changes' : 'Confirm Hold'}
                 </button>
               </div>
             </div>
@@ -884,13 +1135,25 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
           </div>
 
           <button
-            onClick={() => alert('Batch overdue SMS and email alerts dispatched to registered parents.')}
+            onClick={() => {
+              setCirculationNotice({ type: 'success', text: 'Batch overdue SMS and email alerts queued for registered parents and borrowers.' });
+              setTimeout(() => setCirculationNotice(null), 5000);
+            }}
             className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <Mail className="w-4 h-4" />
             <span>Dispatch Automated Reminders</span>
           </button>
         </div>
+
+        {circulationNotice && (
+          <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+            circulationNotice.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}>
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{circulationNotice.text}</span>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
@@ -924,13 +1187,47 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
                     <td className="py-3.5 px-4 font-mono text-rose-700 font-bold">{r.dueDate}</td>
                     <td className="py-3.5 px-4 text-center font-mono font-bold text-rose-600">5 Days</td>
                     <td className="py-3.5 px-4 font-mono font-bold text-slate-900">KES 50</td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
-                      <button
-                        onClick={() => onReturnBook(r.id, 'Returned overdue - fine assessed')}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
-                      >
-                        Accept Return
-                      </button>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => onReturnBook(r.id, 'Returned overdue - fine assessed')}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                        >
+                          Accept Return
+                        </button>
+                        {onDeleteBorrowRecord && (
+                          confirmDeleteBorrowId === r.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onDeleteBorrowRecord(r.id);
+                                  setConfirmDeleteBorrowId(null);
+                                }}
+                                className="px-2 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteBorrowId(null)}
+                                className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteBorrowId(r.id)}
+                              className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold cursor-pointer"
+                              title="Remove overdue record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -959,9 +1256,28 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
             </p>
           </div>
 
-          <div className="text-right">
-            <span className="text-[10px] text-slate-500 uppercase font-bold">Total Revenue Collected</span>
-            <div className="text-xl font-black text-emerald-700 font-mono">KES {totalCollected}</div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <span className="text-[10px] text-slate-500 uppercase font-bold">Total Revenue Collected</span>
+              <div className="text-xl font-black text-emerald-700 font-mono">KES {totalCollected}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingFineId(null);
+                setFineBorrowerId(allUsers.find(u => ['student', 'teacher'].includes(u.role))?.id || '');
+                setFineBookTitle(books[0]?.title || '');
+                setFineDaysOverdue(5);
+                setFineAmount(50);
+                setFineAmountPaid(0);
+                setFineStatus('unpaid');
+                setShowFineModal(true);
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Fine / Penalty</span>
+            </button>
           </div>
         </div>
 
@@ -995,14 +1311,65 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {f.status === 'unpaid' && (
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        {f.status === 'unpaid' && (
+                          <button
+                            onClick={() => onUpdateFine(f.id, { status: 'paid', amountPaid: f.fineAmount })}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                          >
+                            Mark Paid
+                          </button>
+                        )}
                         <button
-                          onClick={() => onUpdateFine(f.id, { status: 'paid', amountPaid: f.fineAmount })}
-                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer"
+                          type="button"
+                          onClick={() => {
+                            setEditingFineId(f.id);
+                            setFineBorrowerId(f.borrowerId);
+                            setFineBookTitle(f.bookTitle);
+                            setFineDaysOverdue(f.daysOverdue);
+                            setFineAmount(f.fineAmount);
+                            setFineAmountPaid(f.amountPaid);
+                            setFineStatus(f.status);
+                            setShowFineModal(true);
+                          }}
+                          className="px-2 py-1 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                         >
-                          Mark Paid
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
                         </button>
-                      )}
+                        {onDeleteFine && (
+                          confirmDeleteFineId === f.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onDeleteFine(f.id);
+                                  setConfirmDeleteFineId(null);
+                                }}
+                                className="px-2 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteFineId(null)}
+                                className="px-2 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold cursor-pointer"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteFineId(f.id)}
+                              className="px-2 py-1 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Remove</span>
+                            </button>
+                          )
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1010,6 +1377,94 @@ export const CirculationViews: React.FC<CirculationViewsProps> = ({
             </table>
           </div>
         </div>
+
+        {/* Add / Edit Fine Modal */}
+        {showFineModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 p-5 space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b pb-3">
+                <h4 className="font-bold text-sm text-slate-900">
+                  {editingFineId ? 'Edit Library Fine / Penalty' : 'Assess Library Fine / Damage Penalty'}
+                </h4>
+                <button onClick={() => setShowFineModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              </div>
+              {!editingFineId && (
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Borrower</label>
+                  <select value={fineBorrowerId} onChange={(e) => setFineBorrowerId(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                    {allUsers.filter(u => ['student', 'teacher', 'class_teacher'].includes(u.role)).map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Book Title / Penalty Reason *</label>
+                <input type="text" value={fineBookTitle} onChange={(e) => setFineBookTitle(e.target.value)} className="w-full border border-slate-300 rounded-lg p-2" required />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Days Late</label>
+                  <input type="number" min={0} value={fineDaysOverdue} onChange={(e) => setFineDaysOverdue(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Fine (KES)</label>
+                  <input type="number" min={0} value={fineAmount} onChange={(e) => setFineAmount(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Paid (KES)</label>
+                  <input type="number" min={0} value={fineAmountPaid} onChange={(e) => setFineAmountPaid(Math.max(0, Number(e.target.value)))} className="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Status</label>
+                <select value={fineStatus} onChange={(e) => setFineStatus(e.target.value as LibraryFine['status'])} className="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                  <option value="unpaid">Unpaid</option>
+                  <option value="paid">Paid</option>
+                  <option value="waived">Waived</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setShowFineModal(false)} className="px-3 py-1.5 text-slate-600 font-bold cursor-pointer">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!fineBookTitle.trim()) return;
+                    if (editingFineId) {
+                      onUpdateFine(editingFineId, {
+                        bookTitle: fineBookTitle.trim(),
+                        daysOverdue: fineDaysOverdue,
+                        fineAmount,
+                        amountPaid: fineAmountPaid,
+                        status: fineStatus
+                      });
+                    } else {
+                      const u = allUsers.find(x => x.id === fineBorrowerId);
+                      onAddFine({
+                        id: `fin-${Date.now()}`,
+                        borrowRecordId: `manual-${Date.now()}`,
+                        bookTitle: fineBookTitle.trim(),
+                        borrowerId: u?.id || 'manual-user',
+                        borrowerName: u?.name || 'Library Member',
+                        borrowerRole: u?.role === 'student' ? 'student' : 'teacher',
+                        daysOverdue: fineDaysOverdue,
+                        fineAmount,
+                        amountPaid: fineAmountPaid,
+                        status: fineStatus,
+                        dateIssued: new Date().toISOString().split('T')[0]
+                      });
+                    }
+                    setShowFineModal(false);
+                    setEditingFineId(null);
+                  }}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg cursor-pointer"
+                >
+                  {editingFineId ? 'Save Changes' : 'Record Fine'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

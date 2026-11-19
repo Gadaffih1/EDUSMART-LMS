@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  User, 
-  GradeLevel, 
-  StreamName, 
-  SubjectName,
-  ReportCard,
-  getStreamsForGrade, 
-  getSubjectsForGrade 
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  User,
+  UserRole,
+  GradeLevel,
+  StreamName,
+  getStreamsForGrade,
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { getAdministrativeRoleShortName } from '../../utils/subjectTeacherSwitch';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { ClassTeacherModule } from './ClassTeacherModule';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
@@ -17,68 +18,260 @@ import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
 import { TimetablePortal } from '../timetable/TimetablePortal';
 import { OwnStaffAppraisal } from '../admin/TeacherAppraisalPages';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
-import { 
-  UserCheck, 
-  Award, 
-  MessageSquare, 
-  Utensils, 
-  ShieldAlert, 
-  DoorOpen, 
-  Calendar, 
-  FileCheck2, 
-  Bell, 
-  Briefcase, 
-  Users, 
-  CheckCircle2, 
-  Clock, 
-  Search, 
-  Save, 
-  Sparkles, 
-  Menu, 
-  AlertCircle,
+import {
+  ahApiFetch,
+  type AcademicBootstrapPayload,
+  type AcademicMonitoringItem,
+  type AcademicStream,
+  type ClassTeacherReportItem,
+  type GradeAnnouncementItem,
+  type GradeNotificationItem,
+  type StreamPerformanceRow,
+  type StudentInterventionItem,
+} from '../academic-hierarchy/academicHierarchyTypes';
+import {
+  exportAcademicReportToExcel,
+  printAcademicReportPdf,
+} from '../academic-hierarchy/academicReportExporter';
+import {
+  AcademicMonitoringPanel,
+  AcademicNotificationsPanel,
+  ClassReportComposerAndHistory,
+  GradeAnnouncementsPanel,
+  StudentInterventionsPanel,
+} from '../academic-hierarchy/GradeReportSubmitAndReviewPanels';
+import { SubjectTeacherVirtualLessonsPanel } from '../virtual-classroom/SubjectTeacherVirtualLessonsPanel';
+import { TeacherLibraryPortal } from '../library/TeacherLibraryPortal';
+import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
+import {
+  UserCheck,
+  Award,
+  MessageSquare,
+  Utensils,
+  ShieldAlert,
+  DoorOpen,
+  Calendar,
+  FileCheck2,
+  Bell,
+  Briefcase,
+  Users,
+  CheckCircle2,
+  Search,
+  Save,
+  Menu,
   FileSpreadsheet,
-  ChevronRight,
   TrendingUp,
-  HeartPulse
+  LayoutDashboard,
+  GraduationCap,
+  Megaphone,
+  Send,
+  Printer,
+  BookOpen,
+  RefreshCw,
+  Video,
+  Library,
 } from 'lucide-react';
 
-export type ClassTeacherTab = 
+export type ClassTeacherTab =
+  | 'dashboard'
+  | 'my_class'
+  | 'students'
   | 'class_register'
   | 'cbc_results'
-  | 'report_remarks'
-  | 'lunch_register'
   | 'discipline_log'
+  | 'parent_comms'
+  | 'report_remarks'
+  | 'report_to_senior'
+  | 'announcements'
+  | 'notifications'
+  | 'lunch_register'
   | 'gate_exit'
   | 'timetable'
+  | 'virtual_classrooms'
+  | 'library_contents'
   | 'work_entry'
-  | 'parent_comms'
   | 'staff_appraisal';
 
 interface ClassTeacherWorkspaceProps {
   currentUser: User;
+  switchedFromRole?: UserRole;
+  onReturnToPrimaryWorkspace?: () => void;
 }
 
-export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ currentUser }) => {
-  const defaultGrade: GradeLevel = currentUser.grade || 4;
-  const defaultStream: StreamName = currentUser.stream || 'Dove';
+interface StreamWorkspaceResponse {
+  grade: {
+    id: string;
+    name: string;
+    gradeNumber: number | null;
+    levelBand: string;
+    academicYear: string;
+  } | null;
+  seniorTeacher: {
+    assignmentId: string;
+    teacherId: string;
+    teacherName: string;
+    teacherEmail: string;
+    assignedAt: string;
+  } | null;
+  stream: StreamPerformanceRow | null;
+  reports: ClassTeacherReportItem[];
+  interventions: StudentInterventionItem[];
+  monitoring: AcademicMonitoringItem[];
+}
 
-  const [selectedGrade, setSelectedGrade] = useState<GradeLevel>(defaultGrade);
-  const [selectedStream, setSelectedStream] = useState<StreamName>(defaultStream);
-  const [activeTab, setActiveTab] = useState<ClassTeacherTab>('class_register');
-  const [sidebarOpenMobile, setSidebarOpenMobile] = useState<boolean>(false);
-
-  // Available streams for this class teacher or all streams if Super Admin / Executive
+export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
+  currentUser,
+  switchedFromRole,
+  onReturnToPrimaryWorkspace,
+}) => {
+  const { currentTenant } = useTenant();
   const isSuperAdmin = currentUser.role === 'admin';
-  const availableStreams: StreamName[] = isSuperAdmin
-    ? getStreamsForGrade(selectedGrade)
-    : currentUser.assignedStreams && currentUser.assignedStreams.length > 0
-    ? currentUser.assignedStreams.filter(as => as.grade === selectedGrade).map(as => as.stream)
-    : [currentUser.stream || 'Dove'];
 
-  // Stream learners
-  const streamStudents = Storage.getUsers().filter(
-    u => u.role === 'student' && u.grade === selectedGrade && u.stream === selectedStream
+  // Backend-scoped Grade/Stream Hierarchy state
+  const [bootstrap, setBootstrap] = useState<AcademicBootstrapPayload | null>(null);
+  const [activeStreamId, setActiveStreamId] = useState<string>('');
+  const [streamWorkspace, setStreamWorkspace] = useState<StreamWorkspaceResponse | null>(null);
+  const [streamRoster, setStreamRoster] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<GradeAnnouncementItem[]>([]);
+  const [notifications, setNotifications] = useState<GradeNotificationItem[]>([]);
+  const [loadingHierarchy, setLoadingHierarchy] = useState<boolean>(true);
+  const [hierarchyError, setHierarchyError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<ClassTeacherTab>('dashboard');
+  const [sidebarOpenMobile, setSidebarOpenMobile] = useState<boolean>(false);
+  const [rosterSearch, setRosterSearch] = useState<string>('');
+  const [academicRecordsSubTab, setAcademicRecordsSubTab] = useState<'marksheet' | 'monitoring'>('marksheet');
+  const [disciplineSubTab, setDisciplineSubTab] = useState<'pastoral' | 'interventions'>('pastoral');
+
+  // Legacy fallback grade/stream synchronized with assigned AcademicStream
+  const selectedHierarchyStream: AcademicStream | undefined = useMemo(() => {
+    if (!bootstrap?.streams.length) return undefined;
+    return bootstrap.streams.find((s) => s.id === activeStreamId) || bootstrap.streams[0];
+  }, [bootstrap, activeStreamId]);
+
+  const selectedHierarchyGrade = useMemo(() => {
+    if (!bootstrap?.grades.length || !selectedHierarchyStream) return undefined;
+    return bootstrap.grades.find((g) => g.id === selectedHierarchyStream.gradeId);
+  }, [bootstrap, selectedHierarchyStream]);
+
+  const selectedGrade: GradeLevel =
+    ((selectedHierarchyGrade?.gradeNumber as GradeLevel) || currentUser.grade || 4) as GradeLevel;
+  const selectedStream: StreamName =
+    ((selectedHierarchyStream?.name as StreamName) || currentUser.stream || 'Dove') as StreamName;
+
+  const loadBootstrap = useCallback(async () => {
+    setLoadingHierarchy(true);
+    setHierarchyError(null);
+    try {
+      const [bs, annRes, notifRes] = await Promise.all([
+        ahApiFetch<AcademicBootstrapPayload>('/api/academic/bootstrap'),
+        ahApiFetch<{ announcements: GradeAnnouncementItem[] }>('/api/academic/announcements'),
+        ahApiFetch<{ notifications: GradeNotificationItem[] }>('/api/academic/notifications'),
+      ]);
+      setBootstrap(bs);
+      setAnnouncements(annRes.announcements || []);
+      setNotifications(notifRes.notifications || []);
+      if (bs.streams.length > 0) {
+        setActiveStreamId((prev) =>
+          prev && bs.streams.some((s) => s.id === prev) ? prev : bs.streams[0].id
+        );
+      } else {
+        setActiveStreamId('');
+      }
+    } catch (err: any) {
+      setHierarchyError(err?.message || 'Unable to load assigned class workspace.');
+    } finally {
+      setLoadingHierarchy(false);
+    }
+  }, []);
+
+  const loadActiveStreamDetails = useCallback(async () => {
+    if (!activeStreamId) {
+      setStreamWorkspace(null);
+      setStreamRoster([]);
+      return;
+    }
+    try {
+      const [wsRes, stuRes] = await Promise.all([
+        ahApiFetch<StreamWorkspaceResponse>(`/api/academic/streams/${encodeURIComponent(activeStreamId)}/workspace`),
+        ahApiFetch<{ students: any[] }>(`/api/academic/streams/${encodeURIComponent(activeStreamId)}/students`),
+      ]);
+      setStreamWorkspace(wsRes);
+      setStreamRoster(stuRes.students || []);
+    } catch (err: any) {
+      setHierarchyError(err?.message || 'Unable to load stream details.');
+    }
+  }, [activeStreamId]);
+
+  useEffect(() => {
+    void loadBootstrap();
+  }, [loadBootstrap]);
+
+  useEffect(() => {
+    void loadActiveStreamDetails();
+  }, [loadActiveStreamDetails]);
+
+  useEffect(() => {
+    const handleNavEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const tab = customEvent.detail as ClassTeacherTab | undefined;
+      if (!tab) return;
+      const validTabs: ClassTeacherTab[] = [
+        'dashboard',
+        'my_class',
+        'students',
+        'class_register',
+        'cbc_results',
+        'discipline_log',
+        'parent_comms',
+        'report_remarks',
+        'report_to_senior',
+        'announcements',
+        'notifications',
+        'lunch_register',
+        'gate_exit',
+        'timetable',
+        'virtual_classrooms',
+        'library_contents',
+        'work_entry',
+        'staff_appraisal',
+      ];
+      if ((tab as string) === 'library_booking') {
+        setActiveTab('library_contents');
+        return;
+      }
+      if (validTabs.includes(tab)) {
+        setActiveTab(tab);
+      }
+    };
+    window.addEventListener('workspace-nav-tab', handleNavEvent);
+    return () => window.removeEventListener('workspace-nav-tab', handleNavEvent);
+  }, []);
+
+  const refreshAll = async () => {
+    await Promise.all([loadBootstrap(), loadActiveStreamDetails()]);
+  };
+
+  // Fallback local stream students list merged with backend stream roster
+  const legacyStreamStudents = Storage.getUsers().filter(
+    (u) => u.role === 'student' && u.grade === selectedGrade && u.stream === selectedStream
   );
+
+  const effectiveRoster = useMemo(() => {
+    if (streamRoster.length > 0) return streamRoster;
+    return legacyStreamStudents.map((stu, idx) => ({
+      studentId: stu.id,
+      studentName: stu.name,
+      admissionNumber: stu.admissionNumber || `ADM-${1000 + idx}`,
+      email: stu.email || '',
+      phone: stu.phone || '',
+      streamDisplayName: selectedHierarchyStream?.displayName || `Grade ${selectedGrade} ${selectedStream}`,
+      parentName: stu.parentName || null,
+      parentPhone: stu.parentPhone || null,
+      parentEmail: stu.parentEmail || null,
+      openInterventionsCount: 0,
+    }));
+  }, [streamRoster, legacyStreamStudents, selectedHierarchyStream, selectedGrade, selectedStream]);
 
   // Termly Report Card Remarks State
   const [remarksSearchQuery, setRemarksSearchQuery] = useState('');
@@ -86,39 +279,41 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
   const [remarksSavedToast, setRemarksSavedToast] = useState<string | null>(null);
 
   // Discipline state
-  const [disciplineEntries, setDisciplineEntries] = useState<Array<{
-    id: string;
-    studentId: string;
-    studentName: string;
-    type: 'merit' | 'demerit' | 'counseling' | 'commendation';
-    category: string;
-    description: string;
-    date: string;
-    actionTaken: string;
-  }>>([
+  const [disciplineEntries, setDisciplineEntries] = useState<
+    Array<{
+      id: string;
+      studentId: string;
+      studentName: string;
+      type: 'merit' | 'demerit' | 'counseling' | 'commendation';
+      category: string;
+      description: string;
+      date: string;
+      actionTaken: string;
+    }>
+  >([
     {
       id: 'disc-1',
-      studentId: streamStudents[0]?.id || 'stu-1',
-      studentName: streamStudents[0]?.name || 'Brian Otieno',
+      studentId: legacyStreamStudents[0]?.id || 'stu-1',
+      studentName: legacyStreamStudents[0]?.name || 'Brian Otieno',
       type: 'commendation',
       category: 'Leadership & Orderliness',
-      description: 'Maintained exceptional class discipline and ensured all group tables were organized.',
+      description: 'Maintained exceptional class discipline and organized peer group workstations.',
       date: '2026-10-01',
-      actionTaken: 'Awarded 5 Merit Points & Announced at morning assembly'
+      actionTaken: 'Awarded 5 Merit Points & Commended during morning assembly',
     },
     {
       id: 'disc-2',
-      studentId: streamStudents[1]?.id || 'stu-2',
-      studentName: streamStudents[1]?.name || 'Amina Hassan',
+      studentId: legacyStreamStudents[1]?.id || 'stu-2',
+      studentName: legacyStreamStudents[1]?.name || 'Amina Hassan',
       type: 'merit',
       category: 'Peer Collaboration',
-      description: 'Volunteered to assist peers during the Fractions practical group session.',
+      description: 'Volunteered to assist peers during practical group work.',
       date: '2026-09-29',
-      actionTaken: 'Recorded in Termly Character Progress Profile'
-    }
+      actionTaken: 'Recorded in Termly Character Progress Profile',
+    },
   ]);
 
-  const [newDisciplineStudentId, setNewDisciplineStudentId] = useState<string>(streamStudents[0]?.id || '');
+  const [newDisciplineStudentId, setNewDisciplineStudentId] = useState<string>('');
   const [newDisciplineType, setNewDisciplineType] = useState<'merit' | 'demerit' | 'counseling' | 'commendation'>('merit');
   const [newDisciplineCategory, setNewDisciplineCategory] = useState<string>('Academic Diligence');
   const [newDisciplineDesc, setNewDisciplineDesc] = useState<string>('');
@@ -126,105 +321,95 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
   const [showNewDisciplineModal, setShowNewDisciplineModal] = useState<boolean>(false);
 
   // Parent Comms state
-  const [classAnnouncements, setClassAnnouncements] = useState<Array<{
-    id: string;
-    title: string;
-    message: string;
-    urgency: 'normal' | 'important' | 'urgent';
-    date: string;
-    recipientsCount: number;
-  }>>([
+  const [classAnnouncements, setClassAnnouncements] = useState<
+    Array<{
+      id: string;
+      title: string;
+      message: string;
+      urgency: 'normal' | 'important' | 'urgent';
+      date: string;
+      recipientsCount: number;
+    }>
+  >([
     {
       id: 'ann-1',
-      title: 'Term 2 Week 6 CBC Practical Project Supplies Reminder',
-      message: 'Dear Grade 4 Dove Parents, kindly ensure your learner carries a notebook, metric ruler and plant specimen for our Science classification module on Wednesday.',
+      title: 'Term CBC Practical Project Supplies Reminder',
+      message: `Dear ${selectedHierarchyStream?.displayName || `Grade ${selectedGrade} ${selectedStream}`} Parents, kindly ensure your learner carries a notebook and metric ruler for Wednesday practicals.`,
       urgency: 'important',
       date: '2026-10-01',
-      recipientsCount: streamStudents.length
+      recipientsCount: effectiveRoster.length,
     },
-    {
-      id: 'ann-2',
-      title: 'Midterm Parent-Teacher Consultation Bookings',
-      message: 'Progress consultation slots are now open on the Parent Portal. Please book a 15-minute slot with Mr. Kiprono before Friday 04:00 PM.',
-      urgency: 'normal',
-      date: '2026-09-28',
-      recipientsCount: streamStudents.length
-    }
   ]);
 
   const [newNoticeTitle, setNewNoticeTitle] = useState('');
   const [newNoticeMsg, setNewNoticeMsg] = useState('');
   const [newNoticeUrgency, setNewNoticeUrgency] = useState<'normal' | 'important' | 'urgent'>('normal');
 
-  // Load Report Card Remarks for enrolled learners
   useEffect(() => {
     const reportCards = Storage.getReportCards(undefined, selectedGrade, selectedStream);
     const initialMap: Record<string, string> = {};
-    streamStudents.forEach(stu => {
-      const existingRc = reportCards.find(rc => rc.studentId === stu.id);
-      initialMap[stu.id] = existingRc?.classTeacherRemarks || 'Exhibits steady CBC competency progression, punctuality, and positive peer collaboration.';
+    effectiveRoster.forEach((stu) => {
+      const existingRc = reportCards.find((rc) => rc.studentId === stu.studentId);
+      initialMap[stu.studentId] =
+        existingRc?.classTeacherRemarks ||
+        'Exhibits steady CBC competency progression, punctuality, and positive peer collaboration.';
     });
     setStudentRemarksMap(initialMap);
-  }, [selectedGrade, selectedStream]);
+    if (!newDisciplineStudentId && effectiveRoster[0]?.studentId) {
+      setNewDisciplineStudentId(effectiveRoster[0].studentId);
+    }
+  }, [selectedGrade, selectedStream, effectiveRoster.length]);
 
-  // Save single student remarks
   const handleSaveStudentRemarks = (studentId: string) => {
     const remark = studentRemarksMap[studentId];
     if (!remark) return;
 
     const reportCards = Storage.getReportCards(undefined, selectedGrade, selectedStream);
-    const existingRc = reportCards.find(rc => rc.studentId === studentId);
+    const existingRc = reportCards.find((rc) => rc.studentId === studentId);
     if (existingRc) {
-      Storage.updateReportCardRemarks(existingRc.id, {
-        classTeacherRemarks: remark
-      });
+      Storage.updateReportCardRemarks(existingRc.id, { classTeacherRemarks: remark });
     }
-
-    setRemarksSavedToast(`Class teacher remarks saved for ${streamStudents.find(s => s.id === studentId)?.name || 'Learner'}!`);
+    const targetName = effectiveRoster.find((s) => s.studentId === studentId)?.studentName || 'Learner';
+    setRemarksSavedToast(`Class teacher remarks saved for ${targetName}.`);
     setTimeout(() => setRemarksSavedToast(null), 3000);
   };
 
-  // Batch save all remarks
   const handleBatchSaveAllRemarks = () => {
     const reportCards = Storage.getReportCards(undefined, selectedGrade, selectedStream);
-    streamStudents.forEach(stu => {
-      const remark = studentRemarksMap[stu.id];
-      const existingRc = reportCards.find(rc => rc.studentId === stu.id);
+    effectiveRoster.forEach((stu) => {
+      const remark = studentRemarksMap[stu.studentId];
+      const existingRc = reportCards.find((rc) => rc.studentId === stu.studentId);
       if (remark && existingRc) {
-        Storage.updateReportCardRemarks(existingRc.id, {
-          classTeacherRemarks: remark
-        });
+        Storage.updateReportCardRemarks(existingRc.id, { classTeacherRemarks: remark });
       }
     });
-
-    setRemarksSavedToast(`Successfully saved remarks for all ${streamStudents.length} learners in Grade ${selectedGrade} (${selectedStream})!`);
+    setRemarksSavedToast(`Saved remarks for all ${effectiveRoster.length} learners in ${streamLabel}.`);
     setTimeout(() => setRemarksSavedToast(null), 3500);
   };
 
-  // Quick Preset Remarks
   const REMARK_PRESETS = [
     'Consistently disciplined, focused, and demonstrates exemplary CBC competency growth.',
     'A courteous and diligent learner who exhibits exceptional promise in collaborative learning.',
     'Making steady, commendable progress. Encouraged to participate more actively in class discussions.',
     'Exhibits outstanding intellectual curiosity and maintains high standards of classroom conduct.',
-    'Creative, punctual, and well-behaved. Keep up the commendable standard of work!'
+    'Creative, punctual, and well-behaved. Keep up the commendable standard of work!',
   ];
 
-  // Handle adding discipline log
   const handleAddDiscipline = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDisciplineDesc || !newDisciplineStudentId) return;
+    const stuId = newDisciplineStudentId || effectiveRoster[0]?.studentId;
+    if (!newDisciplineDesc || !stuId) return;
 
-    const studentObj = streamStudents.find(s => s.id === newDisciplineStudentId);
+    const studentObj = effectiveRoster.find((s) => s.studentId === stuId);
     const entry = {
       id: `disc-${Date.now()}`,
-      studentId: newDisciplineStudentId,
-      studentName: studentObj?.name || 'Learner',
+      studentId: stuId,
+      studentName: studentObj?.studentName || 'Learner',
       type: newDisciplineType,
       category: newDisciplineCategory,
       description: newDisciplineDesc,
       date: new Date().toISOString().split('T')[0],
-      actionTaken: newDisciplineAction || 'Recorded in Class Pastoral Register'
+      actionTaken: newDisciplineAction || 'Recorded in Class Pastoral Register',
     };
 
     setDisciplineEntries([entry, ...disciplineEntries]);
@@ -233,10 +418,29 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
     setNewDisciplineAction('');
   };
 
-  // Handle sending parent broadcast
-  const handleSendNotice = (e: React.FormEvent) => {
+  const handleSendNotice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNoticeTitle || !newNoticeMsg) return;
+    if (!newNoticeTitle.trim() || !newNoticeMsg.trim()) return;
+
+    // Persist scoped notice directly to backend when stream is active
+    if (selectedHierarchyStream) {
+      try {
+        await ahApiFetch('/api/academic/announcements', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: newNoticeTitle.trim(),
+            message: newNoticeMsg.trim(),
+            gradeId: selectedHierarchyStream.gradeId,
+            streamId: selectedHierarchyStream.id,
+            targetAudience: 'parents_only',
+            priority: newNoticeUrgency,
+          }),
+        });
+        await loadBootstrap();
+      } catch {
+        // Maintain graceful local feed continuity even if announcement endpoint fails
+      }
+    }
 
     const newNotice = {
       id: `ann-${Date.now()}`,
@@ -244,108 +448,174 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
       message: newNoticeMsg,
       urgency: newNoticeUrgency,
       date: new Date().toISOString().split('T')[0],
-      recipientsCount: streamStudents.length
+      recipientsCount: effectiveRoster.length,
     };
 
     setClassAnnouncements([newNotice, ...classAnnouncements]);
     setNewNoticeTitle('');
     setNewNoticeMsg('');
-    setRemarksSavedToast(`Announcement broadcasted to ${streamStudents.length} parents of Grade ${selectedGrade} ${selectedStream}!`);
+    setRemarksSavedToast(`Notice sent to ${effectiveRoster.length} parents in ${streamLabel}.`);
     setTimeout(() => setRemarksSavedToast(null), 3500);
   };
 
-  // Sidebar navigation structure
+  const handleExportStreamReport = (format: 'pdf' | 'excel') => {
+    const title = `${streamLabel} Class Academic & Pastoral Report`;
+    const summaryPairs: Array<[string, string]> = [
+      ['Class Stream', streamLabel],
+      ['Class Teacher', currentUser.name],
+      ['Grade Coordinator', streamWorkspace?.seniorTeacher?.teacherName || 'Unassigned'],
+      ['Enrolled Students', String(effectiveRoster.length)],
+      ['Attendance Rate', `${streamWorkspace?.stream?.attendanceRate ?? 0}%`],
+      ['Academic Mean', `${streamWorkspace?.stream?.academicMean ?? 0}%`],
+      ['Syllabus Coverage', `${streamWorkspace?.stream?.syllabusCoverage ?? 0}%`],
+      ['Open Interventions', String(streamWorkspace?.interventions.filter((i) => i.status !== 'resolved').length ?? 0)],
+    ];
+
+    const sections = [
+      {
+        title: 'Registered Stream Students',
+        columns: ['Adm No.', 'Student Name', 'Parent / Guardian', 'Parent Phone', 'Open Interventions'],
+        rows: effectiveRoster.map((s) => [
+          s.admissionNumber || '—',
+          s.studentName,
+          s.parentName || '—',
+          s.parentPhone || s.phone || '—',
+          s.openInterventionsCount || 0,
+        ]),
+      },
+      {
+        title: 'Submitted Reports to Senior Teacher',
+        columns: ['Period', 'Type', 'Title', 'Attend %', 'Mean %', 'Syllabus %', 'Status'],
+        rows: (streamWorkspace?.reports || []).map((r) => [
+          r.period_label,
+          r.report_type,
+          r.title,
+          `${r.attendance_rate}%`,
+          `${r.academic_mean}%`,
+          `${r.syllabus_coverage}%`,
+          r.status,
+        ]),
+      },
+      {
+        title: 'Subject Syllabus & Mean Monitoring',
+        columns: ['Subject', 'Week', 'Topics', 'Syllabus %', 'Mean %', 'Weak Areas'],
+        rows: (streamWorkspace?.monitoring || []).map((m) => [
+          m.subject_name,
+          m.week_number,
+          `${m.topics_completed}/${m.topics_planned}`,
+          `${m.syllabus_coverage_pct}%`,
+          `${m.assessment_mean_score}%`,
+          m.weak_areas || '—',
+        ]),
+      },
+    ];
+
+    if (format === 'excel') {
+      exportAcademicReportToExcel(title, currentTenant.name, summaryPairs, sections);
+    } else {
+      printAcademicReportPdf(
+        currentTenant,
+        title,
+        `${streamLabel} · Coordinator: ${streamWorkspace?.seniorTeacher?.teacherName || 'Unassigned'}`,
+        summaryPairs,
+        sections
+      );
+    }
+  };
+
+  const streamLabel =
+    selectedHierarchyStream?.displayName || `Grade ${selectedGrade} ${selectedStream}`;
+  const unreadNotifCount = notifications.filter((n) => !n.is_read).length;
+  const openInterventions = (streamWorkspace?.interventions || []).filter((i) => i.status !== 'resolved');
+  const latestReviewAlert = (streamWorkspace?.reports || [])
+    .flatMap((r) => (r.reviews || []).map((rv) => ({ ...rv, reportTitle: r.title })))
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+
+  const availableStreamsList = bootstrap?.streams || [];
+  const legacyAvailableStreams: StreamName[] = isSuperAdmin
+    ? getStreamsForGrade(selectedGrade)
+    : [currentUser.stream || 'Dove'];
+
+  const filteredRoster = effectiveRoster.filter(
+    (s) =>
+      !rosterSearch.trim() ||
+      String(s.studentName || '').toLowerCase().includes(rosterSearch.toLowerCase()) ||
+      String(s.admissionNumber || '').toLowerCase().includes(rosterSearch.toLowerCase())
+  );
+
+  // Sidebar navigation structure (strictly includes all 10 required Class Teacher views + Routine)
   const sidebarGroups: WorkspaceSidebarGroup<ClassTeacherTab>[] = [
     {
-      title: 'Class Administration',
+      title: 'Class Teacher Governance',
       items: [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'my_class', label: 'My Class', icon: GraduationCap, badge: streamLabel },
         {
-          id: 'class_register',
-          label: '1. Class Roll Call Register',
-          icon: UserCheck,
-          badge: `${selectedStream}`
+          id: 'students',
+          label: 'Students',
+          icon: Users,
+          badge: `${effectiveRoster.length}`,
         },
-        {
-          id: 'cbc_results',
-          label: '2. CBC Marks & CBA Sheet',
-          icon: Award,
-          badge: 'Gr. ' + selectedGrade,
-          badgeColor: 'bg-emerald-600'
-        },
-        {
-          id: 'report_remarks',
-          label: '3. Termly Report Remarks',
-          icon: FileCheck2,
-          badge: `${streamStudents.length} Pupils`,
-          badgeColor: 'bg-blue-600'
-        },
-        {
-          id: 'lunch_register',
-          label: '4. Learner Lunch Register',
-          icon: Utensils,
-          badge: 'Dining'
-        }
-      ]
-    },
-    {
-      title: 'Learner Pastoral & Welfare',
-      items: [
+        { id: 'class_register', label: 'Attendance', icon: UserCheck },
+        { id: 'cbc_results', label: 'Academic Records', icon: Award },
         {
           id: 'discipline_log',
-          label: '5. Conduct & Merits Log',
+          label: 'Behaviour Records',
           icon: ShieldAlert,
-          badge: `${disciplineEntries.length}`
+          badge: `${disciplineEntries.length + openInterventions.length}`,
+        },
+        { id: 'parent_comms', label: 'Parent Communication', icon: MessageSquare },
+        { id: 'report_remarks', label: 'Class Reports', icon: FileCheck2 },
+        {
+          id: 'report_to_senior',
+          label: 'Report to Senior Teacher',
+          icon: Send,
+          badge: `${streamWorkspace?.reports.length || 0}`,
+          badgeColor: 'bg-emerald-600',
         },
         {
-          id: 'gate_exit',
-          label: '6. Student Gate Exit Passes',
-          icon: DoorOpen
+          id: 'announcements',
+          label: 'Announcements',
+          icon: Megaphone,
+          badge: `${announcements.length}`,
         },
         {
-          id: 'parent_comms',
-          label: '7. Class Parent Notices',
-          icon: MessageSquare,
-          badge: 'SMS Hub'
-        }
-      ]
+          id: 'notifications',
+          label: 'Notifications',
+          icon: Bell,
+          badge: unreadNotifCount > 0 ? `${unreadNotifCount}` : undefined,
+          badgeColor: unreadNotifCount > 0 ? 'bg-rose-600' : undefined,
+        },
+      ],
     },
     {
-      title: 'Teacher Routine & Growth',
+      title: 'Routine & Campus',
       items: [
-        {
-          id: 'timetable',
-          label: '8. Class Timetable',
-          icon: Calendar
-        },
-        {
-          id: 'work_entry',
-          label: '9. Daily Work Entry Sign-In',
-          icon: Briefcase
-        },
-        {
-          id: 'staff_appraisal',
-          label: '10. TPAD Performance Appraisal',
-          icon: TrendingUp
-        }
-      ]
-    }
+        { id: 'library_contents', label: 'School Library & Booking', icon: Library, badge: 'Library', badgeColor: 'bg-purple-700' },
+        { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
+        { id: 'gate_exit', label: 'Student Gate Exit', icon: DoorOpen },
+        { id: 'timetable', label: 'Class Timetable', icon: Calendar },
+        { id: 'virtual_classrooms', label: 'Virtual Classrooms', icon: Video },
+        { id: 'work_entry', label: 'Daily Work Entry', icon: Briefcase },
+        { id: 'staff_appraisal', label: 'TPAD Appraisal', icon: TrendingUp },
+      ],
+    },
   ];
 
   return (
     <div className="flex w-full min-h-screen bg-slate-50 relative">
-      
       {/* Toast Notification */}
       {remarksSavedToast && (
-        <div className="fixed top-20 right-6 z-50 bg-emerald-950 text-emerald-100 px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center gap-2.5 text-xs font-bold animate-in fade-in slide-in-from-top-4">
+        <div className="fixed top-20 right-6 z-50 bg-emerald-950 text-emerald-100 px-4 py-3 rounded-xl shadow-lg border border-emerald-500/40 flex items-center gap-2.5 text-xs font-semibold">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{remarksSavedToast}</span>
         </div>
       )}
 
-      {/* Modern Workspace Sidebar */}
+      {/* Workspace Sidebar */}
       <WorkspaceSidebar
         portalTitle="Class Teacher Desk"
-        portalSubtitle={`Grade ${selectedGrade} (${selectedStream}) Form Master`}
+        portalSubtitle={`${streamLabel} Form Lead`}
         portalIcon="👨‍🏫"
         portalBadge="Form Lead"
         groups={sidebarGroups}
@@ -357,82 +627,416 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
         isOpenMobile={sidebarOpenMobile}
         onCloseMobile={() => setSidebarOpenMobile(false)}
         themeColor="emerald"
-        footerNote="EduSmart CBC Class Teacher Governance"
-        statusText={`Grade ${selectedGrade} ${selectedStream} Active`}
+        footerNote={`${currentTenant.name} · Academic Governance`}
+        statusText={`${streamLabel} Active`}
       />
 
       {/* Main Workspace Body */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        
         {/* Top Header Bar */}
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
-          
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => setSidebarOpenMobile(true)}
-              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 cursor-pointer"
+              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 cursor-pointer"
+              aria-label="Open navigation"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded border border-emerald-300 uppercase">
-                  Class Teacher Portal
-                </span>
-                <span className="text-xs text-slate-500 font-medium hidden sm:inline">
-                  TSC Registered Classroom Lead
-                </span>
+            <TenantSchoolLogo variant="horizontal" size="sm" compactMobile />
+            <div className="border-l border-slate-200 pl-3 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                <span className="font-semibold text-emerald-800 uppercase tracking-wider">Class Teacher Portal</span>
+                <span aria-hidden="true">·</span>
+                <span>{streamLabel}</span>
+                {streamWorkspace?.seniorTeacher && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>Coordinator: {streamWorkspace.seniorTeacher.teacherName}</span>
+                  </>
+                )}
               </div>
-              <h1 className="text-base sm:text-lg font-black text-slate-900 font-serif tracking-tight">
-                {currentUser.name} — Form Lead for Grade {selectedGrade} ({selectedStream})
+              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight truncate">
+                {currentUser.name}
               </h1>
             </div>
           </div>
 
-          {/* Quick Stream & Grade Selector / Switcher */}
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            
-            {/* Stream Switcher if multi-stream assigned */}
-            {availableStreams.length > 1 && (
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-                <span className="text-[10px] text-slate-500 font-bold uppercase px-1">Stream:</span>
-                {availableStreams.map((st) => (
+          {/* Stream Switcher + Quick Actions */}
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            {availableStreamsList.length > 1 ? (
+              <select
+                value={activeStreamId}
+                onChange={(e) => setActiveStreamId(e.target.value)}
+                aria-label="Select assigned stream"
+                className="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-white border border-slate-200 rounded-lg"
+              >
+                {availableStreamsList.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.displayName} ({st.studentsCount} learners)
+                  </option>
+                ))}
+              </select>
+            ) : legacyAvailableStreams.length > 1 && availableStreamsList.length === 0 ? (
+              <div className="flex items-center gap-1 text-xs">
+                {legacyAvailableStreams.map((st) => (
                   <button
                     key={st}
-                    onClick={() => setSelectedStream(st)}
-                    className={`px-2.5 py-1 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                    type="button"
+                    onClick={() => setActiveTab('dashboard')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold text-xs border cursor-pointer ${
                       selectedStream === st
-                        ? 'bg-emerald-700 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200'
                     }`}
                   >
                     {st}
                   </button>
                 ))}
               </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('library_contents')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg whitespace-nowrap cursor-pointer shadow-xs"
+            >
+              <Library className="w-3.5 h-3.5" />
+              <span>School Library</span>
+            </button>
+
+            <LibraryRoomBookingButton currentUser={currentUser} variant="compact" label="Book Library Room" />
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('notifications')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg whitespace-nowrap cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Alerts</span>
+              {unreadNotifCount > 0 && (
+                <span className="font-mono tabular-nums text-rose-700 font-bold">({unreadNotifCount})</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer"
+              title="Refresh assigned stream data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingHierarchy ? 'animate-spin' : ''}`} />
+            </button>
+
+            {onReturnToPrimaryWorkspace && switchedFromRole && (
+              <button
+                type="button"
+                onClick={onReturnToPrimaryWorkspace}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 border border-amber-300 hover:bg-amber-100 rounded-lg cursor-pointer whitespace-nowrap"
+              >
+                <span>&larr; Return to {getAdministrativeRoleShortName(switchedFromRole)}</span>
+              </button>
             )}
-
-            {/* Quick Stats Pill */}
-            <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 bg-slate-100 rounded-xl border border-slate-200 text-xs">
-              <div className="flex items-center gap-1.5 text-slate-700 font-bold">
-                <Users className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{streamStudents.length} Learners</span>
-              </div>
-              <span className="text-slate-300">|</span>
-              <div className="text-[11px] text-slate-600">
-                Grade {selectedGrade}
-              </div>
-            </div>
-
           </div>
-
         </header>
+
+        {/* Unassigned Class Teacher Notice */}
+        {!loadingHierarchy && bootstrap && bootstrap.streams.length === 0 && !isSuperAdmin && (
+          <div className="mx-4 sm:mx-6 lg:mx-8 mt-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-900">
+            No active stream is currently assigned to your account in this school. Contact the School Administrator to assign you as Class Teacher of a stream; routine campus modules remain accessible.
+          </div>
+        )}
+
+        {hierarchyError && (
+          <div className="mx-4 sm:mx-6 lg:mx-8 mt-4 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-xs text-rose-800">
+            {hierarchyError}
+          </div>
+        )}
 
         {/* Content Body */}
         <main className="p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
-          
           {/* ========================================================
-              TAB 1: CLASS ROLL CALL REGISTER (ClassTeacherModule)
+              TAB: DASHBOARD
+              ======================================================== */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Top KPI Grid (max 4 primary KPIs per row, zero-pill, single elevation) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border border-slate-200 rounded-xl p-5">
+                  <div className="text-xs font-medium text-slate-500">Registered Students</div>
+                  <div className="mt-1.5 text-2xl font-bold text-slate-950 font-mono tabular-nums">
+                    {effectiveRoster.length}
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">{streamLabel}</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-5">
+                  <div className="text-xs font-medium text-slate-500">Attendance Rate</div>
+                  <div className="mt-1.5 text-2xl font-bold text-slate-950 font-mono tabular-nums">
+                    {streamWorkspace?.stream?.attendanceRate ?? 0}%
+                  </div>
+                  <div className="mt-1 text-[11px] text-emerald-700 font-medium">
+                    Latest verified class average
+                  </div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-5">
+                  <div className="text-xs font-medium text-slate-500">Academic Mean</div>
+                  <div className="mt-1.5 text-2xl font-bold text-slate-950 font-mono tabular-nums">
+                    {streamWorkspace?.stream?.academicMean ?? 0}%
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500 font-mono tabular-nums">
+                    Syllabus {streamWorkspace?.stream?.syllabusCoverage ?? 0}%
+                  </div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded-xl p-5">
+                  <div className="text-xs font-medium text-slate-500">Open Interventions</div>
+                  <div className="mt-1.5 text-2xl font-bold text-slate-950 font-mono tabular-nums">
+                    {openInterventions.length}
+                  </div>
+                  <div className="mt-1 text-[11px] text-amber-700 font-medium">
+                    {(streamWorkspace?.reports || []).length} reports to Senior Teacher
+                  </div>
+                </div>
+              </div>
+
+              {/* Senior Teacher Feedback & Grade Supervision Card */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <section className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">Senior Teacher Supervision & Feedback</h2>
+                      <p className="text-xs text-slate-500">
+                        Grade Coordinator:{' '}
+                        <span className="font-semibold text-slate-800">
+                          {streamWorkspace?.seniorTeacher?.teacherName || 'Pending Admin Assignment'}
+                        </span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('report_to_senior')}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg cursor-pointer whitespace-nowrap"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Class Report</span>
+                    </button>
+                  </div>
+
+                  {latestReviewAlert ? (
+                    <div className="border border-slate-200 rounded-lg p-4 space-y-1.5 bg-slate-50">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-slate-900">
+                          Latest Feedback on: {latestReviewAlert.reportTitle}
+                        </span>
+                        <span className="font-mono tabular-nums text-slate-500">
+                          {latestReviewAlert.created_at.slice(0, 10)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-700">{latestReviewAlert.comments}</p>
+                      {latestReviewAlert.action_items && (
+                        <p className="text-[11px] font-medium text-amber-800">
+                          Action Item: {latestReviewAlert.action_items}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-xs text-slate-500">
+                      No Senior Teacher feedback posted yet. Submit a weekly or termly class report to receive coordinator review comments.
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('class_register')}
+                      className="px-3 py-2 text-xs font-semibold text-slate-800 border border-slate-200 hover:bg-slate-50 rounded-lg text-left cursor-pointer"
+                    >
+                      Mark Attendance
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('students')}
+                      className="px-3 py-2 text-xs font-semibold text-slate-800 border border-slate-200 hover:bg-slate-50 rounded-lg text-left cursor-pointer"
+                    >
+                      View Students
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('discipline_log')}
+                      className="px-3 py-2 text-xs font-semibold text-slate-800 border border-slate-200 hover:bg-slate-50 rounded-lg text-left cursor-pointer"
+                    >
+                      Log Intervention
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('announcements')}
+                      className="px-3 py-2 text-xs font-semibold text-slate-800 border border-slate-200 hover:bg-slate-50 rounded-lg text-left cursor-pointer"
+                    >
+                      Post Notice
+                    </button>
+                  </div>
+                </section>
+
+                <section className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <h2 className="text-base font-bold text-slate-900">Recent Announcements & Alerts</h2>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('notifications')}
+                      className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
+                    >
+                      View All
+                    </button>
+                  </div>
+                  <div className="divide-y divide-slate-200">
+                    {announcements.slice(0, 3).map((ann) => (
+                      <div key={ann.id} className="py-2.5 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="font-semibold text-slate-700">{ann.author_name}</span>
+                          <span className="font-mono tabular-nums">{ann.created_at.slice(0, 10)}</span>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-900">{ann.title}</div>
+                        <p className="text-[11px] text-slate-600 line-clamp-2">{ann.message}</p>
+                      </div>
+                    ))}
+                    {announcements.length === 0 && (
+                      <div className="py-6 text-xs text-slate-500 text-center">
+                        No grade or stream notices posted yet.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB: MY CLASS
+              ======================================================== */}
+          {activeTab === 'my_class' && (
+            <div className="space-y-6">
+              <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">{streamLabel} — Stream Command</h2>
+                    <p className="text-xs text-slate-500">
+                      Room: {selectedHierarchyStream?.roomLabel || streamLabel} · Capacity{' '}
+                      <span className="font-mono tabular-nums">{selectedHierarchyStream?.capacity || 45}</span> · Senior Coordinator:{' '}
+                      {streamWorkspace?.seniorTeacher?.teacherName || 'Unassigned'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleExportStreamReport('pdf')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print Class PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExportStreamReport('excel')}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-lg cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" />
+                      <span>Export Excel</span>
+                    </button>
+                  </div>
+                </div>
+
+                {selectedHierarchyStream && (
+                  <AcademicMonitoringPanel
+                    streams={[selectedHierarchyStream]}
+                    records={streamWorkspace?.monitoring || []}
+                    onRefresh={() => void refreshAll()}
+                  />
+                )}
+              </section>
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB: STUDENTS ROSTER
+              ======================================================== */}
+          {activeTab === 'students' && (
+            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Registered Students — {streamLabel}</h2>
+                  <p className="text-xs text-slate-500">
+                    <span className="font-mono tabular-nums font-semibold text-slate-800">{effectiveRoster.length}</span>{' '}
+                    active learners enrolled in your assigned stream
+                  </p>
+                </div>
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Filter by name or admission..."
+                    value={rosterSearch}
+                    onChange={(e) => setRosterSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg text-slate-900"
+                  />
+                </div>
+              </div>
+
+              {filteredRoster.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-500">
+                  No learners match your filter in {streamLabel}.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-slate-200 text-slate-500 font-semibold">
+                      <tr>
+                        <th className="py-2.5 pr-3">Adm No.</th>
+                        <th className="py-2.5 pr-3">Learner Name</th>
+                        <th className="py-2.5 pr-3">Parent / Guardian</th>
+                        <th className="py-2.5 pr-3">Contact Phone</th>
+                        <th className="py-2.5 pr-3 text-right">Open Interventions</th>
+                        <th className="py-2.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {filteredRoster.map((stu) => (
+                        <tr key={stu.studentId} className="hover:bg-slate-50/60">
+                          <td className="py-3 pr-3 font-mono tabular-nums text-slate-700">
+                            {stu.admissionNumber || '—'}
+                          </td>
+                          <td className="py-3 pr-3 font-semibold text-slate-900">{stu.studentName}</td>
+                          <td className="py-3 pr-3 text-slate-700">{stu.parentName || '—'}</td>
+                          <td className="py-3 pr-3 font-mono tabular-nums text-slate-600">
+                            {stu.parentPhone || stu.phone || '—'}
+                          </td>
+                          <td className="py-3 pr-3 text-right font-mono tabular-nums">
+                            <span className={stu.openInterventionsCount > 0 ? 'text-amber-700 font-semibold' : 'text-slate-500'}>
+                              {stu.openInterventionsCount || 0}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDisciplineSubTab('interventions');
+                                setActiveTab('discipline_log');
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200 hover:bg-slate-100 rounded-md cursor-pointer"
+                            >
+                              Intervention
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ========================================================
+              TAB: ATTENDANCE (ClassTeacherModule)
               ======================================================== */}
           {activeTab === 'class_register' && (
             <div className="space-y-6">
@@ -441,67 +1045,382 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
           )}
 
           {/* ========================================================
-              TAB 2: CBC MARKS & CBA RESULTS (ResultUploadManager)
+              TAB: ACADEMIC RECORDS (Marksheet + Syllabus Monitoring)
               ======================================================== */}
           {activeTab === 'cbc_results' && (
             <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                   <div>
-                    <h2 className="text-lg font-black text-slate-900 font-serif">
-                      Grade {selectedGrade} ({selectedStream}) CBC Assessment Marksheet
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {streamLabel} — Academic Performance & Syllabus Pacing
                     </h2>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      Upload continuous assessment scores, verify learning area rubrics, and publish formative records.
+                    <p className="text-xs text-slate-500">
+                      Upload learner continuous assessment scores or log weekly subject syllabus coverage to your Senior Teacher.
                     </p>
                   </div>
-                  <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                    CBC CBA Engine Active
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAcademicRecordsSubTab('marksheet')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
+                        academicRecordsSubTab === 'marksheet'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      CBC Marksheet
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAcademicRecordsSubTab('monitoring')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
+                        academicRecordsSubTab === 'monitoring'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      Syllabus & Subject Mean
+                    </button>
+                  </div>
                 </div>
-                <ResultUploadManager
-                  currentUser={currentUser}
-                  defaultGrade={selectedGrade}
-                />
+
+                {academicRecordsSubTab === 'marksheet' ? (
+                  <ResultUploadManager currentUser={currentUser} defaultGrade={selectedGrade} />
+                ) : selectedHierarchyStream ? (
+                  <AcademicMonitoringPanel
+                    streams={[selectedHierarchyStream]}
+                    records={streamWorkspace?.monitoring || []}
+                    onRefresh={() => void refreshAll()}
+                  />
+                ) : (
+                  <div className="text-xs text-slate-500 py-8 text-center">
+                    Assign a stream to log subject syllabus monitoring records.
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* ========================================================
-              TAB 3: TERMLY REPORT CARD REMARKS (Direct Editor)
+              TAB: BEHAVIOUR & INTERVENTIONS
               ======================================================== */}
-          {activeTab === 'report_remarks' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono font-bold bg-blue-50 text-blue-800 px-2 py-0.5 rounded border border-blue-200 uppercase">
-                      Official Remarks Registry
-                    </span>
-                    <span className="text-xs text-slate-500 font-medium">
-                      Term 1 Progress Report Cards
-                    </span>
+          {activeTab === 'discipline_log' && (
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {streamLabel} — Behaviour, Discipline & Student Interventions
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Record pastoral conduct incidents and escalate academic or attendance interventions to the Senior Teacher.
+                    </p>
                   </div>
-                  <h2 className="text-xl font-black text-slate-900 font-serif tracking-tight">
-                    Class Teacher Progress Remarks Manager
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDisciplineSubTab('pastoral')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
+                        disciplineSubTab === 'pastoral'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      Pastoral Register
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDisciplineSubTab('interventions')}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
+                        disciplineSubTab === 'interventions'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      Intervention Plans ({openInterventions.length})
+                    </button>
+                    {disciplineSubTab === 'pastoral' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNewDisciplineModal(true)}
+                        className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                        <span>Record Entry</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {disciplineSubTab === 'pastoral' ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-slate-200 text-slate-500 font-semibold">
+                        <tr>
+                          <th className="py-2.5 pr-3">Date</th>
+                          <th className="py-2.5 pr-3">Learner</th>
+                          <th className="py-2.5 pr-3">Category</th>
+                          <th className="py-2.5 pr-3">Classification</th>
+                          <th className="py-2.5 pr-3">Notes & Observation</th>
+                          <th className="py-2.5">Action Taken</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {disciplineEntries.map((entry) => (
+                          <tr key={entry.id}>
+                            <td className="py-3 pr-3 font-mono tabular-nums text-slate-600 whitespace-nowrap">{entry.date}</td>
+                            <td className="py-3 pr-3 font-semibold text-slate-900">{entry.studentName}</td>
+                            <td className="py-3 pr-3 text-slate-700">{entry.category}</td>
+                            <td className="py-3 pr-3 font-semibold uppercase text-[11px] text-slate-700">{entry.type}</td>
+                            <td className="py-3 pr-3 text-slate-700 max-w-xs">{entry.description}</td>
+                            <td className="py-3 text-slate-600">{entry.actionTaken}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : selectedHierarchyStream ? (
+                  <StudentInterventionsPanel
+                    streams={[selectedHierarchyStream]}
+                    interventions={streamWorkspace?.interventions || []}
+                    onRefresh={() => void refreshAll()}
+                  />
+                ) : null}
+              </div>
+
+              {showNewDisciplineModal && (
+                <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 border border-slate-200">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                      <h3 className="text-base font-bold text-slate-900">Record Learner Pastoral Entry</h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewDisciplineModal(false)}
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleAddDiscipline} className="space-y-3 text-xs">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Select Learner</label>
+                        <select
+                          value={newDisciplineStudentId}
+                          onChange={(e) => setNewDisciplineStudentId(e.target.value)}
+                          className="w-full p-2.5 border border-slate-200 rounded-lg text-slate-900 bg-white"
+                        >
+                          {effectiveRoster.map((s) => (
+                            <option key={s.studentId} value={s.studentId}>
+                              {s.studentName} ({s.admissionNumber || 'Student'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Type</label>
+                          <select
+                            value={newDisciplineType}
+                            onChange={(e) => setNewDisciplineType(e.target.value as any)}
+                            className="w-full p-2.5 border border-slate-200 rounded-lg text-slate-900 bg-white"
+                          >
+                            <option value="merit">Merit</option>
+                            <option value="commendation">Commendation</option>
+                            <option value="counseling">Counseling Referral</option>
+                            <option value="demerit">Infraction Warning</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Category</label>
+                          <input
+                            type="text"
+                            required
+                            value={newDisciplineCategory}
+                            onChange={(e) => setNewDisciplineCategory(e.target.value)}
+                            className="w-full p-2.5 border border-slate-200 rounded-lg text-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Description</label>
+                        <textarea
+                          rows={3}
+                          required
+                          value={newDisciplineDesc}
+                          onChange={(e) => setNewDisciplineDesc(e.target.value)}
+                          placeholder="Describe the incident or achievement..."
+                          className="w-full p-2.5 border border-slate-200 rounded-lg text-slate-900"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Action Taken</label>
+                        <input
+                          type="text"
+                          value={newDisciplineAction}
+                          onChange={(e) => setNewDisciplineAction(e.target.value)}
+                          placeholder="e.g. Parent contacted / counseling referral"
+                          className="w-full p-2.5 border border-slate-200 rounded-lg text-slate-900"
+                        />
+                      </div>
+
+                      <div className="pt-2 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowNewDisciplineModal(false)}
+                          className="px-4 py-2 text-slate-600 font-semibold hover:bg-slate-100 rounded-lg cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg cursor-pointer"
+                        >
+                          Save Record
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB: PARENT COMMUNICATION
+              ======================================================== */}
+          {activeTab === 'parent_comms' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+                <div className="pb-4 border-b border-slate-200">
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {streamLabel} — Parent Communication Hub
                   </h2>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Enter and customize qualitative evaluation remarks printed directly on learners' official termly report cards.
+                  <p className="text-xs text-slate-500">
+                    Send class-specific updates exclusively to parents of learners in {streamLabel}.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <form onSubmit={handleSendNotice} className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+                  <div className="text-xs font-semibold text-slate-900">Broadcast Notice to Stream Parents</div>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Notice Subject..."
+                    value={newNoticeTitle}
+                    onChange={(e) => setNewNoticeTitle(e.target.value)}
+                    className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-lg"
+                  />
+                  <textarea
+                    rows={3}
+                    required
+                    placeholder="Write message to stream parents..."
+                    value={newNoticeMsg}
+                    onChange={(e) => setNewNoticeMsg(e.target.value)}
+                    className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-lg"
+                  />
+                  <div className="flex items-center justify-between gap-3">
+                    <select
+                      value={newNoticeUrgency}
+                      onChange={(e) => setNewNoticeUrgency(e.target.value as any)}
+                      className="p-2 text-xs bg-white border border-slate-200 rounded-lg"
+                    >
+                      <option value="normal">Standard Notice</option>
+                      <option value="important">Important Action</option>
+                      <option value="urgent">Urgent Notice</option>
+                    </select>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      <span>Send to Parents ({effectiveRoster.length})</span>
+                    </button>
+                  </div>
+                </form>
+
+                <div className="divide-y divide-slate-200">
+                  {classAnnouncements.map((ann) => (
+                    <div key={ann.id} className="py-3 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-900">{ann.title}</span>
+                        <span className="font-mono tabular-nums text-[11px] text-slate-500">{ann.date}</span>
+                      </div>
+                      <p className="text-xs text-slate-600">{ann.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <aside className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+                <div className="pb-3 border-b border-slate-200">
+                  <h3 className="text-base font-bold text-slate-900">Stream Parent Directory</h3>
+                  <p className="text-xs text-slate-500">Guardians linked to students in {streamLabel}</p>
+                </div>
+                <div className="divide-y divide-slate-200 max-h-[420px] overflow-y-auto">
+                  {effectiveRoster.map((stu) => (
+                    <div key={stu.studentId} className="py-2.5 text-xs">
+                      <div className="font-semibold text-slate-900">{stu.parentName || 'Parent Record'}</div>
+                      <div className="text-slate-500">
+                        Learner: {stu.studentName} · <span className="font-mono tabular-nums">{stu.parentPhone || stu.phone || '—'}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {effectiveRoster.length === 0 && (
+                    <div className="py-8 text-xs text-slate-500 text-center">No parent contacts loaded yet.</div>
+                  )}
+                </div>
+              </aside>
+            </div>
+          )}
+
+          {/* ========================================================
+              TAB: CLASS REPORTS & TERMLY REMARKS
+              ======================================================== */}
+          {activeTab === 'report_remarks' && (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {streamLabel} — Class Reports & Progress Remarks
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Enter official learner report card remarks or export your tenant-branded Class Stream Dossier.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
                   <button
+                    type="button"
+                    onClick={() => handleExportStreamReport('pdf')}
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Export PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExportStreamReport('excel')}
+                    className="px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Export Excel</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={handleBatchSaveAllRemarks}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-lg inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>Save All Class Remarks</span>
+                    <span>Save All Remarks</span>
                   </button>
                 </div>
               </div>
 
-              {/* Search & Filter */}
               <div className="flex items-center justify-between gap-4">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -510,79 +1429,67 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
                     placeholder="Search pupil by name or admission..."
                     value={remarksSearchQuery}
                     onChange={(e) => setRemarksSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200"
                   />
                 </div>
-                <div className="text-xs text-slate-500 font-medium">
-                  Showing {streamStudents.filter(s => s.name.toLowerCase().includes(remarksSearchQuery.toLowerCase())).length} of {streamStudents.length} Learners
+                <div className="text-xs text-slate-500 font-mono tabular-nums">
+                  {effectiveRoster.length} learners
                 </div>
               </div>
 
-              {/* Roster of Learners with Remarks Editor */}
               <div className="space-y-3">
-                {streamStudents
-                  .filter(stu => stu.name.toLowerCase().includes(remarksSearchQuery.toLowerCase()) || (stu.admissionNumber && stu.admissionNumber.toLowerCase().includes(remarksSearchQuery.toLowerCase())))
-                  .map((stu, sidx) => {
-                    const currentRemark = studentRemarksMap[stu.id] || '';
+                {effectiveRoster
+                  .filter(
+                    (stu) =>
+                      stu.studentName.toLowerCase().includes(remarksSearchQuery.toLowerCase()) ||
+                      (stu.admissionNumber && stu.admissionNumber.toLowerCase().includes(remarksSearchQuery.toLowerCase()))
+                  )
+                  .map((stu) => {
+                    const currentRemark = studentRemarksMap[stu.studentId] || '';
                     return (
-                      <div 
-                        key={stu.id}
-                        className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300 transition-all space-y-3"
-                      >
+                      <div key={stu.studentId} className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                              {stu.name.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="font-bold text-slate-900 text-xs sm:text-sm">
-                                {stu.name}
-                              </div>
-                              <div className="text-[11px] text-slate-500 font-mono">
-                                Adm: {stu.admissionNumber || `ADM-${1000 + sidx}`} • Grade {selectedGrade} ({selectedStream})
-                              </div>
+                          <div>
+                            <div className="font-semibold text-slate-900 text-sm">{stu.studentName}</div>
+                            <div className="text-[11px] text-slate-500 font-mono tabular-nums">
+                              Adm: {stu.admissionNumber || '—'} · {streamLabel}
                             </div>
                           </div>
-
-                          <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                            <button
-                              onClick={() => handleSaveStudentRemarks(stu.id)}
-                              className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 font-bold text-xs rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer"
-                            >
-                              <Save className="w-3 h-3 text-emerald-600" />
-                              <span>Save</span>
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveStudentRemarks(stu.studentId)}
+                            className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 font-semibold text-xs rounded-lg flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                          >
+                            <Save className="w-3 h-3 text-emerald-600" />
+                            <span>Save</span>
+                          </button>
                         </div>
 
-                        {/* Remark Textarea */}
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                            Official Class Teacher Remark:
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={currentRemark}
-                            onChange={(e) => setStudentRemarksMap({
+                        <textarea
+                          rows={2}
+                          value={currentRemark}
+                          onChange={(e) =>
+                            setStudentRemarksMap({
                               ...studentRemarksMap,
-                              [stu.id]: e.target.value
-                            })}
-                            className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans leading-relaxed"
-                          />
-                        </div>
+                              [stu.studentId]: e.target.value,
+                            })
+                          }
+                          className="w-full p-2.5 text-xs bg-white border border-slate-200 rounded-lg"
+                        />
 
-                        {/* Quick Preset Buttons */}
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick Templates:</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase">Templates:</span>
                           {REMARK_PRESETS.map((preset, pidx) => (
                             <button
                               key={pidx}
                               type="button"
-                              onClick={() => setStudentRemarksMap({
-                                ...studentRemarksMap,
-                                [stu.id]: preset
-                              })}
-                              className="px-2 py-0.5 bg-slate-200/70 hover:bg-emerald-100 hover:text-emerald-900 text-[10px] rounded text-slate-700 transition-colors cursor-pointer truncate max-w-[200px]"
+                              onClick={() =>
+                                setStudentRemarksMap({
+                                  ...studentRemarksMap,
+                                  [stu.studentId]: preset,
+                                })
+                              }
+                              className="px-2 py-0.5 bg-white border border-slate-200 hover:border-emerald-300 text-[10px] rounded text-slate-700 cursor-pointer truncate max-w-[200px]"
                               title={preset}
                             >
                               {preset}
@@ -597,314 +1504,85 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({ cu
           )}
 
           {/* ========================================================
-              TAB 4: LEARNER LUNCH REGISTER (LearnerLunchRegister)
+              TAB: REPORT TO SENIOR TEACHER (Structured Academic Escalation)
+              ======================================================== */}
+          {activeTab === 'report_to_senior' && (
+            selectedHierarchyStream ? (
+              <ClassReportComposerAndHistory
+                stream={selectedHierarchyStream}
+                seniorTeacherName={streamWorkspace?.seniorTeacher?.teacherName}
+                defaultStudentsCount={effectiveRoster.length}
+                reports={streamWorkspace?.reports || []}
+                onRefresh={() => void refreshAll()}
+              />
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-xs text-slate-500">
+                An active stream assignment is required before submitting reports to a Senior Teacher.
+              </div>
+            )
+          )}
+
+          {/* ========================================================
+              TAB: ANNOUNCEMENTS
+              ======================================================== */}
+          {activeTab === 'announcements' && (
+            selectedHierarchyGrade && selectedHierarchyStream ? (
+              <GradeAnnouncementsPanel
+                grades={[selectedHierarchyGrade]}
+                streams={[selectedHierarchyStream]}
+                announcements={announcements}
+                defaultGradeId={selectedHierarchyGrade.id}
+                defaultStreamId={selectedHierarchyStream.id}
+                allowAllGrade={false}
+                onCreated={() => void refreshAll()}
+              />
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-xs text-slate-500">
+                No assigned stream announcements available yet.
+              </div>
+            )
+          )}
+
+          {/* ========================================================
+              TAB: NOTIFICATIONS
+              ======================================================== */}
+          {activeTab === 'notifications' && (
+            <AcademicNotificationsPanel
+              notifications={notifications}
+              onRefresh={() => void refreshAll()}
+              onNavigateTab={(t) => {
+                if (t) setActiveTab(t as ClassTeacherTab);
+              }}
+            />
+          )}
+
+          {/* ========================================================
+              PRESERVED ROUTINE TABS
               ======================================================== */}
           {activeTab === 'lunch_register' && (
-            <div className="space-y-6">
-              <LearnerLunchRegister
-                currentUser={currentUser}
-                initialGrade={selectedGrade}
-                initialStream={selectedStream}
-                viewMode="class_teacher"
-                title={`Grade ${selectedGrade} (${selectedStream}) Class Teacher Lunch Register`}
-                subtitle="Official daily midday lunch & dining attendance log. Marked strictly by the respective class teacher."
-              />
-            </div>
+            <LearnerLunchRegister
+              currentUser={currentUser}
+              initialGrade={selectedGrade}
+              initialStream={selectedStream}
+              viewMode="class_teacher"
+              title={`${streamLabel} Learner Lunch Register`}
+              subtitle="Official daily midday lunch attendance log marked strictly by the Class Teacher."
+            />
           )}
 
-          {/* ========================================================
-              TAB 5: CONDUCT & DISCIPLINE LOG
-              ======================================================== */}
-          {activeTab === 'discipline_log' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
-                <div>
-                  <h2 className="text-xl font-black text-slate-900 font-serif tracking-tight">
-                    Grade {selectedGrade} ({selectedStream}) Class Pastoral & Discipline Log
-                  </h2>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    Record merits, commendable achievements, warnings, and counseling interventions for class pupils.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowNewDisciplineModal(true)}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  <span>+ Record Pastoral Entry</span>
-                </button>
-              </div>
+          {activeTab === 'gate_exit' && <StudentGateExit currentUser={currentUser} />}
 
-              {/* Discipline Entries Table */}
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
-                    <tr>
-                      <th className="py-3 px-4">Date</th>
-                      <th className="py-3 px-4">Learner</th>
-                      <th className="py-3 px-4">Category</th>
-                      <th className="py-3 px-4">Classification</th>
-                      <th className="py-3 px-4">Notes & Observation</th>
-                      <th className="py-3 px-4">Action Taken</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {disciplineEntries.map((entry) => (
-                      <tr key={entry.id} className="hover:bg-slate-50/50">
-                        <td className="py-3 px-4 font-mono text-slate-600 whitespace-nowrap">{entry.date}</td>
-                        <td className="py-3 px-4 font-bold text-slate-900">{entry.studentName}</td>
-                        <td className="py-3 px-4 text-slate-700">{entry.category}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            entry.type === 'commendation'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : entry.type === 'merit'
-                              ? 'bg-blue-100 text-blue-800'
-                              : entry.type === 'counseling'
-                              ? 'bg-amber-100 text-amber-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}>
-                            {entry.type}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-700 max-w-xs">{entry.description}</td>
-                        <td className="py-3 px-4 text-slate-600">{entry.actionTaken}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {activeTab === 'timetable' && <TimetablePortal currentUser={currentUser} />}
 
-              {/* Modal to Record New Entry */}
-              {showNewDisciplineModal && (
-                <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-                  <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                      <h3 className="text-base font-black text-slate-900 font-serif">Record Learner Pastoral Entry</h3>
-                      <button 
-                        onClick={() => setShowNewDisciplineModal(false)}
-                        className="text-slate-400 hover:text-slate-600"
-                      >
-                        ✕
-                      </button>
-                    </div>
+          {activeTab === 'virtual_classrooms' && <SubjectTeacherVirtualLessonsPanel />}
 
-                    <form onSubmit={handleAddDiscipline} className="space-y-3 text-xs">
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Select Learner</label>
-                        <select
-                          value={newDisciplineStudentId}
-                          onChange={(e) => setNewDisciplineStudentId(e.target.value)}
-                          className="w-full p-2.5 border border-slate-300 rounded-xl text-slate-900"
-                        >
-                          {streamStudents.map(s => (
-                            <option key={s.id} value={s.id}>{s.name} ({s.admissionNumber || 'Student'})</option>
-                          ))}
-                        </select>
-                      </div>
+          {activeTab === 'library_contents' && <TeacherLibraryPortal currentUser={currentUser} />}
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Type</label>
-                          <select
-                            value={newDisciplineType}
-                            onChange={(e) => setNewDisciplineType(e.target.value as any)}
-                            className="w-full p-2.5 border border-slate-300 rounded-xl text-slate-900"
-                          >
-                            <option value="merit">Merit</option>
-                            <option value="commendation">Commendation</option>
-                            <option value="counseling">Counseling Referral</option>
-                            <option value="demerit">Infraction Warning</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Category</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="e.g. Orderliness"
-                            value={newDisciplineCategory}
-                            onChange={(e) => setNewDisciplineCategory(e.target.value)}
-                            className="w-full p-2.5 border border-slate-300 rounded-xl text-slate-900"
-                          />
-                        </div>
-                      </div>
+          {activeTab === 'work_entry' && <TeacherWorkEntryForm currentUser={currentUser} />}
 
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Description</label>
-                        <textarea
-                          rows={3}
-                          required
-                          placeholder="Describe the incident or commendable achievement..."
-                          value={newDisciplineDesc}
-                          onChange={(e) => setNewDisciplineDesc(e.target.value)}
-                          className="w-full p-2.5 border border-slate-300 rounded-xl text-slate-900"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Action Taken</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Parent notified via SMS / Certificate issued"
-                          value={newDisciplineAction}
-                          onChange={(e) => setNewDisciplineAction(e.target.value)}
-                          className="w-full p-2.5 border border-slate-300 rounded-xl text-slate-900"
-                        />
-                      </div>
-
-                      <div className="pt-2 flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowNewDisciplineModal(false)}
-                          className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-xl"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
-                        >
-                          Save Record
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ========================================================
-              TAB 6: STUDENT GATE EXIT AUTHORIZATION (StudentGateExit)
-              ======================================================== */}
-          {activeTab === 'gate_exit' && (
-            <div className="space-y-6">
-              <StudentGateExit currentUser={currentUser} />
-            </div>
-          )}
-
-          {/* ========================================================
-              TAB 7: CLASS PARENT NOTICES & COMMS
-              ======================================================== */}
-          {activeTab === 'parent_comms' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-              <div className="pb-5 border-b border-slate-200">
-                <h2 className="text-xl font-black text-slate-900 font-serif tracking-tight">
-                  Grade {selectedGrade} ({selectedStream}) Parent Communication Hub
-                </h2>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Broadcast class-specific announcements, homework supply reminders, and meeting notices to parents of this stream.
-                </p>
-              </div>
-
-              {/* Compose New Announcement Form */}
-              <form onSubmit={handleSendNotice} className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4">
-                <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-emerald-600" />
-                  <span>Draft Class Parent Announcement (Dispatched via Portal & SMS)</span>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Subject / Header</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Science Project Materials Needed for Wednesday"
-                    value={newNoticeTitle}
-                    onChange={(e) => setNewNoticeTitle(e.target.value)}
-                    className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Message Content</label>
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder="Type announcement to parents..."
-                    value={newNoticeMsg}
-                    onChange={(e) => setNewNoticeMsg(e.target.value)}
-                    className="w-full p-2.5 text-xs bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 leading-relaxed"
-                  />
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600">Urgency:</span>
-                    <select
-                      value={newNoticeUrgency}
-                      onChange={(e) => setNewNoticeUrgency(e.target.value as any)}
-                      className="p-1.5 text-xs bg-white border border-slate-300 rounded-lg text-slate-800"
-                    >
-                      <option value="normal">Normal</option>
-                      <option value="important">Important</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Bell className="w-3.5 h-3.5" />
-                    <span>Send Announcement to {streamStudents.length} Parents</span>
-                  </button>
-                </div>
-              </form>
-
-              {/* Published Announcements History */}
-              <div className="space-y-3">
-                <h3 className="font-bold text-xs text-slate-900 uppercase tracking-wider">Dispatched Notices History</h3>
-                {classAnnouncements.map((ann) => (
-                  <div key={ann.id} className="p-4 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-xs text-slate-900 font-serif">{ann.title}</h4>
-                      <span className="text-[10px] font-mono text-slate-500">{ann.date}</span>
-                    </div>
-                    <p className="text-xs text-slate-700 leading-relaxed">{ann.message}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-500 pt-1">
-                      <span>Delivered to {ann.recipientsCount} Parent Portals</span>
-                      <span>•</span>
-                      <span className="font-bold text-emerald-700 uppercase">{ann.urgency}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================
-              TAB 8: CLASS TIMETABLE & ROUTINE (TimetablePortal)
-              ======================================================== */}
-          {activeTab === 'timetable' && (
-            <div className="space-y-6">
-              <TimetablePortal currentUser={currentUser} />
-            </div>
-          )}
-
-          {/* ========================================================
-              TAB 9: TEACHER WORK ENTRY (TeacherWorkEntryForm)
-              ======================================================== */}
-          {activeTab === 'work_entry' && (
-            <div className="space-y-6">
-              <TeacherWorkEntryForm currentUser={currentUser} />
-            </div>
-          )}
-
-          {/* ========================================================
-              TAB 10: STAFF APPRAISAL (StaffAppraisalModule)
-              ======================================================== */}
-          {activeTab === 'staff_appraisal' && (
-            <div className="space-y-6">
-              <OwnStaffAppraisal currentUser={currentUser} />
-            </div>
-          )}
-
+          {activeTab === 'staff_appraisal' && <OwnStaffAppraisal currentUser={currentUser} />}
         </main>
-
       </div>
-
     </div>
   );
 };

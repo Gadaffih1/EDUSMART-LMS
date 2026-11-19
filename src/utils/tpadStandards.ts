@@ -1,4 +1,5 @@
 import type { TPADStandardRating } from '../types';
+import { ClientDataStore } from './clientDataStore';
 
 type TpadStandardSeed = Omit<
   TPADStandardRating,
@@ -6,11 +7,6 @@ type TpadStandardSeed = Omit<
 >;
 
 export function loadTpadStandards(): TpadStandardSeed[] {
-  try {
-    const raw = localStorage.getItem('edusmart_tpad_standards_v1');
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed as TpadStandardSeed[] : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<TpadStandardSeed[]>('edusmart_tpad_standards_v1', []);
+  return Array.isArray(data) ? data : [];
 }

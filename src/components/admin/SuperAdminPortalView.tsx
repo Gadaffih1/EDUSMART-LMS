@@ -10,7 +10,6 @@ import {
   CreditCard,
   Plus,
   Settings,
-  BarChart3,
   CheckCircle2,
   Clock,
   AlertTriangle,
@@ -25,13 +24,20 @@ import {
   Save,
   Maximize2,
   Menu,
-  LogOut
+  LogOut,
+  FlaskConical,
+  Database,
+  Download,
+  UserCheck,
+  GraduationCap
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { listPlatformAdmins } from '../../utils/platformAdminAuth';
 import { User, GradeLevel, StreamName, PRIMARY_STREAMS, getStreamsForGrade } from '../../types';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { SuperAdminDashboard, type SuperTab } from './SuperAdminDashboard';
 import { SuperAdminActionMenu, type SuperAdminTab } from './SuperAdminActionMenu';
 import { CampusSwitcherWindow } from '../layout/CampusSwitcherWindow';
@@ -39,47 +45,92 @@ import { PlatformStudioCustomizer } from './PlatformStudioCustomizer';
 import { SuperAdminOperationsControl } from './SuperAdminOperationsControl';
 import { DocumentRequestsHub } from './DocumentRequestsHub';
 import { PlatformAdminSettings } from './PlatformAdminSettings';
+import { VirtualLabApprovalsPanel } from './VirtualLabApprovalsPanel';
+import { PWAAnalyticsPanel } from './PWAAnalyticsPanel';
+import { GradeStreamManagementConsole } from '../academic-hierarchy/GradeStreamManagementConsole';
 
 interface SuperAdminPortalViewProps {
   onEnterSchool?: (schoolId: string) => void;
+  onSwitchRoleAndEnter?: (user: User, schoolId: string) => Promise<void> | void;
   onBackToLanding?: () => void;
   onSignOut?: () => void;
 }
 
 export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
   onEnterSchool,
+  onSwitchRoleAndEnter,
   onBackToLanding,
   onSignOut
 }) => {
-  const { currentTenant, allTenants, switchTenant } = useTenant();
+  const { currentTenant, allTenants, switchTenant, updateTenant } = useTenant();
   const [showCampusSwitcher, setShowCampusSwitcher] = useState<boolean>(false);
+  const [showRoleSwitcher, setShowRoleSwitcher] = useState<boolean>(false);
+  const [roleSwitchSchoolId, setRoleSwitchSchoolId] = useState<string>(currentTenant.id);
+  const [roleSwitchQuery, setRoleSwitchQuery] = useState<string>('');
+  const [switchingRole, setSwitchingRole] = useState<boolean>(false);
+  const [enteringSchoolId, setEnteringSchoolId] = useState<string | null>(null);
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeConsoleTab, setActiveConsoleTab] = useState<SuperAdminTab>(() => {
-    const stored = sessionStorage.getItem('edusmart_super_admin_tab');
-    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'branding', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'settings'];
+    const stored = ClientDataStore.getPreference<string>('edusmart_super_admin_tab', 'overview');
+    const allowed: SuperAdminTab[] = ['overview', 'operations', 'customizer', 'schools', 'grades_streams', 'branding', 'school_settings', 'users', 'spelling', 'categories', 'notify', 'doc_requests', 'vlab_approvals', 'pwa_analytics', 'settings'];
     return allowed.includes(stored as SuperAdminTab) ? stored as SuperAdminTab : 'overview';
   });
   const openConsoleTab = (tab: SuperAdminTab) => {
-    sessionStorage.setItem('edusmart_super_admin_tab', tab);
+    ClientDataStore.setPreference('edusmart_super_admin_tab', tab);
     setActiveConsoleTab(tab);
   };
   const [schoolSearchQuery, setSchoolSearchQuery] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [allUsersState, setAllUsersState] = useState<User[]>(() => Storage.getUsers());
+  const [pendingVlabCount, setPendingVlabCount] = useState<number>(() => {
+    const passes = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+    return Array.isArray(passes) ? passes.filter((p) => p?.status === 'pending_approval').length : 0;
+  });
 
   useEffect(() => {
+    ClientDataStore.apiFetchUsers({ schoolId: 'all' }).catch(() => {});
+    ClientDataStore.loadAllSchoolSettings().catch(() => {});
+
     const handleUsersUpdated = () => {
       setAllUsersState(Storage.getUsers());
     };
+    const handlePassesUpdated = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'edusmart_vlab_ticket_passes') {
+        const passes = ClientDataStore.getCollection<any[]>('edusmart_vlab_ticket_passes', []);
+        setPendingVlabCount(
+          Array.isArray(passes) ? passes.filter((p) => p?.status === 'pending_approval').length : 0
+        );
+      }
+    };
     window.addEventListener('users-updated', handleUsersUpdated);
-    return () => window.removeEventListener('users-updated', handleUsersUpdated);
+    window.addEventListener('edusmart:data-changed', handlePassesUpdated);
+    return () => {
+      window.removeEventListener('users-updated', handleUsersUpdated);
+      window.removeEventListener('edusmart:data-changed', handlePassesUpdated);
+    };
   }, []);
+
+  const [exportingMysql, setExportingMysql] = useState<boolean>(false);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4500);
+  };
+
+  const handleExportMySqlDump = async () => {
+    if (exportingMysql) return;
+    setExportingMysql(true);
+    try {
+      const result = await ClientDataStore.downloadMySqlDump();
+      triggerToast(`Downloaded ${result.filename} (${result.tableCount} tables, ${result.totalRows.toLocaleString()} rows)`);
+    } catch (err: any) {
+      triggerToast(err?.message || 'Failed to export MySQL database dump.');
+    } finally {
+      setExportingMysql(false);
+    }
   };
 
   const platformAdmin = listPlatformAdmins().find((admin) => admin.isActive && admin.accessScope === 'super_admin_only');
@@ -96,7 +147,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
     : allUsersState.find(u => u.role === 'admin') || {
         id: 'usr-admin-root',
         name: 'Super Administrator',
-        email: 'admin@edutech.ac.ke',
+        email: 'admin@edusmart.ac.ke',
         role: 'admin'
       };
 
@@ -121,7 +172,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           {/* Brand & Platform Admin Badge */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="bg-white p-1 sm:p-1.5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center shrink-0">
-              <EduSmartGadsaLogo variant="emblem" size="sm" />
+              <EduSmartGadsaLogo forceSystemLogo variant="emblem" size="sm" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -142,6 +193,36 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           {/* Actions & Platform Owner User Profile */}
           <div className="flex items-center gap-1 sm:gap-3 shrink-0">
             
+            {/* Export Complete MySQL Dump (.sql) to PC */}
+            <button
+              type="button"
+              onClick={handleExportMySqlDump}
+              disabled={exportingMysql}
+              className="px-2 sm:px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl border border-emerald-700 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              title="Download full central database as a MySQL 8.0+ / MariaDB (.sql) dump file"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden md:inline">{exportingMysql ? 'Exporting SQL…' : 'Export MySQL (.sql)'}</span>
+              <span className="md:hidden">.SQL</span>
+            </button>
+
+            {/* Super Admin Exclusive Switch Role Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setRoleSwitchSchoolId(currentTenant.id);
+                setRoleSwitchQuery('');
+                setShowRoleSwitcher(true);
+              }}
+              className="px-2 sm:px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Switch to any school role (Super Admin Exclusive)"
+              aria-label="Switch Role"
+            >
+              <UserCheck className="w-4 h-4 text-slate-600" />
+              <span className="hidden sm:inline">Switch Role</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+            </button>
+
             {/* Visual Customizer & CMS Studio Button */}
             <button
               onClick={() => setShowCampusSwitcher(true)}
@@ -215,6 +296,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
           onCloseMobile={() => setMobileMenuOpen(false)}
           schoolCount={allTenants.length}
           userCount={allUsersState.length}
+          pendingVlabCount={pendingVlabCount}
         />
         <div className="min-w-0 flex-1 overflow-y-auto">
 
@@ -224,33 +306,45 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       <section className="bg-gradient-to-br from-white via-white to-blue-50/70 border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-6">
         <div className="max-w-7xl mx-auto space-y-6">
           
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
-              aria-label="Open platform menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">
-                {activeConsoleTab === 'overview' && 'Platform Overview'}
-                {activeConsoleTab === 'operations' && 'Finance & Operations'}
-                {activeConsoleTab === 'customizer' && 'Platform Studio'}
-                {activeConsoleTab === 'schools' && 'Schools & Tenancy'}
-                {activeConsoleTab === 'branding' && 'Logo & Background'}
-                {activeConsoleTab === 'users' && 'Users & Staff'}
-                {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
-                {activeConsoleTab === 'categories' && 'Categories'}
-                {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
-                {activeConsoleTab === 'doc_requests' && 'Document Requests'}
-                {activeConsoleTab === 'settings' && 'Account Settings'}
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600">
-                Manage all schools, subscriptions and platform settings.
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 lg:hidden"
+                aria-label="Open platform menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">
+                  {activeConsoleTab === 'overview' && 'Platform Overview'}
+                  {activeConsoleTab === 'operations' && 'Finance & Operations'}
+                  {activeConsoleTab === 'customizer' && 'Platform Studio'}
+                  {activeConsoleTab === 'schools' && 'Schools & Tenancy'}
+                  {activeConsoleTab === 'grades_streams' && 'Grades & Streams Management'}
+                  {activeConsoleTab === 'branding' && 'Logo & Background'}
+                  {activeConsoleTab === 'school_settings' && 'Tenant School Settings'}
+                  {activeConsoleTab === 'users' && 'Users & Staff'}
+                  {activeConsoleTab === 'spelling' && 'Spelling Corrector'}
+                  {activeConsoleTab === 'categories' && 'Categories'}
+                  {activeConsoleTab === 'notify' && 'Broadcast Alerts'}
+                  {activeConsoleTab === 'doc_requests' && 'Document Requests'}
+                  {activeConsoleTab === 'vlab_approvals' && 'Virtual Lab Approvals'}
+                  {activeConsoleTab === 'pwa_analytics' && 'PWA App & Installs'}
+                  {activeConsoleTab === 'settings' && 'Account Settings'}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600">
+                  Manage all schools, subscriptions and platform settings.
+                </p>
+              </div>
             </div>
+            {toastMessage && (
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-900 shadow-xs">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                <span>{toastMessage}</span>
+              </div>
+            )}
           </div>
 
           {/* 4 Metric Cards (Matching Panel 4 in User Diagram) */}
@@ -357,16 +451,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                         <tr key={school.id} className="hover:bg-blue-50/50 transition-colors">
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-3">
-                              <div 
-                                className="w-8 h-8 rounded-lg shrink-0 border border-slate-200 flex items-center justify-center p-0.5"
-                                style={{ backgroundColor: school.backgroundColor || '#ffffff' }}
-                              >
-                                {school.logoUrl ? (
-                                  <img src={school.logoUrl} alt={school.name} className="w-full h-full object-contain" />
-                                ) : (
-                                  <School className="w-4 h-4 text-slate-700" />
-                                )}
-                              </div>
+                              <TenantSchoolLogo variant="emblem" size="xs" tenantOverride={school} />
                               <div>
                                 <div className="font-bold text-slate-900 text-xs sm:text-sm">{school.name}</div>
                                 <div className="text-[10px] text-slate-500">{school.city} · {school.code}</div>
@@ -376,10 +461,18 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 
                           <td className="py-3.5 px-3">
                             {isPending ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateTenant(school.id, { status: 'active', expiryDate: '31 Dec 2026' });
+                                  triggerToast(`${school.name} approved and activated.`);
+                                }}
+                                title="Click to approve and activate this school"
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 hover:bg-emerald-50 text-amber-800 hover:text-emerald-800 border border-amber-200 hover:border-emerald-300 transition-colors cursor-pointer"
+                              >
                                 <Clock className="w-3 h-3" />
-                                <span>Pending</span>
-                              </span>
+                                <span>Pending · Approve</span>
+                              </button>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                                 <CheckCircle2 className="w-3 h-3" />
@@ -406,14 +499,21 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
 
                           <td className="py-3.5 px-4 text-right">
                             <button
-                              onClick={() => {
-                                switchTenant(school.id);
-                                onEnterSchool?.(school.id);
+                              type="button"
+                              disabled={enteringSchoolId === school.id}
+                              onClick={async () => {
+                                setEnteringSchoolId(school.id);
+                                try {
+                                  await switchTenant(school.id);
+                                  onEnterSchool?.(school.id);
+                                } finally {
+                                  setEnteringSchoolId(null);
+                                }
                               }}
-                              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 ml-auto cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 ml-auto cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                               title={`Enter ${school.name} Workspace as Platform Owner`}
                             >
-                              <span>Enter School</span>
+                              <span>{enteringSchoolId === school.id ? 'Entering...' : 'Enter School'}</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </td>
@@ -468,6 +568,27 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
+                  {/* Action 0.6: Virtual Lab Approvals */}
+                  <button
+                    onClick={() => openConsoleTab('vlab_approvals')}
+                    className="w-full p-3 bg-amber-50/70 hover:bg-amber-50 border border-amber-200 hover:border-amber-300 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform font-bold">
+                      <FlaskConical className="w-5 h-5 text-slate-950" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-bold text-xs text-slate-900 group-hover:text-amber-900 transition-colors flex items-center justify-between gap-1.5">
+                        <span>Virtual Lab Payment Approvals</span>
+                        {pendingVlabCount > 0 && (
+                          <span className="text-[9px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded-full font-black">
+                            {pendingVlabCount} pending
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-600">Paybill 400200 · Account 1164798 verification</div>
+                    </div>
+                  </button>
+
                   {/* Action 1: Add New School */}
                   <button
                     onClick={() => openConsoleTab('schools')}
@@ -482,9 +603,23 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
+                  {/* Action 1.5: Manage Grades & Streams */}
+                  <button
+                    onClick={() => openConsoleTab('grades_streams')}
+                    className="w-full p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <GraduationCap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 group-hover:text-blue-800 transition-colors">Manage Grades &amp; Streams</div>
+                      <div className="text-[10px] text-slate-600">Add, edit, or remove grades &amp; streams across any school</div>
+                    </div>
+                  </button>
+
                   {/* Action 2: Manage Subscriptions */}
                   <button
-                    onClick={() => alert("Subscription Management: View institutional contracts, M-Pesa billing, and invoice dispatch.")}
+                    onClick={() => openConsoleTab('operations')}
                     className="w-full p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
                   >
                     <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
@@ -510,17 +645,21 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                     </div>
                   </button>
 
-                  {/* Action 4: View Reports */}
+                  {/* Action 4: Download MySQL Dump to PC */}
                   <button
-                    onClick={() => alert("Platform Analytics Report: Monthly active learners: 4,840. Total assessments logged: 19,412. Server latency: 34ms.")}
-                    className="w-full p-3 bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-blue-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group"
+                    type="button"
+                    onClick={handleExportMySqlDump}
+                    disabled={exportingMysql}
+                    className="w-full p-3 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 rounded-xl text-left flex items-center gap-3 transition-all cursor-pointer group disabled:opacity-60"
                   >
-                    <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-700 border border-violet-100 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                      <BarChart3 className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Database className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="font-bold text-xs text-slate-900 group-hover:text-blue-800 transition-colors">View Reports</div>
-                      <div className="text-[10px] text-slate-600">Platform usage, bandwidth and revenue</div>
+                      <div className="font-bold text-xs text-emerald-950">
+                        {exportingMysql ? 'Generating MySQL Dump…' : 'Export MySQL Dump (.sql)'}
+                      </div>
+                      <div className="text-[10px] text-emerald-800">Download full database backup to this PC</div>
                     </div>
                   </button>
 
@@ -560,6 +699,18 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           <DocumentRequestsHub currentUser={superAdminUser} />
         </main>
+      ) : activeConsoleTab === 'vlab_approvals' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <VirtualLabApprovalsPanel />
+        </main>
+      ) : activeConsoleTab === 'grades_streams' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <GradeStreamManagementConsole allowCampusSelection defaultMode="grades" />
+        </main>
+      ) : activeConsoleTab === 'pwa_analytics' ? (
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          <PWAAnalyticsPanel />
+        </main>
       ) : activeConsoleTab === 'settings' ? (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
           {platformAdmin ? (
@@ -597,7 +748,122 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
       <CampusSwitcherWindow
         isOpen={showCampusSwitcher}
         onClose={() => setShowCampusSwitcher(false)}
+        onEnterCampus={(schoolId) => {
+          setShowCampusSwitcher(false);
+          onEnterSchool?.(schoolId);
+        }}
       />
+
+      {showRoleSwitcher && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[88vh] flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-blue-700" />
+                  <span>Super Admin Role &amp; Portal Switcher</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Preview and enter any tenant school portal using an authorized role profile. Only visible to Super Admins.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRoleSwitcher(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70"
+                aria-label="Close Role Switcher"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-slate-200 space-y-3 bg-white">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Target School Campus
+                  </label>
+                  <select
+                    value={roleSwitchSchoolId}
+                    onChange={(e) => setRoleSwitchSchoolId(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-900 font-medium"
+                  >
+                    {allTenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Filter User or Role
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={roleSwitchQuery}
+                      onChange={(e) => setRoleSwitchQuery(e.target.value)}
+                      placeholder="Search name, email, or role..."
+                      className="w-full pl-8 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-white text-slate-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100">
+              {allUsersState
+                .filter((u) => {
+                  const matchesSchool = !u.schoolId || u.schoolId === roleSwitchSchoolId || roleSwitchSchoolId === 'school-edusmart-main';
+                  if (!matchesSchool) return false;
+                  if (!roleSwitchQuery.trim()) return true;
+                  const q = roleSwitchQuery.trim().toLowerCase();
+                  return (
+                    u.name.toLowerCase().includes(q) ||
+                    u.email.toLowerCase().includes(q) ||
+                    u.role.toLowerCase().includes(q)
+                  );
+                })
+                .slice(0, 60)
+                .map((targetUser) => (
+                  <div key={`${roleSwitchSchoolId}-${targetUser.id}`} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 truncate">{targetUser.name}</div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-2 truncate">
+                        <span className="font-mono">{targetUser.email}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="uppercase font-semibold text-blue-700">{targetUser.role.replace(/_/g, ' ')}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={switchingRole}
+                      onClick={async () => {
+                        setSwitchingRole(true);
+                        try {
+                          if (onSwitchRoleAndEnter) {
+                            await onSwitchRoleAndEnter(targetUser, roleSwitchSchoolId);
+                          } else {
+                            await switchTenant(roleSwitchSchoolId);
+                            onEnterSchool?.(roleSwitchSchoolId);
+                          }
+                          setShowRoleSwitcher(false);
+                        } finally {
+                          setSwitchingRole(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-900 hover:bg-slate-800 text-white shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      Enter Portal
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

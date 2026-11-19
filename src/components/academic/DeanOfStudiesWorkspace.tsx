@@ -384,8 +384,8 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>
@@ -690,8 +690,31 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
             </button>
           </div>
 
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs">
+          {/* Mobile Stacked Exam Schedule Cards */}
+          <div className="md:hidden space-y-2.5 text-xs">
+            {examSchedules.map((ex) => (
+              <div key={`dean-mob-${ex.id}`} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-bold text-slate-900">{ex.name}</div>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0 ${
+                    ex.status === 'Completed' ? 'bg-slate-200 text-slate-600' :
+                    ex.status === 'Scheduled' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {ex.status}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-600">
+                  <span className="font-semibold text-emerald-800">{ex.type}</span> · {ex.gradesTargeted}
+                </div>
+                <div className="text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-200/70">
+                  Term {ex.term} · {ex.startDate} to {ex.endDate}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+            <table className="w-full text-left text-xs min-w-[600px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-2.5 px-3">Assessment Title</th>

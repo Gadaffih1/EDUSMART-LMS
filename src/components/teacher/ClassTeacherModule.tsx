@@ -511,8 +511,8 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
           </div>
 
           {/* Student Register Table */}
-          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
-            <table className="w-full text-left text-xs">
+          <div className="border border-slate-200 rounded-2xl overflow-x-auto bg-white shadow-xs">
+            <table className="w-full text-left text-xs min-w-[680px]">
               <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4 w-12 text-center">#</th>
@@ -746,46 +746,81 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
 
           {/* Student Cumulative Attendance Table */}
           <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
-            <div className="p-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between text-xs font-bold text-slate-800">
+            <div className="p-4 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-800">
               <span>Cumulative Term Attendance by Student</span>
               <span className="text-slate-500 font-normal">Based on all {allStreamRecords.length} marked days</span>
             </div>
 
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-2.5 px-4">Learner Name</th>
-                  <th className="py-2.5 px-4">Admission No.</th>
-                  <th className="py-2.5 px-4 text-center">Days Present</th>
-                  <th className="py-2.5 px-4 text-center">Days Absent</th>
-                  <th className="py-2.5 px-4 text-center">Days Excused</th>
-                  <th className="py-2.5 px-4 text-center">Attendance %</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {streamStudents.map(stu => {
-                  const summary = Storage.getStudentAttendanceSummary(stu.id);
-                  return (
-                    <tr key={stu.id} className="hover:bg-slate-50">
-                      <td className="py-2.5 px-4 font-bold text-slate-900">{stu.name}</td>
-                      <td className="py-2.5 px-4 font-mono text-slate-600">{stu.admissionNumber}</td>
-                      <td className="py-2.5 px-4 text-center font-mono font-bold text-emerald-700">
-                        {summary.daysPresent}
-                      </td>
-                      <td className="py-2.5 px-4 text-center font-mono font-bold text-rose-700">
-                        {summary.daysAbsent}
-                      </td>
-                      <td className="py-2.5 px-4 text-center font-mono text-blue-700">
-                        {summary.daysExcused}
-                      </td>
-                      <td className="py-2.5 px-4 text-center font-mono font-extrabold text-slate-900">
+            <div className="md:hidden divide-y divide-slate-200">
+              {streamStudents.map((stu) => {
+                const summary = Storage.getStudentAttendanceSummary(stu.id);
+                return (
+                  <div key={`mob-cum-${stu.id}`} className="p-3.5 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-slate-900">{stu.name}</div>
+                        <div className="text-[11px] font-mono text-slate-500">{stu.admissionNumber}</div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-900 text-white font-mono font-bold">
                         {summary.attendanceRate}%
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center font-mono bg-slate-50 p-2 rounded-lg">
+                      <div>
+                        <div className="text-[10px] font-sans text-slate-500">Present</div>
+                        <div className="font-bold text-emerald-700">{summary.daysPresent}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-sans text-slate-500">Absent</div>
+                        <div className="font-bold text-rose-700">{summary.daysAbsent}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-sans text-slate-500">Excused</div>
+                        <div className="font-bold text-blue-700">{summary.daysExcused}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[560px]">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-2.5 px-4">Learner Name</th>
+                    <th className="py-2.5 px-4">Admission No.</th>
+                    <th className="py-2.5 px-4 text-center">Days Present</th>
+                    <th className="py-2.5 px-4 text-center">Days Absent</th>
+                    <th className="py-2.5 px-4 text-center">Days Excused</th>
+                    <th className="py-2.5 px-4 text-center">Attendance %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {streamStudents.map(stu => {
+                    const summary = Storage.getStudentAttendanceSummary(stu.id);
+                    return (
+                      <tr key={stu.id} className="hover:bg-slate-50">
+                        <td className="py-2.5 px-4 font-bold text-slate-900">{stu.name}</td>
+                        <td className="py-2.5 px-4 font-mono text-slate-600">{stu.admissionNumber}</td>
+                        <td className="py-2.5 px-4 text-center font-mono font-bold text-emerald-700">
+                          {summary.daysPresent}
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-mono font-bold text-rose-700">
+                          {summary.daysAbsent}
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-mono text-blue-700">
+                          {summary.daysExcused}
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-mono font-extrabold text-slate-900">
+                          {summary.attendanceRate}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -940,8 +975,8 @@ export const ClassTeacherModule: React.FC<ClassTeacherModuleProps> = ({ currentU
               </div>
 
               {/* Subject Breakdown Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[680px]">
                   <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
                     <tr>
                       <th className="py-2.5 px-3">Subject / Learning Area</th>

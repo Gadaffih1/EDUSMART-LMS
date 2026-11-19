@@ -25,6 +25,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { OperationsStorage } from '../../utils/operationsStorage';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { 
   FeeInvoice, 
   FeePaymentReceipt, 
@@ -381,8 +382,56 @@ export const FinancePortalView: React.FC<FinancePortalViewProps> = ({
             </div>
           </div>
 
+          {/* Mobile Stacked Invoice Cards */}
+          <div className="md:hidden space-y-3">
+            {filteredInvoices.map((inv) => (
+              <div key={`mob-inv-${inv.id}`} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-slate-950 font-serif truncate">{inv.studentName}</div>
+                    <div className="text-[11px] font-mono text-slate-500">
+                      {inv.invoiceNumber} · {inv.admissionNumber} · Gr {inv.grade} ({inv.stream})
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                    inv.status === 'Paid in Full'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : inv.status === 'Partially Paid'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                  }`}>
+                    {inv.status}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/70 font-mono">
+                  <div>
+                    <div className="text-[10px] font-sans text-slate-500">Billed</div>
+                    <div className="font-bold text-slate-800">KES {inv.totalAmount.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-sans text-slate-500">Paid</div>
+                    <div className="font-bold text-emerald-700">KES {inv.paidAmount.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-sans text-slate-500">Balance</div>
+                    <div className={inv.balanceAmount === 0 ? 'text-slate-400 font-bold' : 'text-rose-700 font-extrabold'}>
+                      KES {inv.balanceAmount.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleOpenPaymentModal(inv)}
+                  className="w-full min-h-[40px] px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  {inv.balanceAmount === 0 ? 'Add Payment' : 'Record Fee Payment'}
+                </button>
+              </div>
+            ))}
+          </div>
+
           {/* TABLE OF INVOICES */}
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 uppercase font-mono font-bold text-[10px] border-y border-slate-200">
                 <tr>
@@ -465,7 +514,35 @@ export const FinancePortalView: React.FC<FinancePortalViewProps> = ({
             </span>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Stacked Payment Cards */}
+          <div className="md:hidden space-y-3">
+            {payments.map((p) => (
+              <div key={`mob-pay-${p.id}`} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-slate-950 font-serif truncate">{p.studentName}</div>
+                    <div className="text-[11px] font-mono text-blue-700 font-bold">{p.receiptNumber} · {p.paymentDate}</div>
+                  </div>
+                  <span className="font-mono font-black text-emerald-700 shrink-0">
+                    KES {p.amount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1.5 border-t border-slate-200/70">
+                  <span>{p.paymentMethod} · Ref: <strong className="font-mono">{p.referenceNumber}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReceiptForPrint(p)}
+                    className="min-h-[36px] px-3 py-1 rounded-lg bg-slate-900 text-white font-bold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 uppercase font-mono font-bold text-[10px] border-y border-slate-200">
                 <tr>
@@ -861,12 +938,8 @@ export const FinancePortalView: React.FC<FinancePortalViewProps> = ({
                 style={{ borderColor: currentTenant.primaryColorHex || '#1e3a8a' }}
               >
                 {/* School Logo */}
-                <div className="flex justify-center mb-1">
-                  {currentTenant.customLogoBase64 ? (
-                    <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain" />
-                  ) : currentTenant.logoUrl ? (
-                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain" />
-                  ) : null}
+                <div className="flex justify-center mb-1.5">
+                  <TenantSchoolLogo variant="emblem" size="sm" />
                 </div>
                 <div className="font-black text-base font-serif uppercase tracking-tight text-slate-950">{currentTenant.name}</div>
                 <div className="text-[10px] font-serif italic text-slate-700">"{currentTenant.motto}" {currentTenant.taglineNotes ? `· ${currentTenant.taglineNotes}` : ''}</div>

@@ -1,4 +1,4 @@
-import { isRemoteDataActive } from './supabaseHydrate';
+import { ClientDataStore } from './clientDataStore';
 
 export type RegistryNumberKind = 'admission' | 'staff' | 'none';
 
@@ -17,23 +17,17 @@ const SYSTEM_ROLES: SystemRole[] = [];
 const STORAGE_KEY = 'edusmart_system_roles_v1';
 
 function readStored(): SystemRole[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<SystemRole[]>(STORAGE_KEY, []);
+  return Array.isArray(data) ? data : [];
 }
 
 function writeStored(roles: SystemRole[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(roles));
+  ClientDataStore.setCollection(STORAGE_KEY, roles);
 }
 
 function mergedRoles(): SystemRole[] {
   const stored = readStored();
-  if (isRemoteDataActive()) return stored;
+  if (ClientDataStore.isHydrated() && stored.length > 0) return stored;
   const bySlug = new Map<string, SystemRole>();
   for (const role of SYSTEM_ROLES) bySlug.set(role.slug, role);
   for (const role of stored) {

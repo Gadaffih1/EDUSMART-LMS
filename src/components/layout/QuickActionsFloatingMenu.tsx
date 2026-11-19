@@ -35,11 +35,16 @@ import {
   Bell,
   HardDrive,
   Plus,
-  LogOut
+  LogOut,
+  Library
 } from 'lucide-react';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import {
+  canAccessStudentStreamAllocation,
+  canAccessTeacherLibrary,
+  getAdministrativeRoleDisplayName,
+} from '../../utils/subjectTeacherSwitch';
 
 export interface QuickActionItem {
   id: string;
@@ -52,17 +57,46 @@ export interface QuickActionItem {
   badge?: string;
   badgeColor?: string;
   tabTarget?: string;
-  actionType?: 'nav_tab' | 'absence_modal' | 'storage_modal' | 'switch_user' | 'toggle_notif';
+  targetRole?: UserRole | null;
+  actionType?:
+    | 'nav_tab'
+    | 'absence_modal'
+    | 'storage_modal'
+    | 'switch_user'
+    | 'toggle_notif'
+    | 'toggle_subject_teacher'
+    | 'toggle_class_teacher'
+    | 'switch_workspace_role'
+    | 'open_stream_allocator'
+    | 'open_school_library';
 }
 
 interface QuickActionsFloatingMenuProps {
   currentUser: User;
   onSwitchUser?: (user: User) => void;
+  canSwitchToSubjectTeacher?: boolean;
+  isSubjectTeacherMode?: boolean;
+  onToggleSubjectTeacherMode?: () => void;
+  canSwitchToClassTeacher?: boolean;
+  isClassTeacherMode?: boolean;
+  onToggleClassTeacherMode?: () => void;
+  switchedWorkspaceRole?: UserRole | null;
+  switchableRoles?: UserRole[];
+  onSwitchWorkspaceRole?: (role: UserRole | null) => void;
 }
 
 export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> = ({
   currentUser,
-  onSwitchUser
+  onSwitchUser,
+  canSwitchToSubjectTeacher = false,
+  isSubjectTeacherMode = false,
+  onToggleSubjectTeacherMode,
+  canSwitchToClassTeacher = false,
+  isClassTeacherMode = false,
+  onToggleClassTeacherMode,
+  switchedWorkspaceRole = null,
+  switchableRoles = [],
+  onSwitchWorkspaceRole
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,8 +147,11 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
   // Construct Role-Specific Action List
   const roleActions: QuickActionItem[] = useMemo(() => {
-    const role = currentUser.role;
+    const role =
+      switchedWorkspaceRole ||
+      (isSubjectTeacherMode ? 'teacher' : isClassTeacherMode ? 'class_teacher' : currentUser.role);
 
+    const getBaseActions = (): QuickActionItem[] => {
     switch (role) {
       case 'teacher':
       case 'class_teacher':
@@ -1075,7 +1112,141 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
           }
         ];
     }
-  }, [currentUser]);
+    };
+
+    const base = getBaseActions();
+    const switchItems: QuickActionItem[] = [];
+
+    if (canSwitchToClassTeacher && (onToggleClassTeacherMode || onSwitchWorkspaceRole)) {
+      switchItems.push(
+        isClassTeacherMode
+          ? {
+              id: 'return-from-class-teacher',
+              title: `Return to ${getAdministrativeRoleDisplayName(currentUser.role)} Workspace`,
+              subtitle: 'Exit Class Teacher desk and resume primary administrative duties',
+              icon: ArrowRight,
+              iconBg: 'bg-amber-100',
+              iconColor: 'text-amber-700',
+              category: 'primary',
+              badge: 'Primary Role',
+              badgeColor: 'bg-amber-600 text-white',
+              actionType: 'toggle_class_teacher',
+            }
+          : {
+              id: 'switch-to-class-teacher',
+              title: 'Switch as Class Teacher',
+              subtitle: 'Open Class Teacher Command Desk with full rights to your assigned class',
+              icon: UserCheck,
+              iconBg: 'bg-emerald-100',
+              iconColor: 'text-emerald-700',
+              category: 'primary',
+              badge: 'Class Lead',
+              badgeColor: 'bg-emerald-600 text-white',
+              actionType: 'toggle_class_teacher',
+            }
+      );
+    }
+
+    if (canSwitchToSubjectTeacher && (onToggleSubjectTeacherMode || onSwitchWorkspaceRole)) {
+      switchItems.push(
+        isSubjectTeacherMode
+          ? {
+              id: 'return-from-subject-teacher',
+              title: `Return to ${getAdministrativeRoleDisplayName(currentUser.role)} Workspace`,
+              subtitle: 'Exit Subject Teacher workspace and resume primary administrative duties',
+              icon: ArrowRight,
+              iconBg: 'bg-amber-100',
+              iconColor: 'text-amber-700',
+              category: 'primary',
+              badge: 'Admin Mode',
+              badgeColor: 'bg-amber-600 text-white',
+              actionType: 'toggle_subject_teacher',
+            }
+          : {
+              id: 'switch-to-subject-teacher',
+              title: 'Switch as Subject Teacher',
+              subtitle: 'Enter full Subject Teacher workspace with complete teaching, marks & live class rights',
+              icon: BookOpen,
+              iconBg: 'bg-indigo-100',
+              iconColor: 'text-indigo-700',
+              category: 'primary',
+              badge: 'Role Switch',
+              badgeColor: 'bg-indigo-600 text-white',
+              actionType: 'toggle_subject_teacher',
+            }
+      );
+    }
+
+    if (onSwitchWorkspaceRole) {
+      for (const extraRole of switchableRoles) {
+        if (extraRole === 'teacher' || extraRole === 'class_teacher' || extraRole === currentUser.role) {
+          continue;
+        }
+        const isActiveExtra = switchedWorkspaceRole === extraRole;
+        const label = getAdministrativeRoleDisplayName(extraRole);
+        switchItems.push({
+          id: `switch-role-${extraRole}`,
+          title: isActiveExtra
+            ? `Return to ${getAdministrativeRoleDisplayName(currentUser.role)} Workspace`
+            : `Switch to ${label}`,
+          subtitle: isActiveExtra
+            ? `Resume your primary ${getAdministrativeRoleDisplayName(currentUser.role)} workspace`
+            : `Open assigned ${label} workspace with full role rights`,
+          icon: Layers,
+          iconBg: isActiveExtra ? 'bg-amber-100' : 'bg-blue-100',
+          iconColor: isActiveExtra ? 'text-amber-700' : 'text-blue-700',
+          category: 'primary',
+          badge: isActiveExtra ? 'Active Mode' : 'Assigned Role',
+          badgeColor: isActiveExtra ? 'bg-amber-600 text-white' : 'bg-blue-600 text-white',
+          targetRole: isActiveExtra ? null : extraRole,
+          actionType: 'switch_workspace_role',
+        });
+      }
+    }
+
+    if (canAccessTeacherLibrary(currentUser) && role !== 'librarian') {
+      switchItems.push({
+        id: 'school-library-portal',
+        title: 'School Library & Room Booking',
+        subtitle: 'Browse all library books, digital e-books, curated E-links, reservations & book a Library room',
+        icon: Library,
+        iconBg: 'bg-purple-100',
+        iconColor: 'text-purple-700',
+        category: 'academic',
+        badge: 'Library',
+        badgeColor: 'bg-purple-700 text-white',
+        actionType: 'open_school_library',
+      });
+    }
+
+    if (canAccessStudentStreamAllocation(currentUser)) {
+      switchItems.push({
+        id: 'student-stream-allocation-hub',
+        title: 'Student Stream Allocations',
+        subtitle: 'Open CBC Student Stream Assignment Hub (Admin, Grade Senior Teacher & delegated role only)',
+        icon: Users,
+        iconBg: 'bg-sky-100',
+        iconColor: 'text-sky-700',
+        category: 'management',
+        badge: 'CBC Streams',
+        badgeColor: 'bg-sky-600 text-white',
+        actionType: 'open_stream_allocator',
+      });
+    }
+
+    return [...switchItems, ...base];
+  }, [
+    currentUser,
+    canSwitchToSubjectTeacher,
+    isSubjectTeacherMode,
+    onToggleSubjectTeacherMode,
+    canSwitchToClassTeacher,
+    isClassTeacherMode,
+    onToggleClassTeacherMode,
+    switchedWorkspaceRole,
+    switchableRoles,
+    onSwitchWorkspaceRole,
+  ]);
 
   // System Utility Actions available to all logged-in users
   const utilityActions = useMemo<QuickActionItem[]>(() => {
@@ -1092,16 +1263,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
         badgeColor: 'bg-emerald-700 text-white',
         actionType: 'storage_modal'
       },
-      {
-        id: 'switch-user-persona',
-        title: 'Quick Switch User / Role Persona',
-        subtitle: 'Seamlessly test teacher, student, head teacher, dean or admin perspectives',
-        icon: UserIcon,
-        iconBg: 'bg-indigo-100',
-        iconColor: 'text-indigo-700',
-        category: 'utility',
-        actionType: 'switch_user'
-      }
     ];
     return actions;
   }, []);
@@ -1133,13 +1294,56 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       return;
     }
 
-    if (action.actionType === 'switch_user') {
-      // Find switch user button in navbar or dispatch event
-      const switchBtn = document.querySelector('button[title*="Switch User"], button[title*="Quick Switch"]') as HTMLButtonElement | null;
-      if (switchBtn) {
-        switchBtn.click();
-      } else {
-        window.dispatchEvent(new CustomEvent('open-user-switch-modal'));
+    if (action.actionType === 'toggle_subject_teacher') {
+      if (onToggleSubjectTeacherMode) onToggleSubjectTeacherMode();
+      else onSwitchWorkspaceRole?.(isSubjectTeacherMode ? null : 'teacher');
+      setToastMessage(
+        isSubjectTeacherMode
+          ? `Returned to ${getAdministrativeRoleDisplayName(currentUser.role)} workspace`
+          : 'Switched to Subject Teacher workspace'
+      );
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    if (action.actionType === 'toggle_class_teacher') {
+      if (onToggleClassTeacherMode) onToggleClassTeacherMode();
+      else onSwitchWorkspaceRole?.(isClassTeacherMode ? null : 'class_teacher');
+      setToastMessage(
+        isClassTeacherMode
+          ? `Returned to ${getAdministrativeRoleDisplayName(currentUser.role)} workspace`
+          : 'Switched to Class Teacher workspace'
+      );
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    if (action.actionType === 'switch_workspace_role') {
+      const next = action.targetRole ?? null;
+      onSwitchWorkspaceRole?.(next);
+      setToastMessage(
+        next
+          ? `Switched to ${getAdministrativeRoleDisplayName(next)} workspace`
+          : `Returned to ${getAdministrativeRoleDisplayName(currentUser.role)} workspace`
+      );
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    if (action.actionType === 'open_stream_allocator') {
+      if (canAccessStudentStreamAllocation(currentUser)) {
+        window.dispatchEvent(new CustomEvent('open-stream-allocator'));
+        setToastMessage('Opened Student Stream Assignment Hub');
+        setTimeout(() => setToastMessage(null), 3000);
+      }
+      return;
+    }
+
+    if (action.actionType === 'open_school_library') {
+      if (canAccessTeacherLibrary(currentUser)) {
+        window.dispatchEvent(new CustomEvent('open-school-library'));
+        setToastMessage('Opened School Library & Room Booking');
+        setTimeout(() => setToastMessage(null), 3000);
       }
       return;
     }
@@ -1171,6 +1375,9 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
   // Format friendly role title
   const friendlyRoleTitle = useMemo(() => {
+    if (isSubjectTeacherMode) return 'Subject Teacher (Switched)';
+    if (isClassTeacherMode) return 'Class Teacher (Switched)';
+    if (switchedWorkspaceRole) return `${getAdministrativeRoleDisplayName(switchedWorkspaceRole)} (Switched)`;
     switch (currentUser.role) {
       case 'student': return 'Learner';
       case 'parent': return 'Parent';
@@ -1189,7 +1396,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       case 'admin': return 'System Administrator';
       default: return 'Faculty Staff';
     }
-  }, [currentUser]);
+  }, [currentUser, isSubjectTeacherMode, isClassTeacherMode, switchedWorkspaceRole]);
 
   const { 
     isMobileOverlapProtectionEnabled, 
@@ -1203,21 +1410,18 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
 
   return (
     <>
-      {/* ACTION TRIGGER BUTTON (BOTTOM-RIGHT MAIN VIEWPORT OR DOCKED BOTTOM STRIP) */}
+      {/* ACTION TRIGGER BUTTON (CLEARS MOBILE BOTTOM NAV ON < lg) */}
       <aside 
         aria-label="Quick Actions Floating Menu" 
-        className={`fixed z-40 print:hidden flex items-center gap-1.5 transition-all duration-300 ${
-          isMinimizedOnMobile
-            ? 'bottom-3 right-3 sm:bottom-6 sm:right-6'
-            : 'bottom-4 right-4 sm:bottom-6 sm:right-6'
-        }`}
+        className="fixed z-40 print:hidden flex items-center gap-1.5 transition-all duration-300 bottom-16 right-3 sm:bottom-20 sm:right-4 lg:bottom-6 lg:right-6"
       >
         {/* Floating Quick Actions Trigger Pill */}
         <button
+          type="button"
           onClick={() => setIsOpen(prev => !prev)}
           className={`group flex items-center gap-2 rounded-2xl shadow-xl transition-all duration-300 cursor-pointer ${
             isMinimizedOnMobile
-              ? 'p-2 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl bg-slate-900/90 backdrop-blur-xs text-white border border-indigo-400/40 shadow-lg hover:scale-105 active:scale-95'
+              ? 'min-w-[44px] min-h-[44px] p-2.5 sm:px-4 sm:py-2.5 rounded-full sm:rounded-2xl bg-slate-900/95 backdrop-blur-xs text-white border border-indigo-400/40 shadow-lg hover:scale-105 active:scale-95'
               : isOpen 
               ? 'px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-900 text-white ring-2 ring-indigo-500 shadow-indigo-500/25' 
               : 'px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-900 text-white hover:from-indigo-900 hover:to-slate-900 shadow-slate-900/40 hover:shadow-2xl hover:scale-105 active:scale-95 border border-indigo-500/30'
@@ -1230,10 +1434,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
           aria-expanded={isOpen}
         >
           <div className="relative">
-            <span className="flex h-2.5 w-2.5 absolute -top-0.5 -right-0.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
             <div className="w-6 h-6 rounded-lg bg-indigo-500/30 flex items-center justify-center text-amber-400">
               <Zap className="w-4 h-4 fill-amber-400 text-amber-400 transition-transform group-hover:rotate-12" />
             </div>
@@ -1278,7 +1478,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       {isOpen && (
         <div 
           ref={menuRef}
-          className="fixed bottom-20 right-4 sm:right-6 z-40 w-[calc(100vw-2rem)] sm:w-[440px] max-h-[82vh] flex flex-col bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:hidden"
+          className="fixed bottom-28 lg:bottom-20 right-3 sm:right-6 z-50 w-[calc(100vw-1.5rem)] sm:w-[440px] max-h-[75dvh] flex flex-col bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden animate-in fade-in zoom-in-95 duration-150 print:hidden"
         >
           {/* HEADER: Role Badge & Identity */}
           <div className="p-4 sm:px-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shrink-0 border-b border-slate-800">

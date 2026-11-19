@@ -70,11 +70,8 @@ export const SafeSearchModal: React.FC<SafeSearchModalProps> = ({
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex sm:hidden items-center justify-center shadow-xs">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+              <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
             </div>
             <div>
               <div className="flex items-center gap-2">

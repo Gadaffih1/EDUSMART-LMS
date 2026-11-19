@@ -19,9 +19,22 @@ import {
   calculateKenyanPayrollDeductions
 } from '../types/financeOperations';
 import { Storage } from './storage';
+import { ClientDataStore } from './clientDataStore';
 import { SyncEngine } from './syncEngine';
-import { isSupabaseConfigured } from '../lib/supabase';
-import { isRemoteDataActive } from './supabaseHydrate';
+import {
+  INITIAL_FEE_STRUCTURES,
+  INITIAL_GL_ACCOUNTS,
+  INITIAL_BUDGETS,
+  INITIAL_SUPPLIERS,
+  INITIAL_REQUISITIONS,
+  INITIAL_LPOS,
+  INITIAL_INVENTORY,
+  INITIAL_GRNS,
+  INITIAL_SIVS,
+  INITIAL_EMPLOYEES,
+  INITIAL_PAYROLL_RUNS,
+  INITIAL_AUDIT_LOGS
+} from '../data/financeOperationsData';
 
 const STORAGE_KEYS = {
   FEE_STRUCTURES: 'edusmart_ops_fee_structures_v1',
@@ -43,31 +56,18 @@ const STORAGE_KEYS = {
 };
 
 function getStorage<T>(key: string, defaultValue: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      if (isRemoteDataActive()) return Array.isArray(defaultValue) ? [] as T : defaultValue;
-      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
-    }
-    const parsed = JSON.parse(raw);
-    return isSupabaseConfigured && Array.isArray(defaultValue) && !Array.isArray(parsed)
-      ? [] as T
-      : parsed as T;
-  } catch {
-    return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
+  const data = ClientDataStore.getCollection<T>(key, defaultValue);
+  if (Array.isArray(defaultValue) && !Array.isArray(data)) {
+    return [] as unknown as T;
   }
+  return data;
 }
 
 function setStorage<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    SyncEngine.markDirty(key);
-  } catch {
-    // Ignore storage quota errors
-  }
+  ClientDataStore.setCollection(key, value);
 }
 
-// Register every operations collection with the Supabase sync layer.
+// Register every operations collection with the sync layer.
 SyncEngine.register(Object.values(STORAGE_KEYS));
 
 // Generate sample student invoices based on actual registered students
@@ -160,19 +160,19 @@ const INITIAL_FEE_PAYMENTS: FeePaymentReceipt[] = [
 export const OperationsStorage = {
   getInitialSeedCollections(): Record<string, unknown> {
     return {
-      [STORAGE_KEYS.FEE_STRUCTURES]: [],
+      [STORAGE_KEYS.FEE_STRUCTURES]: INITIAL_FEE_STRUCTURES,
       [STORAGE_KEYS.FEE_PAYMENTS]: INITIAL_FEE_PAYMENTS,
-      [STORAGE_KEYS.GL_ACCOUNTS]: [],
-      [STORAGE_KEYS.BUDGETS]: [],
-      [STORAGE_KEYS.SUPPLIERS]: [],
-      [STORAGE_KEYS.REQUISITIONS]: [],
-      [STORAGE_KEYS.LPOS]: [],
-      [STORAGE_KEYS.INVENTORY]: [],
-      [STORAGE_KEYS.GRNS]: [],
-      [STORAGE_KEYS.SIVS]: [],
-      [STORAGE_KEYS.EMPLOYEES]: [],
-      [STORAGE_KEYS.PAYROLL_RUNS]: [],
-      [STORAGE_KEYS.AUDIT_LOGS]: [],
+      [STORAGE_KEYS.GL_ACCOUNTS]: INITIAL_GL_ACCOUNTS,
+      [STORAGE_KEYS.BUDGETS]: INITIAL_BUDGETS,
+      [STORAGE_KEYS.SUPPLIERS]: INITIAL_SUPPLIERS,
+      [STORAGE_KEYS.REQUISITIONS]: INITIAL_REQUISITIONS,
+      [STORAGE_KEYS.LPOS]: INITIAL_LPOS,
+      [STORAGE_KEYS.INVENTORY]: INITIAL_INVENTORY,
+      [STORAGE_KEYS.GRNS]: INITIAL_GRNS,
+      [STORAGE_KEYS.SIVS]: INITIAL_SIVS,
+      [STORAGE_KEYS.EMPLOYEES]: INITIAL_EMPLOYEES,
+      [STORAGE_KEYS.PAYROLL_RUNS]: INITIAL_PAYROLL_RUNS,
+      [STORAGE_KEYS.AUDIT_LOGS]: INITIAL_AUDIT_LOGS,
     };
   },
 
@@ -180,23 +180,20 @@ export const OperationsStorage = {
   // 1. FINANCE & BILLING
   // =========================================================================
   getFeeStructures(tenantId: string = 'tenant-riara'): FeeStructureItem[] {
-    return getStorage<FeeStructureItem[]>(STORAGE_KEYS.FEE_STRUCTURES, []);
+    return getStorage<FeeStructureItem[]>(
+      STORAGE_KEYS.FEE_STRUCTURES,
+      []
+    );
   },
 
   getFeeInvoices(tenantId: string = 'tenant-riara'): FeeInvoice[] {
     const invoices = getStorage<FeeInvoice[]>(STORAGE_KEYS.FEE_INVOICES, []);
-    if (invoices.length === 0) {
-      if (isSupabaseConfigured) return [];
-      const generated = generateInitialInvoices();
-      setStorage(STORAGE_KEYS.FEE_INVOICES, generated);
-      return generated.filter(i => !tenantId || i.tenantId === tenantId);
-    }
     return invoices.filter(i => !tenantId || i.tenantId === tenantId);
   },
 
   getStudentFeeAccounts(tenantId: string = 'tenant-riara'): StudentFeeAccount[] {
     const invoices = this.getFeeInvoices(tenantId);
-    if (isSupabaseConfigured && invoices.length === 0) return [];
+    if (invoices.length === 0) return [];
     const users = Storage.getUsers().filter(u => u.role === 'student');
     
     return users.map(u => {
@@ -229,10 +226,8 @@ export const OperationsStorage = {
   },
 
   getFeePayments(tenantId: string = 'tenant-riara'): FeePaymentReceipt[] {
-    return getStorage<FeePaymentReceipt[]>(
-      STORAGE_KEYS.FEE_PAYMENTS,
-      isSupabaseConfigured ? [] : INITIAL_FEE_PAYMENTS
-    ).filter(p => !tenantId || p.tenantId === tenantId);
+    return getStorage<FeePaymentReceipt[]>(STORAGE_KEYS.FEE_PAYMENTS, [])
+      .filter(p => !tenantId || p.tenantId === tenantId);
   },
 
   addFeePayment(paymentData: Omit<FeePaymentReceipt, 'id' | 'receiptNumber'> & { receiptNumber?: string }): FeePaymentReceipt {
@@ -291,14 +286,16 @@ export const OperationsStorage = {
   },
 
   getBudgetAllocations(tenantId: string = 'tenant-riara'): BudgetAllocation[] {
-    return getStorage<BudgetAllocation[]>(STORAGE_KEYS.BUDGETS, []).filter(b => !tenantId || b.tenantId === tenantId);
+    return getStorage<BudgetAllocation[]>(STORAGE_KEYS.BUDGETS, [])
+      .filter(b => !tenantId || b.tenantId === tenantId);
   },
 
   // =========================================================================
   // 2. PROCUREMENT & PURCHASING
   // =========================================================================
   getSuppliers(tenantId: string = 'tenant-riara'): VendorSupplier[] {
-    return getStorage<VendorSupplier[]>(STORAGE_KEYS.SUPPLIERS, []).filter(s => !tenantId || s.tenantId === tenantId);
+    return getStorage<VendorSupplier[]>(STORAGE_KEYS.SUPPLIERS, [])
+      .filter(s => !tenantId || s.tenantId === tenantId);
   },
 
   addSupplier(supplierData: Omit<VendorSupplier, 'id'>): VendorSupplier {
@@ -325,7 +322,8 @@ export const OperationsStorage = {
   },
 
   getRequisitions(tenantId: string = 'tenant-riara'): PurchaseRequisition[] {
-    return getStorage<PurchaseRequisition[]>(STORAGE_KEYS.REQUISITIONS, []).filter(r => !tenantId || r.tenantId === tenantId);
+    return getStorage<PurchaseRequisition[]>(STORAGE_KEYS.REQUISITIONS, [])
+      .filter(r => !tenantId || r.tenantId === tenantId);
   },
 
   addRequisition(reqData: Omit<PurchaseRequisition, 'id' | 'reqNumber'>): PurchaseRequisition {
@@ -420,7 +418,8 @@ export const OperationsStorage = {
   },
 
   getPurchaseOrders(tenantId: string = 'tenant-riara'): PurchaseOrderLPO[] {
-    return getStorage<PurchaseOrderLPO[]>(STORAGE_KEYS.LPOS, []).filter(l => !tenantId || l.tenantId === tenantId);
+    return getStorage<PurchaseOrderLPO[]>(STORAGE_KEYS.LPOS, [])
+      .filter(l => !tenantId || l.tenantId === tenantId);
   },
 
   createPurchaseOrder(orderData: Omit<PurchaseOrderLPO, 'id' | 'lpoNumber'>): PurchaseOrderLPO {
@@ -461,7 +460,8 @@ export const OperationsStorage = {
   // 3. STORES & INVENTORY
   // =========================================================================
   getStoreInventory(tenantId: string = 'tenant-riara'): StoreInventoryItem[] {
-    return getStorage<StoreInventoryItem[]>(STORAGE_KEYS.INVENTORY, []).filter(i => !tenantId || i.tenantId === tenantId);
+    return getStorage<StoreInventoryItem[]>(STORAGE_KEYS.INVENTORY, [])
+      .filter(i => !tenantId || i.tenantId === tenantId);
   },
 
   addStoreItem(itemData: Omit<StoreInventoryItem, 'id'>): StoreInventoryItem {
@@ -476,7 +476,8 @@ export const OperationsStorage = {
   },
 
   getGRNs(tenantId: string = 'tenant-riara'): GoodsReceivedNoteGRN[] {
-    return getStorage<GoodsReceivedNoteGRN[]>(STORAGE_KEYS.GRNS, []).filter(g => !tenantId || g.tenantId === tenantId);
+    return getStorage<GoodsReceivedNoteGRN[]>(STORAGE_KEYS.GRNS, [])
+      .filter(g => !tenantId || g.tenantId === tenantId);
   },
 
   createGRN(grnData: Omit<GoodsReceivedNoteGRN, 'id' | 'grnNumber'>): GoodsReceivedNoteGRN {
@@ -526,7 +527,8 @@ export const OperationsStorage = {
   },
 
   getSIVs(tenantId: string = 'tenant-riara'): StoreIssueVoucher[] {
-    return getStorage<StoreIssueVoucher[]>(STORAGE_KEYS.SIVS, []).filter(s => !tenantId || s.tenantId === tenantId);
+    return getStorage<StoreIssueVoucher[]>(STORAGE_KEYS.SIVS, [])
+      .filter(s => !tenantId || s.tenantId === tenantId);
   },
 
   createSIV(sivData: Omit<StoreIssueVoucher, 'id' | 'sivNumber'>): StoreIssueVoucher {
@@ -570,7 +572,8 @@ export const OperationsStorage = {
   // 4. HR & PAYROLL
   // =========================================================================
   getEmployees(tenantId: string = 'tenant-riara'): HREmployee[] {
-    return getStorage<HREmployee[]>(STORAGE_KEYS.EMPLOYEES, []).filter(e => !tenantId || e.tenantId === tenantId);
+    return getStorage<HREmployee[]>(STORAGE_KEYS.EMPLOYEES, [])
+      .filter(e => !tenantId || e.tenantId === tenantId);
   },
 
   addEmployee(empData: Omit<HREmployee, 'id'>): HREmployee {
@@ -597,7 +600,8 @@ export const OperationsStorage = {
   },
 
   getPayrollRuns(tenantId: string = 'tenant-riara'): MonthlyPayrollRun[] {
-    return getStorage<MonthlyPayrollRun[]>(STORAGE_KEYS.PAYROLL_RUNS, []).filter(p => !tenantId || p.tenantId === tenantId);
+    return getStorage<MonthlyPayrollRun[]>(STORAGE_KEYS.PAYROLL_RUNS, [])
+      .filter(p => !tenantId || p.tenantId === tenantId);
   },
 
   createMonthlyPayrollRun(
@@ -754,7 +758,8 @@ export const OperationsStorage = {
   // 5. AUDIT LOGS
   // =========================================================================
   getOperationsAuditLogs(tenantId: string = 'tenant-riara'): OperationsAuditLog[] {
-    return getStorage<OperationsAuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, []).filter(l => !tenantId || l.tenantId === tenantId);
+    return getStorage<OperationsAuditLog[]>(STORAGE_KEYS.AUDIT_LOGS, [])
+      .filter(l => !tenantId || l.tenantId === tenantId);
   },
 
   logOperation(logData: Omit<OperationsAuditLog, 'id' | 'timestamp'>): OperationsAuditLog {

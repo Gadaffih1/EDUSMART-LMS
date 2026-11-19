@@ -89,6 +89,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
   const [issueBorrowerRole, setIssueBorrowerRole] = useState<'student' | 'teacher'>('student');
   const [issueDueDate, setIssueDueDate] = useState('2026-10-18');
   const [issueRemarks, setIssueRemarks] = useState('');
+  const [issueError, setIssueError] = useState<string | null>(null);
 
   // Quick Add Book Modal state
   const [showAddBookModal, setShowAddBookModal] = useState(false);
@@ -152,59 +153,80 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
     };
   }, []);
 
+  // Audit log helper
+  const logAudit = (action: string, details: string) => {
+    Storage.addLibraryAuditLog({
+      id: `aud-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      action,
+      performedBy: currentUser.name,
+      role: currentUser.role === 'admin' ? 'admin' : 'librarian',
+      timestamp: new Date().toISOString(),
+      details
+    });
+    setAuditLogs(Storage.getLibraryAuditLogs());
+  };
+
   // Actions
   const handleIssueBook = (record: LibraryBorrowRecord) => {
     Storage.borrowBook(record);
-    Storage.addLibraryAuditLog({
-      id: `aud-${Date.now()}`,
-      action: 'Book Loan Issued',
-      performedBy: currentUser.name,
-      role: 'librarian',
-      timestamp: new Date().toISOString(),
-      details: `Issued "${record.bookTitle}" to ${record.borrowerName} (${record.borrowerRole})`
-    });
+    logAudit('Book Loan Issued', `Issued "${record.bookTitle}" (${record.bookCopyId || 'Unassigned ID'}) to ${record.borrowerName} (${record.borrowerRole})`);
     setBooks(Storage.getLibraryBooks());
     setBorrowRecords(Storage.getBorrowRecords());
-    setAuditLogs(Storage.getLibraryAuditLogs());
   };
 
   const handleReturnBook = (recordId: string, remarks?: string) => {
     Storage.returnBook(recordId, remarks);
-    Storage.addLibraryAuditLog({
-      id: `aud-${Date.now()}`,
-      action: 'Book Loan Returned',
-      performedBy: currentUser.name,
-      role: 'librarian',
-      timestamp: new Date().toISOString(),
-      details: `Returned loan record ${recordId}. Remarks: ${remarks || 'None'}`
-    });
+    logAudit('Book Loan Returned', `Returned loan record ${recordId}. Remarks: ${remarks || 'None'}`);
     setBooks(Storage.getLibraryBooks());
     setBorrowRecords(Storage.getBorrowRecords());
-    setAuditLogs(Storage.getLibraryAuditLogs());
+  };
+
+  const handleUpdateBorrowRecord = (id: string, updates: Partial<LibraryBorrowRecord>) => {
+    Storage.updateBorrowRecord(id, updates);
+    logAudit('Loan Record Updated', `Updated circulation loan ${id}`);
+    setBooks(Storage.getLibraryBooks());
+    setBorrowRecords(Storage.getBorrowRecords());
+  };
+
+  const handleDeleteBorrowRecord = (id: string) => {
+    const target = borrowRecords.find(r => r.id === id);
+    Storage.deleteBorrowRecord(id);
+    logAudit('Loan Record Deleted', `Deleted loan record "${target?.bookTitle || id}" (${target?.borrowerName || 'Borrower'})`);
+    setBooks(Storage.getLibraryBooks());
+    setBorrowRecords(Storage.getBorrowRecords());
   };
 
   const handleAddBook = (book: LibraryBook) => {
     Storage.saveLibraryBook(book);
-    Storage.addLibraryAuditLog({
-      id: `aud-${Date.now()}`,
-      action: 'New Title Catalogued',
-      performedBy: currentUser.name,
-      role: 'librarian',
-      timestamp: new Date().toISOString(),
-      details: `Catalogued "${book.title}" (${book.isbn}) - ${book.totalCopies} copies`
-    });
+    logAudit('New Title Catalogued', `Catalogued "${book.title}" (${book.isbn}) - ${book.totalCopies} copies`);
     setBooks(Storage.getLibraryBooks());
-    setAuditLogs(Storage.getLibraryAuditLogs());
+  };
+
+  const handleUpdateBook = (book: LibraryBook) => {
+    Storage.saveLibraryBook(book);
+    logAudit('Inventory Title Updated', `Updated "${book.title}" (${book.isbn}) - ${book.copiesAvailable}/${book.totalCopies} copies`);
+    setBooks(Storage.getLibraryBooks());
+  };
+
+  const handleDeleteBook = (id: string) => {
+    const target = books.find(b => b.id === id);
+    Storage.deleteLibraryBook(id);
+    logAudit('Inventory Title Deleted', `Removed "${target?.title || id}" from library catalogue & inventory`);
+    setBooks(Storage.getLibraryBooks());
   };
 
   const handleQuickIssueSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setIssueError(null);
     const bk = books.find(b => b.id === issueBookId);
     const user = allUsers.find(u => u.id === issueBorrowerId);
-    if (!bk || !user) return;
+    if (!bk || !user) {
+      setIssueError('Please select both a valid book title and borrower.');
+      return;
+    }
 
     if (bk.copiesAvailable <= 0) {
-      alert('No available copies of this title currently.');
+      setIssueError('No available copies of this title currently.');
       return;
     }
 
@@ -214,7 +236,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
     const activeLoans = borrowRecords.filter(r => r.status !== 'returned');
     const duplicate = activeLoans.some(r => r.bookCopyId && r.bookCopyId.trim().toUpperCase() === assignedCopyId.toUpperCase());
     if (duplicate) {
-      alert(`The Unique ID "${assignedCopyId}" is already checked out to another borrower! Please select/enter an available unique copy ID.`);
+      setIssueError(`The Unique ID "${assignedCopyId}" is already checked out to another borrower. Please select or enter an available unique copy ID.`);
       return;
     }
 
@@ -240,6 +262,7 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
     setShowIssueModal(false);
     setIssueCopyId('');
     setIssueRemarks('');
+    setIssueError(null);
   };
 
   // Section categorize
@@ -328,7 +351,11 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
               fines={fines}
               readingMembers={readingMembers}
               onNavigate={setCurrentSection}
-              onOpenIssueModal={() => setShowIssueModal(true)}
+              onOpenIssueModal={() => {
+                setIssueError(null);
+                if (!issueBookId && books[0]) setIssueBookId(books[0].id);
+                setShowIssueModal(true);
+              }}
               onOpenAddBookModal={() => setShowAddBookModal(true)}
             />
           )}
@@ -343,20 +370,38 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
               allUsers={allUsers}
               onIssueBook={handleIssueBook}
               onReturnBook={handleReturnBook}
+              onUpdateBorrowRecord={handleUpdateBorrowRecord}
+              onDeleteBorrowRecord={handleDeleteBorrowRecord}
               onUpdateReservation={(id, updates) => {
                 Storage.updateLibraryReservation(id, updates);
+                logAudit('Reservation Updated', `Updated reservation ${id}`);
                 setReservations(Storage.getLibraryReservations());
               }}
               onAddReservation={(res) => {
                 Storage.addLibraryReservation(res);
+                logAudit('Reservation Placed', `Reserved "${res.bookTitle}" for ${res.borrowerName}`);
+                setReservations(Storage.getLibraryReservations());
+              }}
+              onDeleteReservation={(id) => {
+                const target = reservations.find(r => r.id === id);
+                Storage.deleteLibraryReservation(id);
+                logAudit('Reservation Removed', `Deleted reservation for "${target?.bookTitle || id}"`);
                 setReservations(Storage.getLibraryReservations());
               }}
               onUpdateFine={(id, updates) => {
                 Storage.updateLibraryFine(id, updates);
+                logAudit('Fine Record Updated', `Updated fine ${id} (${updates.status || 'edited'})`);
                 setFines(Storage.getLibraryFines());
               }}
               onAddFine={(fine) => {
                 Storage.addLibraryFine(fine);
+                logAudit('Fine Added', `Charged KES ${fine.fineAmount} to ${fine.borrowerName} (${fine.bookTitle})`);
+                setFines(Storage.getLibraryFines());
+              }}
+              onDeleteFine={(id) => {
+                const target = fines.find(f => f.id === id);
+                Storage.deleteLibraryFine(id);
+                logAudit('Fine Deleted', `Deleted fine record for ${target?.borrowerName || id}`);
                 setFines(Storage.getLibraryFines());
               }}
             />
@@ -373,12 +418,54 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
               shelves={shelves}
               digitalItems={digitalItems}
               onAddBook={handleAddBook}
+              onUpdateBook={handleUpdateBook}
+              onDeleteBook={handleDeleteBook}
               onAddAcquisition={(acq) => {
                 Storage.addLibraryAcquisition(acq);
+                logAudit('Acquisition Requested', `Added acquisition "${acq.title}" (${acq.quantity} copies)`);
                 setAcquisitions(Storage.getLibraryAcquisitions());
+              }}
+              onUpdateAcquisition={(id, updates) => {
+                Storage.updateLibraryAcquisition(id, updates);
+                logAudit('Acquisition Updated', `Updated acquisition record ${id}`);
+                setAcquisitions(Storage.getLibraryAcquisitions());
+              }}
+              onDeleteAcquisition={(id) => {
+                const target = acquisitions.find(a => a.id === id);
+                Storage.deleteLibraryAcquisition(id);
+                logAudit('Acquisition Deleted', `Deleted acquisition "${target?.title || id}"`);
+                setAcquisitions(Storage.getLibraryAcquisitions());
+              }}
+              onAddShelf={(shelf) => {
+                Storage.addLibraryShelf(shelf);
+                logAudit('Shelf Location Added', `Added shelf "${shelf.code}" (${shelf.sectionName})`);
+                setShelves(Storage.getLibraryShelves());
+              }}
+              onUpdateShelf={(id, updates) => {
+                Storage.updateLibraryShelf(id, updates);
+                logAudit('Shelf Location Updated', `Updated shelf ${id}`);
+                setShelves(Storage.getLibraryShelves());
+              }}
+              onDeleteShelf={(id) => {
+                const target = shelves.find(s => s.id === id);
+                Storage.deleteLibraryShelf(id);
+                logAudit('Shelf Location Deleted', `Removed shelf "${target?.code || id}"`);
+                setShelves(Storage.getLibraryShelves());
               }}
               onAddDigitalItem={(item) => {
                 Storage.addDigitalLibraryItem(item);
+                logAudit('Digital Resource Added', `Added digital item "${item.title}"`);
+                setDigitalItems(Storage.getDigitalLibraryItems());
+              }}
+              onUpdateDigitalItem={(id, updates) => {
+                Storage.updateDigitalLibraryItem(id, updates);
+                logAudit('Digital Resource Updated', `Updated digital item ${id}`);
+                setDigitalItems(Storage.getDigitalLibraryItems());
+              }}
+              onDeleteDigitalItem={(id) => {
+                const target = digitalItems.find(d => d.id === id);
+                Storage.deleteDigitalLibraryItem(id);
+                logAudit('Digital Resource Deleted', `Deleted digital item "${target?.title || id}"`);
                 setDigitalItems(Storage.getDigitalLibraryItems());
               }}
               onIssueBook={handleIssueBook}
@@ -394,16 +481,67 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
               attendanceLogs={attendanceLogs}
               timetableSlots={timetableSlots}
               events={events}
+              onAddReadingMember={(member) => {
+                Storage.addReadingProgrammeMember(member);
+                logAudit('Reading Champion Added', `Enrolled ${member.studentName} in Reading Programme`);
+                setReadingMembers(Storage.getReadingProgrammeMembers());
+              }}
+              onUpdateReadingMember={(id, updates) => {
+                Storage.updateReadingProgrammeMember(id, updates);
+                logAudit('Reading Champion Updated', `Updated Reading Programme member ${id}`);
+                setReadingMembers(Storage.getReadingProgrammeMembers());
+              }}
+              onDeleteReadingMember={(id) => {
+                const target = readingMembers.find(m => m.id === id);
+                Storage.deleteReadingProgrammeMember(id);
+                logAudit('Reading Champion Removed', `Removed ${target?.studentName || id} from Reading Programme`);
+                setReadingMembers(Storage.getReadingProgrammeMembers());
+              }}
               onAddAttendanceLog={(log) => {
                 Storage.addLibraryAttendanceLog(log);
+                logAudit('Library Attendance Logged', `Logged visit for ${log.name}`);
+                setAttendanceLogs(Storage.getLibraryAttendance());
+              }}
+              onUpdateAttendanceLog={(id, updates) => {
+                Storage.updateLibraryAttendanceLog(id, updates);
+                logAudit('Attendance Log Updated', `Updated attendance entry ${id}`);
+                setAttendanceLogs(Storage.getLibraryAttendance());
+              }}
+              onDeleteAttendanceLog={(id) => {
+                const target = attendanceLogs.find(l => l.id === id);
+                Storage.deleteLibraryAttendanceLog(id);
+                logAudit('Attendance Log Deleted', `Removed attendance log for ${target?.name || id}`);
                 setAttendanceLogs(Storage.getLibraryAttendance());
               }}
               onAddTimetableSlot={(slot) => {
                 Storage.addLibraryTimetableSlot(slot);
+                logAudit('Timetable Slot Added', `Scheduled Grade ${slot.grade} ${slot.stream} (${slot.dayOfWeek} ${slot.startTime}-${slot.endTime})`);
+                setTimetableSlots(Storage.getLibraryTimetable());
+              }}
+              onUpdateTimetableSlot={(id, updates) => {
+                Storage.updateLibraryTimetableSlot(id, updates);
+                logAudit('Timetable Slot Updated', `Updated library timetable slot ${id}`);
+                setTimetableSlots(Storage.getLibraryTimetable());
+              }}
+              onDeleteTimetableSlot={(id) => {
+                Storage.deleteLibraryTimetableSlot(id);
+                logAudit('Timetable Slot Deleted', `Removed library timetable slot ${id}`);
                 setTimetableSlots(Storage.getLibraryTimetable());
               }}
               onAddEvent={(event) => {
                 Storage.addLibraryEvent(event);
+                logAudit('Library Event Added', `Created library event "${event.title}"`);
+                setEvents(Storage.getLibraryEvents());
+              }}
+              onUpdateEvent={(id, updates) => {
+                Storage.updateLibraryEvent(id, updates);
+                logAudit('Library Event Updated', `Updated library event ${id}`);
+                setEvents(Storage.getLibraryEvents());
+              }}
+              onDeleteEvent={(id) => {
+                const target = events.find(ev => ev.id === id);
+                Storage.deleteLibraryEvent(id);
+                logAudit('Library Event Deleted', `Deleted library event "${target?.title || id}"`);
                 setEvents(Storage.getLibraryEvents());
               }}
             />
@@ -416,8 +554,20 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
               auditLogs={auditLogs}
               books={books}
               borrowRecords={borrowRecords}
+              onAddPolicy={(policy) => {
+                Storage.addLibraryPolicy(policy);
+                logAudit('Library Policy Added', `Added policy "${policy.policyName}" (${policy.value})`);
+                setPolicies(Storage.getLibraryPolicies());
+              }}
               onUpdatePolicy={(id, updates) => {
                 Storage.updateLibraryPolicy(id, updates);
+                logAudit('Library Policy Updated', `Updated policy "${updates.policyName || id}"`);
+                setPolicies(Storage.getLibraryPolicies());
+              }}
+              onDeletePolicy={(id) => {
+                const target = policies.find(p => p.id === id);
+                Storage.deleteLibraryPolicy(id);
+                logAudit('Library Policy Deleted', `Deleted policy "${target?.policyName || id}"`);
                 setPolicies(Storage.getLibraryPolicies());
               }}
               onAddAuditLog={(log) => {
@@ -442,6 +592,11 @@ export const LibrarianWorkspace: React.FC<LibrarianWorkspaceProps> = ({
             </div>
 
             <form onSubmit={handleQuickIssueSubmit} className="p-5 space-y-3">
+              {issueError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                  {issueError}
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Select Book</label>
                 <select

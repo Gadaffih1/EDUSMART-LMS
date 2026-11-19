@@ -4,11 +4,15 @@ import {
   ChevronLeft,
   DollarSign,
   FileText,
+  FlaskConical,
   FolderPlus,
+  GraduationCap,
   LayoutDashboard,
   Palette,
   School,
   Settings,
+  SlidersHorizontal,
+  Smartphone,
   Sparkles,
   SpellCheck,
   Users,
@@ -21,12 +25,16 @@ export type SuperAdminTab =
   | 'operations'
   | 'customizer'
   | 'schools'
+  | 'grades_streams'
   | 'branding'
+  | 'school_settings'
   | 'users'
   | 'spelling'
   | 'categories'
   | 'notify'
   | 'doc_requests'
+  | 'vlab_approvals'
+  | 'pwa_analytics'
   | 'settings';
 
 interface ActionItem {
@@ -45,6 +53,7 @@ interface SuperAdminActionMenuProps {
   onCloseMobile: () => void;
   schoolCount: number;
   userCount: number;
+  pendingVlabCount?: number;
 }
 
 export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
@@ -56,6 +65,7 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
   onCloseMobile,
   schoolCount,
   userCount,
+  pendingVlabCount = 0,
 }) => {
   const groups: { title: string; items: ActionItem[] }[] = [
     {
@@ -63,7 +73,9 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
       items: [
         { id: 'overview', label: 'Platform Overview', icon: LayoutDashboard },
         { id: 'schools', label: 'Schools & Tenancy', icon: School, badge: String(schoolCount) },
+        { id: 'grades_streams', label: 'Grades & Streams', icon: GraduationCap },
         { id: 'branding', label: 'Logo & Background', icon: Palette },
+        { id: 'school_settings', label: 'Tenant School Settings', icon: SlidersHorizontal },
         { id: 'users', label: 'Users & Staff', icon: Users, badge: String(userCount) },
       ],
     },
@@ -79,6 +91,8 @@ export const SuperAdminActionMenu: React.FC<SuperAdminActionMenuProps> = ({
     {
       title: 'Operations',
       items: [
+        { id: 'vlab_approvals', label: 'Virtual Lab Approvals', icon: FlaskConical, badge: pendingVlabCount > 0 ? String(pendingVlabCount) : undefined },
+        { id: 'pwa_analytics', label: 'PWA App & Installs', icon: Smartphone },
         { id: 'operations', label: 'Finance & Operations', icon: DollarSign },
         { id: 'doc_requests', label: 'Document Requests', icon: FileText },
       ],

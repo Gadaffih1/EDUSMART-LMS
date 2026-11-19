@@ -14,11 +14,20 @@ import {
   TeacherAbsenceReport
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { listSubjects } from '../../utils/catalogStore';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
 import { TeacherAbsenceReportModal } from './TeacherAbsenceReportModal';
 import { ReliefBookingModal } from './ReliefBookingModal';
 import { TeacherTimetableCaptureModal } from './TeacherTimetableCaptureModal';
+import { TTWorkspacePayload, ttApiFetch } from './timetableTypes';
+import { TimetableConfigPanel } from './TimetableConfigPanel';
+import { TimetableAllocationsPanel } from './TimetableAllocationsPanel';
+import { TimetableTeachersPanel } from './TimetableTeachersPanel';
+import { TimetableDragDropEditor } from './TimetableDragDropEditor';
+import { TimetableVersionsAndReportsPanel } from './TimetableVersionsAndReportsPanel';
+import { ScrollableMatrixTableWrapper } from '../common/ResponsiveUIKit';
 import { 
   Calendar, 
   Clock, 
@@ -58,7 +67,11 @@ import {
   Check,
   Send,
   CalendarCheck,
-  ListTodo
+  ListTodo,
+  Sliders,
+  UserCog,
+  FileSpreadsheet,
+  LayoutGrid
 } from 'lucide-react';
 
 interface TimetablePortalProps {
@@ -95,6 +108,103 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [showPeriodTimingsModal, setShowPeriodTimingsModal] = useState(false);
   const [tempBellSchedule, setTempBellSchedule] = useState<BellPeriodDef[]>([]);
 
+  const { currentTenant } = useTenant();
+  const isTimetableAdminUser =
+    !readOnly &&
+    (currentUser.accessScope === 'super_admin_only' ||
+      [
+        'admin',
+        'head_teacher',
+        'deputy_head',
+        'dean_of_studies',
+        'curriculum_coordinator',
+        'school_admin_staff',
+        'senior_teacher',
+        'hod',
+      ].includes(String(currentUser.role || '').toLowerCase()));
+
+  type SuiteTabId = 'published' | 'config' | 'allocations' | 'teachers' | 'editor' | 'approvals';
+  const [suiteTab, setSuiteTab] = useState<SuiteTabId>('published');
+  const [ttWorkspace, setTtWorkspace] = useState<TTWorkspacePayload | null>(null);
+  const [loadingWorkspace, setLoadingWorkspace] = useState(false);
+
+  const loadWorkspace = async (versionId?: string) => {
+    if (!isTimetableAdminUser) return;
+    setLoadingWorkspace(true);
+    try {
+      const qs = versionId ? `?versionId=${encodeURIComponent(versionId)}` : '';
+      const data = await ttApiFetch<TTWorkspacePayload>(`/api/timetable/workspace${qs}`);
+      setTtWorkspace(data);
+    } catch {
+      // Fallback to local state if session/network not yet hydrated
+    } finally {
+      setLoadingWorkspace(false);
+    }
+  };
+
+  const loadPublishedBackendSchedule = async () => {
+    try {
+      const shouldRequestTeacherScope =
+        initialPerspective === 'teacher' ||
+        ['teacher', 'hod', 'senior_teacher', 'curriculum_coordinator'].includes(currentUser.role);
+      const publishedUrl = shouldRequestTeacherScope
+        ? '/api/timetable/published?viewAs=teacher'
+        : '/api/timetable/published';
+      const pub = await ttApiFetch<{
+        published: boolean;
+        periods?: Array<{ periodNumber: number; label: string; kind: string; startTime: string; endTime: string }>;
+        entries?: Array<{
+          id: string;
+          dayOfWeek: string;
+          periodNumber: number;
+          grade: number;
+          stream: string;
+          groupName: string;
+          subjectName: string;
+          teacherNames: string[];
+          roomName: string;
+        }>;
+      }>(publishedUrl);
+
+      if (pub?.published && Array.isArray(pub.entries) && pub.entries.length > 0) {
+        const periodTimeMap = new Map<number, { startTime: string; endTime: string }>();
+        (pub.periods || []).forEach((p) => {
+          if (p.kind === 'lesson' && p.periodNumber > 0) {
+            periodTimeMap.set(p.periodNumber, { startTime: p.startTime, endTime: p.endTime });
+          }
+        });
+        const mappedSlots: TimetableSlot[] = pub.entries.map((e) => {
+          const tm = periodTimeMap.get(e.periodNumber);
+          return {
+            id: e.id,
+            grade: e.grade as GradeLevel,
+            stream: e.stream as StreamName,
+            dayOfWeek: e.dayOfWeek as TimetableSlot['dayOfWeek'],
+            period: e.periodNumber,
+            startTime: tm?.startTime || '08:00',
+            endTime: tm?.endTime || '08:40',
+            subject: e.subjectName as SubjectName,
+            teacherName: (e.teacherNames || []).join(', ') || 'Faculty',
+            roomName: e.roomName || 'Classroom',
+            notes: e.groupName && e.groupName !== 'Whole Class' ? `Group: ${e.groupName}` : undefined,
+          };
+        });
+        setAllSlots(mappedSlots);
+      }
+    } catch {
+      // Preserve database-hydrated timetable cache if backend does not yet have a published version
+    }
+  };
+
+  useEffect(() => {
+    loadPublishedBackendSchedule();
+    if (isTimetableAdminUser) {
+      loadWorkspace();
+    }
+  }, [currentUser.id, currentUser.schoolId, currentUser.role]);
+
+  const [catalogRevision, setCatalogRevision] = useState(0);
+
   // Listen for storage updates
   useEffect(() => {
     const handleTimetableUpdate = () => {
@@ -107,13 +217,18 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     const handleAbsenceUpdate = () => {
       setAbsenceReports(Storage.getTeacherAbsenceReports());
     };
+    const handleCatalogUpdate = () => {
+      setCatalogRevision((v) => v + 1);
+    };
     window.addEventListener('timetable-updated', handleTimetableUpdate);
     window.addEventListener('bell-schedule-updated', handleBellUpdate);
     window.addEventListener('teacher-absence-reports-updated', handleAbsenceUpdate);
+    window.addEventListener('subjects-catalog-updated', handleCatalogUpdate);
     return () => {
       window.removeEventListener('timetable-updated', handleTimetableUpdate);
       window.removeEventListener('bell-schedule-updated', handleBellUpdate);
       window.removeEventListener('teacher-absence-reports-updated', handleAbsenceUpdate);
+      window.removeEventListener('subjects-catalog-updated', handleCatalogUpdate);
     };
   }, []);
 
@@ -151,7 +266,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const isStudent = currentUser.role === 'student';
   const isParent = currentUser.role === 'parent';
   const isClassTeacher = currentUser.role === 'class_teacher';
-  const isSubjectTeacher = currentUser.role === 'teacher' || currentUser.role === 'hod' || currentUser.role === 'senior_teacher';
+  const isSubjectTeacher = ['teacher', 'hod', 'senior_teacher', 'curriculum_coordinator'].includes(currentUser.role);
 
   interface ClassOption {
     grade: GradeLevel;
@@ -480,10 +595,25 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     return selectedGrade >= 7 ? JUNIOR_STREAMS : PRIMARY_STREAMS;
   }, [selectedGrade]);
 
-  // Subjects applicable to active grade
+  // Subjects applicable to active grade (merged with Master Timetable workspace & catalog subjects)
   const availableSubjects = useMemo(() => {
-    return selectedGrade >= 7 ? JUNIOR_SUBJECTS : PRIMARY_SUBJECTS;
-  }, [selectedGrade]);
+    const base: string[] = selectedGrade >= 7 ? [...JUNIOR_SUBJECTS] : [...PRIMARY_SUBJECTS];
+    const seen = new Set(base.map((s) => s.toLowerCase()));
+    const extras: string[] = [];
+    for (const s of ttWorkspace?.subjects || []) {
+      if (s?.name && !seen.has(s.name.toLowerCase())) {
+        seen.add(s.name.toLowerCase());
+        extras.push(s.name);
+      }
+    }
+    for (const s of listSubjects()) {
+      if (s?.name && !seen.has(s.name.toLowerCase())) {
+        seen.add(s.name.toLowerCase());
+        extras.push(s.name);
+      }
+    }
+    return [...base, ...extras.sort()] as SubjectName[];
+  }, [selectedGrade, ttWorkspace?.subjects, catalogRevision]);
 
   // Filtered slots for active Grade & Stream
   const classSlots = useMemo(() => {
@@ -511,6 +641,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Distinct Rooms & Labs across timetable
   const distinctRooms = useMemo(() => {
     const list = Array.from(new Set(allSlots.map(s => s.roomName).filter((r): r is string => Boolean(r))));
+    if (!list.includes('Main Library Reading Hall')) list.push('Main Library Reading Hall');
     if (!list.includes('Junior Science Lab 1')) list.push('Junior Science Lab 1');
     if (!list.includes('Computer Lab A')) list.push('Computer Lab A');
     if (!list.includes('Fine Art & Music Studio')) list.push('Fine Art & Music Studio');
@@ -589,6 +720,24 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         border: 'border-lime-300',
         accent: 'bg-lime-600',
         badge: 'text-lime-800 bg-lime-100/60'
+      };
+    }
+    if (s.includes('library')) {
+      return {
+        bg: 'bg-indigo-50/90 hover:bg-indigo-100/90',
+        text: 'text-indigo-950',
+        border: 'border-indigo-300',
+        accent: 'bg-indigo-600',
+        badge: 'text-indigo-800 bg-indigo-100/80'
+      };
+    }
+    if (s.includes('nutrition')) {
+      return {
+        bg: 'bg-emerald-50/90 hover:bg-emerald-100/90',
+        text: 'text-emerald-950',
+        border: 'border-emerald-300',
+        accent: 'bg-emerald-600',
+        badge: 'text-emerald-800 bg-emerald-100/80'
       };
     }
     if (s.includes('religious') || s.includes('cre') || s.includes('ire')) {
@@ -692,8 +841,43 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     };
 
     Storage.saveTimetableSlot(slotPayload);
+
+    // Sync Library Lesson slots directly to Library Timetable so Library Bookings detect occupied vs free slots
+    const linkedLibId = `mt-lib-${slotPayload.id}`;
+    const isLibrarySubject = String(slotPayload.subject || '').toLowerCase().includes('library');
+    const existingLibSlots = Storage.getLibraryTimetable();
+    const existingLinked = existingLibSlots.find((ls) => ls.id === linkedLibId);
+    if (isLibrarySubject) {
+      const libVenue =
+        slotPayload.roomName && slotPayload.roomName.toLowerCase().includes('library')
+          ? slotPayload.roomName
+          : 'Main Library Reading Hall';
+      const syncedEntry = {
+        id: linkedLibId,
+        dayOfWeek: slotPayload.dayOfWeek,
+        startTime: slotPayload.startTime,
+        endTime: slotPayload.endTime,
+        grade: slotPayload.grade,
+        stream: `Grade ${slotPayload.grade} ${slotPayload.stream}`,
+        teacherInCharge: slotPayload.teacherName || 'Subject Teacher',
+        sessionType: 'Library Reading Period' as const,
+        venue: libVenue,
+      };
+      if (existingLinked) {
+        Storage.updateLibraryTimetableSlot(linkedLibId, syncedEntry);
+      } else {
+        Storage.addLibraryTimetableSlot(syncedEntry);
+      }
+    } else if (existingLinked) {
+      Storage.deleteLibraryTimetableSlot(linkedLibId);
+    }
+
     setShowEditModal(false);
-    setNotificationMsg(`Timetable period saved successfully for Grade ${selectedGrade} ${selectedStream}!`);
+    setNotificationMsg(
+      isLibrarySubject
+        ? `Library Lesson saved for Grade ${selectedGrade} ${selectedStream} and synced to Library Bookings!`
+        : `Timetable period saved successfully for Grade ${selectedGrade} ${selectedStream}!`
+    );
     setTimeout(() => setNotificationMsg(null), 3500);
   };
 
@@ -701,6 +885,10 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const handleDeleteSlot = (id: string) => {
     if (window.confirm('Are you sure you want to remove this timetable slot?')) {
       Storage.deleteTimetableSlot(id);
+      const linkedLibId = `mt-lib-${id}`;
+      if (Storage.getLibraryTimetable().some((ls) => ls.id === linkedLibId)) {
+        Storage.deleteLibraryTimetableSlot(linkedLibId);
+      }
       setSelectedSlotForDetail(null);
       setNotificationMsg('Period removed from schedule.');
       setTimeout(() => setNotificationMsg(null), 3000);
@@ -756,7 +944,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-1">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
+              <TenantSchoolLogo variant="emblem" size="xs" />
+              <span className="text-white">{currentTenant.name}</span>
               <span className="text-slate-500">·</span>
               <span>Curriculum Timetable & Bell Schedule</span>
               <span className="text-slate-500">·</span>
@@ -941,8 +1130,134 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       </header>
 
       {/* ========================================================
+          INTELLIGENT TIMETABLE MANAGEMENT SUITE NAVIGATION (ADMIN)
+          ======================================================== */}
+      {isTimetableAdminUser && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1">
+            {(
+              [
+                { id: 'published', label: 'Published Views', icon: LayoutGrid },
+                { id: 'config', label: '1. Config, Subjects & Depts', icon: Sliders },
+                { id: 'allocations', label: '2. Allocations & Groups', icon: Layers },
+                { id: 'teachers', label: '3. Teachers & Limits', icon: UserCog },
+                { id: 'editor', label: '4. Auto-Solver & Editor', icon: Sparkles },
+                { id: 'approvals', label: '5. Approvals & Reports', icon: FileSpreadsheet },
+              ] as const
+            ).map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setSuiteTab(tab.id);
+                    if (tab.id !== 'published' && !ttWorkspace) {
+                      loadWorkspace();
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    suiteTab === tab.id
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {loadingWorkspace && (
+            <span className="text-[11px] font-mono text-slate-500 px-2">Syncing workspace...</span>
+          )}
+        </div>
+      )}
+
+      {isTimetableAdminUser && suiteTab !== 'published' && (
+        <div className="space-y-4">
+          {!ttWorkspace ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center text-xs text-slate-500">
+              Loading {currentTenant.name} intelligent timetable workspace...
+            </div>
+          ) : (
+            <>
+              {suiteTab === 'config' && (
+                <TimetableConfigPanel
+                  config={ttWorkspace.config}
+                  gradeSchedules={ttWorkspace.gradeSchedules}
+                  periods={ttWorkspace.periods}
+                  classrooms={ttWorkspace.classrooms}
+                  subjects={ttWorkspace.subjects}
+                  departments={ttWorkspace.departments || []}
+                  schoolId={currentTenant.id}
+                  onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'allocations' && (
+                <TimetableAllocationsPanel
+                  gradeSchedules={ttWorkspace.gradeSchedules}
+                  subjects={ttWorkspace.subjects}
+                  classrooms={ttWorkspace.classrooms}
+                  studentGroups={ttWorkspace.studentGroups}
+                  teachers={ttWorkspace.teachers}
+                  gradeAllocations={ttWorkspace.gradeAllocations}
+                  streamAllocations={ttWorkspace.streamAllocations}
+                  jointLessons={ttWorkspace.jointLessons}
+                  allocationIssues={ttWorkspace.allocationIssues}
+                  streamLoadSummary={ttWorkspace.streamLoadSummary}
+                  onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'teachers' && (
+                <TimetableTeachersPanel
+                  teachers={ttWorkspace.teachers}
+                  subjects={ttWorkspace.subjects}
+                  departments={ttWorkspace.departments || []}
+                  config={ttWorkspace.config}
+                  periods={ttWorkspace.periods}
+                  onRefresh={async () => {
+                    await loadWorkspace(ttWorkspace.activeVersion?.id);
+                  }}
+                />
+              )}
+
+              {suiteTab === 'editor' && (
+                <TimetableDragDropEditor
+                  workspace={ttWorkspace}
+                  onRefresh={async (verId) => {
+                    await loadWorkspace(verId || ttWorkspace.activeVersion?.id);
+                    await loadPublishedBackendSchedule();
+                  }}
+                />
+              )}
+
+              {suiteTab === 'approvals' && (
+                <TimetableVersionsAndReportsPanel
+                  workspace={ttWorkspace}
+                  currentUser={currentUser}
+                  onRefresh={async (verId) => {
+                    await loadWorkspace(verId || ttWorkspace.activeVersion?.id);
+                    await loadPublishedBackendSchedule();
+                  }}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
           2. PERSPECTIVE SWITCHER & PRIMARY NAVIGATION TABS
           ======================================================== */}
+      {suiteTab === 'published' && (
+        <React.Fragment>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
         
         {/* Perspectives strictly filtered by role-based availability */}
@@ -1293,7 +1608,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <ScrollableMatrixTableWrapper hint="Swipe horizontally to view Monday–Friday periods" className="border-0">
             <table className="w-full text-left border-collapse min-w-[850px]">
               <thead>
                 <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 text-xs font-bold">
@@ -1474,7 +1789,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableMatrixTableWrapper>
         </div>
       )}
 
@@ -2837,13 +3152,30 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 <label className="block font-bold text-slate-700 mb-1">Subject / Learning Area</label>
                 <select
                   value={formSubject}
-                  onChange={(e) => setFormSubject(e.target.value as any)}
+                  onChange={(e) => {
+                    const nextSub = e.target.value as SubjectName;
+                    setFormSubject(nextSub);
+                    if (
+                      String(nextSub).toLowerCase().includes('library') &&
+                      (!formRoomName || formRoomName.toLowerCase().startsWith('classroom'))
+                    ) {
+                      setFormRoomName('Main Library Reading Hall');
+                    }
+                  }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold"
                 >
                   {availableSubjects.map(sub => (
                     <option key={sub} value={sub}>{sub}</option>
                   ))}
+                  {!availableSubjects.includes(formSubject) && (
+                    <option value={formSubject}>{formSubject}</option>
+                  )}
                 </select>
+                {String(formSubject).toLowerCase().includes('library') && (
+                  <p className="text-[11px] text-indigo-700 font-semibold mt-1">
+                    Linked to Library Bookings: saving this Library Lesson automatically marks this library slot as occupied so free slots are visible for other teachers.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -2991,21 +3323,22 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   <div className="text-[10px] font-black uppercase text-emerald-800 tracking-wider">
                     Republic of Kenya · Ministry of Education · CBC Compliant
                   </div>
-                  <h2 className="text-xl font-black text-slate-900">
-                    EDUSMART ACADEMY & JUNIOR SCHOOL
+                  <h2 className="text-xl font-black text-slate-900 uppercase">
+                    {currentTenant.name}
                   </h2>
                   <p className="text-xs text-slate-600">
                     Official Class Routine Timetable · Grade {selectedGrade} ({selectedStream}) · Academic Year 2026
                   </p>
                 </div>
-                <div className="text-right">
-                  <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <div className="text-right flex flex-col items-end">
+                  <TenantSchoolLogo variant="emblem" size="sm" />
                   <div className="text-[10px] font-mono text-slate-500 mt-1">Ref: TIMETABLE/2026/G{selectedGrade}</div>
                 </div>
               </div>
 
               {/* High-Contrast Print Grid */}
-              <table className="w-full text-left text-xs border border-slate-900 border-collapse">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border border-slate-900 border-collapse min-w-[680px]">
                 <thead>
                   <tr className="bg-slate-200 border-b border-slate-900 font-black text-slate-900">
                     <th className="p-2 border-r border-slate-900 w-28 text-center">Period / Time</th>
@@ -3077,6 +3410,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   })}
                 </tbody>
               </table>
+              </div>
 
               {/* Signatures & Seal */}
               <div className="pt-6 border-t border-slate-200 grid grid-cols-3 gap-6 text-xs text-slate-700">
@@ -3215,8 +3549,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
               </div>
 
               {/* Editable Periods List */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[620px]">
                   <thead>
                     <tr className="bg-slate-100/90 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">Session Type</th>
@@ -3368,6 +3702,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             setTimeout(() => setNotificationMsg(null), 4000);
           }}
         />
+      )}
+        </React.Fragment>
       )}
 
       {/* Teacher Absence Reporting Modal */}

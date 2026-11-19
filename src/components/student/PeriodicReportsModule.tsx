@@ -170,8 +170,8 @@ export const PeriodicReportsModule: React.FC<PeriodicReportsModuleProps> = ({ cu
                   <Award className="w-4 h-4 text-emerald-600" />
                   <span>Research-Based CBC Core Competency Assessments</span>
                 </h4>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[520px]">
                     <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                       <tr>
                         <th className="py-2.5 px-3">CBC Core Competency</th>

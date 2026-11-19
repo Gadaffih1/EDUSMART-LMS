@@ -36,16 +36,21 @@ import {
   Calendar,
   ExternalLink,
   Sliders,
+  SlidersHorizontal,
   ChevronRight,
   Info,
   Check,
-  ArrowRight
+  ArrowRight,
+  Printer,
+  KeyRound,
+  X
 } from 'lucide-react';
 import { User, UserRole, GradeLevel, StreamName, AppNotification, PostCategory } from '../../types';
 import { Tenant } from '../../types/tenant';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo, resolveTenantLogoSrc } from '../common/TenantSchoolLogo';
 import { RegistryNumberKind } from '../../utils/systemRoles';
 import { addSystemRole, listSystemRoles } from '../../utils/systemRoles';
 import {
@@ -66,6 +71,11 @@ import {
 import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
 import { saveProvisionedAccount } from '../../utils/provisionedAccounts';
 import { ensureDepartments } from '../../utils/departmentStore';
+import { ClientDataStore } from '../../utils/clientDataStore';
+import { getUserRoles, normalizeAssignedRoleList } from '../../utils/subjectTeacherSwitch';
+import { PrintableCredentialsModal } from './PrintableCredentialsModal';
+import { SchoolSettingsPanel } from './SchoolSettingsPanel';
+import { MobileOverflowMenu } from '../common/ResponsiveUIKit';
 
 interface SuperAdminDashboardProps {
   currentUser: User;
@@ -75,7 +85,7 @@ interface SuperAdminDashboardProps {
   onSectionChange?: (section: SuperTab) => void;
 }
 
-export type SuperTab = 'schools' | 'branding' | 'users' | 'categories' | 'spelling' | 'notify';
+export type SuperTab = 'schools' | 'branding' | 'school_settings' | 'users' | 'categories' | 'spelling' | 'notify';
 
 // Built-in common spelling dictionary for Kenyan CBC education system
 const COMMON_SPELLING_DICTIONARY: { typo: string; correction: string; context: string }[] = [
@@ -140,9 +150,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   // Selected school to configure (defaults to current tenant)
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>(currentTenant.id);
 
-  // Users state with live event sync
+  // Users state with live event sync & DB preload
   const [users, setUsers] = useState<User[]>(() => Storage.getUsers());
   useEffect(() => {
+    ClientDataStore.apiFetchUsers({ schoolId: 'all' }).catch(() => {});
     const handleUsersUpdated = () => setUsers(Storage.getUsers());
     window.addEventListener('users-updated', handleUsersUpdated);
     return () => window.removeEventListener('users-updated', handleUsersUpdated);
@@ -399,39 +410,58 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   // ========================================================
   // 2. BRANDING & BACKGROUND COLOR CUSTOMIZER
   // ========================================================
-  const [customLogoUrl, setCustomLogoUrl] = useState(targetSchool.logoUrl || '');
+  const [customLogoUrl, setCustomLogoUrl] = useState(resolveTenantLogoSrc(targetSchool));
   const [customBgColor, setCustomBgColor] = useState(targetSchool.backgroundColor || '#f8fafc');
   const [selectedHeaderGradient, setSelectedHeaderGradient] = useState(targetSchool.headerBgClass || HEADER_GRADIENTS[0].class);
   const [selectedCrest, setSelectedCrest] = useState<'school' | 'graduation-cap' | 'book-open' | 'shield'>(targetSchool.crestIcon || 'graduation-cap');
 
   useEffect(() => {
-    setCustomLogoUrl(targetSchool.logoUrl || '');
+    setCustomLogoUrl(resolveTenantLogoSrc(targetSchool));
     setCustomBgColor(targetSchool.backgroundColor || '#f8fafc');
     setSelectedHeaderGradient(targetSchool.headerBgClass || HEADER_GRADIENTS[0].class);
     setSelectedCrest(targetSchool.crestIcon || 'graduation-cap');
   }, [targetSchool]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
         showToast('Logo file size exceeds 2MB limit. Please upload a smaller SVG or PNG.', 'error');
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setCustomLogoUrl(event.target.result as string);
+      try {
+        const uploaded = await ClientDataStore.uploadFile(file, 'school-logo');
+        setCustomLogoUrl(uploaded.url);
+        showToast('School logo image uploaded. Click "Save Branding" to apply.');
+      } catch {
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('Failed reading logo file.'));
+            reader.readAsDataURL(file);
+          });
+          setCustomLogoUrl(dataUrl);
           showToast('School logo image loaded. Click "Save Branding" to apply.');
+        } catch (readErr: any) {
+          showToast(readErr?.message || 'Failed to upload school logo.', 'error');
         }
-      };
-      reader.readAsDataURL(file);
+      }
     }
   };
 
   const handleSaveBranding = () => {
+    const trimmedLogo = customLogoUrl.trim();
+    const logoUpdate: Partial<Tenant> = trimmedLogo
+      ? {
+          customLogoBase64: trimmedLogo,
+          logoUrl: targetSchool.logoUrl || trimmedLogo,
+        }
+      : {
+          customLogoBase64: undefined,
+        };
     updateTenantBranding({
-      logoUrl: customLogoUrl || undefined,
+      ...logoUpdate,
       backgroundColor: customBgColor,
       headerBgClass: selectedHeaderGradient,
       crestIcon: selectedCrest
@@ -449,6 +479,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [userSaving, setUserSaving] = useState(false);
+  const [showPrintableModal, setShowPrintableModal] = useState(false);
+
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<User | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordBusy, setResetPasswordBusy] = useState(false);
+  const [resetPasswordError, setResetPasswordError] = useState('');
+
+  const [deleteUserTarget, setDeleteUserTarget] = useState<User | null>(null);
+  const [deleteUserBusy, setDeleteUserBusy] = useState(false);
+  const [deleteUserError, setDeleteUserError] = useState('');
+
   const [numberEdited, setNumberEdited] = useState(false);
   const [systemRoles, setSystemRoles] = useState(() => listSystemRoles());
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -463,6 +505,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     password: '',
     phone: '',
     role: 'teacher' as UserRole,
+    assignedRoles: [] as UserRole[],
     schoolId: targetSchool.id,
     grade: 1 as GradeLevel,
     stream: 'Dove' as StreamName,
@@ -518,7 +561,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         (u.staffNumber && u.staffNumber.toLowerCase().includes(userSearch.toLowerCase())) ||
         (u.phone && u.phone.includes(userSearch));
 
-      const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+      const matchesRole = userRoleFilter === 'all' || getUserRoles(u).includes(userRoleFilter as UserRole);
       const matchesSchool = userSchoolFilter === 'all' || (u.schoolId ? u.schoolId === userSchoolFilter : userSchoolFilter === currentTenant.id);
       
       const isUserActive = u.isActive !== false;
@@ -531,10 +574,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     });
   }, [users, userSearch, userRoleFilter, userSchoolFilter, userStatusFilter, currentTenant.id]);
 
-  const handleToggleUserActivation = (user: User) => {
+  const handleToggleUserActivation = async (user: User) => {
     const nextStatus = user.isActive === false ? true : false;
-    Storage.toggleUserStatus(user.id, nextStatus);
-    showToast(`Account for ${user.name} is now ${nextStatus ? 'ACTIVE' : 'DEACTIVATED'}.`, nextStatus ? 'success' : 'info');
+    try {
+      await ClientDataStore.apiUpdateUser(user.id, { isActive: nextStatus });
+      showToast(`Account for ${user.name} is now ${nextStatus ? 'ACTIVE' : 'DEACTIVATED'}.`, nextStatus ? 'success' : 'info');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed updating account status.', 'error');
+    }
   };
 
   const handleOpenAddUser = () => {
@@ -546,6 +593,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       password: '',
       phone: '+254 7',
       role: '' as UserRole,
+      assignedRoles: [] as UserRole[],
       schoolId: targetSchool.id,
       grade: 4,
       stream: 'Dove',
@@ -566,9 +614,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setUserForm({
       name: user.name,
       email: user.email,
-      password: user.password || '',
+      password: '',
       phone: user.phone || '',
       role: user.role,
+      assignedRoles: (user.assignedRoles || []).filter((r) => r !== user.role),
       schoolId: user.schoolId || currentTenant.id,
       grade: user.grade || 1,
       stream: user.stream || 'Dove',
@@ -582,11 +631,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setShowUserModal(true);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (userSaving) return;
     const role = systemRoles.find((item) => item.slug === userForm.role);
     if (!userForm.name.trim() || !userForm.email.trim()) {
       showToast('Enter the legal name so the username can be created.', 'error');
+      return;
+    }
+    if (!userForm.role) {
+      showToast('Choose an account role.', 'error');
       return;
     }
     if (role?.numberKind === 'admission' && !userForm.admissionNumber.trim()) {
@@ -598,68 +652,87 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       return;
     }
 
+    const trimmedPassword = userForm.password.trim();
+    if (editingUserId && trimmedPassword.length > 0 && trimmedPassword.length < 4) {
+      showToast('New password must be at least 4 characters.', 'error');
+      return;
+    }
+    if (!editingUserId && trimmedPassword.length < 4) {
+      showToast('Password must be at least 4 characters.', 'error');
+      return;
+    }
+
     const registryNumber = role?.numberKind === 'admission'
       ? userForm.admissionNumber.trim()
       : role?.numberKind === 'staff'
         ? userForm.staffNumber.trim()
         : '';
 
-    if (editingUserId) {
-      Storage.updateUser(editingUserId, {
-        name: userForm.name,
-        email: userForm.email,
-        password: userForm.password,
-        phone: userForm.phone,
-        role: userForm.role,
-        schoolId: userForm.schoolId,
-        grade: userForm.role === 'student' ? userForm.grade : undefined,
-        stream: userForm.role === 'student' ? userForm.stream : undefined,
-        admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
-        staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
-        tscNumber: userForm.tscNumber,
-        designation: userForm.designation,
-        department: userForm.department,
-        isActive: userForm.isActive
-      });
-      saveProvisionedAccount({
-        id: editingUserId,
-        name: userForm.name,
-        email: userForm.email.toLowerCase().trim(),
-        password: userForm.password,
-        phone: userForm.phone,
-        role: userForm.role,
-        schoolId: userForm.schoolId,
-        admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
-        staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
-        isActive: userForm.isActive,
-      });
-      showToast(`Updated ${userForm.name}. Username ${userForm.email}.`, 'success', true);
-    } else {
-      const newUser: User = {
-        id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        name: userForm.name,
-        email: userForm.email.toLowerCase().trim(),
-        password: userForm.password,
-        phone: userForm.phone,
-        role: userForm.role,
-        schoolId: userForm.schoolId,
-        grade: userForm.role === 'student' ? userForm.grade : undefined,
-        stream: userForm.role === 'student' ? userForm.stream : undefined,
-        admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
-        staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
-        designation: role?.name || userForm.designation,
-        department: userForm.department,
-        isActive: userForm.isActive
-      };
-      Storage.addUser(newUser);
-      saveProvisionedAccount(newUser);
-      showToast(
-        `Created ${newUser.name}. Username ${newUser.email}. Password ${newUser.password}.${registryNumber ? ` Number ${registryNumber}.` : ''}`,
-        'success',
-        true,
-      );
+    const allAssignedRoles = normalizeAssignedRoleList(userForm.role, userForm.assignedRoles);
+    const hasClassRole =
+      allAssignedRoles.includes('student') || allAssignedRoles.includes('class_teacher');
+    const hasHodRole = allAssignedRoles.includes('hod');
+
+    setUserSaving(true);
+    try {
+      if (editingUserId) {
+        const updates: Partial<User> & { password?: string } = {
+          name: userForm.name.trim(),
+          email: userForm.email.toLowerCase().trim(),
+          phone: userForm.phone,
+          role: userForm.role,
+          assignedRoles: allAssignedRoles,
+          schoolId: userForm.schoolId,
+          grade: hasClassRole ? userForm.grade : undefined,
+          stream: hasClassRole ? userForm.stream : undefined,
+          admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
+          staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
+          tscNumber: userForm.tscNumber,
+          designation: userForm.designation,
+          department: hasHodRole ? userForm.department : userForm.department,
+          isActive: userForm.isActive
+        };
+        if (trimmedPassword.length > 0) {
+          updates.password = trimmedPassword;
+        }
+        const updated = await ClientDataStore.apiUpdateUser(editingUserId, updates);
+        saveProvisionedAccount({
+          ...updated,
+          ...(trimmedPassword ? { password: trimmedPassword } : {}),
+        });
+        showToast(`Updated ${updated.name}. Username ${updated.email}.`, 'success', true);
+      } else {
+        const newUser: User = {
+          id: `usr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: userForm.name.trim(),
+          email: userForm.email.toLowerCase().trim(),
+          password: trimmedPassword,
+          phone: userForm.phone,
+          role: userForm.role,
+          assignedRoles: allAssignedRoles,
+          schoolId: userForm.schoolId,
+          grade: hasClassRole ? userForm.grade : undefined,
+          stream: hasClassRole ? userForm.stream : undefined,
+          admissionNumber: role?.numberKind === 'admission' ? userForm.admissionNumber.trim() : undefined,
+          staffNumber: role?.numberKind === 'staff' ? userForm.staffNumber.trim() : undefined,
+          designation: role?.name || userForm.designation,
+          department: hasHodRole ? (userForm.department || 'Sciences & Mathematics') : userForm.department,
+          isActive: userForm.isActive
+        };
+        const created = await ClientDataStore.apiCreateUser(newUser);
+        saveProvisionedAccount({ ...created, password: trimmedPassword });
+        showToast(
+          `Created ${created.name}. Username ${created.email}. Password ${trimmedPassword}.${registryNumber ? ` Number ${registryNumber}.` : ''}`,
+          'success',
+          true,
+        );
+      }
+      setShowUserModal(false);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed saving user account to database.', 'error');
+    } finally {
+      setUserSaving(false);
     }
-    setShowUserModal(false);
   };
 
   const handleSaveRole = (e: React.FormEvent) => {
@@ -675,9 +748,51 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   };
 
   const handleDeleteUser = (user: User) => {
-    if (confirm(`Are you sure you want to completely remove user ${user.name} (${user.email})? This action cannot be undone.`)) {
-      Storage.deleteUser(user.id);
-      showToast(`User ${user.name} removed.`, 'info');
+    setDeleteUserTarget(user);
+    setDeleteUserError('');
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteUserTarget || deleteUserBusy) return;
+    setDeleteUserBusy(true);
+    setDeleteUserError('');
+    try {
+      await ClientDataStore.apiDeleteUser(deleteUserTarget.id);
+      showToast(`User ${deleteUserTarget.name} (${deleteUserTarget.email}) permanently removed.`, 'info');
+      setDeleteUserTarget(null);
+    } catch (err: any) {
+      setDeleteUserError(err?.message || 'Failed removing user account.');
+    } finally {
+      setDeleteUserBusy(false);
+    }
+  };
+
+  const handleOpenResetPassword = (user: User) => {
+    setResetPasswordTarget(user);
+    setResetPasswordValue('');
+    setResetPasswordError('');
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordTarget || resetPasswordBusy) return;
+    const nextPass = resetPasswordValue.trim();
+    if (nextPass.length < 4) {
+      setResetPasswordError('Password must be at least 4 characters.');
+      return;
+    }
+    setResetPasswordBusy(true);
+    setResetPasswordError('');
+    try {
+      await ClientDataStore.apiResetUserPassword(resetPasswordTarget.id, nextPass);
+      saveProvisionedAccount({ ...resetPasswordTarget, password: nextPass });
+      showToast(`Password updated for ${resetPasswordTarget.name} (${resetPasswordTarget.email}).`, 'success', true);
+      setResetPasswordTarget(null);
+      setResetPasswordValue('');
+    } catch (err: any) {
+      setResetPasswordError(err?.message || 'Failed resetting password.');
+    } finally {
+      setResetPasswordBusy(false);
     }
   };
 
@@ -1070,6 +1185,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveSubTab('school_settings')}
+          className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+            activeSubTab === 'school_settings'
+              ? 'bg-indigo-600 text-white shadow-md'
+              : 'text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+          <span>School Settings</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('users')}
           className={`px-4 py-2 text-xs font-black rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
             activeSubTab === 'users'
@@ -1159,18 +1286,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      {school.logoUrl ? (
-                        <div className="w-12 h-12 rounded-xl bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center overflow-hidden">
-                          <img src={school.logoUrl} alt={school.name} className="w-full h-full object-contain" />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center shrink-0 shadow-xs">
-                          {school.crestIcon === 'school' ? <School className="w-6 h-6" /> :
-                           school.crestIcon === 'shield' ? <Shield className="w-6 h-6" /> :
-                           school.crestIcon === 'book-open' ? <BookOpen className="w-6 h-6" /> :
-                           <GraduationCap className="w-6 h-6" />}
-                        </div>
-                      )}
+                      <TenantSchoolLogo variant="emblem" size="sm" tenantOverride={school} />
 
                       <div>
                         <div className="flex items-center gap-2">
@@ -1531,18 +1647,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 {/* Simulated Navbar Header */}
                 <div className={`p-3 rounded-xl bg-gradient-to-r ${selectedHeaderGradient} text-white shadow-md flex items-center justify-between gap-3`}>
                   <div className="flex items-center gap-2.5">
-                    {customLogoUrl ? (
-                      <div className="w-9 h-9 rounded-lg bg-white p-0.5 shrink-0 overflow-hidden flex items-center justify-center">
-                        <img src={customLogoUrl} alt="Preview Logo" className="w-full h-full object-contain" />
-                      </div>
-                    ) : (
-                      <div className="w-9 h-9 rounded-lg bg-white/20 text-amber-300 flex items-center justify-center shrink-0">
-                        {selectedCrest === 'school' ? <School className="w-5 h-5" /> :
-                         selectedCrest === 'shield' ? <Shield className="w-5 h-5" /> :
-                         selectedCrest === 'book-open' ? <BookOpen className="w-5 h-5" /> :
-                         <GraduationCap className="w-5 h-5" />}
-                      </div>
-                    )}
+                    <TenantSchoolLogo
+                      variant="emblem"
+                      size="xs"
+                      tenantOverride={{
+                        ...targetSchool,
+                        customLogoBase64: customLogoUrl || undefined,
+                        logoUrl: customLogoUrl || targetSchool.logoUrl,
+                        crestIcon: selectedCrest,
+                      }}
+                    />
                     <div>
                       <div className="text-xs font-black font-serif text-white">{targetSchool.name}</div>
                       <div className="text-[9px] text-slate-300 italic">{targetSchool.motto}</div>
@@ -1587,6 +1701,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       )}
 
+      {activeSubTab === 'school_settings' && (
+        <SchoolSettingsPanel
+          schoolId={selectedSchoolId}
+          allowTenantSwitch
+          onTenantChange={(id) => {
+            setSelectedSchoolId(id);
+            switchTenant(id);
+          }}
+        />
+      )}
+
       {/* ========================================================
           SUB-TAB 3: USER & STAFF MANAGEMENT (ACTIVATE / DEACTIVATE / ADD / REMOVE)
           ======================================================== */}
@@ -1595,10 +1720,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200">
             <div>
               <h2 className="text-base font-black text-slate-900">System Users & Account Governance</h2>
-              <p className="text-xs text-slate-500">Manage, edit, activate, deactivate, or assign accounts across all schools.</p>
+              <p className="text-xs text-slate-500">Manage, edit, reset passwords, activate/deactivate, print credentials, or remove accounts across all schools.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
+                type="button"
+                onClick={() => setShowPrintableModal(true)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-amber-300" />
+                <span>Print Credentials Roster</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setShowRoleModal(true)}
                 className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
               >
@@ -1606,6 +1740,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <span>Manage Roles</span>
               </button>
               <button
+                type="button"
                 onClick={handleOpenAddUser}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all cursor-pointer"
               >
@@ -1669,7 +1804,91 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
           {/* User Table */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
+            {/* Mobile Stacked User Cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredUsers.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No users matching your search filters.
+                </div>
+              ) : (
+                filteredUsers.slice(0, 50).map((u) => {
+                  const isActive = u.isActive !== false;
+                  const school = allTenants.find((t) => t.id === u.schoolId);
+                  return (
+                    <div
+                      key={`sa-mob-${u.id}`}
+                      className={`p-3.5 space-y-2 ${!isActive ? 'bg-rose-50/40' : 'bg-white'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-bold text-sm text-slate-900 truncate">{u.name}</div>
+                          <div className="text-[11px] font-mono text-slate-500 truncate">{u.email}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {isActive ? 'Active' : 'Off'}
+                          </span>
+                          <MobileOverflowMenu
+                            label={`Actions for ${u.name}`}
+                            items={[
+                              {
+                                label: 'Edit User',
+                                icon: <Edit3 className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenEditUser(u),
+                              },
+                              {
+                                label: 'Reset Password',
+                                icon: <KeyRound className="w-3.5 h-3.5" />,
+                                onClick: () => handleOpenResetPassword(u),
+                              },
+                              {
+                                label: isActive ? 'Deactivate Account' : 'Activate Account',
+                                icon: isActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />,
+                                onClick: () => handleToggleUserActivation(u),
+                              },
+                              {
+                                label: 'Delete User',
+                                icon: <Trash2 className="w-3.5 h-3.5" />,
+                                danger: true,
+                                onClick: () => handleDeleteUser(u),
+                              },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {getUserRoles(u).map((roleSlug, idx) => (
+                          <span
+                            key={`sa-mob-${u.id}-${roleSlug}`}
+                            className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                              idx === 0
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {roleSlug.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 pt-1 border-t border-slate-100">
+                        <span className="font-medium truncate">
+                          {school ? `${school.shortName} (${school.code})` : 'Universal · ROOT'}
+                        </span>
+                        <span className="font-mono text-slate-500">
+                          {u.admissionNumber || u.tscNumber || u.phone || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                   <tr>
@@ -1700,9 +1919,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           </td>
 
                           <td className="p-3.5">
-                            <span className="px-2 py-0.5 rounded-md font-bold text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 capitalize">
-                              {u.role.replace('_', ' ')}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {getUserRoles(u).map((roleSlug, idx) => (
+                                <span
+                                  key={`${u.id}-${roleSlug}`}
+                                  className={`px-2 py-0.5 rounded-md font-bold text-[10px] border capitalize ${
+                                    idx === 0
+                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}
+                                >
+                                  {roleSlug.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
                             {u.grade && (
                               <div className="text-[10px] text-slate-500 mt-0.5">
                                 Grade {u.grade} {u.stream ? `(${u.stream})` : ''}
@@ -1738,18 +1968,28 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             </button>
                           </td>
 
-                          {/* Actions: Edit, Assign, Delete */}
+                          {/* Actions: Edit, Reset Password, Delete */}
                           <td className="p-3.5 text-right space-x-1 whitespace-nowrap">
                             <button
+                              type="button"
                               onClick={() => handleOpenEditUser(u)}
-                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors"
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-colors cursor-pointer"
                               title="Edit user details"
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
                             <button
+                              type="button"
+                              onClick={() => handleOpenResetPassword(u)}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-amber-50 hover:text-amber-700 transition-colors cursor-pointer"
+                              title="Reset user password"
+                            >
+                              <KeyRound className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleDeleteUser(u)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                              className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
                               title="Delete user"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -2352,10 +2592,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">System Role *</label>
+                  <label className="font-bold text-slate-700 block mb-1">Primary System Role *</label>
                   <select
                     value={userForm.role}
-                    onChange={(e) => setUserForm(buildUserDraft({ ...userForm, role: e.target.value as UserRole }, numberEdited))}
+                    onChange={(e) => {
+                      const nextPrimary = e.target.value as UserRole;
+                      setUserForm(
+                        buildUserDraft(
+                          {
+                            ...userForm,
+                            role: nextPrimary,
+                            assignedRoles: userForm.assignedRoles.filter((r) => r !== nextPrimary),
+                          },
+                          numberEdited
+                        )
+                      );
+                    }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold bg-white"
                   >
                     <option value="">Choose an account role</option>
@@ -2379,16 +2631,68 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </div>
               </div>
 
+              {userForm.role && (
+                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800">Additional Assigned Roles (Multi-Role)</span>
+                    <span className="text-[10px] font-mono text-indigo-700">
+                      {1 + userForm.assignedRoles.filter((r) => r !== userForm.role).length} role(s)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    {systemRoles
+                      .filter((role) => role.slug !== userForm.role)
+                      .map((role) => {
+                        const slug = role.slug as UserRole;
+                        const checked = userForm.assignedRoles.includes(slug);
+                        return (
+                          <label
+                            key={role.id}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                              checked
+                                ? 'bg-indigo-100 border-indigo-300 text-indigo-950 font-bold'
+                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                setUserForm((prev) => ({
+                                  ...prev,
+                                  assignedRoles: prev.assignedRoles.includes(slug)
+                                    ? prev.assignedRoles.filter((r) => r !== slug)
+                                    : [...prev.assignedRoles, slug],
+                                }))
+                              }
+                              className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300"
+                            />
+                            <span className="truncate">{role.name}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Generated password</label>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    {editingUserId ? 'New password (optional)' : 'Password *'}
+                  </label>
                   <input
                     type="text"
-                    readOnly
                     value={userForm.password}
+                    onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                    placeholder={editingUserId ? 'Leave blank to keep existing password' : 'Generated or custom password'}
+                    required={!editingUserId}
                     className="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-mono font-bold bg-white"
                   />
-                  <p className="mt-1 text-[11px] text-slate-500">Role prefix, then @, then the year. A student is st@{new Date().getFullYear()}.</p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {editingUserId
+                      ? 'Leave blank to preserve the user’s existing database password.'
+                      : `Defaults to role prefix + @${new Date().getFullYear()} (e.g. st@${new Date().getFullYear()}).`}
+                  </p>
                 </div>
                 {systemRoles.find((role) => role.slug === userForm.role)?.numberKind === 'admission' && (
                   <div>
@@ -2422,7 +2726,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 )}
               </div>
 
-              {userForm.role === 'student' && (
+              {Boolean(userForm.role && normalizeAssignedRoleList(userForm.role, userForm.assignedRoles).some((r) => r === 'student' || r === 'class_teacher')) && (
                 <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">Grade</label>
@@ -2445,6 +2749,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white"
                     />
                   </div>
+                </div>
+              )}
+
+              {Boolean(userForm.role && normalizeAssignedRoleList(userForm.role, userForm.assignedRoles).includes('hod')) && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="font-bold text-slate-700 block mb-1">Department</label>
+                  <select
+                    value={userForm.department || 'Sciences & Mathematics'}
+                    onChange={(e) => setUserForm({ ...userForm, department: e.target.value })}
+                    className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold"
+                  >
+                    <option value="Sciences & Mathematics">Sciences & Mathematics</option>
+                    <option value="Languages & Humanities">Languages & Humanities</option>
+                    <option value="Creative Arts & Applied Technical">Creative Arts & Applied Technical</option>
+                  </select>
                 </div>
               )}
 
@@ -2472,9 +2791,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black shadow-md cursor-pointer"
+                  disabled={userSaving}
+                  className="px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-black shadow-md cursor-pointer"
                 >
-                  {editingUserId ? 'Save User' : 'Create User'}
+                  {userSaving ? 'Saving…' : editingUserId ? 'Save User' : 'Create User'}
                 </button>
               </div>
             </form>
@@ -2631,6 +2951,129 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================
+          MODAL: RESET USER PASSWORD (SUPER ADMIN)
+          ======================================================== */}
+      {resetPasswordTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">Reset User Password</h3>
+                  <p className="text-[11px] font-mono text-slate-500">{resetPasswordTarget.email}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setResetPasswordTarget(null)} className="text-slate-400 hover:text-slate-700 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleConfirmResetPassword} className="mt-4 space-y-4 text-xs">
+              <p className="text-slate-600">
+                Set a new database-retained password for <strong className="text-slate-900">{resetPasswordTarget.name}</strong>. It will be stored hashed for sign-in and encrypted in the Super Admin printable credential vault.
+              </p>
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">New Password (min 4 characters)</label>
+                <input
+                  type="text"
+                  required
+                  minLength={4}
+                  autoFocus
+                  value={resetPasswordValue}
+                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  placeholder="Enter new password..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              {resetPasswordError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold">
+                  {resetPasswordError}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setResetPasswordTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetPasswordBusy}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {resetPasswordBusy ? 'Resetting…' : 'Save New Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: CONFIRM DELETE USER (SUPER ADMIN)
+          ======================================================== */}
+      {deleteUserTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-rose-950">Remove User Account</h3>
+                  <p className="text-[11px] font-mono text-rose-700">{deleteUserTarget.email}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setDeleteUserTarget(null)} className="text-slate-400 hover:text-slate-700 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-4 text-xs">
+              <p className="text-slate-700 leading-relaxed">
+                Are you sure you want to permanently remove <strong className="text-slate-900">{deleteUserTarget.name}</strong> ({deleteUserTarget.email})? This removes the account, credentials, and active sessions from the database.
+              </p>
+              {deleteUserError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-semibold">
+                  {deleteUserError}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteUserTarget(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteUserBusy}
+                  onClick={handleConfirmDeleteUser}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black disabled:opacity-60 cursor-pointer"
+                >
+                  {deleteUserBusy ? 'Removing…' : 'Remove User'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: PRINTABLE USER CREDENTIALS PER TENANT SCHOOL
+          ======================================================== */}
+      <PrintableCredentialsModal
+        isOpen={showPrintableModal}
+        initialSchoolId={userSchoolFilter !== 'all' ? userSchoolFilter : 'all'}
+        onClose={() => setShowPrintableModal(false)}
+      />
     </div>
   );
 };

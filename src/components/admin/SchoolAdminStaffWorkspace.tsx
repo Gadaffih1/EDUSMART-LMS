@@ -15,7 +15,8 @@ import {
   JUNIOR_STREAMS
 } from '../../types';
 import { Storage } from '../../utils/storage';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
@@ -88,6 +89,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
   currentUser,
   onLogout
 }) => {
+  const { currentTenant } = useTenant();
   // Navigation active tab - default to sanatorium if nurse or sanatorium officer
   const [activeTab, setActiveTab] = useState<AdminTab>(() => 
     currentUser.email === 'nurse@edusmart.ac.ke' || (currentUser.designation && currentUser.designation.toLowerCase().includes('nurse'))
@@ -380,8 +382,8 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             
             {/* Branding + Staff Role */}
             <div className="flex items-center gap-4">
-              <div className="bg-white p-2 rounded-xl border border-amber-400 shadow-xs">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+              <div className="bg-white p-1.5 rounded-xl border border-amber-400 shadow-xs">
+                <TenantSchoolLogo variant="horizontal" size="sm" />
               </div>
               <div>
                 <div className="flex items-center gap-2 text-[11px] font-bold tracking-wider text-amber-400 uppercase">
@@ -1767,7 +1769,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div className="flex items-center gap-3">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
                 <div>
                   <h3 className="font-black text-slate-900 text-base">
                     Official CBC Learner Progress Transcript
@@ -1805,8 +1807,8 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             </div>
 
             {/* Subject Marks Table */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden mb-4">
-              <table className="w-full text-left text-xs">
+            <div className="border border-slate-200 rounded-xl overflow-x-auto mb-4">
+              <table className="w-full text-left text-xs min-w-[540px]">
                 <thead className="bg-slate-100 text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
                   <tr>
                     <th className="py-2.5 px-3">Subject</th>
@@ -1866,7 +1868,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
           <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
               <div className="flex items-center gap-3">
-                <EduSmartGadsaLogo variant="horizontal" size="sm" />
+                <TenantSchoolLogo variant="horizontal" size="sm" />
                 <div>
                   <h3 className="font-black text-slate-900 text-base">
                     {printModalType === 'timetable' && `Official Class Routine Timetable (Grade ${printableGrade} ${printableStream})`}
@@ -1878,7 +1880,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                     {printModalType === 'register' && `Marked Class Attendance Roll (Grade ${attendanceGrade} ${attendanceStream})`}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Edu-Smart PORTAL by Gadsa Systems · Authorized School Seal
+                    {currentTenant.name} · Authorized School Seal
                   </p>
                 </div>
               </div>
@@ -1962,30 +1964,32 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                     </p>
                   </div>
 
-                  <table className="w-full text-left text-xs border border-slate-300">
-                    <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
-                      <tr>
-                        <th className="p-2 border border-slate-300">Date</th>
-                        <th className="p-2 border border-slate-300">Time</th>
-                        <th className="p-2 border border-slate-300">Subject / Paper</th>
-                        <th className="p-2 border border-slate-300">Room / Hall</th>
-                        <th className="p-2 border border-slate-300">Invigilator</th>
-                        <th className="p-2 border border-slate-300">Instructions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {activeExamSchedule.map(exam => (
-                        <tr key={exam.id} className="hover:bg-slate-100/50">
-                          <td className="p-2 font-mono font-bold border border-slate-300">{exam.examDate}</td>
-                          <td className="p-2 font-mono border border-slate-300">{exam.startTime} - {exam.endTime}</td>
-                          <td className="p-2 font-bold text-slate-900 border border-slate-300">{exam.subject}</td>
-                          <td className="p-2 border border-slate-300">{exam.room}</td>
-                          <td className="p-2 border border-slate-300">{exam.invigilatorName}</td>
-                          <td className="p-2 text-[11px] text-slate-600 border border-slate-300">{exam.instructions}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border border-slate-300 min-w-[600px]">
+                      <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
+                        <tr>
+                          <th className="p-2 border border-slate-300">Date</th>
+                          <th className="p-2 border border-slate-300">Time</th>
+                          <th className="p-2 border border-slate-300">Subject / Paper</th>
+                          <th className="p-2 border border-slate-300">Room / Hall</th>
+                          <th className="p-2 border border-slate-300">Invigilator</th>
+                          <th className="p-2 border border-slate-300">Instructions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {activeExamSchedule.map(exam => (
+                          <tr key={exam.id} className="hover:bg-slate-100/50">
+                            <td className="p-2 font-mono font-bold border border-slate-300">{exam.examDate}</td>
+                            <td className="p-2 font-mono border border-slate-300">{exam.startTime} - {exam.endTime}</td>
+                            <td className="p-2 font-bold text-slate-900 border border-slate-300">{exam.subject}</td>
+                            <td className="p-2 border border-slate-300">{exam.room}</td>
+                            <td className="p-2 border border-slate-300">{exam.invigilatorName}</td>
+                            <td className="p-2 text-[11px] text-slate-600 border border-slate-300">{exam.instructions}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
                   <div className="text-[11px] text-slate-500 italic">
                     Note: All candidates must be seated 15 minutes before reading time. Mathematical sets required for Science and Math.
@@ -2040,28 +2044,30 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                     </p>
                   </div>
 
-                  <table className="w-full text-left text-xs border border-slate-300">
-                    <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
-                      <tr>
-                        <th className="p-2 border border-slate-300">Term</th>
-                        <th className="p-2 border border-slate-300">Dates</th>
-                        <th className="p-2 border border-slate-300">Event Title</th>
-                        <th className="p-2 border border-slate-300">Audience</th>
-                        <th className="p-2 border border-slate-300">Venue</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {calendarEvents.map(evt => (
-                        <tr key={evt.id} className="hover:bg-slate-100/50">
-                          <td className="p-2 font-bold border border-slate-300">Term {evt.term}</td>
-                          <td className="p-2 font-mono border border-slate-300">{evt.startDate}</td>
-                          <td className="p-2 font-bold text-slate-900 border border-slate-300">{evt.title}</td>
-                          <td className="p-2 border border-slate-300">{evt.targetAudience}</td>
-                          <td className="p-2 border border-slate-300">{evt.venue || 'Campus'}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border border-slate-300 min-w-[540px]">
+                      <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
+                        <tr>
+                          <th className="p-2 border border-slate-300">Term</th>
+                          <th className="p-2 border border-slate-300">Dates</th>
+                          <th className="p-2 border border-slate-300">Event Title</th>
+                          <th className="p-2 border border-slate-300">Audience</th>
+                          <th className="p-2 border border-slate-300">Venue</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {calendarEvents.map(evt => (
+                          <tr key={evt.id} className="hover:bg-slate-100/50">
+                            <td className="p-2 font-bold border border-slate-300">Term {evt.term}</td>
+                            <td className="p-2 font-mono border border-slate-300">{evt.startDate}</td>
+                            <td className="p-2 font-bold text-slate-900 border border-slate-300">{evt.title}</td>
+                            <td className="p-2 border border-slate-300">{evt.targetAudience}</td>
+                            <td className="p-2 border border-slate-300">{evt.venue || 'Campus'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
@@ -2165,31 +2171,33 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                     </p>
                   </div>
 
-                  <table className="w-full text-left text-xs border border-slate-300">
-                    <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
-                      <tr>
-                        <th className="p-2 border border-slate-300 w-12">#</th>
-                        <th className="p-2 border border-slate-300">Student Name</th>
-                        <th className="p-2 border border-slate-300">Roll Status</th>
-                        <th className="p-2 border border-slate-300">Teacher Remarks</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {(selectedClassAttendance?.records || [
-                        { studentName: 'Brian Otieno', status: 'present', remarks: 'Arrived on time' },
-                        { studentName: 'Faith Wanjiku', status: 'present', remarks: 'Arrived on time' },
-                        { studentName: 'Kelvin Kiprop', status: 'excused', remarks: 'Hospital dental visit' },
-                        { studentName: 'Mercy Achieng', status: 'present', remarks: 'Arrived on time' }
-                      ]).map((r, i) => (
-                        <tr key={i} className="hover:bg-slate-100/50">
-                          <td className="p-2 font-mono text-center border border-slate-300">{i + 1}</td>
-                          <td className="p-2 font-bold text-slate-900 border border-slate-300">{r.studentName}</td>
-                          <td className="p-2 font-bold uppercase text-[10px] border border-slate-300">{r.status}</td>
-                          <td className="p-2 text-[11px] text-slate-600 border border-slate-300">{r.remarks || '-'}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border border-slate-300 min-w-[480px]">
+                      <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
+                        <tr>
+                          <th className="p-2 border border-slate-300 w-12">#</th>
+                          <th className="p-2 border border-slate-300">Student Name</th>
+                          <th className="p-2 border border-slate-300">Roll Status</th>
+                          <th className="p-2 border border-slate-300">Teacher Remarks</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {(selectedClassAttendance?.records || [
+                          { studentName: 'Brian Otieno', status: 'present', remarks: 'Arrived on time' },
+                          { studentName: 'Faith Wanjiku', status: 'present', remarks: 'Arrived on time' },
+                          { studentName: 'Kelvin Kiprop', status: 'excused', remarks: 'Hospital dental visit' },
+                          { studentName: 'Mercy Achieng', status: 'present', remarks: 'Arrived on time' }
+                        ]).map((r, i) => (
+                          <tr key={i} className="hover:bg-slate-100/50">
+                            <td className="p-2 font-mono text-center border border-slate-300">{i + 1}</td>
+                            <td className="p-2 font-bold text-slate-900 border border-slate-300">{r.studentName}</td>
+                            <td className="p-2 font-bold uppercase text-[10px] border border-slate-300">{r.status}</td>
+                            <td className="p-2 text-[11px] text-slate-600 border border-slate-300">{r.remarks || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

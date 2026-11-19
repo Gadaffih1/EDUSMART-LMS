@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Tenant } from '../../types/tenant';
 import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from './TenantSchoolLogo';
 
 export interface TenantPrintHeaderProps {
   title?: string;
@@ -83,29 +84,12 @@ export const TenantPrintHeader: React.FC<TenantPrintHeaderProps> = ({
             
             {/* School Logo / Crest */}
             <div className="shrink-0">
-              {tenant.customLogoBase64 ? (
-                <img 
-                  src={tenant.customLogoBase64} 
-                  alt={tenant.name} 
-                  className="w-16 h-16 sm:w-20 sm:h-20 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" 
-                />
-              ) : tenant.logoUrl ? (
-                <img 
-                  src={tenant.logoUrl} 
-                  alt={tenant.name} 
-                  className="w-16 h-16 sm:w-20 sm:h-20 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" 
-                />
-              ) : (
-                <div 
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex flex-col items-center justify-center p-2 text-white shadow-xs"
-                  style={{ backgroundColor: tenant.primaryColorHex || '#0f172a' }}
-                >
-                  <GraduationCap className="w-8 h-8 text-amber-400" />
-                  <span className="text-[7px] font-mono tracking-widest uppercase mt-0.5 opacity-90">
-                    EST. {tenant.establishedYear || 1990}
-                  </span>
-                </div>
-              )}
+              <TenantSchoolLogo
+                variant="emblem"
+                size="lg"
+                tenantOverride={tenant}
+                className="border-slate-200 shadow-2xs"
+              />
             </div>
 
             {/* School Name, Tagline & Address */}

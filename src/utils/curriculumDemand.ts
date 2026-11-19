@@ -1,4 +1,5 @@
 import { GradeLevel, SubjectName } from '../types';
+import { ClientDataStore } from './clientDataStore';
 
 export interface SubjectCurriculumDemand {
   subject: SubjectName;
@@ -8,13 +9,8 @@ export interface SubjectCurriculumDemand {
 }
 
 function readDemand(key: string): SubjectCurriculumDemand[] {
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<SubjectCurriculumDemand[]>(key, []);
+  return Array.isArray(data) ? data : [];
 }
 
 export function getCurriculumDemandForGrade(grade: GradeLevel): SubjectCurriculumDemand[] {

@@ -1,4 +1,5 @@
 import { User } from '../types';
+import { ClientDataStore } from './clientDataStore';
 
 const STORAGE_KEY = 'edusmart_role_seats_v1';
 const EXCLUDED_ROLES = new Set(['student', 'parent']);
@@ -29,18 +30,12 @@ export interface RoleSeat {
 }
 
 function readAll(): RoleSeat[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const data = ClientDataStore.getCollection<RoleSeat[]>(STORAGE_KEY, []);
+  return Array.isArray(data) ? data : [];
 }
 
 function writeAll(seats: RoleSeat[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(seats));
+  ClientDataStore.setCollection(STORAGE_KEY, seats);
 }
 
 export function userInSchool(user: User, schoolId: string): boolean {

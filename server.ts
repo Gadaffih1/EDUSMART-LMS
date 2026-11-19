@@ -1,12 +1,23 @@
 import express from 'express';
 import type { Request, Response } from 'express';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { networkInterfaces } from 'os';
 import { fileURLToPath } from 'url';
+import { initDatabase } from './src/server/db.ts';
+import { runDatabaseMigrations } from './src/server/migrate.ts';
+import { attachAuthSession, registerAuthRoutes } from './src/server/authRoutes.ts';
+import { registerWebAuthnRoutes } from './src/server/webauthnRoutes.ts';
+import { registerDataRoutes } from './src/server/dataRoutes.ts';
+import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
+import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
+import { registerAcademicHierarchyRoutes } from './src/server/academicHierarchyRoutes.ts';
+import { registerVirtualClassroomRoutes, startVirtualLessonScheduler } from './src/server/virtualClassroomRoutes.ts';
+import { registerUserManagementRoutes } from './src/server/userManagementRoutes.ts';
+import { registerExecutiveReportsRoutes } from './src/server/executiveReportsRoutes.ts';
+import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
 
@@ -15,11 +26,7 @@ const __dirname = path.dirname(__filename);
 
 // Helper to determine the listening port across container environments, CLI args, and defaults
 function resolvePort(): number {
-  if (process.env.PORT) {
-    const parsed = parseInt(process.env.PORT, 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  // Check CLI flags: --port 3000, -p 3000, or --port=3000
+  // Check CLI flags first: --port 3000, -p 3000, or --port=3000
   for (let i = 0; i < process.argv.length; i++) {
     const arg = process.argv[i];
     if (arg === '--port' || arg === '-p') {
@@ -33,6 +40,10 @@ function resolvePort(): number {
       if (!isNaN(parsed) && parsed > 0) return parsed;
     }
   }
+  if (process.env.PORT) {
+    const parsed = parseInt(process.env.PORT, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
   return 3000;
 }
 
@@ -41,17 +52,47 @@ async function startServer() {
   const PORT = resolvePort();
   const HOST = process.env.HOST || '0.0.0.0';
 
-  app.use(express.json());
+  app.use(
+    express.json({
+      limit: '50mb',
+      type: ['application/json', 'application/webhook+json'],
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf.toString('utf8');
+      },
+    })
+  );
+
+  // Raw binary body parser for large teacher E-resource uploads (video, audio, PDF, images up to 60MB)
+  app.use(
+    '/api/files/upload-binary',
+    express.raw({
+      type: '*/*',
+      limit: '65mb',
+    })
+  );
 
   const rootDir = typeof __dirname !== 'undefined' ? __dirname : process.cwd();
 
+  // Initialize local cache/database and run safe idempotent migrations
+  initDatabase(rootDir);
+  runDatabaseMigrations(rootDir);
+
+  // Connect live MySQL database when configured via .env (MYSQL_* / MYSQL_URL)
+  await initMySqlBridge();
+
+  // Attach HTTP-only session cookie middleware
+  app.use(attachAuthSession);
+
   // Health and readiness check endpoints for container orchestrators, load balancers, and Cloud Run
   const healthHandler = (_req: Request, res: Response) => {
+    const mysqlStatus = getMySqlStatus();
     res.status(200).json({
       status: 'ok',
       service: 'EduSmart API',
       port: PORT,
       host: HOST,
+      database: mysqlStatus.connected ? 'mysql2' : 'sqlite-wal',
+      mysql: mysqlStatus,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       geminiConfigured: !!process.env.GEMINI_API_KEY
@@ -64,214 +105,17 @@ async function startServer() {
   app.get('/livez', healthHandler);
   app.get('/readyz', healthHandler);
 
-  // =========================================================================
-  // PERSISTENT DATABASE STORAGE & SYNC ENGINE BACKEND
-  // Provides disk-backed database persistence and synchronization for all LMS
-  // records, user accounts, and activity data.
-  // =========================================================================
-  const dbDir = path.resolve(rootDir, 'data');
-  const dbFile = path.resolve(dbDir, 'server_db.json');
-
-  // Ensure database directory exists
-  if (!fs.existsSync(dbDir)) {
-    try {
-      fs.mkdirSync(dbDir, { recursive: true });
-    } catch (e) {
-      console.warn('Could not create data directory:', e);
-    }
-  }
-
-  interface ServerDb {
-    collections: Record<string, any>;
-    metadata: {
-      initializedAt: string;
-      lastUpdatedAt: string;
-      totalWrites: number;
-    };
-  }
-
-  function readServerDb(): ServerDb {
-    try {
-      if (fs.existsSync(dbFile)) {
-        const raw = fs.readFileSync(dbFile, 'utf-8');
-        return JSON.parse(raw);
-      }
-    } catch (err) {
-      console.warn('Error reading server_db.json, reinitializing:', err);
-    }
-    return {
-      collections: {},
-      metadata: {
-        initializedAt: new Date().toISOString(),
-        lastUpdatedAt: new Date().toISOString(),
-        totalWrites: 0,
-      },
-    };
-  }
-
-  function writeServerDb(db: ServerDb): void {
-    try {
-      db.metadata.lastUpdatedAt = new Date().toISOString();
-      db.metadata.totalWrites = (db.metadata.totalWrites || 0) + 1;
-      const tmpFile = `${dbFile}.tmp`;
-      fs.writeFileSync(tmpFile, JSON.stringify(db, null, 2), 'utf-8');
-      fs.renameSync(tmpFile, dbFile);
-    } catch (err) {
-      console.error('Error writing server_db.json:', err);
-    }
-  }
-
-  // 1. Database Push / Synchronize Endpoint
-  app.post('/api/sync/push', (req: Request, res: Response) => {
-    try {
-      const { collection, records, tenantId = null, userId = null } = req.body;
-      if (!collection) {
-        return res.status(400).json({ error: 'collection name is required' });
-      }
-
-      const db = readServerDb();
-      const existing = db.collections[collection];
-
-      if (Array.isArray(records)) {
-        if (Array.isArray(existing)) {
-          // Merge items by id
-          const idMap = new Map<string, any>();
-          existing.forEach((item: any, idx: number) => {
-            const key = item?.id ? String(item.id) : `idx-${idx}`;
-            idMap.set(key, item);
-          });
-          records.forEach((item: any, idx: number) => {
-            const key = item?.id ? String(item.id) : `idx-${idx}`;
-            idMap.set(key, item);
-          });
-          db.collections[collection] = Array.from(idMap.values());
-        } else {
-          db.collections[collection] = records;
-        }
-      } else {
-        db.collections[collection] = records;
-      }
-
-      writeServerDb(db);
-
-      return res.json({
-        success: true,
-        collection,
-        tenantId,
-        userId,
-        count: Array.isArray(records) ? records.length : 1,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err: any) {
-      console.error('Error in /api/sync/push:', err);
-      return res.status(500).json({ error: 'Failed to push data to database', message: err?.message });
-    }
-  });
-
-  // 2. Database Pull / Synchronize Single Collection Endpoint
-  app.get('/api/sync/pull', (req: Request, res: Response) => {
-    try {
-      const collection = req.query.collection as string;
-      if (!collection) {
-        return res.status(400).json({ error: 'collection parameter is required' });
-      }
-
-      const db = readServerDb();
-      const data = db.collections[collection] ?? null;
-
-      return res.json({
-        success: true,
-        collection,
-        data,
-        timestamp: db.metadata.lastUpdatedAt,
-      });
-    } catch (err: any) {
-      console.error('Error in /api/sync/pull:', err);
-      return res.status(500).json({ error: 'Failed to pull from database', message: err?.message });
-    }
-  });
-
-  // 3. Database Pull All Collections (Fast Hydration on Boot)
-  app.get('/api/sync/all', (_req: Request, res: Response) => {
-    try {
-      const db = readServerDb();
-      return res.json({
-        success: true,
-        collections: db.collections,
-        totalCollections: Object.keys(db.collections).length,
-        timestamp: db.metadata.lastUpdatedAt,
-      });
-    } catch (err: any) {
-      console.error('Error in /api/sync/all:', err);
-      return res.status(500).json({ error: 'Failed to pull database collections', message: err?.message });
-    }
-  });
-
-  // 4. Database User Account Registration & Persistence Endpoint
-  app.post('/api/auth/register', (req: Request, res: Response) => {
-    try {
-      const { user } = req.body;
-      if (!user || !user.email || !user.name || !user.role) {
-        return res.status(400).json({ error: 'Missing required user registration fields (name, email, role)' });
-      }
-
-      const cleanEmail = String(user.email).trim().toLowerCase();
-      const db = readServerDb();
-      const usersCollection = 'edusmart_users_v1';
-      let users: any[] = Array.isArray(db.collections[usersCollection]) ? db.collections[usersCollection] : [];
-
-      const existingIndex = users.findIndex(
-        (u: any) => u.email && u.email.toLowerCase() === cleanEmail
-      );
-
-      const registeredUser = {
-        ...user,
-        email: cleanEmail,
-        id: user.id || `usr-${user.role}-${Date.now()}`,
-        schoolId: user.schoolId || 'tenant-riara',
-        isActive: true,
-        registeredAt: new Date().toISOString(),
-      };
-
-      if (existingIndex >= 0) {
-        users[existingIndex] = { ...users[existingIndex], ...registeredUser };
-      } else {
-        users.push(registeredUser);
-      }
-
-      db.collections[usersCollection] = users;
-      writeServerDb(db);
-
-      return res.json({
-        success: true,
-        user: registeredUser,
-        message: 'User account registered and synchronized to database successfully.',
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err: any) {
-      console.error('Error in /api/auth/register:', err);
-      return res.status(500).json({ error: 'Failed to register user account', message: err?.message });
-    }
-  });
-
-  // 5. Database Sync Engine Health & Telemetry Status
-  app.get('/api/sync/status', (_req: Request, res: Response) => {
-    try {
-      const db = readServerDb();
-      const collectionNames = Object.keys(db.collections);
-      return res.json({
-        status: 'connected',
-        persistence: 'server-json-database',
-        databaseFile: dbFile,
-        totalCollections: collectionNames.length,
-        collections: collectionNames,
-        lastUpdatedAt: db.metadata.lastUpdatedAt,
-        totalWrites: db.metadata.totalWrites,
-      });
-    } catch (err: any) {
-      return res.status(500).json({ error: 'Failed to check database status', message: err?.message });
-    }
-  });
+  // Register Authentication, WebAuthn Biometrics, Central Data/Sync/File/Realtime & Timetable routes
+  registerAuthRoutes(app);
+  registerWebAuthnRoutes(app);
+  registerDataRoutes(app);
+  registerOperationsRoutes(app);
+  registerTimetableRoutes(app);
+  registerAcademicHierarchyRoutes(app);
+  registerVirtualClassroomRoutes(app);
+  registerUserManagementRoutes(app);
+  registerExecutiveReportsRoutes(app);
+  startVirtualLessonScheduler();
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API
   app.post('/api/quiz-explanation', async (req: Request, res: Response) => {
@@ -716,12 +560,32 @@ Core rules:
     }
   });
 
+  // Ensure unmatched /api/* endpoints always return JSON rather than HTML fallback
+  app.all('/api/*', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
   const distPath = path.resolve(rootDir, 'dist');
   const indexHtmlPath = path.resolve(distPath, 'index.html');
   const isProd = process.env.NODE_ENV === 'production';
 
   if (isProd) {
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        setHeaders: (res, filePath) => {
+          const base = path.basename(filePath);
+          if (base === 'sw.js' || base.startsWith('workbox-')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Service-Worker-Allowed', '/');
+          } else if (base === 'manifest.webmanifest') {
+            res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+          } else if (base === 'index.html' || base === 'offline.html') {
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+          }
+        },
+      })
+    );
 
     // Helper to find active compiled bundle assets
     const getBundledAssets = () => {
@@ -768,9 +632,53 @@ Core rules:
       }
     });
   } else {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false, ws: false },
       appType: 'spa'
+    });
+    // Serve a clean WebSocket-free Vite client shim in dev when HMR is disabled
+    app.get('/@vite/client', (_req: Request, res: Response) => {
+      res.type('application/javascript').send(`
+const sheetsMap = new Map();
+export function updateStyle(id, content) {
+  let style = sheetsMap.get(id);
+  if (!style) {
+    style = document.createElement('style');
+    style.setAttribute('type', 'text/css');
+    style.setAttribute('data-vite-dev-id', id);
+    style.textContent = content;
+    document.head.appendChild(style);
+    sheetsMap.set(id, style);
+  } else {
+    style.textContent = content;
+  }
+}
+export function removeStyle(id) {
+  const style = sheetsMap.get(id);
+  if (style) {
+    document.head.removeChild(style);
+    sheetsMap.delete(id);
+  }
+}
+export function createHotContext() {
+  return {
+    data: {},
+    accept() {},
+    acceptExports() {},
+    dispose() {},
+    prune() {},
+    decline() {},
+    invalidate() {},
+    on() {},
+    off() {},
+    send() {},
+  };
+}
+export function injectQuery(url) { return url; }
+export class ErrorOverlay extends HTMLElement {}
+export default {};
+`);
     });
     app.use(vite.middlewares);
     app.use('*', async (req: Request, res: Response, next) => {
@@ -806,8 +714,13 @@ Core rules:
   });
 
   // Graceful shutdown handling for container orchestrators (Cloud Run, Docker, Kubernetes)
-  const handleShutdown = (signal: string) => {
-    console.log(`EduSmart server received ${signal}, closing HTTP server cleanly...`);
+  const handleShutdown = async (signal: string) => {
+    console.log(`EduSmart server received ${signal}, flushing MySQL sync & closing HTTP server cleanly...`);
+    try {
+      await flushMySqlSync();
+    } catch {
+      // ignore shutdown sync errors
+    }
     server.close(() => {
       console.log('HTTP server closed successfully.');
       process.exit(0);

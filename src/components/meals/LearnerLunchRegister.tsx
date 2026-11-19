@@ -983,8 +983,8 @@ export const LearnerLunchRegister: React.FC<LearnerLunchRegisterProps> = ({
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <table className="w-full text-left border-collapse text-[11px]">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                <table className="w-full text-left border-collapse text-[11px] min-w-[540px]">
                   <thead>
                     <tr className="bg-slate-100 font-bold border-b border-slate-200">
                       <th className="p-2">#</th>

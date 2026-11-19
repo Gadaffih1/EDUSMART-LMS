@@ -427,11 +427,8 @@ export const SafeBrowser: React.FC<SafeBrowserProps> = ({
         {/* Top Status Bar: App Name, Grade Selector, Close Button */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="bg-white p-1 rounded-xl shadow-xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
-            </div>
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex sm:hidden items-center justify-center font-bold">
-              <ShieldCheck className="w-4 h-4" />
+            <div className="bg-white p-1 rounded-xl shadow-xs shrink-0">
+              <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
             </div>
             <div>
               <div className="flex items-center gap-2">

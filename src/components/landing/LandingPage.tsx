@@ -3,12 +3,14 @@ import { GradeLevel, User, PRIMARY_STREAMS, JUNIOR_STREAMS, SchoolCalendarEvent 
 import { Storage } from '../../utils/storage';
 import { useTenant } from '../../context/TenantContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { EventTicketModal } from '../events/EventTicketModal';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { VirtualLabSubscriptionModal } from '../virtuallab/VirtualLabSubscriptionModal';
 import { PortalAccessAppModal, PORTAL_APPS_CONFIG } from './PortalAccessAppModal';
 import { resolveSchoolUserAndTenant } from '../../utils/schoolAuthResolver';
 import { findActivePlatformAdmin } from '../../utils/platformAdminAuth';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   GraduationCap, 
   Lock, 
@@ -140,11 +142,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
   const handleOpenPortalApp = (appKey: string) => {
     setErrorMsg('');
-    const app = PORTAL_APPS_CONFIG[appKey];
-    if (app) {
-      setEmail(app.defaultEmail);
-      setPassword(app.defaultPassword);
-    }
+    setEmail('');
+    setPassword('');
     setSelectedPortalAppKey(appKey);
     setIsPortalAppModalOpen(true);
   };
@@ -154,30 +153,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       setIsVirtualLabSubscriptionOpen(true);
       return;
     }
-    const app = PORTAL_APPS_CONFIG[appKey];
-    if (!app) return;
-    setProcessingPortalAppKey(appKey);
-    setPortalProcessingProgress(25);
-    setPortalProcessingStep(`Verifying ${app.appCode} gateway credentials & encryption handshake...`);
-
-    setTimeout(() => {
-      setPortalProcessingProgress(55);
-      setPortalProcessingStep('Establishing authenticated handshake with Central LMS Cloud Core...');
-    }, 280);
-
-    setTimeout(() => {
-      setPortalProcessingProgress(85);
-      setPortalProcessingStep(`Authorizing ${app.name} workspace permissions...`);
-    }, 600);
-
-    setTimeout(() => {
-      setPortalProcessingProgress(100);
-      setPortalProcessingStep('Portal handshake verified. Launching LMS workspace...');
-      setTimeout(() => {
-        setProcessingPortalAppKey(null);
-        handleQuickDemoLogin(app.defaultEmail);
-      }, 250);
-    }, 900);
+    handleOpenPortalApp(appKey);
   };
 
   const handleCopyPortalLink = (appKey: string, e?: React.MouseEvent) => {
@@ -224,139 +200,115 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     return () => window.removeEventListener('landing-nav', handleNavEvent);
   }, [onReturnToSuperAdmin]);
 
-  // Handle credential login
+  // Handle strict credential login against backend /api/auth/login
+  const authenticateWithCredentials = async (
+    emailInput: string,
+    passwordInput: string,
+    expectedRoleCategory?: 'student' | 'parent' | 'teacher' | 'librarian' | 'school_admin_staff' | 'sanatorium' | 'transport' | 'cocurricular' | 'administration'
+  ) => {
+    setErrorMsg('');
+    const cleanEmail = emailInput.trim().toLowerCase();
+    if (!cleanEmail || !passwordInput) {
+      setErrorMsg('Please enter your assigned email address and password.');
+      return false;
+    }
+    if (findActivePlatformAdmin(cleanEmail)) {
+      setErrorMsg('This account can only open the Super Admin console.');
+      return false;
+    }
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, identifier: cleanEmail, password: passwordInput }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || !body?.user) {
+        setErrorMsg(body?.error || 'Incorrect email or password. Please verify your assigned school credentials.');
+        return false;
+      }
+
+      const authedUser: User = body.user;
+      const isNurseUser = authedUser.role === 'nurse' || (authedUser.designation && authedUser.designation.toLowerCase().includes('nurse'));
+
+      if (expectedRoleCategory) {
+        if (isNurseUser && expectedRoleCategory !== 'sanatorium') {
+          setErrorMsg('School Nursing Officer is strictly authorized to access the School Sanatorium Clinic portal only.');
+          return false;
+        }
+        if (expectedRoleCategory === 'student' && authedUser.role !== 'student') {
+          setErrorMsg('This account is not a student account. Please use your designated portal.');
+          return false;
+        }
+        if (expectedRoleCategory === 'parent' && authedUser.role !== 'parent') {
+          setErrorMsg('This account is not registered as a Parent. Please use the appropriate login.');
+          return false;
+        }
+        if (expectedRoleCategory === 'teacher' && !['teacher', 'class_teacher'].includes(authedUser.role)) {
+          setErrorMsg('This portal is reserved for Subject and Class Teachers.');
+          return false;
+        }
+        if (expectedRoleCategory === 'librarian' && authedUser.role !== 'librarian') {
+          setErrorMsg('This portal is reserved for the School Librarian.');
+          return false;
+        }
+        if (expectedRoleCategory === 'school_admin_staff' && authedUser.role !== 'school_admin_staff') {
+          setErrorMsg('This portal is reserved for School Admin Staff (Registrar & Secretariat).');
+          return false;
+        }
+        if (expectedRoleCategory === 'sanatorium' && !['nurse', 'school_admin_staff', 'admin'].includes(authedUser.role)) {
+          setErrorMsg('This portal is reserved for School Sanatorium Medical Officers & Staff.');
+          return false;
+        }
+        if (expectedRoleCategory === 'transport' && !['transport_team', 'school_admin_staff', 'admin'].includes(authedUser.role)) {
+          setErrorMsg('This portal is reserved for School Transport Drivers, Chaperones, and Fleet Managers.');
+          return false;
+        }
+        if (expectedRoleCategory === 'cocurricular' && !['cocurricular_team', 'teacher', 'class_teacher', 'senior_teacher', 'deputy_head', 'head_teacher', 'admin'].includes(authedUser.role)) {
+          setErrorMsg('This portal is reserved for Sports Coaches, Club Patrons, and Co-Curricular Team.');
+          return false;
+        }
+        if (expectedRoleCategory === 'administration') {
+          if (!['head_teacher', 'deputy_head', 'senior_teacher', 'dean_of_studies', 'hod', 'school_admin_staff', 'admin'].includes(authedUser.role)) {
+            setErrorMsg('This portal is strictly restricted to School Administrative Leadership.');
+            return false;
+          }
+        }
+      }
+
+      if (body.sessionToken) {
+        ClientDataStore.setSessionToken(String(body.sessionToken));
+      }
+      ClientDataStore.setSessionUser(authedUser);
+      await ClientDataStore.hydrateFromBackend(true);
+
+      const finalUser: User = ClientDataStore.getSessionUser() || authedUser;
+      const resolved = resolveSchoolUserAndTenant(cleanEmail, allTenants, currentTenant);
+      const targetSchoolId = finalUser.schoolId || resolved?.tenant.id || currentTenant.id;
+      switchTenant(targetSchoolId);
+      const isolatedUser = { ...finalUser, schoolId: targetSchoolId };
+      Storage.setCurrentUser(isolatedUser);
+      onLoginSuccess(isolatedUser);
+      return true;
+    } catch {
+      setErrorMsg('Unable to reach authentication server. Please try again.');
+      return false;
+    }
+  };
+
   const handleCredentialLogin = (
-    e: React.FormEvent, 
+    e: React.FormEvent,
     expectedRoleCategory: 'student' | 'parent' | 'teacher' | 'librarian' | 'school_admin_staff' | 'sanatorium' | 'transport' | 'cocurricular' | 'administration'
   ) => {
     e.preventDefault();
-    setErrorMsg('');
-
-    const cleanEmail = email.trim().toLowerCase();
-    if (findActivePlatformAdmin(cleanEmail)) {
-      setErrorMsg('This account can only open the Super Admin console.');
-      return;
-    }
-    const resolved = resolveSchoolUserAndTenant(cleanEmail, allTenants, currentTenant);
-
-    if (!resolved) {
-      setErrorMsg('Account not found with this email. Please check your credentials or contact your School Administration.');
-      return;
-    }
-
-    const { user, expectedPassword, tenant } = resolved;
-
-    if (expectedPassword && expectedPassword !== password) {
-      setErrorMsg('Incorrect password. Please verify and try again.');
-      return;
-    }
-
-    const isNurseUser = user.role === 'nurse' || user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'));
-    if (isNurseUser && expectedRoleCategory !== 'sanatorium') {
-      setErrorMsg('School Nursing Officer is strictly authorized to access the School Sanatorium Clinic portal only.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'student' && user.role !== 'student') {
-      setErrorMsg('This account is not a student account. Please use your designated portal.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'parent' && user.role !== 'parent') {
-      setErrorMsg('This account is not registered as a Parent. Please use the appropriate login.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'teacher' && !['teacher', 'class_teacher'].includes(user.role)) {
-      setErrorMsg('This portal is reserved for Subject and Class Teachers.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'librarian' && user.role !== 'librarian') {
-      setErrorMsg('This portal is reserved for the School Librarian.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'school_admin_staff' && user.role !== 'school_admin_staff') {
-      setErrorMsg('This portal is reserved for School Admin Staff (Registrar & Secretariat).');
-      return;
-    }
-
-    if (expectedRoleCategory === 'sanatorium' && !['nurse', 'school_admin_staff', 'admin'].includes(user.role)) {
-      setErrorMsg('This portal is reserved for School Sanatorium Medical Officers & Staff.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'transport' && !['transport_team', 'school_admin_staff', 'admin'].includes(user.role)) {
-      setErrorMsg('This portal is reserved for School Transport Drivers, Chaperones, and Fleet Managers.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'cocurricular' && !['cocurricular_team', 'teacher', 'class_teacher', 'senior_teacher', 'deputy_head', 'head_teacher', 'admin'].includes(user.role)) {
-      setErrorMsg('This portal is reserved for Sports Coaches, Club Patrons, and Co-Curricular Team.');
-      return;
-    }
-
-    if (expectedRoleCategory === 'administration') {
-      if (user.email === 'nurse@edusmart.ac.ke' || (user.designation && user.designation.toLowerCase().includes('nurse'))) {
-        setErrorMsg('Sanatorium healthcare staff must authenticate through the dedicated School Sanatorium Healthcare portal.');
-        return;
-      }
-      if (!['head_teacher', 'deputy_head', 'senior_teacher', 'dean_of_studies', 'hod', 'school_admin_staff', 'admin'].includes(user.role)) {
-        setErrorMsg('This portal is strictly restricted to School Administrative Leadership.');
-        return;
-      }
-    }
-
-    // Success - bind user to tenant and switch tenant
-    switchTenant(tenant.id);
-    const isolatedUser = { ...user, schoolId: tenant.id };
-    Storage.setCurrentUser(isolatedUser);
-    onLoginSuccess(isolatedUser);
+    void authenticateWithCredentials(email, password, expectedRoleCategory);
   };
 
-  // Handle direct Grade Passcode access (e.g. GR4@2026)
   const handleGradePasscodeLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
-
-    const isValid = Storage.validateGradePassword(selectedGrade, gradePasscode);
-    if (!isValid) {
-      setErrorMsg(`Invalid passcode for Grade ${selectedGrade}. Default format is GR${selectedGrade}@2026`);
-      return;
-    }
-
-    // Find first student in this grade or create a session student
-    const allUsers = Storage.getUsers();
-    let student = allUsers.find(u => u.role === 'student' && u.grade === selectedGrade && (!u.schoolId || u.schoolId === currentTenant.id));
-    
-    if (!student) {
-      student = {
-        id: `stu-${currentTenant.id}-gr${selectedGrade}-demo`,
-        name: `Grade ${selectedGrade} Learner`,
-        email: `learner.gr${selectedGrade}@${currentTenant.domain || 'student.edusmart.ac.ke'}`,
-        role: 'student',
-        grade: selectedGrade,
-        stream: selectedGrade <= 6 ? 'Dove' : 'Mara',
-        admissionNumber: `ADM/${currentTenant.code}/0${selectedGrade}01`,
-        schoolId: currentTenant.id
-      };
-      Storage.addUser(student);
-    }
-
-    Storage.setCurrentUser(student);
-    onLoginSuccess(student);
-  };
-
-  // Quick 1-click test login
-  const handleQuickDemoLogin = (emailToUse: string) => {
-    const resolved = resolveSchoolUserAndTenant(emailToUse, allTenants, currentTenant);
-    if (resolved) {
-      switchTenant(resolved.tenant.id);
-      const isolatedUser = { ...resolved.user, schoolId: resolved.tenant.id };
-      Storage.setCurrentUser(isolatedUser);
-      onLoginSuccess(isolatedUser);
-    }
+    setErrorMsg('Direct grade passcodes without an assigned email and password are disabled. Please sign in with your assigned student email and password.');
   };
 
   return (
@@ -721,25 +673,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="relative group/logo">
             <div 
               onClick={() => setIsBrandingCustomizerOpen(true)}
-              className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[145px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-all cursor-pointer relative"
+              className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[160px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-all cursor-pointer relative"
               title="Click to customize school logo, theme & letterhead"
             >
-              {currentTenant.customLogoBase64 ? (
-                <img 
-                  src={currentTenant.customLogoBase64} 
-                  alt={currentTenant.name} 
-                  className="w-16 h-16 object-contain"
-                />
-              ) : currentTenant.logoUrl ? (
-                <img 
-                  src={currentTenant.logoUrl} 
-                  alt={currentTenant.name} 
-                  className="w-16 h-16 object-contain"
-                />
-              ) : (
-                <EduSmartGadsaLogo variant="full" size="sm" />
-              )}
-              <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase tracking-tight truncate max-w-full">
+              <TenantSchoolLogo variant="full" size="md" className="border-0 shadow-none" />
+              <div className="text-[9px] font-mono font-bold text-slate-700 mt-1.5 uppercase tracking-tight truncate max-w-full">
                 {currentTenant.portalCardBadge || 'By Gadsa Systems'}
               </div>
 
@@ -3360,112 +3298,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 </button>
               </form>
 
-              {/* Explicit Role-Based Access Buttons */}
-              <div className="pt-3 border-t border-slate-200">
-                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Select Role to Authenticate:
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <button
-                    onClick={() => handleQuickDemoLogin('headteacher@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-emerald-800">Head Teacher</div>
-                      <div className="text-[10px] text-slate-500">School-wide management</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('deputy@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-emerald-800">Deputy Head</div>
-                      <div className="text-[10px] text-slate-500">Operations & discipline</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('senior.teacher@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-emerald-800">Senior Teacher</div>
-                      <div className="text-[10px] text-slate-500">Supervision & mentorship</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('dean@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-emerald-800">Dean of Studies</div>
-                      <div className="text-[10px] text-slate-500">Academic & assessments</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('hod.sciences@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-emerald-800">Head of Dept (HOD)</div>
-                      <div className="text-[10px] text-slate-500">Department curriculum</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('adminstaff@edusmart.ac.ke')}
-                    className="p-2.5 bg-slate-50 hover:bg-teal-50 hover:border-teal-300 rounded-xl border border-slate-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 group-hover:text-teal-800">School Admin Staff</div>
-                      <div className="text-[10px] text-slate-500">Secretariat & registers</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-teal-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('transport@edusmart.ac.ke')}
-                    className="p-2.5 bg-amber-50/80 hover:bg-amber-100 hover:border-amber-300 rounded-xl border border-amber-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-amber-950">🚌 Transport Team</div>
-                      <div className="text-[10px] text-amber-700">Lead Driver & Fleet Supervisor</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-amber-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('cocurricular@edusmart.ac.ke')}
-                    className="p-2.5 bg-emerald-50/80 hover:bg-emerald-100 hover:border-emerald-300 rounded-xl border border-emerald-200 text-left transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="font-extrabold text-emerald-950">🎯 Co-Curricular Lead</div>
-                      <div className="text-[10px] text-emerald-700">Coach Benjamin Omwenga</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-emerald-600" />
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickDemoLogin('admin@edusmart.ac.ke')}
-                    className="p-2.5 bg-indigo-50/80 hover:bg-indigo-100 rounded-xl border border-indigo-200 text-left transition-colors flex items-center justify-between group col-span-2"
-                  >
-                    <div>
-                      <div className="font-extrabold text-indigo-900">System Administrator</div>
-                      <div className="text-[10px] text-indigo-700">Full system configuration & user governance</div>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-indigo-500" />
-                  </button>
-                </div>
+              <div className="pt-3 border-t border-slate-200 text-[11px] text-slate-600">
+                Administrative access requires your assigned school email address and password.
               </div>
             </div>
           </div>
@@ -3882,8 +3716,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <h4 className="font-bold text-slate-900 mb-2 uppercase text-[11px] tracking-wider">
                   Grade Passwords Directory (Grades 1 to 9)
                 </h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left">
+                <div className="border border-slate-200 rounded-lg overflow-x-auto">
+                  <table className="w-full min-w-[360px] text-left">
                     <thead className="bg-slate-100 text-slate-600 font-semibold text-[11px]">
                       <tr>
                         <th className="py-2 px-3">Grade Level</th>
@@ -3998,10 +3832,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             setIsPortalAppModalOpen(false);
             setSelectedPortalAppKey(null);
           }}
-          onLogin={(emailToUse, passwordToUse) => {
-            setIsPortalAppModalOpen(false);
-            setSelectedPortalAppKey(null);
-            handleQuickDemoLogin(emailToUse);
+          onLogin={async (emailToUse, passwordToUse) => {
+            const ok = await authenticateWithCredentials(emailToUse, passwordToUse);
+            if (ok) {
+              setIsPortalAppModalOpen(false);
+              setSelectedPortalAppKey(null);
+            }
           }}
           errorMsg={errorMsg}
         />

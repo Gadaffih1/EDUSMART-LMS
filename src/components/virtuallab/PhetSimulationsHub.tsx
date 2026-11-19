@@ -9,7 +9,7 @@ import { ClassicForcesMotionPhET } from './classic/ClassicForcesMotionPhET';
 import { ClassicBendingLightPhET } from './classic/ClassicBendingLightPhET';
 import { ClassicEnergySkateParkPhET } from './classic/ClassicEnergySkateParkPhET';
 import { ClassicWaveOnStringPhET } from './classic/ClassicWaveOnStringPhET';
-import { SyncEngine } from '../../utils/syncEngine';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { User } from '../../types';
 import { 
   Atom, 
@@ -119,9 +119,8 @@ export const PhetSimulationsHub: React.FC<PhetSimulationsHubProps> = ({
     };
 
     try {
-      const existing = JSON.parse(localStorage.getItem('edusmart_virtual_lab_reports') || '[]');
-      existing.unshift(reportData);
-      SyncEngine.persistItem('edusmart_virtual_lab_reports', JSON.stringify(existing));
+      const existing = ClientDataStore.getCollection<any[]>('edusmart_virtual_lab_reports', []);
+      ClientDataStore.setCollection('edusmart_virtual_lab_reports', [reportData, ...existing]);
     } catch (e) {
       console.error(e);
     }

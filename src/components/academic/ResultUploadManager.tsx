@@ -12,6 +12,7 @@ import {
   getCbcAttainmentFromScore
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { 
   Upload, 
   FileSpreadsheet, 
@@ -165,7 +166,7 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
   // Get all registered students from storage
   const allUsers = useMemo(() => Storage.getUsers(), []);
   const allTeachers = useMemo(() => {
-    return allUsers.filter(u => u.role === 'teacher' || u.role === 'class_teacher' || u.role === 'hod' || u.role === 'senior_teacher');
+    return allUsers.filter(u => ['teacher', 'class_teacher', 'hod', 'senior_teacher', 'deputy_head', 'dean_of_studies', 'curriculum_coordinator'].includes(u.role));
   }, [allUsers]);
 
   // Learners enrolled in selected grade
@@ -1270,15 +1271,7 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div className="shrink-0">
-                    {currentTenant.customLogoBase64 ? (
-                      <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
-                    ) : currentTenant.logoUrl ? (
-                      <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
-                    ) : (
-                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
-                        <EduSmartGadsaLogo variant="horizontal" size="sm" />
-                      </div>
-                    )}
+                    <TenantSchoolLogo variant="emblem" size="sm" />
                   </div>
                   <div>
                     <h2 className="text-base font-black tracking-tight uppercase font-serif">
@@ -1318,8 +1311,8 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
               </div>
 
               {/* Subject Breakdown Table */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                <table className="w-full text-left border-collapse text-xs">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[540px]">
                   <thead>
                     <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-700">
                       <th className="py-2.5 px-3">Learning Area / Subject</th>

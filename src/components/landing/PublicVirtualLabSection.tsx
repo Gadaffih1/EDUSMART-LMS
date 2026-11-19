@@ -18,12 +18,17 @@ import {
   Check,
   Activity,
   Code2,
-  Lock
+  Lock,
+  Mail,
+  RefreshCw,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 import { SubscriptionTier, PASS_OPTIONS } from '../virtuallab/VirtualLabSubscriptionModal';
+import { ClientDataStore } from '../../utils/clientDataStore';
 
 interface PublicVirtualLabSectionProps {
-  onOpenTicketModal: (tier?: SubscriptionTier, step?: 'select' | 'checkout' | 'enter_ticket' | 'launch_lab', ticketCode?: string) => void;
+  onOpenTicketModal: (tier?: SubscriptionTier, step?: 'select' | 'checkout' | 'ticket' | 'enter_ticket' | 'launch_lab', ticketCode?: string) => void;
   isSuperAdminEditMode?: boolean;
   hasActiveSubscription?: boolean;
   activeTicketCode?: string;
@@ -37,12 +42,71 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
 }) => {
   const [ticketInputCode, setTicketInputCode] = useState('');
   const [quickNotice, setQuickNotice] = useState<string | null>(null);
+  const [approvalEmail, setApprovalEmail] = useState('');
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailCheckNotice, setEmailCheckNotice] = useState<{ type: 'warning' | 'error'; message: string } | null>(null);
 
-  const handleVerifyDirectTicket = (e: React.FormEvent) => {
+  const handleConfirmApprovalByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = approvalEmail.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setEmailCheckNotice({
+        type: 'error',
+        message: 'Please enter the valid email address submitted with your Paybill 400200 payment.',
+      });
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    setEmailCheckNotice(null);
+    try {
+      const res = await fetch('/api/vlab/tickets/check-email', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (
+        res.ok &&
+        data?.approved &&
+        data?.pass &&
+        data.pass.status === 'active' &&
+        data.pass.subscriptionVerified !== false
+      ) {
+        ClientDataStore.setActiveVlabPass(data.pass);
+        setEmailCheckNotice(null);
+        onOpenTicketModal((data.pass.tier as SubscriptionTier) || 'term', 'ticket', data.pass.ticketId);
+      } else if (data?.status === 'pending_approval') {
+        setEmailCheckNotice({
+          type: 'warning',
+          message:
+            data?.error ||
+            'Your Paybill 400200 (Account 1164798) payment is still awaiting Super Admin approval.',
+        });
+      } else {
+        setEmailCheckNotice({
+          type: 'error',
+          message:
+            data?.error ||
+            `No approved Virtual Lab subscription found for "${cleanEmail}".`,
+        });
+      }
+    } catch {
+      setEmailCheckNotice({
+        type: 'error',
+        message: 'Unable to check approval status with the server right now. Please try again.',
+      });
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
+  const handleVerifyDirectTicket = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = ticketInputCode.trim().toUpperCase();
     if (!code) {
-      setQuickNotice('Please enter your paid subscription ticket code (e.g. VLAB-TICKET-829104).');
+      setQuickNotice('Please enter your paid subscription ticket code (e.g. VLAB-TICKET-XXXXXX).');
       return;
     }
 
@@ -52,18 +116,23 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
     }
 
     try {
-      const stored = JSON.parse(localStorage.getItem('edusmart_vlab_ticket_passes') || '[]');
-      const found = stored.find((t: any) => 
-        t.ticketId && 
-        t.ticketId.toUpperCase() === code && 
-        t.status === 'active' && 
-        !t.ticketId.toUpperCase().includes('DEMO')
-      );
-      if (found) {
-        onOpenTicketModal('term', 'launch_lab', found.ticketId);
+      const res = await fetch(`/api/vlab/tickets/${encodeURIComponent(code)}`, { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (
+        res.ok &&
+        data?.valid &&
+        data?.pass &&
+        data.pass.status === 'active' &&
+        data.pass.subscriptionVerified !== false &&
+        !String(data.pass.ticketId || '').toUpperCase().includes('DEMO')
+      ) {
+        ClientDataStore.setActiveVlabPass(data.pass);
+        onOpenTicketModal('term', 'launch_lab', data.pass.ticketId);
         setQuickNotice(null);
       } else {
-        setQuickNotice(`No active paid subscription found for "${code}". Public access to the laboratory workspace is strictly restricted to paid subscribers. Please select a pass below.`);
+        setQuickNotice(
+          data?.error || `No active paid subscription found for "${code}". Public access to the laboratory workspace is strictly restricted to paid subscribers. Please select a pass below.`
+        );
       }
     } catch {
       onOpenTicketModal('term', 'select');
@@ -123,7 +192,7 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
         <div className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-black uppercase tracking-widest shadow-lg">
             <FlaskConical className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span>Open to the Public · Digital Lab Ticketing</span>
+            <span>Subscription Required for Public Access · Lab Ticketing</span>
           </div>
 
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
@@ -169,8 +238,58 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
             </div>
           )}
 
-          {/* Quick Direct Ticket Access Banner */}
-          <div className="pt-2 max-w-xl mx-auto">
+          {/* Quick Direct Ticket Access & Email Approval Confirmation Banners */}
+          <div className="pt-2 max-w-2xl mx-auto space-y-3">
+            {/* Confirm Approval by Email -> Pops Ticket Once Approved */}
+            <form
+              onSubmit={handleConfirmApprovalByEmail}
+              className="p-2 sm:p-2.5 bg-gradient-to-r from-emerald-950/90 via-slate-900/95 to-teal-950/90 backdrop-blur-md rounded-2xl border border-emerald-500/40 shadow-xl flex flex-col sm:flex-row items-center gap-2"
+            >
+              <div className="relative flex-1 w-full">
+                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400" />
+                <input
+                  type="email"
+                  value={approvalEmail}
+                  onChange={(e) => {
+                    setApprovalEmail(e.target.value);
+                    if (emailCheckNotice) setEmailCheckNotice(null);
+                  }}
+                  placeholder="Confirm approval by email (e.g. parent@gmail.com)"
+                  className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-white placeholder-slate-400 focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={isCheckingEmail}
+                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-60"
+              >
+                {isCheckingEmail ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Ticket className="w-3.5 h-3.5" />
+                )}
+                <span>{isCheckingEmail ? 'Checking...' : 'Confirm Approval & Pop Ticket'}</span>
+              </button>
+            </form>
+
+            {emailCheckNotice && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-start gap-2 text-left border ${
+                  emailCheckNotice.type === 'warning'
+                    ? 'bg-amber-950/80 border-amber-500/40 text-amber-200'
+                    : 'bg-red-950/80 border-red-500/40 text-red-200'
+                }`}
+              >
+                {emailCheckNotice.type === 'warning' ? (
+                  <Clock className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+                )}
+                <span>{emailCheckNotice.message}</span>
+              </div>
+            )}
+
             <form onSubmit={handleVerifyDirectTicket} className="p-2 sm:p-2.5 bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-700 shadow-xl flex flex-col sm:flex-row items-center gap-2">
               <div className="relative flex-1 w-full">
                 <KeyRound className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -181,7 +300,7 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
                     setTicketInputCode(e.target.value);
                     if (quickNotice) setQuickNotice(null);
                   }}
-                  placeholder="Enter Ticket Code (e.g. VLAB-TICKET-829104)"
+                  placeholder="Enter Ticket Code (e.g. VLAB-TICKET-XXXXXX)"
                   className="w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono font-bold text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400 uppercase"
                 />
               </div>
@@ -294,7 +413,9 @@ export const PublicVirtualLabSection: React.FC<PublicVirtualLabSectionProps> = (
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">Instant M-Pesa STK verification</span>
+              <span className="text-xs text-emerald-300 font-mono font-bold">
+                Paybill: 400200 · Account: 1164798 (Super Admin Approval)
+              </span>
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
             </div>
           </div>

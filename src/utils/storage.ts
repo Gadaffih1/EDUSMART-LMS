@@ -97,9 +97,10 @@ import {
   TeacherLessonFile
 } from '../types';
 import { getStudentRecord, studentRecordToUser, listSchoolParents, saveStudentRecord, saveStudentParent, StudentRecord } from './schoolDirectoryStore';
-import { isSupabaseConfigured } from '../lib/supabase';
-import { isRemoteDataActive } from './supabaseHydrate';
+import { ClientDataStore } from './clientDataStore';
 import { SyncEngine } from './syncEngine';
+import { canAccessStudentStreamAllocation } from './subjectTeacherSwitch';
+import { canDeleteEResource } from './resourcePermissions';
 
 const KEYS = {
   USERS: 'edusmart_users_v1',
@@ -193,50 +194,24 @@ const KEYS = {
 // Every core LMS collection participates in Supabase synchronisation.
 SyncEngine.register(Object.values(KEYS));
 
-/** localStorage write that also queues a Supabase push. Drop-in for setItem. */
 function persistItem(key: string, serialized: string): void {
-  localStorage.setItem(key, serialized);
-  SyncEngine.markDirty(key);
+  try {
+    ClientDataStore.setCollection(key, JSON.parse(serialized));
+  } catch {
+    ClientDataStore.setCollection(key, serialized);
+  }
 }
 
 function getFromStorage<T>(key: string, defaultValue: T): T {
-  try {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-      return defaultValue;
-    }
-    const item = localStorage.getItem(key);
-    if (!item || item === 'undefined' || item === 'null') {
-      if (isRemoteDataActive()) {
-        return Array.isArray(defaultValue) ? [] as T : defaultValue;
-      }
-      if (!isSupabaseConfigured) {
-        // Factory seed: written locally only — uploaded on first sync if the
-        // cloud copy of this collection is empty (never overwrites cloud data).
-        SyncEngine.persistSeed(key, JSON.stringify(defaultValue));
-      }
-      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
-    }
-    const parsed = JSON.parse(item);
-    if (parsed === null && defaultValue !== null) {
-      return isSupabaseConfigured && Array.isArray(defaultValue) ? [] as T : defaultValue;
-    }
-    if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
-      return isSupabaseConfigured ? [] as T : defaultValue;
-    }
-    return parsed as T;
-  } catch (err) {
-    console.error(`Error reading ${key} from localStorage`, err);
-    return defaultValue;
+  const value = ClientDataStore.getCollection<T>(key, defaultValue);
+  if (Array.isArray(defaultValue) && !Array.isArray(value)) {
+    return [] as unknown as T;
   }
+  return value;
 }
 
 function setToStorage<T>(key: string, value: T): void {
-  try {
-    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-    persistItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.error(`Error writing ${key} to localStorage`, err);
-  }
+  ClientDataStore.setCollection(key, value);
 }
 
 const buildFullPermissions = (role: UserRole, perms: any): RoleAccessRights => ({
@@ -645,12 +620,8 @@ export const INITIAL_ONBOARDING_BATCHES: OnboardingBatchRecord[] = [
 const REMOVED_ACCOUNTS_KEY = 'edusmart_removed_accounts_v1';
 
 function removedAccountIds(): Set<string> {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(REMOVED_ACCOUNTS_KEY) || '[]');
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set();
-  }
+  const data = ClientDataStore.getCollection<string[]>(REMOVED_ACCOUNTS_KEY, []);
+  return new Set(Array.isArray(data) ? data : []);
 }
 
 export const Storage = {
@@ -738,12 +709,10 @@ export const Storage = {
     };
   },
 
-  // Reset all data to factory demo defaults
+  // Reset all data disabled in central-database mode to protect institutional records
   resetAllData(): void {
-    if (isSupabaseConfigured) {
-      console.error('[storage] Demo data reset is disabled when Supabase is configured.');
-      return;
-    }
+    console.warn('[storage] Destructive client reset is disabled in database-centric mode.');
+    return;
     persistItem(KEYS.USERS, JSON.stringify([]));
     persistItem(KEYS.GRADE_PASSWORDS, JSON.stringify([]));
     persistItem(KEYS.TOPICS, JSON.stringify([]));
@@ -811,6 +780,11 @@ export const Storage = {
     window.dispatchEvent(new CustomEvent('role-permissions-updated', { detail: { role, permissions: current[role] } }));
   },
 
+  resetRolePermissions(): void {
+    setToStorage(KEYS.ROLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS);
+    window.dispatchEvent(new CustomEvent('role-permissions-updated'));
+  },
+
   getUserEffectivePermissions(user: User): RoleAccessRights {
     // Nurse is strictly restricted to Sanatorium by policy
     const isNurse = user.role === 'nurse' || user.email === 'nurse@edusmart.ac.ke' || 
@@ -820,8 +794,30 @@ export const Storage = {
     }
 
     const allRolePerms = this.getRolePermissions();
-    const basePerms = allRolePerms[user.role] || DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.student;
-    
+    const roleSet = new Set<UserRole>([user.role]);
+    if (Array.isArray(user.assignedRoles)) {
+      user.assignedRoles.forEach((r) => {
+        if (r) roleSet.add(r);
+      });
+    }
+    if (user.doubleAccessConfig?.enabled && user.doubleAccessConfig.secondaryRole) {
+      roleSet.add(user.doubleAccessConfig.secondaryRole);
+    }
+
+    const basePerms: RoleAccessRights = {
+      ...(allRolePerms[user.role] || DEFAULT_ROLE_PERMISSIONS[user.role] || DEFAULT_ROLE_PERMISSIONS.student),
+    };
+    roleSet.forEach((r) => {
+      if (r === user.role) return;
+      const rolePerms = allRolePerms[r] || DEFAULT_ROLE_PERMISSIONS[r];
+      if (!rolePerms) return;
+      (Object.keys(rolePerms) as (keyof RoleAccessRights)[]).forEach((permKey) => {
+        if (rolePerms[permKey]) {
+          (basePerms as any)[permKey] = true;
+        }
+      });
+    });
+
     // Apply user-level custom overrides if defined
     const effective: RoleAccessRights = { ...basePerms, ...(user.customPermissions || {}) };
 
@@ -848,6 +844,10 @@ export const Storage = {
       effective.canAddCategoriesToPosts = true;
       effective.canEditPostsBySpecificUsers = true;
     }
+
+    // Strict Student Stream Allocation policy:
+    // ONLY System Administrator, Grade Senior Teacher, or explicitly assigned `student_stream_allocator` extra role.
+    effective.canAllocateStudentStreams = canAccessStudentStreamAllocation(user);
 
     return effective;
   },
@@ -879,28 +879,17 @@ export const Storage = {
     return users[idx];
   },
 
-  // Auth & Session
+  // Auth & Session (backed by HTTP-only server session cookie hydrated into ClientDataStore)
   getCurrentUser(): User | null {
-    return getFromStorage<User | null>(KEYS.CURRENT_USER, null);
+    return ClientDataStore.getSessionUser();
   },
   setCurrentUser(user: User | null): void {
-    setToStorage(KEYS.CURRENT_USER, user);
+    ClientDataStore.setSessionUser(user);
   },
 
   // Users
   getUsers(tenantId?: string): User[] {
-    const stored = getFromStorage<User[]>(KEYS.USERS, isRemoteDataActive() ? [] : []);
-    if (isRemoteDataActive()) {
-      return tenantId
-        ? stored.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
-        : stored;
-    }
-    if (isSupabaseConfigured) {
-      return tenantId
-        ? stored.filter(u => u.schoolId === tenantId || (!u.schoolId && tenantId === 'tenant-riara'))
-        : stored;
-    }
-
+    const stored = getFromStorage<User[]>(KEYS.USERS, []);
     const removed = removedAccountIds();
     const visible = removed.size > 0 ? stored.filter((user) => !removed.has(user.id)) : stored;
 
@@ -920,7 +909,7 @@ export const Storage = {
     const completeUser: User = {
       ...user,
       email: cleanEmail,
-      schoolId: user.schoolId || 'tenant-riara',
+      schoolId: user.schoolId || ClientDataStore.getActiveTenantId() || 'tenant-riara',
       isActive: user.isActive !== false
     };
 
@@ -931,20 +920,6 @@ export const Storage = {
     }
 
     setToStorage(KEYS.USERS, users);
-
-    // Synchronize newly created user account directly to server database
-    try {
-      fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: completeUser })
-      }).catch(err => {
-        console.warn('[storage] Background server database user register notice:', err);
-      });
-    } catch {
-      // Browser offline or non-blocking
-    }
-
     window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
   },
 
@@ -975,7 +950,7 @@ export const Storage = {
   deleteUser(id: string): void {
     const removed = removedAccountIds();
     removed.add(id);
-    localStorage.setItem(REMOVED_ACCOUNTS_KEY, JSON.stringify([...removed]));
+    ClientDataStore.setCollection(REMOVED_ACCOUNTS_KEY, [...removed]);
     const users = this.getUsers().filter(u => u.id !== id);
     setToStorage(KEYS.USERS, users);
     window.dispatchEvent(new CustomEvent('users-updated', { detail: users }));
@@ -1104,10 +1079,17 @@ export const Storage = {
     const notes = this.getNotes();
     notes.push(note);
     setToStorage(KEYS.NOTES, notes);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
-  deleteNote(id: string): void {
-    const notes = this.getNotes().filter(n => n.id !== id);
+  deleteNote(id: string): boolean {
+    const all = this.getNotes();
+    const target = all.find(n => n.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const notes = all.filter(n => n.id !== id);
     setToStorage(KEYS.NOTES, notes);
+    window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+    return true;
   },
 
   // Videos
@@ -1124,10 +1106,15 @@ export const Storage = {
     setToStorage(KEYS.VIDEOS, videos);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
-  deleteVideo(id: string): void {
-    const videos = this.getVideos().filter(v => v.id !== id);
+  deleteVideo(id: string): boolean {
+    const all = this.getVideos();
+    const target = all.find(v => v.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const videos = all.filter(v => v.id !== id);
     setToStorage(KEYS.VIDEOS, videos);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+    return true;
   },
 
   // Audios
@@ -1144,10 +1131,15 @@ export const Storage = {
     setToStorage(KEYS.AUDIOS, audios);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
   },
-  deleteAudio(id: string): void {
-    const audios = this.getAudios().filter(a => a.id !== id);
+  deleteAudio(id: string): boolean {
+    const all = this.getAudios();
+    const target = all.find(a => a.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const audios = all.filter(a => a.id !== id);
     setToStorage(KEYS.AUDIOS, audios);
     window.dispatchEvent(new CustomEvent('lesson-resources-updated'));
+    return true;
   },
 
   // Lesson Images (Diagrams, Charts, Visual Resources)
@@ -1167,9 +1159,14 @@ export const Storage = {
     images.unshift(image);
     this.saveLessonImages(images);
   },
-  deleteLessonImage(id: string): void {
-    const images = this.getLessonImages().filter(img => img.id !== id);
+  deleteLessonImage(id: string): boolean {
+    const all = this.getLessonImages();
+    const target = all.find(img => img.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const images = all.filter(img => img.id !== id);
     this.saveLessonImages(images);
+    return true;
   },
 
   // E-Links (Curated Digital Web Links for Library & Subject Teachers)
@@ -1190,23 +1187,43 @@ export const Storage = {
     const updated = links.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString().split('T')[0] } : l);
     this.saveELinks(updated);
   },
-  deleteELink(id: string): void {
-    const links = this.getELinks().filter(l => l.id !== id);
+  deleteELink(id: string): boolean {
+    const all = this.getELinks();
+    const target = all.find(l => l.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
+    const links = all.filter(l => l.id !== id);
     this.saveELinks(links);
+    return true;
   },
 
-  // Quizzes
-  getQuizzes(grade?: GradeLevel): Quiz[] {
+  getActiveSwitchedRole(userId?: string | null): UserRole | null {
+    const val = ClientDataStore.getActiveSwitchedRole(userId);
+    return (val as UserRole) || null;
+  },
+  setActiveSwitchedRole(role: UserRole | null, userId?: string | null): void {
+    ClientDataStore.setActiveSwitchedRole(role, userId);
+  },
+
+  // Quizzes (strictly scoped by grade and stream when provided)
+  getQuizzes(grade?: GradeLevel, stream?: StreamName): Quiz[] {
     const quizzes = getFromStorage<Quiz[]>(KEYS.QUIZZES, []);
-    if (grade) {
-      return quizzes.filter(q => q.grade === grade);
-    }
-    return quizzes;
+    const targetStream = stream ? String(stream).trim().toLowerCase() : '';
+    return quizzes.filter((q) => {
+      if (grade !== undefined && Number(q.grade) !== Number(grade)) return false;
+      if (targetStream && q.stream) {
+        if (String(q.stream).trim().toLowerCase() !== targetStream) return false;
+      }
+      return true;
+    });
   },
   addQuiz(quiz: Quiz): void {
     const quizzes = this.getQuizzes();
     quizzes.push(quiz);
     setToStorage(KEYS.QUIZZES, quizzes);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('quizzes-updated'));
+    }
   },
 
   // Quiz Attempts
@@ -1223,12 +1240,15 @@ export const Storage = {
     setToStorage(KEYS.QUIZ_ATTEMPTS, attempts);
   },
 
-  // Assignments
+  // Assignments (strictly scoped by grade and stream when provided)
   getAssignments(grade?: GradeLevel, stream?: StreamName): Assignment[] {
     const assignments = getFromStorage<Assignment[]>(KEYS.ASSIGNMENTS, []);
-    return assignments.filter(a => {
-      if (grade && a.grade !== grade) return false;
-      if (stream && a.stream && a.stream !== stream) return false;
+    const targetStream = stream ? String(stream).trim().toLowerCase() : '';
+    return assignments.filter((a) => {
+      if (grade !== undefined && Number(a.grade) !== Number(grade)) return false;
+      if (targetStream && a.stream) {
+        if (String(a.stream).trim().toLowerCase() !== targetStream) return false;
+      }
       return true;
     });
   },
@@ -1236,6 +1256,9 @@ export const Storage = {
     const assignments = this.getAssignments();
     assignments.push(assignment);
     setToStorage(KEYS.ASSIGNMENTS, assignments);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('assignments-updated'));
+    }
   },
 
   // Announcements
@@ -1496,11 +1519,15 @@ export const Storage = {
     window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated'));
   },
 
-  deleteTeacherLessonFile(id: string): void {
+  deleteTeacherLessonFile(id: string): boolean {
     const files = this.getTeacherLessonFiles();
+    const target = files.find(f => f.id === id);
+    if (!target) return false;
+    if (!canDeleteEResource(this.getCurrentUser(), target)) return false;
     const updated = files.filter(f => f.id !== id);
     setToStorage(KEYS.TEACHER_LESSON_FILES, updated);
     window.dispatchEvent(new CustomEvent('teacher-lesson-files-updated'));
+    return true;
   },
 
   // Virtual Classes
@@ -1534,15 +1561,9 @@ export const Storage = {
       firstName: l.firstName || (l.teacherName ? l.teacherName.split(' ')[0] : 'Teacher'),
       lastName: l.lastName || (l.teacherName ? l.teacherName.split(' ').slice(1).join(' ') : 'Educator'),
       email: l.email || `${(l.teacherId || 'staff').replace('usr-teach-', '')}@edusmart.ac.ke`,
-      signInLocation: l.signInLocation || 'EduSmart Main Campus, Staffroom Block A · Nairobi Grounds',
+      signInLocation: l.signInLocation || 'Live geographic location not recorded',
       photoUrl: l.photoUrl || 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
-      geoStamp: l.geoStamp || {
-        latitude: -1.2921,
-        longitude: 36.8219,
-        accuracy: 5,
-        address: 'EduSmart Campus Gate A · Coordinates -1.2921° S, 36.8219° E (Campus Perimeter Verified)',
-        verifiedCampus: true
-      }
+      geoStamp: l.geoStamp,
     }));
 
     if (teacherId) {
@@ -1824,6 +1845,13 @@ export const Storage = {
       books.unshift(book);
     }
     setToStorage(KEYS.LIBRARY_BOOKS, books);
+    window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+  },
+  deleteLibraryBook(id: string): void {
+    const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
+    const updated = books.filter(b => b.id !== id);
+    setToStorage(KEYS.LIBRARY_BOOKS, updated);
+    window.dispatchEvent(new CustomEvent('library-books-updated', { detail: updated }));
   },
   getBorrowRecords(): LibraryBorrowRecord[] {
     return getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
@@ -1870,6 +1898,47 @@ export const Storage = {
     }
     return null;
   },
+  updateBorrowRecord(id: string, updates: Partial<LibraryBorrowRecord>): void {
+    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
+    const existing = records.find(r => r.id === id);
+    if (!existing) return;
+    const wasReturned = existing.status === 'returned';
+    const nextStatus = updates.status ?? existing.status;
+    const updated = records.map(r => r.id === id ? { ...r, ...updates } : r);
+    setToStorage(KEYS.BORROW_RECORDS, updated);
+
+    if (wasReturned !== (nextStatus === 'returned')) {
+      const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
+      const bk = books.find(b => b.id === existing.bookId);
+      if (bk) {
+        if (nextStatus === 'returned' && bk.copiesAvailable < bk.totalCopies) {
+          bk.copiesAvailable += 1;
+        } else if (nextStatus !== 'returned' && bk.copiesAvailable > 0) {
+          bk.copiesAvailable -= 1;
+        }
+        setToStorage(KEYS.LIBRARY_BOOKS, books);
+        window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+      }
+    }
+    window.dispatchEvent(new CustomEvent('library-borrow-records-updated', { detail: updated }));
+  },
+  deleteBorrowRecord(id: string): void {
+    const records = getFromStorage<LibraryBorrowRecord[]>(KEYS.BORROW_RECORDS, []);
+    const target = records.find(r => r.id === id);
+    const updated = records.filter(r => r.id !== id);
+    setToStorage(KEYS.BORROW_RECORDS, updated);
+
+    if (target && target.status !== 'returned') {
+      const books = getFromStorage<LibraryBook[]>(KEYS.LIBRARY_BOOKS, []);
+      const bk = books.find(b => b.id === target.bookId);
+      if (bk && bk.copiesAvailable < bk.totalCopies) {
+        bk.copiesAvailable += 1;
+        setToStorage(KEYS.LIBRARY_BOOKS, books);
+        window.dispatchEvent(new CustomEvent('library-books-updated', { detail: books }));
+      }
+    }
+    window.dispatchEvent(new CustomEvent('library-borrow-records-updated', { detail: updated }));
+  },
   getActiveBorrowRecordByCopyId(copyId: string): LibraryBorrowRecord | undefined {
     if (!copyId) return undefined;
     const records = this.getBorrowRecords();
@@ -1906,6 +1975,11 @@ export const Storage = {
     const updated = list.map(r => r.id === id ? { ...r, ...updates } : r);
     this.saveLibraryReservations(updated);
   },
+  deleteLibraryReservation(id: string): void {
+    const list = this.getLibraryReservations();
+    const updated = list.filter(r => r.id !== id);
+    this.saveLibraryReservations(updated);
+  },
 
   getLibraryFines(): LibraryFine[] {
     return getFromStorage<LibraryFine[]>(KEYS.LIBRARY_FINES, []);
@@ -1922,6 +1996,11 @@ export const Storage = {
   updateLibraryFine(id: string, updates: Partial<LibraryFine>): void {
     const list = this.getLibraryFines();
     const updated = list.map(f => f.id === id ? { ...f, ...updates } : f);
+    this.saveLibraryFines(updated);
+  },
+  deleteLibraryFine(id: string): void {
+    const list = this.getLibraryFines();
+    const updated = list.filter(f => f.id !== id);
     this.saveLibraryFines(updated);
   },
 
@@ -1942,6 +2021,11 @@ export const Storage = {
     const updated = list.map(a => a.id === id ? { ...a, ...updates } : a);
     this.saveLibraryAcquisitions(updated);
   },
+  deleteLibraryAcquisition(id: string): void {
+    const list = this.getLibraryAcquisitions();
+    const updated = list.filter(a => a.id !== id);
+    this.saveLibraryAcquisitions(updated);
+  },
 
   getLibraryShelves(): LibraryShelfLocation[] {
     return getFromStorage<LibraryShelfLocation[]>(KEYS.LIBRARY_SHELVES, []);
@@ -1955,6 +2039,16 @@ export const Storage = {
     const updated = [...list, shelf];
     this.saveLibraryShelves(updated);
   },
+  updateLibraryShelf(id: string, updates: Partial<LibraryShelfLocation>): void {
+    const list = this.getLibraryShelves();
+    const updated = list.map(s => s.id === id ? { ...s, ...updates } : s);
+    this.saveLibraryShelves(updated);
+  },
+  deleteLibraryShelf(id: string): void {
+    const list = this.getLibraryShelves();
+    const updated = list.filter(s => s.id !== id);
+    this.saveLibraryShelves(updated);
+  },
 
   getDigitalLibraryItems(): DigitalLibraryItem[] {
     return getFromStorage<DigitalLibraryItem[]>(KEYS.LIBRARY_DIGITAL_ITEMS, []);
@@ -1966,6 +2060,16 @@ export const Storage = {
   addDigitalLibraryItem(item: DigitalLibraryItem): void {
     const list = this.getDigitalLibraryItems();
     const updated = [item, ...list];
+    this.saveDigitalLibraryItems(updated);
+  },
+  updateDigitalLibraryItem(id: string, updates: Partial<DigitalLibraryItem>): void {
+    const list = this.getDigitalLibraryItems();
+    const updated = list.map(i => i.id === id ? { ...i, ...updates } : i);
+    this.saveDigitalLibraryItems(updated);
+  },
+  deleteDigitalLibraryItem(id: string): void {
+    const list = this.getDigitalLibraryItems();
+    const updated = list.filter(i => i.id !== id);
     this.saveDigitalLibraryItems(updated);
   },
 
@@ -1986,6 +2090,11 @@ export const Storage = {
     const updated = list.map(m => m.id === id ? { ...m, ...updates } : m);
     this.saveReadingProgrammeMembers(updated);
   },
+  deleteReadingProgrammeMember(id: string): void {
+    const list = this.getReadingProgrammeMembers();
+    const updated = list.filter(m => m.id !== id);
+    this.saveReadingProgrammeMembers(updated);
+  },
 
   getLibraryAttendance(): LibraryAttendanceLog[] {
     return getFromStorage<LibraryAttendanceLog[]>(KEYS.LIBRARY_ATTENDANCE, []);
@@ -1997,6 +2106,16 @@ export const Storage = {
   addLibraryAttendanceLog(log: LibraryAttendanceLog): void {
     const list = this.getLibraryAttendance();
     const updated = [log, ...list];
+    this.saveLibraryAttendance(updated);
+  },
+  updateLibraryAttendanceLog(id: string, updates: Partial<LibraryAttendanceLog>): void {
+    const list = this.getLibraryAttendance();
+    const updated = list.map(l => l.id === id ? { ...l, ...updates } : l);
+    this.saveLibraryAttendance(updated);
+  },
+  deleteLibraryAttendanceLog(id: string): void {
+    const list = this.getLibraryAttendance();
+    const updated = list.filter(l => l.id !== id);
     this.saveLibraryAttendance(updated);
   },
 
@@ -2012,6 +2131,16 @@ export const Storage = {
     const updated = [...list, slot];
     this.saveLibraryTimetable(updated);
   },
+  updateLibraryTimetableSlot(id: string, updates: Partial<LibraryTimetableSlot>): void {
+    const list = this.getLibraryTimetable();
+    const updated = list.map(s => s.id === id ? { ...s, ...updates } : s);
+    this.saveLibraryTimetable(updated);
+  },
+  deleteLibraryTimetableSlot(id: string): void {
+    const list = this.getLibraryTimetable();
+    const updated = list.filter(s => s.id !== id);
+    this.saveLibraryTimetable(updated);
+  },
 
   getLibraryEvents(): LibraryEvent[] {
     return getFromStorage<LibraryEvent[]>(KEYS.LIBRARY_EVENTS, []);
@@ -2025,6 +2154,16 @@ export const Storage = {
     const updated = [event, ...list];
     this.saveLibraryEvents(updated);
   },
+  updateLibraryEvent(id: string, updates: Partial<LibraryEvent>): void {
+    const list = this.getLibraryEvents();
+    const updated = list.map(e => e.id === id ? { ...e, ...updates } : e);
+    this.saveLibraryEvents(updated);
+  },
+  deleteLibraryEvent(id: string): void {
+    const list = this.getLibraryEvents();
+    const updated = list.filter(e => e.id !== id);
+    this.saveLibraryEvents(updated);
+  },
 
   getLibraryPolicies(): LibraryPolicy[] {
     return getFromStorage<LibraryPolicy[]>(KEYS.LIBRARY_POLICIES, []);
@@ -2033,9 +2172,19 @@ export const Storage = {
     setToStorage(KEYS.LIBRARY_POLICIES, policies);
     window.dispatchEvent(new CustomEvent('library-policies-updated', { detail: policies }));
   },
+  addLibraryPolicy(policy: LibraryPolicy): void {
+    const list = this.getLibraryPolicies();
+    const updated = [policy, ...list];
+    this.saveLibraryPolicies(updated);
+  },
   updateLibraryPolicy(id: string, updates: Partial<LibraryPolicy>): void {
     const list = this.getLibraryPolicies();
     const updated = list.map(p => p.id === id ? { ...p, ...updates } : p);
+    this.saveLibraryPolicies(updated);
+  },
+  deleteLibraryPolicy(id: string): void {
+    const list = this.getLibraryPolicies();
+    const updated = list.filter(p => p.id !== id);
     this.saveLibraryPolicies(updated);
   },
 
@@ -2051,11 +2200,78 @@ export const Storage = {
 
   // Library Rooms & Room Booking Portal
   getLibraryRooms(): LibraryRoom[] {
-    return getFromStorage<LibraryRoom[]>(KEYS.LIBRARY_ROOMS, []);
+    const defaultRooms: LibraryRoom[] = [
+      {
+        id: 'room-main-hall',
+        name: 'Main Library Reading Hall',
+        type: 'Reading Hall',
+        capacity: 60,
+        location: 'Ground Floor · Central Wing',
+        features: ['Quiet Reading Tables', 'Reference Encyclopedias & Atlases', 'Ceiling Projector & Screen'],
+        description: 'Spacious main reading and research hall ideal for full-class literacy sessions, guided reading, and CBC investigations.',
+      },
+      {
+        id: 'room-digital-av',
+        name: 'Digital Research & AV Lab',
+        type: 'Multimedia & ICT Suite',
+        capacity: 40,
+        location: 'First Floor · Digital Wing',
+        features: ['Interactive Smart Screen', 'High-Speed CBC Tablets', 'Audio Headsets (Language lab)'],
+        description: 'Equipped with interactive smart displays, digital library terminals, and audio-visual screening facilities.',
+      },
+      {
+        id: 'room-seminar-a',
+        name: 'Collaborative Seminar Room A',
+        type: 'Seminar Room',
+        capacity: 32,
+        location: 'First Floor · East Wing',
+        features: ['Magnetic Whiteboards & Markers', 'Interactive Smart Screen', 'Group Discussion Tables'],
+        description: 'Flexible seminar space designed for group debates, CBC project presentations, and subject club workshops.',
+      },
+      {
+        id: 'room-seminar-b',
+        name: 'Collaborative Seminar Room B',
+        type: 'Seminar Room',
+        capacity: 28,
+        location: 'First Floor · West Wing',
+        features: ['Magnetic Whiteboards & Markers', 'Ceiling Projector & Screen', 'CBC Science Experiment Trays'],
+        description: 'Dedicated group study and STEM inquiry room for collaborative problem-solving and small-group clinics.',
+      },
+      {
+        id: 'room-reference-wing',
+        name: 'Quiet Reference & Periodicals Wing',
+        type: 'Reference Suite',
+        capacity: 24,
+        location: 'Ground Floor · North Mezzanine',
+        features: ['Reference Encyclopedias & Atlases', 'High-Speed CBC Tablets', 'Quiet Study Carrels'],
+        description: 'Quiet academic reference wing tailored for focused research, exam revision, and teacher resource preparation.',
+      },
+    ];
+    const stored = getFromStorage<LibraryRoom[] | null>(KEYS.LIBRARY_ROOMS, null);
+    if (Array.isArray(stored)) {
+      const validStored = stored.filter((r): r is LibraryRoom => Boolean(r && typeof r === 'object' && r.id && r.name));
+      return validStored.length > 0 ? validStored : defaultRooms;
+    }
+    return defaultRooms;
   },
   saveLibraryRooms(rooms: LibraryRoom[]): void {
     setToStorage(KEYS.LIBRARY_ROOMS, rooms);
     window.dispatchEvent(new CustomEvent('library-rooms-updated', { detail: rooms }));
+  },
+  addLibraryRoom(room: LibraryRoom): void {
+    const list = this.getLibraryRooms();
+    const updated = [...list, room];
+    this.saveLibraryRooms(updated);
+  },
+  updateLibraryRoom(id: string, updates: Partial<LibraryRoom>): void {
+    const list = this.getLibraryRooms();
+    const updated = list.map(r => r.id === id ? { ...r, ...updates } : r);
+    this.saveLibraryRooms(updated);
+  },
+  deleteLibraryRoom(id: string): void {
+    const list = this.getLibraryRooms();
+    const updated = list.filter(r => r.id !== id);
+    this.saveLibraryRooms(updated);
   },
   getLibraryRoomBookings(): LibraryRoomBooking[] {
     return getFromStorage<LibraryRoomBooking[]>(KEYS.LIBRARY_ROOM_BOOKINGS, []);
@@ -2077,6 +2293,11 @@ export const Storage = {
   cancelLibraryRoomBooking(id: string): void {
     const list = this.getLibraryRoomBookings();
     const updated = list.map(b => b.id === id ? { ...b, status: 'cancelled' as const } : b);
+    this.saveLibraryRoomBookings(updated);
+  },
+  deleteLibraryRoomBooking(id: string): void {
+    const list = this.getLibraryRoomBookings();
+    const updated = list.filter(b => b.id !== id);
     this.saveLibraryRoomBookings(updated);
   },
 
@@ -2178,27 +2399,45 @@ export const Storage = {
     const list = getFromStorage<AppNotification[]>(KEYS.NOTIFICATIONS, []);
     if (!user) return list;
 
-    // Filter relevant to user's role, grade, or user ID
+    // Filter relevant to user's role, grade, department, or user ID
     return list.filter(n => {
       // 1. Direct user match
       if (n.targetUserId && n.targetUserId === user.id) return true;
+      if (Array.isArray(n.targetUserIds) && n.targetUserIds.includes(user.id)) return true;
 
       // 2. Role match
       if (n.targetRole === 'all') return true;
-      if (n.targetRole === user.role) return true;
+      if (n.targetRole && n.targetRole === user.role) return true;
       if (n.targetRole === 'teacher' && user.role === 'class_teacher') return true;
+      if (Array.isArray(n.targetRoles) && n.targetRoles.includes(user.role)) return true;
 
-      // 3. Student grade match
+      // 3. Department match
+      if (Array.isArray(n.targetDepartments) && n.targetDepartments.length > 0 && user.department) {
+        const uDept = user.department.trim().toLowerCase();
+        if (n.targetDepartments.some(d => d.trim().toLowerCase() === uDept || uDept.includes(d.trim().toLowerCase()))) {
+          return true;
+        }
+      }
+
+      // 4. Student grade match
       if (user.role === 'student' && n.targetGrade && n.targetGrade === user.grade) return true;
 
-      // 4. Parent child grade match
+      // 5. Parent child grade match
       if (user.role === 'parent' && n.targetGrade) {
         const children = this.getParentChildren(user);
         if (children.some(c => c.grade === n.targetGrade)) return true;
       }
 
-      // If no specific target role or grade, include for all
-      if (!n.targetRole && !n.targetGrade && !n.targetUserId) return true;
+      // If no specific target role, grade, department, or user ID, include for all
+      const hasAnyTarget = Boolean(
+        n.targetRole ||
+        n.targetGrade ||
+        n.targetUserId ||
+        (Array.isArray(n.targetRoles) && n.targetRoles.length > 0) ||
+        (Array.isArray(n.targetUserIds) && n.targetUserIds.length > 0) ||
+        (Array.isArray(n.targetDepartments) && n.targetDepartments.length > 0)
+      );
+      if (!hasAnyTarget) return true;
 
       return false;
     }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -2450,7 +2689,7 @@ export const Storage = {
         status: 'guided_redirection',
         message: 'Educational Redirection: Non-curriculum search detected. We have guided you to approved gamified CBC challenges on Kahoot, Quizizz, and Interactive Quizzes.',
         matchedNotes: [],
-        matchedQuizzes: this.getQuizzes(user.grade),
+        matchedQuizzes: this.getQuizzes(user.grade, user.stream),
         matchedBooks: [],
         redirectionSuggestion: 'Try exploring: Gamified Mathematics Quizzes or KICD Creative Arts Storybooks!'
       };
@@ -2458,7 +2697,7 @@ export const Storage = {
 
     // Safe academic search across curriculum notes, quizzes, and books
     const allNotes = this.getNotes(user.grade);
-    const allQuizzes = this.getQuizzes(user.grade);
+    const allQuizzes = this.getQuizzes(user.grade, user.stream);
     const allBooks = this.getLibraryBooks();
 
     const matchedNotes = allNotes.filter(n => 
@@ -4403,7 +4642,7 @@ export const Storage = {
   }
 };
 
-export const []: TeacherAbsenceReport[] = [
+export const INITIAL_TEACHER_ABSENCE_REPORTS: TeacherAbsenceReport[] = [
   {
     id: 'abs-rep-01',
     teacherId: 'usr-tea-01',

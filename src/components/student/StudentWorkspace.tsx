@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SyncEngine } from '../../utils/syncEngine';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { 
   User, 
   Topic, 
@@ -32,9 +33,12 @@ import { ExternalToolsHub } from './ExternalToolsHub';
 import { SafeBrowser } from './SafeBrowser';
 import { ReportingHub } from '../reports/ReportingHub';
 import { TimetablePortal } from '../timetable/TimetablePortal';
-import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
+import { useTenant } from '../../context/TenantContext';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
+import { ahApiFetch, type GradeAnnouncementItem } from '../academic-hierarchy/academicHierarchyTypes';
+import { StudentVirtualClassroomPanel } from '../virtual-classroom/StudentVirtualClassroomPanel';
 import { 
   BookOpen, 
   Bell, 
@@ -102,6 +106,7 @@ type WorkspaceTab =
   | 'browser';
 
 export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser }) => {
+  const { currentTenant } = useTenant();
   const studentGrade = currentUser.grade || 4;
   const studentStream = currentUser.stream || 'Dove';
 
@@ -119,7 +124,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['resources', 'browser', 'timetable', 'assignments', 'reports', 'badges', 'portfolio'].includes(tab)) {
+        if (['resources', 'browser', 'timetable', 'assignments', 'reports', 'badges', 'portfolio', 'virtual_class'].includes(tab)) {
           setActiveTab(tab as WorkspaceTab);
         } else if (tab === 'results' || tab === 'gradebook' || tab === 'grades' || tab === 'marks') {
           setActiveTab('reports');
@@ -190,12 +195,18 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
     window.addEventListener('users-updated', handleUpdate);
     window.addEventListener('subject-teacher-chats-updated', handleUpdate);
     window.addEventListener('teacher-lesson-files-updated', handleUpdate);
+    window.addEventListener('lesson-resources-updated', handleUpdate);
     window.addEventListener('announcements-updated', handleUpdate);
+    window.addEventListener('quizzes-updated', handleUpdate);
+    window.addEventListener('assignments-updated', handleUpdate);
     return () => {
       window.removeEventListener('users-updated', handleUpdate);
       window.removeEventListener('subject-teacher-chats-updated', handleUpdate);
       window.removeEventListener('teacher-lesson-files-updated', handleUpdate);
+      window.removeEventListener('lesson-resources-updated', handleUpdate);
       window.removeEventListener('announcements-updated', handleUpdate);
+      window.removeEventListener('quizzes-updated', handleUpdate);
+      window.removeEventListener('assignments-updated', handleUpdate);
     };
   }, []);
 
@@ -216,9 +227,15 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const gradeVideos = Storage.getVideos(studentGrade);
   const gradeAudios = Storage.getAudios(studentGrade);
   const gradeImages = Storage.getLessonImages(studentGrade);
-  const gradeQuizzes = Storage.getQuizzes(studentGrade);
-  // Strictly stream-filtered announcements
+  const gradeQuizzes = Storage.getQuizzes(studentGrade, studentStream);
+  // Strictly stream-filtered announcements (Local + Grade-Based Hierarchy Backend)
   const gradeAnnouncements = Storage.getAnnouncements(studentGrade, studentStream);
+  const [scopedDbAnnouncements, setScopedDbAnnouncements] = useState<GradeAnnouncementItem[]>([]);
+  useEffect(() => {
+    void ahApiFetch<{ announcements: GradeAnnouncementItem[] }>('/api/academic/announcements')
+      .then((res) => setScopedDbAnnouncements(res.announcements || []))
+      .catch(() => setScopedDbAnnouncements([]));
+  }, [currentUser.id, revision]);
   const studentAttempts = Storage.getQuizAttempts(currentUser.id);
   const gradeVirtualClasses = Storage.getVirtualClasses(studentGrade);
   const studentReportCards = Storage.getReportCards(currentUser.id);
@@ -286,7 +303,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       title: 'OPERATIONAL & COLLABORATION',
       items: [
         { id: 'announcements' as WorkspaceTab, label: '7. Announcements & Notices', icon: Bell, badge: gradeAnnouncements.length > 0 ? `${gradeAnnouncements.length}` : undefined, badgeColor: 'bg-rose-600' },
-        { id: 'virtual_class' as WorkspaceTab, label: '8. Virtual Class (Meet Live)', icon: Video },
+        { id: 'virtual_class' as WorkspaceTab, label: '8. My Virtual Classrooms', icon: Video },
         { id: 'grade_chats' as WorkspaceTab, label: '9. Stream & Teacher Chats', icon: MessageSquare },
         { id: 'badges' as WorkspaceTab, label: '10. Badges & Streaks Matrix', icon: Flame, badge: `${learnerTotalXP} BP · 🔥`, badgeColor: 'bg-orange-600' },
         { id: 'browser' as WorkspaceTab, label: '11. Safe Browser (AI Guarded)', icon: Globe },
@@ -317,8 +334,8 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <TenantSchoolLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>
@@ -420,11 +437,21 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
               )}
             </div>
-            {!isSidebarCollapsed && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 shrink-0">
-                Active
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!isSidebarCollapsed && (
+                <span className="hidden sm:inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  Active
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                aria-label="Close student navigation menu"
+                className="lg:hidden min-w-[36px] min-h-[36px] inline-flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Groups */}
@@ -494,8 +521,61 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           </div>
         </aside>
 
+        {/* Mobile Bottom Navigation Bar */}
+        <nav
+          aria-label="Student quick navigation"
+          className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_16px_rgba(15,23,42,0.06)] pb-safe"
+        >
+          <div className="grid grid-cols-5 h-14 max-w-screen-md mx-auto">
+            {([
+              { id: 'resources' as const, label: 'Resources', icon: BookOpen },
+              { id: 'assignments' as const, label: 'Homework', icon: FileText },
+              { id: 'quiz_results' as const, label: 'Quizzes', icon: CheckSquare },
+              { id: 'reports' as const, label: 'Reports', icon: Award },
+            ]).map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-bold transition-colors cursor-pointer min-w-0 ${
+                    isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="truncate max-w-full leading-tight">{item.label}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              aria-label="Open all student modules"
+              className={`flex flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-bold transition-colors cursor-pointer ${
+                isMobileSidebarOpen ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Menu className="w-4 h-4 shrink-0" />
+              <span className="leading-tight">Modules</span>
+            </button>
+          </div>
+        </nav>
+
         {/* Content View Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+        <main className="flex-1 min-w-0 p-3.5 sm:p-6 lg:p-8 overflow-y-auto space-y-5 sm:space-y-6">
+
+      {activeTab !== 'virtual_class' && (
+        <StudentVirtualClassroomPanel
+          compactBannerOnly
+          onOpenFullTab={() => setActiveTab('virtual_class')}
+        />
+      )}
 
       {/* ========================================================
           ACHIEVEMENT SYSTEM: DIGITAL BADGES SHELF WIDGET
@@ -751,9 +831,23 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2.5">
                                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                                    file.fileType === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'
+                                    file.fileType === 'video'
+                                      ? 'bg-purple-50 text-purple-600'
+                                      : file.fileType === 'audio'
+                                      ? 'bg-teal-50 text-teal-600'
+                                      : file.fileType === 'pdf'
+                                      ? 'bg-rose-50 text-rose-600'
+                                      : 'bg-indigo-50 text-indigo-600'
                                   }`}>
-                                    {file.fileType === 'pdf' ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                                    {file.fileType === 'video' ? (
+                                      <Video className="w-4 h-4" />
+                                    ) : file.fileType === 'audio' ? (
+                                      <Volume2 className="w-4 h-4" />
+                                    ) : file.fileType === 'image' ? (
+                                      <ImageIcon className="w-4 h-4" />
+                                    ) : (
+                                      <FileText className="w-4 h-4" />
+                                    )}
                                   </div>
                                   <div>
                                     <span className="text-[10px] font-mono text-slate-400 font-bold block uppercase">
@@ -797,21 +891,11 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                                 <button
                                   type="button"
                                   onClick={() => setPreviewLessonFile(file)}
-                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  <span>Preview</span>
-                                </button>
-                                <a
-                                  href={file.fileUrl}
-                                  download={file.fileName}
-                                  target="_blank"
-                                  rel="noreferrer"
                                   className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                                 >
-                                  <Download className="w-3 h-3" />
-                                  <span>Download</span>
-                                </a>
+                                  <Eye className="w-3 h-3" />
+                                  <span>Open Viewer</span>
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -820,8 +904,130 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   )}
                 </div>
               ) : (
-                /* VIEW 2: TOPICS AND SYLLABUS BREAKDOWN */
+                /* VIEW 2: TOPICS AND SYLLABUS BREAKDOWN + TEACHER-SHARED E-RESOURCES */
                 <div className="space-y-6">
+                {(() => {
+                  const topicIdSet = new Set(gradeTopics.map(t => t.id));
+                  const sharedNotes = gradeNotes.filter(
+                    n => n.subject === selectedSubject && !topicIdSet.has(n.topicId)
+                  );
+                  const sharedVideos = gradeVideos.filter(
+                    v => v.subject === selectedSubject && !topicIdSet.has(v.topicId)
+                  );
+                  const sharedAudios = gradeAudios.filter(
+                    a => a.subject === selectedSubject && !topicIdSet.has(a.topicId)
+                  );
+                  const sharedImages = gradeImages.filter(
+                    img => img.subject === selectedSubject && !topicIdSet.has(img.topicId)
+                  );
+                  const totalShared =
+                    sharedNotes.length + sharedVideos.length + sharedAudios.length + sharedImages.length;
+
+                  if (totalShared === 0) return null;
+
+                  return (
+                    <div className="bg-white rounded-2xl border border-indigo-200 p-5 sm:p-6 shadow-xs space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                            Teacher-Shared E-Resources · {selectedSubject}
+                          </div>
+                          <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                            Uploaded Videos, Audio, PDF Notes & Pictures
+                          </h3>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">
+                          {sharedNotes.length} Notes/PDF · {sharedVideos.length} Video · {sharedAudios.length} Audio · {sharedImages.length} Pictures
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {sharedNotes.map(n => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => handleOpenNote(n)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                              {n.documentUrl ? <FileText className="w-4 h-4" /> : <BookOpen className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">
+                                {n.documentUrl ? 'PDF Lesson Document' : 'Lesson Notes'}
+                              </div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{n.title}</div>
+                              <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                By {n.author}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+
+                        {sharedVideos.map(v => (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => handleOpenVideo(v)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-rose-50/60 hover:border-rose-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-800 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+                              <Play className="w-4 h-4 fill-current ml-0.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">Video Lesson</div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{v.title}</div>
+                              <div className="text-[10px] text-rose-700 font-medium mt-1">
+                                {v.durationMinutes} mins · {v.teacherName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+
+                        {sharedAudios.map(a => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => handleOpenAudio(a)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-teal-50/60 hover:border-teal-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-teal-100 text-teal-800 flex items-center justify-center shrink-0 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                              <Volume2 className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">Audio Lesson</div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{a.title}</div>
+                              <div className="text-[10px] text-teal-700 font-medium mt-1">
+                                {a.durationMinutes} mins · {a.teacherName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+
+                        {sharedImages.map(img => (
+                          <button
+                            key={img.id}
+                            type="button"
+                            onClick={() => handleOpenImage(img)}
+                            className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 transition-all text-left flex items-start gap-3 group cursor-pointer"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">Image / Picture</div>
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{img.title}</div>
+                              <div className="text-[10px] text-blue-700 font-medium mt-1">
+                                {img.category || 'Diagram'} · {img.teacherName}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {gradeTopics.length === 0 ? (
                   <div className="p-8 text-center bg-white rounded-xl border border-slate-200">
                     <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -1053,6 +1259,25 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           </div>
 
           <div className="space-y-4">
+            {scopedDbAnnouncements.map((ann) => (
+              <div key={ann.id} className="p-5 rounded-xl border border-slate-200 bg-white space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="font-semibold text-emerald-700">
+                      {ann.stream_display_name || ann.grade_name || 'School Notice'}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span className="uppercase font-semibold">{ann.priority}</span>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono tabular-nums">{ann.created_at.slice(0, 10)}</span>
+                </div>
+                <h3 className="font-bold text-sm text-slate-900">{ann.title}</h3>
+                <p className="text-xs text-slate-700 leading-relaxed">{ann.message}</p>
+                <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                  Posted by <span className="font-semibold text-slate-800">{ann.author_name}</span> ({ann.author_role.replace(/_/g, ' ')})
+                </div>
+              </div>
+            ))}
             {gradeAnnouncements.map((ann) => (
               <div
                 key={ann.id}
@@ -1199,10 +1424,10 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 {/* Official School Header */}
                 <div className="text-center pb-4 border-b border-slate-200 space-y-1">
                   <div className="flex justify-center mb-2">
-                    <EduSmartGadsaLogo variant="full" size="sm" />
+                    <TenantSchoolLogo variant="full" size="sm" />
                   </div>
                   <div className="text-xs font-bold text-emerald-700 uppercase tracking-widest">
-                    Edu-Smart PORTAL · By Gadsa Systems
+                    {currentTenant.name}
                   </div>
                   <h3 className="text-xl font-extrabold text-slate-900">
                     Official Learner Progress Report Card
@@ -1242,9 +1467,30 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                   </div>
                 </div>
 
-                {/* Multi-subject Scores Table */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left text-xs">
+                {/* Mobile Stacked Subject Score Cards */}
+                <div className="md:hidden space-y-2.5">
+                  {rc.subjects.map((sub, sIdx) => (
+                    <div key={sIdx} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-bold text-slate-900 text-sm">{sub.subject}</div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-mono font-bold text-xs shrink-0">
+                          {sub.total}% · {sub.gradeLetter}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[11px] font-mono bg-white p-2 rounded-lg border border-slate-200/80">
+                        <div><span className="text-slate-400 block font-sans text-[10px]">Opener</span>{sub.openerScore}/30</div>
+                        <div><span className="text-slate-400 block font-sans text-[10px]">Mid-Term</span>{sub.midTermScore}/30</div>
+                        <div><span className="text-slate-400 block font-sans text-[10px]">End-Term</span>{sub.endTermScore}/40</div>
+                      </div>
+                      <div className="text-[11px] text-slate-700 font-semibold">{sub.rubricLevel}</div>
+                      <p className="text-[11px] text-slate-600 italic">"{sub.remarks}"</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Multi-subject Scores Table */}
+                <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+                  <table className="w-full min-w-[680px] text-left text-xs">
                     <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                       <tr>
                         <th className="py-2.5 px-3">Subject / Learning Area</th>
@@ -1346,40 +1592,66 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
 
                 {attSummary.history.length > 0 && (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                        <tr>
-                          <th className="py-2 px-3">Date</th>
-                          <th className="py-2 px-3 text-center">Status</th>
-                          <th className="py-2 px-3">Class Teacher Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 font-mono">
-                        {attSummary.history.map((h, hIdx) => (
-                          <tr key={hIdx} className="hover:bg-slate-50">
-                            <td className="py-2 px-3 font-bold text-slate-800">{h.date}</td>
-                            <td className="py-2 px-3 text-center">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                                  h.status === 'present'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : h.status === 'absent'
-                                    ? 'bg-rose-100 text-rose-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {h.status}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 font-sans text-slate-600 italic">
-                              {h.remarks ? `"${h.remarks}"` : 'Regular attendance recorded'}
-                            </td>
+                  <>
+                    <div className="md:hidden space-y-2">
+                      {attSummary.history.map((h, hIdx) => (
+                        <div key={hIdx} className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-1 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono font-bold text-slate-900">{h.date}</span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                h.status === 'present'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : h.status === 'absent'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {h.status}
+                            </span>
+                          </div>
+                          <p className="text-slate-600 italic text-[11px]">
+                            {h.remarks ? `"${h.remarks}"` : 'Regular attendance recorded'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto">
+                      <table className="w-full min-w-[480px] text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                          <tr>
+                            <th className="py-2 px-3">Date</th>
+                            <th className="py-2 px-3 text-center">Status</th>
+                            <th className="py-2 px-3">Class Teacher Remarks</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 font-mono">
+                          {attSummary.history.map((h, hIdx) => (
+                            <tr key={hIdx} className="hover:bg-slate-50">
+                              <td className="py-2 px-3 font-bold text-slate-800">{h.date}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                    h.status === 'present'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : h.status === 'absent'
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {h.status}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 font-sans text-slate-600 italic">
+                                {h.remarks ? `"${h.remarks}"` : 'Regular attendance recorded'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             );
@@ -1425,143 +1697,101 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
               </button>
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">Quiz Title</th>
-                    <th className="py-3 px-4">Subject</th>
-                    <th className="py-3 px-4 text-center">Score</th>
-                    <th className="py-3 px-4 text-center">Percentage</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4">Completed On</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {studentAttempts.map((att) => (
-                    <tr key={att.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4 font-bold text-slate-900">{att.quizTitle}</td>
-                      <td className="py-3 px-4 text-slate-600 font-medium">{att.subject}</td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
-                        {att.score} / {att.totalQuestions}
-                      </td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-emerald-700">
-                        {att.percentage}%
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded font-mono uppercase ${
-                            att.passed
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {att.passed ? 'PASS' : 'FAIL'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{att.completedAt}</td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => {
-                            const quiz = gradeQuizzes.find(q => q.id === att.quizId);
-                            if (quiz) setActiveQuiz(quiz);
-                          }}
-                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs transition-colors"
-                        >
-                          Review / Retake
-                        </button>
-                      </td>
+            <>
+              <div className="md:hidden space-y-2.5">
+                {studentAttempts.map((att) => (
+                  <div key={att.id} className="p-3.5 rounded-xl border border-slate-200 bg-white shadow-xs space-y-2 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-sm">{att.quizTitle}</div>
+                        <div className="text-[11px] text-slate-500">{att.subject} · {att.completedAt}</div>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase shrink-0 ${
+                          att.passed ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                        }`}
+                      >
+                        {att.passed ? 'PASS' : 'FAIL'} · {att.percentage}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <span className="font-mono font-bold text-slate-800">Score: {att.score} / {att.totalQuestions}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const quiz = gradeQuizzes.find(q => q.id === att.quizId);
+                          if (quiz) setActiveQuiz(quiz);
+                        }}
+                        className="min-h-[36px] px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-xs cursor-pointer"
+                      >
+                        Review / Retake
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden md:block border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-xs">
+                <table className="w-full min-w-[640px] text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">Quiz Title</th>
+                      <th className="py-3 px-4">Subject</th>
+                      <th className="py-3 px-4 text-center">Score</th>
+                      <th className="py-3 px-4 text-center">Percentage</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4">Completed On</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {studentAttempts.map((att) => (
+                      <tr key={att.id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4 font-bold text-slate-900">{att.quizTitle}</td>
+                        <td className="py-3 px-4 text-slate-600 font-medium">{att.subject}</td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-slate-900">
+                          {att.score} / {att.totalQuestions}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-emerald-700">
+                          {att.percentage}%
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-0.5 rounded font-mono uppercase ${
+                              att.passed
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {att.passed ? 'PASS' : 'FAIL'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{att.completedAt}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => {
+                              const quiz = gradeQuizzes.find(q => q.id === att.quizId);
+                              if (quiz) setActiveQuiz(quiz);
+                            }}
+                            className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold text-xs transition-colors"
+                          >
+                            Review / Retake
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}
 
       {/* ========================================================
-          TAB 5: VIRTUAL CLASS (Google Meet Integration)
+          TAB 5: MY VIRTUAL CLASSROOMS (LiveKit Integration)
           ======================================================== */}
-      {activeTab === 'virtual_class' && (
-        <section className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Grade {studentGrade} Google Meet Virtual Class
-              </h2>
-              <p className="text-xs text-slate-500">
-                Access your official Google Meet virtual classroom for live lectures, demonstrations, and teacher Q&A.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Google Meet Ready</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {gradeVirtualClasses.map((vc) => (
-              <div
-                key={vc.id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between space-y-4"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase flex items-center gap-1.5 ${
-                        vc.isLive
-                          ? 'bg-rose-100 text-rose-800 animate-pulse'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${vc.isLive ? 'bg-rose-600' : 'bg-slate-400'}`} />
-                      {vc.isLive ? 'LIVE NOW' : 'SCHEDULED'}
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                      Grade {vc.grade} {vc.stream ? `· ${vc.stream}` : ''}
-                    </span>
-                  </div>
-
-                  <h3 className="text-base font-bold text-slate-900 mb-1">
-                    {vc.subject}: {vc.topic}
-                  </h3>
-                  <div className="text-xs text-slate-600">
-                    Host: <strong>{vc.teacherName}</strong>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1 font-mono">
-                    Time: {vc.scheduledTime} ({vc.durationMinutes} mins)
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100 space-y-2">
-                  <div className="text-[11px] text-slate-500 font-mono break-all">
-                    Link: {vc.googleMeetLink}
-                  </div>
-                  <a
-                    href={vc.googleMeetLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
-                  >
-                    <Video className="w-4 h-4" />
-                    <span>Join Google Meet Session</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
-            <div className="font-bold text-slate-800">Virtual Classroom Guidelines:</div>
-            <div>1. Ensure your microphone is muted upon entry; use the "Raise Hand" icon to speak.</div>
-            <div>2. Have your notebook and CBC curriculum textbook open for note taking.</div>
-            <div>3. Direct technical issues to your class teacher via the Grade Chats tab.</div>
-          </div>
-        </section>
-      )}
+      {activeTab === 'virtual_class' && <StudentVirtualClassroomPanel />}
 
       {/* ========================================================
           TAB 6: GRADE CHATS & DIRECT TEACHER CHAT
@@ -2068,21 +2298,23 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 onClose={() => setActiveAssignedLab(null)}
                 onAssignmentComplete={(rep) => {
                   const submissionText = `[Digital CBC Practical Report]\nExperiment: ${activeAssignedLab.labTitle || activeAssignedLab.title}\nObservations recorded: ${rep?.observations || 'Completed practical inquiry in Virtual Lab'}\nHypothesis: ${rep?.hypothesis || 'Verified'}\nFindings & Conclusion: ${rep?.conclusion || 'Completed according to standard lab procedures.'}`;
-                  const existingSubs = JSON.parse(localStorage.getItem('edusmart_assignment_submissions') || '[]');
-                  existingSubs.push({
-                    id: `sub-${Date.now()}`,
-                    assignmentId: activeAssignedLab.id,
-                    studentId: currentUser.id,
-                    studentName: currentUser.name,
-                    grade: currentUser.grade || 4,
-                    stream: (currentUser.stream as any) || 'Dove',
-                    submissionText,
-                    submittedAt: new Date().toISOString().split('T')[0],
-                    status: 'submitted'
-                  });
-                  SyncEngine.persistItem('edusmart_assignment_submissions', JSON.stringify(existingSubs));
+                  const existingSubs = ClientDataStore.getCollection<any[]>('edusmart_assignment_submissions', []);
+                  const updatedSubs = [
+                    ...existingSubs,
+                    {
+                      id: `sub-${Date.now()}`,
+                      assignmentId: activeAssignedLab.id,
+                      studentId: currentUser.id,
+                      studentName: currentUser.name,
+                      grade: currentUser.grade || 4,
+                      stream: (currentUser.stream as any) || 'Dove',
+                      submissionText,
+                      submittedAt: new Date().toISOString().split('T')[0],
+                      status: 'submitted'
+                    }
+                  ];
+                  ClientDataStore.setCollection('edusmart_assignment_submissions', updatedSubs);
                   setActiveAssignedLab(null);
-                  alert('Assigned Practical Completed & Submitted to Teacher Successfully!');
                 }}
               />
             </div>
@@ -2153,8 +2385,16 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  {previewLessonFile.fileType === 'pdf' ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  {previewLessonFile.fileType === 'video' ? (
+                    <Video className="w-5 h-5" />
+                  ) : previewLessonFile.fileType === 'audio' ? (
+                    <Volume2 className="w-5 h-5" />
+                  ) : previewLessonFile.fileType === 'image' ? (
+                    <ImageIcon className="w-5 h-5" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-900 text-sm">{previewLessonFile.title}</h4>
@@ -2172,43 +2412,73 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
               </button>
             </div>
 
-            <div className="h-80 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center">
+            <div
+              className="h-80 sm:h-96 bg-slate-950 rounded-2xl overflow-hidden flex items-center justify-center select-none"
+              onContextMenu={(e) => e.preventDefault()}
+            >
               {previewLessonFile.fileType === 'image' ? (
                 <img
                   src={previewLessonFile.fileUrl}
                   alt={previewLessonFile.title}
-                  className="w-full h-full object-contain"
+                  draggable={false}
+                  className="w-full h-full object-contain pointer-events-none"
+                />
+              ) : previewLessonFile.fileType === 'video' ? (
+                <video
+                  controls
+                  controlsList="nodownload"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  playsInline
+                  preload="metadata"
+                  src={previewLessonFile.fileUrl}
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : previewLessonFile.fileType === 'audio' ? (
+                <div className="w-full max-w-md p-6 text-center text-white space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-teal-500/20 text-teal-400 flex items-center justify-center mx-auto">
+                    <Volume2 className="w-7 h-7" />
+                  </div>
+                  <div className="font-bold text-sm truncate">{previewLessonFile.fileName}</div>
+                  <audio
+                    controls
+                    controlsList="nodownload"
+                    onContextMenu={(e) => e.preventDefault()}
+                    preload="metadata"
+                    src={previewLessonFile.fileUrl}
+                    className="w-full"
+                  />
+                </div>
+              ) : previewLessonFile.fileType === 'pdf' ? (
+                <iframe
+                  src={previewLessonFile.fileUrl.includes('#') ? previewLessonFile.fileUrl : `${previewLessonFile.fileUrl}#toolbar=0&navpanes=0`}
+                  title={previewLessonFile.title}
+                  className="w-full h-full bg-white"
                 />
               ) : (
                 <div className="text-center text-white space-y-2 p-6">
                   <FileText className="w-12 h-12 text-blue-400 mx-auto" />
                   <div className="font-bold text-sm">{previewLessonFile.fileName}</div>
                   <p className="text-xs text-slate-300">
-                    KICD CBC educational handout ({previewLessonFile.fileSize})
+                    KICD CBC educational handout ({previewLessonFile.fileSize}) · View-only mode
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
               <span className="text-xs text-slate-500">
                 Teacher: <strong>{previewLessonFile.teacherName}</strong>
               </span>
               <div className="flex items-center gap-2">
-                <a
-                  href={previewLessonFile.fileUrl}
-                  download={previewLessonFile.fileName}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Resource</span>
-                </a>
+                <span className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px] rounded-xl flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Download Restricted · View-Only</span>
+                </span>
                 <button
                   type="button"
                   onClick={() => setPreviewLessonFile(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
                 >
                   Close
                 </button>

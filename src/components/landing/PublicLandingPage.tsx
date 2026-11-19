@@ -606,10 +606,10 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
             </div>
           )}
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[76px] flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-[76px] flex items-center justify-between gap-2">
             
             {/* Logo & Title */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <div className="bg-white p-1 rounded-2xl border border-slate-200/90 shadow-md flex items-center justify-center shrink-0">
                 <img 
                   src="/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg" 
@@ -620,11 +620,11 @@ export const PublicLandingPage: React.FC<PublicLandingPageProps> = ({
                   }}
                 />
               </div>
-              <div>
-                <span className="font-sans font-black text-lg sm:text-xl tracking-tight text-slate-950 block leading-tight">
-                  <span className="text-[#0B3075]">Edu-</span><span className="text-[#F5A623]">Smart</span> <span className="text-[#0B3075] text-xs sm:text-sm uppercase tracking-wider font-extrabold ml-1">PORTAL</span>
+              <div className="min-w-0">
+                <span className="font-sans font-black text-base sm:text-xl tracking-tight text-slate-950 block leading-tight truncate">
+                  <span className="text-[#0B3075]">Edu-</span><span className="text-[#F5A623]">Smart</span> <span className="text-[#0B3075] text-[11px] sm:text-sm uppercase tracking-wider font-extrabold ml-0.5 sm:ml-1">PORTAL</span>
                 </span>
-                <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.1em] text-slate-500 uppercase block mt-0.5">
+                <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.08em] sm:tracking-[0.1em] text-slate-500 uppercase block mt-0.5 truncate">
                   By Gadsa Systems · Multi-Tenant LMS
                 </span>
               </div>

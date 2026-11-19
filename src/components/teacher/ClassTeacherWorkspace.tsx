@@ -41,6 +41,8 @@ import {
   StudentInterventionsPanel,
 } from '../academic-hierarchy/GradeReportSubmitAndReviewPanels';
 import { SubjectTeacherVirtualLessonsPanel } from '../virtual-classroom/SubjectTeacherVirtualLessonsPanel';
+import { TeacherLibraryPortal } from '../library/TeacherLibraryPortal';
+import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import {
   UserCheck,
   Award,
@@ -67,6 +69,7 @@ import {
   BookOpen,
   RefreshCw,
   Video,
+  Library,
 } from 'lucide-react';
 
 export type ClassTeacherTab =
@@ -85,6 +88,7 @@ export type ClassTeacherTab =
   | 'gate_exit'
   | 'timetable'
   | 'virtual_classrooms'
+  | 'library_contents'
   | 'work_entry'
   | 'staff_appraisal';
 
@@ -228,9 +232,14 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
         'gate_exit',
         'timetable',
         'virtual_classrooms',
+        'library_contents',
         'work_entry',
         'staff_appraisal',
       ];
+      if ((tab as string) === 'library_booking') {
+        setActiveTab('library_contents');
+        return;
+      }
       if (validTabs.includes(tab)) {
         setActiveTab(tab);
       }
@@ -582,6 +591,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
     {
       title: 'Routine & Campus',
       items: [
+        { id: 'library_contents', label: 'School Library & Booking', icon: Library, badge: 'Library', badgeColor: 'bg-purple-700' },
         { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
         { id: 'gate_exit', label: 'Student Gate Exit', icon: DoorOpen },
         { id: 'timetable', label: 'Class Timetable', icon: Calendar },
@@ -634,7 +644,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
             >
               <Menu className="w-5 h-5" />
             </button>
-            <TenantSchoolLogo variant="horizontal" size="sm" />
+            <TenantSchoolLogo variant="horizontal" size="sm" compactMobile />
             <div className="border-l border-slate-200 pl-3 min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                 <span className="font-semibold text-emerald-800 uppercase tracking-wider">Class Teacher Portal</span>
@@ -686,6 +696,17 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
                 ))}
               </div>
             ) : null}
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('library_contents')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg whitespace-nowrap cursor-pointer shadow-xs"
+            >
+              <Library className="w-3.5 h-3.5" />
+              <span>School Library</span>
+            </button>
+
+            <LibraryRoomBookingButton currentUser={currentUser} variant="compact" label="Book Library Room" />
 
             <button
               type="button"
@@ -1554,6 +1575,8 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
           {activeTab === 'timetable' && <TimetablePortal currentUser={currentUser} />}
 
           {activeTab === 'virtual_classrooms' && <SubjectTeacherVirtualLessonsPanel />}
+
+          {activeTab === 'library_contents' && <TeacherLibraryPortal currentUser={currentUser} />}
 
           {activeTab === 'work_entry' && <TeacherWorkEntryForm currentUser={currentUser} />}
 

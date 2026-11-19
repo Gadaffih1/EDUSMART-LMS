@@ -4,16 +4,18 @@ import {
   LibraryBook,
   DigitalLibraryItem,
   LibraryShelfLocation,
+  LibraryBorrowRecord,
+  LibraryReservation,
   GradeLevel,
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { LibraryRoomBookingButton } from './LibraryRoomBookingButton';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import {
   BookOpen,
   Compass,
-  DoorOpen,
   Eye,
   FileText,
   Globe,
@@ -24,13 +26,16 @@ import {
   Atom,
   X,
   Lock,
+  BookmarkPlus,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface TeacherLibraryPortalProps {
   currentUser: User;
 }
 
-type LibrarySubTab = 'catalogue' | 'digital' | 'elinks' | 'shelves';
+type LibrarySubTab = 'catalogue' | 'digital' | 'elinks' | 'shelves' | 'my_loans';
 
 export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ currentUser }) => {
   const [subTab, setSubTab] = useState<LibrarySubTab>('catalogue');
@@ -41,6 +46,13 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
   const [shelves, setShelves] = useState<LibraryShelfLocation[]>(() =>
     Storage.getLibraryShelves()
   );
+  const [borrowRecords, setBorrowRecords] = useState<LibraryBorrowRecord[]>(() =>
+    Storage.getBorrowRecords()
+  );
+  const [reservations, setReservations] = useState<LibraryReservation[]>(() =>
+    Storage.getLibraryReservations()
+  );
+  const [reservationFeedback, setReservationFeedback] = useState<string | null>(null);
 
   // Filters
   const [bookSearch, setBookSearch] = useState('');
@@ -57,21 +69,83 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
     const syncBooks = () => setBooks(Storage.getLibraryBooks());
     const syncDigital = () => setDigitalItems(Storage.getDigitalLibraryItems());
     const syncShelves = () => setShelves(Storage.getLibraryShelves());
+    const syncLoans = () => {
+      setBorrowRecords(Storage.getBorrowRecords());
+      setReservations(Storage.getLibraryReservations());
+    };
 
     window.addEventListener('library-books-updated', syncBooks);
     window.addEventListener('digital-library-updated', syncDigital);
     window.addEventListener('library-shelves-updated', syncShelves);
+    window.addEventListener('library-borrow-updated', syncLoans);
+    window.addEventListener('library-reservations-updated', syncLoans);
     window.addEventListener('edusmart:data-changed', syncBooks);
     window.addEventListener('edusmart:data-changed', syncDigital);
+    window.addEventListener('edusmart:data-changed', syncLoans);
 
     return () => {
       window.removeEventListener('library-books-updated', syncBooks);
       window.removeEventListener('digital-library-updated', syncDigital);
       window.removeEventListener('library-shelves-updated', syncShelves);
+      window.removeEventListener('library-borrow-updated', syncLoans);
+      window.removeEventListener('library-reservations-updated', syncLoans);
       window.removeEventListener('edusmart:data-changed', syncBooks);
       window.removeEventListener('edusmart:data-changed', syncDigital);
+      window.removeEventListener('edusmart:data-changed', syncLoans);
     };
   }, []);
+
+  const myBorrowRecords = useMemo(() => {
+    const uid = String(currentUser.id || '').toLowerCase();
+    const uname = String(currentUser.name || '').toLowerCase();
+    return borrowRecords.filter(
+      (r) =>
+        String(r.borrowerId || '').toLowerCase() === uid ||
+        String(r.borrowerName || '').toLowerCase() === uname
+    );
+  }, [borrowRecords, currentUser.id, currentUser.name]);
+
+  const myReservations = useMemo(() => {
+    const uid = String(currentUser.id || '').toLowerCase();
+    const uname = String(currentUser.name || '').toLowerCase();
+    return reservations.filter(
+      (r) =>
+        String(r.borrowerId || '').toLowerCase() === uid ||
+        String(r.borrowerName || '').toLowerCase() === uname
+    );
+  }, [reservations, currentUser.id, currentUser.name]);
+
+  const handleReserveBook = (book: LibraryBook) => {
+    const alreadyPending = myReservations.some(
+      (r) => r.bookId === book.id && (r.status === 'pending' || r.status === 'ready_for_pickup')
+    );
+    if (alreadyPending) {
+      setReservationFeedback(`You already have an active reservation for "${book.title}".`);
+      setTimeout(() => setReservationFeedback(null), 4000);
+      return;
+    }
+
+    const today = new Date();
+    const expiry = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const newReservation: LibraryReservation = {
+      id: `res-${Date.now()}`,
+      bookId: book.id,
+      bookTitle: book.title,
+      borrowerId: currentUser.id,
+      borrowerName: currentUser.name,
+      borrowerRole: 'teacher',
+      grade: currentUser.grade,
+      stream: currentUser.stream,
+      reservationDate: today.toISOString().split('T')[0],
+      expiryDate: expiry.toISOString().split('T')[0],
+      status: 'pending',
+      notes: 'Requested by Subject Teacher via School Library Portal',
+    };
+    Storage.addLibraryReservation(newReservation);
+    setReservations(Storage.getLibraryReservations());
+    setReservationFeedback(`Reserved "${book.title}" for pickup at the Library Desk.`);
+    setTimeout(() => setReservationFeedback(null), 4000);
+  };
 
   const bookCategories = useMemo(
     () => Array.from(new Set(books.map((b) => b.category).filter(Boolean))),
@@ -110,18 +184,23 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
   return (
     <section className="space-y-6">
       {/* Header Hero Banner */}
-      <div className="bg-gradient-to-r from-indigo-950 via-purple-900 to-slate-900 rounded-2xl p-5 sm:p-6 text-white shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="space-y-1.5 min-w-0">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-[10px] font-bold uppercase tracking-wider">
-            <Library className="w-3.5 h-3.5" />
-            <span>Subject Teacher School Library Access</span>
+      <div className="bg-gradient-to-r from-indigo-950 via-purple-900 to-slate-900 rounded-2xl p-4 sm:p-6 text-white shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+          <div className="shrink-0">
+            <TenantSchoolLogo variant="emblem" size="sm" />
           </div>
-          <h2 className="text-lg sm:text-2xl font-black tracking-tight">
-            School Library Contents & Digital Repository
-          </h2>
-          <p className="text-xs text-purple-100/80 max-w-2xl leading-relaxed">
-            Full faculty access to all library course books, CBC teacher guides, digital e-books, curated E-Links, shelf locations, and Library Room Booking. Downloads are strictly disabled — all digital content opens in the secure in-app viewer.
-          </p>
+          <div className="space-y-1.5 min-w-0">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-[10px] font-bold uppercase tracking-wider">
+              <Library className="w-3.5 h-3.5" />
+              <span>Subject Teacher School Library Access</span>
+            </div>
+            <h2 className="text-lg sm:text-2xl font-black tracking-tight">
+              School Library Contents & Digital Repository
+            </h2>
+            <p className="text-xs text-purple-100/80 max-w-2xl leading-relaxed">
+              Full faculty access to all library course books, CBC teacher guides, digital e-books, curated E-Links, shelf locations, book reservations, and Library Room Booking. Downloads are strictly disabled — all digital content opens in the secure in-app viewer.
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -148,6 +227,13 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
           <strong>Read-Only Digital Protection:</strong> Downloading library contents or shared E-resources is strictly restricted across EduSmart. Use the in-app reader for classroom instruction and reference.
         </span>
       </div>
+
+      {reservationFeedback && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-900 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{reservationFeedback}</span>
+        </div>
+      )}
 
       {/* Sub-Tab Switcher */}
       <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-2xs">
@@ -201,6 +287,19 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
         >
           <Compass className="w-3.5 h-3.5 shrink-0" />
           <span>Shelves & Stacks ({shelves.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSubTab('my_loans')}
+          className={`px-3 py-2 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            subTab === 'my_loans'
+              ? 'bg-purple-700 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span>My Loans & Reservations ({myBorrowRecords.length + myReservations.length})</span>
         </button>
       </div>
 
@@ -301,15 +400,22 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-mono text-slate-400">In-App View Only</span>
+                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleReserveBook(book)}
+                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <BookmarkPlus className="w-3.5 h-3.5 shrink-0" />
+                      <span>Reserve Copy</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => setReadingBook(book)}
                       className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                     >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Inspect Book Details</span>
+                      <Eye className="w-3.5 h-3.5 shrink-0" />
+                      <span>Inspect Book</span>
                     </button>
                   </div>
                 </div>
@@ -423,6 +529,75 @@ export const TeacherLibraryPortal: React.FC<TeacherLibraryPortalProps> = ({ curr
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* TAB 5: MY BORROWED BOOKS & RESERVATIONS */}
+      {subTab === 'my_loans' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-3">
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-purple-700" />
+              <span>My Borrowed Library Books ({myBorrowRecords.length})</span>
+            </h3>
+            {myBorrowRecords.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4">
+                No physical library books are currently issued to your account. Reserve any title from the catalogue and collect it at the Library Desk.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {myBorrowRecords.map((rec) => (
+                  <div key={rec.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-900">{rec.bookTitle}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          rec.status === 'returned'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : rec.status === 'overdue'
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                        }`}
+                      >
+                        {rec.status}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Borrowed: {rec.borrowedDate} · Due: <strong className="text-slate-700">{rec.dueDate}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-3">
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <BookmarkPlus className="w-4 h-4 text-emerald-700" />
+              <span>My Book Reservations ({myReservations.length})</span>
+            </h3>
+            {myReservations.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4">
+                You have not placed any book reservations yet. Click &ldquo;Reserve Copy&rdquo; on any book in the Library Catalogue.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {myReservations.map((res) => (
+                  <div key={res.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-900">{res.bookTitle}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-50 text-purple-800 border border-purple-200">
+                        {res.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Reserved: {res.reservationDate} · Hold Until: <strong className="text-slate-700">{res.expiryDate}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

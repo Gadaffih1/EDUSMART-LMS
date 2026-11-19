@@ -448,8 +448,8 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block shrink-0">
-            <TenantSchoolLogo variant="horizontal" size="xs" showMotto={false} />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <TenantSchoolLogo variant="horizontal" size="xs" showMotto={false} compactMobile />
           </div>
 
           <div className="min-w-0">

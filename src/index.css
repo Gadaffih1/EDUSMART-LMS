@@ -61,25 +61,25 @@ table {
   }
 
   /* Compact, non-overlapping button titles on smartphone screens */
-  button,
-  [role="button"] {
+  button:not(.edusmart-brand-btn),
+  [role="button"]:not(.edusmart-brand-btn) {
     font-size: 11px !important;
     line-height: 1.25 !important;
     max-width: 100%;
   }
 
-  button > span,
-  button .text-xs,
-  button .text-sm,
-  button .text-base,
-  [role="button"] > span {
+  button:not(.edusmart-brand-btn) > span,
+  button:not(.edusmart-brand-btn) .text-xs,
+  button:not(.edusmart-brand-btn) .text-sm,
+  button:not(.edusmart-brand-btn) .text-base,
+  [role="button"]:not(.edusmart-brand-btn) > span {
     font-size: 11px !important;
     line-height: 1.25 !important;
     min-width: 0;
   }
 
   /* Keep micro-badges and bottom-nav labels even tighter */
-  button .text-\[10px\],
+  button:not(.edusmart-brand-btn) .text-\[10px\],
   nav button,
   nav button > span {
     font-size: 10px !important;
@@ -88,13 +88,13 @@ table {
 }
 
 @media (max-width: 390px) {
-  button,
-  [role="button"],
-  button > span,
-  button .text-xs,
-  button .text-sm,
-  button .text-base,
-  [role="button"] > span {
+  button:not(.edusmart-brand-btn),
+  [role="button"]:not(.edusmart-brand-btn),
+  button:not(.edusmart-brand-btn) > span,
+  button:not(.edusmart-brand-btn) .text-xs,
+  button:not(.edusmart-brand-btn) .text-sm,
+  button:not(.edusmart-brand-btn) .text-base,
+  [role="button"]:not(.edusmart-brand-btn) > span {
     font-size: 10.5px !important;
     line-height: 1.2 !important;
   }

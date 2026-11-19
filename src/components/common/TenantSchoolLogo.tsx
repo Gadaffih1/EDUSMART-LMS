@@ -8,6 +8,8 @@ export interface TenantSchoolLogoProps {
   variant?: 'full' | 'emblem' | 'horizontal' | 'badge';
   monochrome?: boolean;
   showMotto?: boolean;
+  /** When true on variant="horizontal", shows the crisp emblem on phones (<640px) and emblem + text on sm+ */
+  compactMobile?: boolean;
 }
 
 export const TenantSchoolLogo: React.FC<TenantSchoolLogoProps> = ({
@@ -16,16 +18,17 @@ export const TenantSchoolLogo: React.FC<TenantSchoolLogoProps> = ({
   variant = 'full',
   monochrome = false,
   showMotto = true,
+  compactMobile = false,
 }) => {
   const { currentTenant } = useTenant();
   const logoSrc = currentTenant.customLogoBase64 || currentTenant.logoUrl || '';
 
   const sizeMap: Record<string, { width: number; height: number; iconClass: string }> = {
-    xs: { width: 28, height: 28, iconClass: 'w-4 h-4' },
-    sm: { width: 38, height: 38, iconClass: 'w-5 h-5' },
-    md: { width: 54, height: 54, iconClass: 'w-7 h-7' },
-    lg: { width: 84, height: 84, iconClass: 'w-10 h-10' },
-    xl: { width: 120, height: 120, iconClass: 'w-14 h-14' },
+    xs: { width: 38, height: 38, iconClass: 'w-5 h-5' },
+    sm: { width: 44, height: 44, iconClass: 'w-6 h-6' },
+    md: { width: 60, height: 60, iconClass: 'w-8 h-8' },
+    lg: { width: 88, height: 88, iconClass: 'w-11 h-11' },
+    xl: { width: 124, height: 124, iconClass: 'w-14 h-14' },
     '2xl': { width: 180, height: 180, iconClass: 'w-20 h-20' },
     doc: { width: 96, height: 96, iconClass: 'w-12 h-12' },
   };
@@ -47,7 +50,7 @@ export const TenantSchoolLogo: React.FC<TenantSchoolLogoProps> = ({
 
   const renderLogoBox = (extraClasses = '') => (
     <div
-      className={`rounded-xl overflow-hidden bg-white p-1 shrink-0 flex items-center justify-center border border-slate-200 ${
+      className={`rounded-xl overflow-hidden bg-white p-0.5 shrink-0 flex items-center justify-center border border-slate-200 ${
         monochrome ? 'grayscale' : ''
       } ${extraClasses}`}
       style={{ width: currentSize.width, height: currentSize.height }}
@@ -68,9 +71,9 @@ export const TenantSchoolLogo: React.FC<TenantSchoolLogoProps> = ({
 
   if (variant === 'horizontal') {
     return (
-      <div className={`inline-flex items-center gap-2.5 ${className}`}>
+      <div className={`inline-flex items-center gap-2 sm:gap-2.5 min-w-0 ${className}`}>
         {renderLogoBox()}
-        <div className="leading-tight text-left min-w-0">
+        <div className={`leading-tight text-left min-w-0 ${compactMobile ? 'hidden sm:block' : ''}`}>
           <div className="font-serif font-bold tracking-tight text-sm sm:text-base text-slate-950 truncate">
             {currentTenant.name}
           </div>
@@ -87,7 +90,7 @@ export const TenantSchoolLogo: React.FC<TenantSchoolLogoProps> = ({
   if (variant === 'emblem') {
     return (
       <div
-        className={`rounded-2xl overflow-hidden bg-white p-1 flex items-center justify-center shrink-0 border border-slate-200 ${
+        className={`rounded-2xl overflow-hidden bg-white p-0.5 flex items-center justify-center shrink-0 border border-slate-200 ${
           monochrome ? 'grayscale' : ''
         } ${className}`}
         style={{ width: currentSize.width, height: currentSize.height }}

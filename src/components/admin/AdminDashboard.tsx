@@ -652,11 +652,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 hidden sm:flex items-center justify-center">
-            <TenantSchoolLogo variant="horizontal" size="sm" />
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white font-bold text-xl flex sm:hidden items-center justify-center shadow-xs shrink-0">
-            <School className="w-6 h-6 text-emerald-400" />
+          <div className="bg-slate-50 p-1.5 sm:p-2 rounded-2xl border border-slate-200 shadow-2xs shrink-0 flex items-center justify-center">
+            <TenantSchoolLogo variant="horizontal" size="sm" compactMobile />
           </div>
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">

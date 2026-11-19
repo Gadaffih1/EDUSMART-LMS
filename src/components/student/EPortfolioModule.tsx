@@ -80,8 +80,8 @@ export const EPortfolioModule: React.FC<EPortfolioModuleProps> = ({ currentUser 
       {/* Module Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-4">
-          <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-2xs shrink-0 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+          <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
           </div>
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-1">

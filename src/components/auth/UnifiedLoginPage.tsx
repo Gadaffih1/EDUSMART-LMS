@@ -212,17 +212,17 @@ export const UnifiedLoginPage: React.FC<UnifiedLoginPageProps> = ({
         <div className="w-full max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200/90 p-5 sm:p-8 space-y-5 sm:space-y-6">
           {/* Brand Logo & Title */}
           <div className="text-center space-y-2">
-            <div className="inline-flex items-center justify-center gap-2.5 p-2 px-3 bg-white rounded-2xl border border-slate-200 shadow-xs mb-1 max-w-full">
+            <div className="inline-flex items-center justify-center gap-3 p-2.5 px-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs mb-1 max-w-full">
               <img
                 src="/assets/aistudio/WhatsApp_Image_2026-10-22_at_12.24.43_41514bbb.jpeg"
                 alt="Edu-Smart PORTAL By Gadsa Systems"
-                className="w-9 h-9 sm:w-10 sm:h-10 object-contain shrink-0"
+                className="w-12 h-12 sm:w-14 sm:h-14 object-contain shrink-0 rounded-xl"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/edusmart-portal-logo.jpeg';
                 }}
               />
               <div className="text-left leading-tight min-w-0">
-                <span className="font-sans font-black text-blue-950 text-base block truncate">
+                <span className="font-sans font-black text-blue-950 text-base sm:text-lg block truncate">
                   <span className="text-[#0B3075]">Edu-</span>
                   <span className="text-[#F5A623]">Smart</span>{' '}
                   <span className="text-[#0B3075] text-xs uppercase font-extrabold ml-1">PORTAL</span>

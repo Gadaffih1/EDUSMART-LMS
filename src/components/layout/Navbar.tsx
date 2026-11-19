@@ -31,7 +31,8 @@ import {
   Minimize2,
   ArrowLeft,
   X,
-  Accessibility
+  Accessibility,
+  Library
 } from 'lucide-react';
 import { OfflineSyncIndicator } from './OfflineSyncIndicator';
 import { SettingsModal } from '../settings/SettingsModal';
@@ -63,6 +64,9 @@ interface NavbarProps {
   switchedWorkspaceRole?: UserRole | null;
   switchableRoles?: UserRole[];
   onSwitchWorkspaceRole?: (role: UserRole | null) => void;
+  canAccessLibrary?: boolean;
+  isViewingLibrary?: boolean;
+  onToggleSchoolLibrary?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -80,7 +84,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleClassTeacherMode,
   switchedWorkspaceRole = null,
   switchableRoles = [],
-  onSwitchWorkspaceRole
+  onSwitchWorkspaceRole,
+  canAccessLibrary = false,
+  isViewingLibrary = false,
+  onToggleSchoolLibrary
 }) => {
   const { currentTenant, allTenants, switchTenant } = useTenant();
   const { isMobileOverlapProtectionEnabled, toggleMobileOverlapProtection } = useMobileLayout();
@@ -165,10 +172,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-14 sm:min-h-16 py-1.5 sm:py-2 flex items-center justify-between gap-2 sm:gap-3">
         
         {/* Zone 1: Current School Branding (Multi-Tenancy) & Campus Selector */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
           <button 
             onClick={onNavigateHome}
-            className="flex items-center gap-2.5 text-left text-slate-900 hover:opacity-90 transition-opacity focus:outline-none cursor-pointer"
+            className="edusmart-brand-btn flex items-center gap-2.5 text-left text-slate-900 hover:opacity-90 transition-opacity focus:outline-none cursor-pointer min-w-0"
             title={`${currentTenant.name} — ${currentTenant.motto}`}
             aria-label={
               screenReaderMode 
@@ -176,32 +183,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : `${currentTenant.name} — ${currentTenant.motto}`
             }
           >
-            {/* School Crest Logo with Active Multi-Tenancy School Branding */}
-            {currentTenant.logoUrl ? (
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden shadow-xs shrink-0 border border-slate-200 bg-white flex items-center justify-center p-0.5 hover:ring-2 hover:ring-emerald-500/30 transition-all">
+            {/* School Crest Logo with Active Multi-Tenancy School Branding (Generous Mobile Visibility) */}
+            {(currentTenant.customLogoBase64 || currentTenant.logoUrl) ? (
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden shadow-xs shrink-0 border border-slate-200 bg-white flex items-center justify-center p-0.5 hover:ring-2 hover:ring-emerald-500/30 transition-all">
                 <img 
-                  src={currentTenant.logoUrl} 
+                  src={currentTenant.customLogoBase64 || currentTenant.logoUrl} 
                   alt={`${currentTenant.name} Crest Logo`} 
                   className="w-full h-full object-contain"
                 />
               </div>
             ) : (
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900 text-white flex flex-col items-center justify-center p-1.5 shadow-xs shrink-0 border border-slate-700">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-slate-900 text-white flex flex-col items-center justify-center p-1.5 shadow-xs shrink-0 border border-slate-700">
                 {currentTenant.crestIcon === 'school' ? (
-                  <School className="w-5 h-5 text-sky-400" />
+                  <School className="w-6 h-6 text-sky-400" />
                 ) : currentTenant.crestIcon === 'book-open' ? (
-                  <BookOpen className="w-5 h-5 text-indigo-400" />
+                  <BookOpen className="w-6 h-6 text-indigo-400" />
                 ) : currentTenant.crestIcon === 'shield' ? (
-                  <Shield className="w-5 h-5 text-amber-400" />
+                  <Shield className="w-6 h-6 text-amber-400" />
                 ) : (
-                  <GraduationCap className="w-5 h-5 text-amber-400" />
+                  <GraduationCap className="w-6 h-6 text-amber-400" />
                 )}
               </div>
             )}
 
             <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-sm sm:text-base font-black tracking-tight text-slate-950 font-serif truncate max-w-[135px] sm:max-w-[210px] md:max-w-xs">
+                <span className="text-sm sm:text-base font-black tracking-tight text-slate-950 font-serif truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs">
                   {currentTenant.name}
                 </span>
                 <span className="hidden xl:inline-block text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
@@ -361,6 +368,33 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Settings className="w-4 h-4" />
           </button>
+
+          {/* School Library Quick Access for ALL Subject Teachers & Teaching Faculty */}
+          {currentUser && canAccessLibrary && onToggleSchoolLibrary && (
+            <button
+              type="button"
+              onClick={onToggleSchoolLibrary}
+              className={`px-2.5 py-1.5 rounded-lg border transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer flex items-center gap-1.5 text-xs font-bold whitespace-nowrap ${
+                isViewingLibrary
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                  : 'bg-purple-700 text-white border-purple-800 hover:bg-purple-800 shadow-xs'
+              }`}
+              title="Open School Library Catalogue, Digital E-Books & Library Room Booking"
+              aria-pressed={isViewingLibrary}
+            >
+              {isViewingLibrary ? (
+                <>
+                  <ArrowLeft className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Exit Library</span>
+                </>
+              ) : (
+                <>
+                  <Library className="w-3.5 h-3.5 text-purple-200" />
+                  <span>School Library</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Switch to Class Teacher Workspace Button (All HODs & Multi-Role Class Teachers) */}
           {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
@@ -569,6 +603,31 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 xl:hidden shrink-0">
+          {currentUser && canAccessLibrary && onToggleSchoolLibrary && (
+            <button
+              type="button"
+              onClick={onToggleSchoolLibrary}
+              className={`min-h-[38px] inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-bold shadow-xs cursor-pointer whitespace-nowrap ${
+                isViewingLibrary
+                  ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                  : 'border-purple-800 bg-purple-700 text-white hover:bg-purple-800'
+              }`}
+              title="Open School Library Contents & Room Booking"
+              aria-pressed={isViewingLibrary}
+            >
+              {isViewingLibrary ? (
+                <>
+                  <ArrowLeft className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                  <span>Back</span>
+                </>
+              ) : (
+                <>
+                  <Library className="h-3.5 w-3.5 text-purple-200 shrink-0" />
+                  <span>Library</span>
+                </>
+              )}
+            </button>
+          )}
           {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
             <button
               type="button"
@@ -701,6 +760,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Settings className="h-4 w-4" /> Settings and storage
               </button>
+              {currentUser && canAccessLibrary && onToggleSchoolLibrary && (
+                <button
+                  type="button"
+                  onClick={() => { onToggleSchoolLibrary(); setIsMobileActionsOpen(false); }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold ${
+                    isViewingLibrary
+                      ? 'text-amber-900 bg-amber-50 hover:bg-amber-100'
+                      : 'text-purple-800 bg-purple-50 hover:bg-purple-100'
+                  }`}
+                  role="menuitem"
+                >
+                  {isViewingLibrary ? (
+                    <>
+                      <ArrowLeft className="h-4 w-4 text-amber-700" /> Exit School Library
+                    </>
+                  ) : (
+                    <>
+                      <Library className="h-4 w-4 text-purple-700" /> School Library &amp; Room Booking
+                    </>
+                  )}
+                </button>
+              )}
               {currentUser && canSwitchToClassTeacher && onToggleClassTeacherMode && (
                 <button
                   type="button"

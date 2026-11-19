@@ -580,8 +580,8 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
             <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <TenantSchoolLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <TenantSchoolLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>
@@ -818,8 +818,8 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
           <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-xl z-10">
               <div className="flex items-center gap-3">
-                <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs hidden sm:block">
-                  <TenantSchoolLogo variant="horizontal" size="xs" />
+                <div className="bg-white p-1.5 rounded-xl border border-white/20 shadow-xs shrink-0">
+                  <TenantSchoolLogo variant="horizontal" size="xs" compactMobile />
                 </div>
                 <div className="flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-emerald-400">
                   <Users className="w-4 h-4 text-emerald-300" />

@@ -109,8 +109,8 @@ export const QuizRunner: React.FC<QuizRunnerProps> = ({
         {/* Header */}
         <div className="p-4 sm:px-6 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs hidden sm:block">
-              <EduSmartGadsaLogo variant="horizontal" size="xs" />
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-2xs shrink-0">
+              <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
             </div>
             <div>
               <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">

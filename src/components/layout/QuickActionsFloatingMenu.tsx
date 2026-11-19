@@ -35,12 +35,14 @@ import {
   Bell,
   HardDrive,
   Plus,
-  LogOut
+  LogOut,
+  Library
 } from 'lucide-react';
 import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
 import {
   canAccessStudentStreamAllocation,
+  canAccessTeacherLibrary,
   getAdministrativeRoleDisplayName,
 } from '../../utils/subjectTeacherSwitch';
 
@@ -65,7 +67,8 @@ export interface QuickActionItem {
     | 'toggle_subject_teacher'
     | 'toggle_class_teacher'
     | 'switch_workspace_role'
-    | 'open_stream_allocator';
+    | 'open_stream_allocator'
+    | 'open_school_library';
 }
 
 interface QuickActionsFloatingMenuProps {
@@ -1201,6 +1204,21 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       }
     }
 
+    if (canAccessTeacherLibrary(currentUser) && role !== 'librarian') {
+      switchItems.push({
+        id: 'school-library-portal',
+        title: 'School Library & Room Booking',
+        subtitle: 'Browse all library books, digital e-books, curated E-links, reservations & book a Library room',
+        icon: Library,
+        iconBg: 'bg-purple-100',
+        iconColor: 'text-purple-700',
+        category: 'academic',
+        badge: 'Library',
+        badgeColor: 'bg-purple-700 text-white',
+        actionType: 'open_school_library',
+      });
+    }
+
     if (canAccessStudentStreamAllocation(currentUser)) {
       switchItems.push({
         id: 'student-stream-allocation-hub',
@@ -1316,6 +1334,15 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
       if (canAccessStudentStreamAllocation(currentUser)) {
         window.dispatchEvent(new CustomEvent('open-stream-allocator'));
         setToastMessage('Opened Student Stream Assignment Hub');
+        setTimeout(() => setToastMessage(null), 3000);
+      }
+      return;
+    }
+
+    if (action.actionType === 'open_school_library') {
+      if (canAccessTeacherLibrary(currentUser)) {
+        window.dispatchEvent(new CustomEvent('open-school-library'));
+        setToastMessage('Opened School Library & Room Booking');
         setTimeout(() => setToastMessage(null), 3000);
       }
       return;

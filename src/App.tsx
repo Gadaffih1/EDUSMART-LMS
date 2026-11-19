@@ -45,9 +45,11 @@ import { fromAppPath, toAppPath } from './utils/appPath';
 import { PWAInstallInvitation, PWAUpdateAndOfflineBanner } from './components/pwa/PWAInstallExperience';
 import { InactivityTimeoutModal } from './components/auth/InactivityTimeoutModal';
 import { StudentStreamManager } from './components/teacher/StudentStreamManager';
+import { TeacherLibraryPortal } from './components/library/TeacherLibraryPortal';
 import {
   SUBJECT_TEACHER_ELIGIBLE_ROLES,
   canAccessStudentStreamAllocation,
+  canAccessTeacherLibrary,
   canSwitchToClassTeacher,
   canSwitchToSubjectTeacher,
   createRoleProxyUser,
@@ -116,6 +118,7 @@ function AppContent({
   const [isPlatformAdminSession, setIsPlatformAdminSession] = useState<boolean>(false);
   const [viewingOperationsHub, setViewingOperationsHub] = useState<boolean>(false);
   const [viewingStreamAllocator, setViewingStreamAllocator] = useState<boolean>(false);
+  const [viewingSchoolLibrary, setViewingSchoolLibrary] = useState<boolean>(false);
   const resolvePersistedSwitchedRole = React.useCallback((user: User | null): UserRole | null => {
     if (!user) return null;
     const saved = Storage.getActiveSwitchedRole(user.id);
@@ -131,6 +134,7 @@ function AppContent({
   React.useEffect(() => {
     setSwitchedWorkspaceRole(resolvePersistedSwitchedRole(currentUser));
     setViewingStreamAllocator(false);
+    setViewingSchoolLibrary(false);
   }, [currentUser, resolvePersistedSwitchedRole]);
 
   const updateSwitchedWorkspaceRole = React.useCallback(
@@ -163,6 +167,7 @@ function AppContent({
     (targetRole: UserRole | null) => {
       setViewingOperationsHub(false);
       setViewingStreamAllocator(false);
+      setViewingSchoolLibrary(false);
       if (!currentUser || !targetRole || targetRole === currentUser.role) {
         updateSwitchedWorkspaceRole(null);
         return;
@@ -176,14 +181,27 @@ function AppContent({
   const handleToggleSubjectTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
     setViewingStreamAllocator(false);
+    setViewingSchoolLibrary(false);
     updateSwitchedWorkspaceRole(switchedWorkspaceRole === 'teacher' ? null : 'teacher');
   }, [switchedWorkspaceRole, updateSwitchedWorkspaceRole]);
 
   const handleToggleClassTeacherMode = React.useCallback(() => {
     setViewingOperationsHub(false);
     setViewingStreamAllocator(false);
+    setViewingSchoolLibrary(false);
     updateSwitchedWorkspaceRole(switchedWorkspaceRole === 'class_teacher' ? null : 'class_teacher');
   }, [switchedWorkspaceRole, updateSwitchedWorkspaceRole]);
+
+  const canAccessSchoolLibrary = Boolean(
+    currentUser && canAccessTeacherLibrary(currentUser) && effectiveRole !== 'librarian'
+  );
+
+  const handleToggleSchoolLibrary = React.useCallback(() => {
+    if (!currentUser || !canAccessTeacherLibrary(currentUser)) return;
+    setViewingOperationsHub(false);
+    setViewingStreamAllocator(false);
+    setViewingSchoolLibrary((prev) => !prev);
+  }, [currentUser]);
 
   const navigateToPortal = (view: PortalView, schoolId = currentTenant.id, replace = false) => {
     const path = fromAppPath(view === 'public_landing'
@@ -267,22 +285,35 @@ function AppContent({
     const handleOpenOps = () => {
       updateSwitchedWorkspaceRole(null);
       setViewingStreamAllocator(false);
+      setViewingSchoolLibrary(false);
       setViewingOperationsHub(true);
     };
     const handleCloseOps = () => setViewingOperationsHub(false);
     const handleOpenStreamAllocator = () => {
       if (canAccessStudentStreamAllocation(currentUser)) {
         setViewingOperationsHub(false);
+        setViewingSchoolLibrary(false);
         setViewingStreamAllocator(true);
       }
     };
     const handleCloseStreamAllocator = () => setViewingStreamAllocator(false);
+    const handleOpenSchoolLibrary = () => {
+      if (canAccessTeacherLibrary(currentUser)) {
+        setViewingOperationsHub(false);
+        setViewingStreamAllocator(false);
+        setViewingSchoolLibrary(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+    const handleCloseSchoolLibrary = () => setViewingSchoolLibrary(false);
     const handleToggleSubjectTeacher = () => handleToggleSubjectTeacherMode();
     const handleToggleClassTeacher = () => handleToggleClassTeacherMode();
     window.addEventListener('open-operations-hub', handleOpenOps);
     window.addEventListener('close-operations-hub', handleCloseOps);
     window.addEventListener('open-stream-allocator', handleOpenStreamAllocator);
     window.addEventListener('close-stream-allocator', handleCloseStreamAllocator);
+    window.addEventListener('open-school-library', handleOpenSchoolLibrary);
+    window.addEventListener('close-school-library', handleCloseSchoolLibrary);
     window.addEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
     window.addEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     return () => {
@@ -290,6 +321,8 @@ function AppContent({
       window.removeEventListener('close-operations-hub', handleCloseOps);
       window.removeEventListener('open-stream-allocator', handleOpenStreamAllocator);
       window.removeEventListener('close-stream-allocator', handleCloseStreamAllocator);
+      window.removeEventListener('open-school-library', handleOpenSchoolLibrary);
+      window.removeEventListener('close-school-library', handleCloseSchoolLibrary);
       window.removeEventListener('toggle-subject-teacher-mode', handleToggleSubjectTeacher);
       window.removeEventListener('toggle-class-teacher-mode', handleToggleClassTeacher);
     };
@@ -416,6 +449,9 @@ function AppContent({
         switchedWorkspaceRole={switchedWorkspaceRole}
         switchableRoles={switchableRoles}
         onSwitchWorkspaceRole={handleSwitchWorkspaceRole}
+        canAccessLibrary={canAccessSchoolLibrary}
+        isViewingLibrary={viewingSchoolLibrary}
+        onToggleSchoolLibrary={handleToggleSchoolLibrary}
         onReturnToSuperAdmin={() => {
           setIsPlatformAdminSession(true);
           if (!platformAdminSession) {
@@ -551,7 +587,23 @@ function AppContent({
                   </div>
                 )}
 
-                {viewingStreamAllocator && canAccessStudentStreamAllocation(currentUser) ? (
+                {viewingSchoolLibrary && canAccessTeacherLibrary(currentUser) ? (
+                  <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setViewingSchoolLibrary(false)}
+                        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                      >
+                        <span>&larr; Return to {getAdministrativeRoleDisplayName(effectiveRole)} Workspace</span>
+                      </button>
+                      <span className="text-xs font-semibold text-slate-500">
+                        School Library Portal &bull; {currentTenant.name}
+                      </span>
+                    </div>
+                    <TeacherLibraryPortal currentUser={effectiveUser} />
+                  </div>
+                ) : viewingStreamAllocator && canAccessStudentStreamAllocation(currentUser) ? (
                   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <button

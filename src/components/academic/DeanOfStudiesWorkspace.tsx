@@ -384,8 +384,8 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <EduSmartGadsaLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <EduSmartGadsaLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>

@@ -334,8 +334,8 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             <ChevronLeft className={`w-4 h-4 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
           </button>
           
-          <div className="bg-white p-1 rounded-lg border border-slate-700 hidden sm:block">
-            <TenantSchoolLogo variant="horizontal" size="xs" />
+          <div className="bg-white p-1 rounded-xl border border-slate-700 shrink-0">
+            <TenantSchoolLogo variant="horizontal" size="xs" compactMobile />
           </div>
 
           <div>

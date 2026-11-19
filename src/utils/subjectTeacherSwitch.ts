@@ -83,6 +83,34 @@ export function canSwitchToSubjectTeacher(user: User | null | undefined): boolea
 }
 
 /**
+ * School Library faculty access policy:
+ * ALL Subject Teachers (`teacher`) and all teaching/academic roles that also teach subjects
+ * (`class_teacher`, `hod`, `senior_teacher`, `dean_of_studies`, `deputy_head`,
+ * `curriculum_coordinator`, `head_teacher`, `admin`, `librarian`) have full in-app
+ * read-only access to the School Library catalogue, digital e-books, E-links, shelves,
+ * reservations, and Library Room Booking. Downloads remain strictly disabled.
+ */
+export const TEACHER_LIBRARY_ELIGIBLE_ROLES: readonly UserRole[] = [
+  'teacher',
+  'class_teacher',
+  'hod',
+  'senior_teacher',
+  'dean_of_studies',
+  'deputy_head',
+  'curriculum_coordinator',
+  'head_teacher',
+  'admin',
+  'librarian',
+];
+
+const TEACHER_LIBRARY_ROLE_SET = new Set<UserRole>(TEACHER_LIBRARY_ELIGIBLE_ROLES);
+
+export function canAccessTeacherLibrary(user: User | null | undefined): boolean {
+  if (!user) return false;
+  return getUserRoles(user).some((r) => TEACHER_LIBRARY_ROLE_SET.has(r));
+}
+
+/**
  * All Heads of Department (HOD) must be able to switch to the Class Teacher role
  * with full Class Teacher rights for their assigned class, plus any multi-role
  * user holding `class_teacher` alongside another primary role.

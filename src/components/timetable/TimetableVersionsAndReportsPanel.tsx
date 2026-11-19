@@ -385,7 +385,8 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
     body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; font-size: 11px; }
     .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 12px; }
     .brand { display: flex; align-items: center; gap: 12px; }
-    .logo-img { width: 54px; height: 54px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px; background: #fff; }
+    .logo-frame { width: 58px; height: 58px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px; background: #ffffff; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; flex-shrink: 0; }
+    .logo-img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
     .school-name { font-size: 17px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; margin: 0; }
     .school-meta { font-size: 10px; color: #475569; margin-top: 2px; }
     .report-meta { text-align: right; font-size: 10px; color: #334155; }
@@ -400,7 +401,7 @@ export const TimetableVersionsAndReportsPanel: React.FC<TimetableVersionsAndRepo
 <body>
   <div class="header">
     <div class="brand">
-      ${logoUrl ? `<img class="logo-img" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(currentTenant.name)}" />` : ''}
+      ${logoUrl ? `<div class="logo-frame"><img class="logo-img" src="${escapeHtml(logoUrl)}" alt="${escapeHtml(currentTenant.name)}" /></div>` : ''}
       <div>
         <h1 class="school-name">${escapeHtml(currentTenant.name)}</h1>
         <div class="school-meta">${escapeHtml(currentTenant.motto || '')} ${currentTenant.registrationNumber ? '· ' + escapeHtml(currentTenant.registrationNumber) : ''}</div>

@@ -395,7 +395,7 @@ export const ReportingHub: React.FC<ReportingHubProps> = ({
   <div class="header">
     <div style="display: flex; justify-content: center; margin-bottom: 12px;">
       ${(currentTenant.customLogoBase64 || currentTenant.logoUrl)
-        ? `<img src="${currentTenant.customLogoBase64 || currentTenant.logoUrl}" alt="${currentTenant.name}" style="width: 72px; height: 72px; object-fit: contain; border-radius: 12px;" />`
+        ? `<div style="width: 80px; height: 80px; border-radius: 12px; border: 1px solid #cbd5e1; background: #ffffff; padding: 6px; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;"><img src="${currentTenant.customLogoBase64 || currentTenant.logoUrl}" alt="${currentTenant.name}" style="max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block;" /></div>`
         : `<div style="width: 64px; height: 64px; border-radius: 12px; background: #0f172a; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px;">${currentTenant.name.slice(0, 2).toUpperCase()}</div>`
       }
     </div>

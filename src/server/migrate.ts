@@ -1110,6 +1110,7 @@ export function ensureDefaultSchoolSettings(
     location?: string;
     primaryColor?: string;
     logoUrl?: string;
+    customLogoBase64?: string;
     curriculum?: string;
   }
 ): number {
@@ -1132,6 +1133,7 @@ export function ensureDefaultSchoolSettings(
         location: tenant.location || 'Kenya',
         primaryColor: tenant.primaryColor || '#2563eb',
         logoUrl: tenant.logoUrl || '',
+        customLogoBase64: tenant.customLogoBase64 || '',
       },
     ],
     [
@@ -1439,6 +1441,7 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
       location: parsedTenant.location,
       primaryColor: parsedTenant.primaryColor,
       logoUrl: parsedTenant.logoUrl,
+      customLogoBase64: parsedTenant.customLogoBase64,
       curriculum: parsedTenant.curriculum,
     });
   }

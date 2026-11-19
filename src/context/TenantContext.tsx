@@ -8,16 +8,55 @@ const ALL_TENANTS_STORAGE_KEY = 'edusmart_all_tenants_registry';
 
 export const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+const PRESET_LOGO_BY_ID = new Map<string, string>(
+  INITIAL_TENANTS
+    .map((t): [string, string] => [t.id, t.logoUrl || ''])
+    .filter(([, logo]) => Boolean(logo))
+);
+
+function ensureTenantLogoRetained(tenant: Tenant): Tenant {
+  const presetLogo = PRESET_LOGO_BY_ID.get(tenant.id);
+  if (!tenant.logoUrl && presetLogo) {
+    return { ...tenant, logoUrl: presetLogo };
+  }
+  return tenant;
+}
+
+function applyTenantUpdatePreservingLogo(existing: Tenant, updates: Partial<Tenant>): Tenant {
+  const hasExplicitCustomLogoKey = Object.prototype.hasOwnProperty.call(updates, 'customLogoBase64');
+  const nextCustomLogo = hasExplicitCustomLogoKey
+    ? typeof updates.customLogoBase64 === 'string' && updates.customLogoBase64.trim()
+      ? updates.customLogoBase64.trim()
+      : undefined
+    : existing.customLogoBase64;
+
+  const nextLogoUrl =
+    typeof updates.logoUrl === 'string' && updates.logoUrl.trim()
+      ? updates.logoUrl.trim()
+      : existing.logoUrl || PRESET_LOGO_BY_ID.get(existing.id) || '';
+
+  const merged: Tenant = {
+    ...existing,
+    ...updates,
+    logoUrl: nextLogoUrl,
+    customLogoBase64: nextCustomLogo,
+  };
+  if (!merged.customLogoBase64) {
+    delete merged.customLogoBase64;
+  }
+  return merged;
+}
+
 function loadTenantsFromStore(): Tenant[] {
   const stored = ClientDataStore.getCollection<Tenant[]>(ALL_TENANTS_STORAGE_KEY, []);
   if (Array.isArray(stored) && stored.length > 0) {
-    return mergeDurableSchools(stored);
+    return mergeDurableSchools(stored).map(ensureTenantLogoRetained);
   }
   const fallbackTenants = ClientDataStore.getCollection<Tenant[]>('tenants', []);
   if (Array.isArray(fallbackTenants) && fallbackTenants.length > 0) {
-    return mergeDurableSchools(fallbackTenants);
+    return mergeDurableSchools(fallbackTenants).map(ensureTenantLogoRetained);
   }
-  return mergeDurableSchools(INITIAL_TENANTS);
+  return mergeDurableSchools(INITIAL_TENANTS).map(ensureTenantLogoRetained);
 }
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -119,12 +158,22 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const updateTenantBranding = (updates: Partial<Tenant>, tenantId?: string) => {
     const targetId = tenantId || currentTenant.id;
     setAllTenants((prev) => {
-      const updated = prev.map((t) => (t.id === targetId ? { ...t, ...updates } : t));
+      const updated = prev.map((t) =>
+        t.id === targetId ? applyTenantUpdatePreservingLogo(t, updates) : t
+      );
       ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
       const savedTenant = updated.find((tenant) => tenant.id === targetId);
       if (savedTenant) saveDurableSchool(savedTenant);
       if (ClientDataStore.getSessionUser()) {
-        void ClientDataStore.saveSchoolSettings({ tenantId: targetId, tenantUpdates: updates }).catch(() => {});
+        const hasExplicitClearCustom =
+          Object.prototype.hasOwnProperty.call(updates, 'customLogoBase64') && !updates.customLogoBase64;
+        const payloadUpdates: Record<string, any> = {
+          ...updates,
+          ...(savedTenant?.logoUrl ? { logoUrl: savedTenant.logoUrl } : {}),
+          ...(savedTenant?.customLogoBase64 ? { customLogoBase64: savedTenant.customLogoBase64 } : {}),
+          ...(hasExplicitClearCustom ? { clearCustomLogo: true } : {}),
+        };
+        void ClientDataStore.saveSchoolSettings({ tenantId: targetId, tenantUpdates: payloadUpdates }).catch(() => {});
       }
       window.dispatchEvent(new CustomEvent('tenant-branding-updated', { detail: { tenantId: targetId, updates } }));
       return updated;
@@ -135,23 +184,34 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setAllTenants((prev) => {
       const exists = prev.some((t) => t.id === newTenant.id || t.code === newTenant.code);
       const updated = exists
-        ? prev.map((t) => (t.id === newTenant.id ? { ...t, ...newTenant } : t))
-        : [...prev, newTenant];
+        ? prev.map((t) => (t.id === newTenant.id ? applyTenantUpdatePreservingLogo(t, newTenant) : t))
+        : [...prev, ensureTenantLogoRetained(newTenant)];
       ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
-      saveDurableSchool(newTenant);
-      window.dispatchEvent(new CustomEvent('tenant-registered', { detail: newTenant }));
+      const saved = updated.find((t) => t.id === newTenant.id) || newTenant;
+      saveDurableSchool(saved);
+      window.dispatchEvent(new CustomEvent('tenant-registered', { detail: saved }));
       return updated;
     });
   };
 
   const updateTenant = (tenantId: string, updates: Partial<Tenant>) => {
     setAllTenants((prev) => {
-      const updated = prev.map((t) => (t.id === tenantId ? { ...t, ...updates } : t));
+      const updated = prev.map((t) =>
+        t.id === tenantId ? applyTenantUpdatePreservingLogo(t, updates) : t
+      );
       ClientDataStore.setCollection(ALL_TENANTS_STORAGE_KEY, updated);
       const saved = updated.find((tenant) => tenant.id === tenantId);
       if (saved) saveDurableSchool(saved);
       if (ClientDataStore.getSessionUser()) {
-        void ClientDataStore.saveSchoolSettings({ tenantId, tenantUpdates: updates }).catch(() => {});
+        const hasExplicitClearCustom =
+          Object.prototype.hasOwnProperty.call(updates, 'customLogoBase64') && !updates.customLogoBase64;
+        const payloadUpdates: Record<string, any> = {
+          ...updates,
+          ...(saved?.logoUrl ? { logoUrl: saved.logoUrl } : {}),
+          ...(saved?.customLogoBase64 ? { customLogoBase64: saved.customLogoBase64 } : {}),
+          ...(hasExplicitClearCustom ? { clearCustomLogo: true } : {}),
+        };
+        void ClientDataStore.saveSchoolSettings({ tenantId, tenantUpdates: payloadUpdates }).catch(() => {});
       }
       window.dispatchEvent(new CustomEvent('tenant-updated', { detail: { tenantId, updates } }));
       return updated;

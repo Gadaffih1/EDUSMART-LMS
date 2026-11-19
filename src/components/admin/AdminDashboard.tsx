@@ -765,13 +765,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
             <div className="relative p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center gap-5">
                 {/* Crest Logo */}
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white p-2 shadow-xl border-2 border-amber-400/80 flex items-center justify-center shrink-0">
-                  {currentTenant.logoUrl ? (
-                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-full h-full object-contain" />
-                  ) : (
-                    <School className="w-10 h-10 text-blue-700" />
-                  )}
-                </div>
+                <TenantSchoolLogo
+                  variant="emblem"
+                  size="lg"
+                  className="border-2 border-amber-400/80 shadow-xl"
+                />
 
                 <div className="text-left space-y-1">
                   <div className="flex items-center gap-2">

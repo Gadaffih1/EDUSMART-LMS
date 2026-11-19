@@ -1566,6 +1566,7 @@ export function registerDataRoutes(app: Express): void {
             location: parsedTenant.location,
             primaryColor: parsedTenant.primaryColor,
             logoUrl: parsedTenant.logoUrl,
+            customLogoBase64: parsedTenant.customLogoBase64,
             curriculum: parsedTenant.curriculum,
           });
           const sRows = db
@@ -1683,7 +1684,36 @@ export function registerDataRoutes(app: Express): void {
             | undefined;
           if (row) {
             const current = JSON.parse(row.payload_json);
-            const merged = { ...current, ...effectiveTenantUpdates, id: tenantId };
+            const rawUpdates: Record<string, any> = { ...effectiveTenantUpdates };
+            const explicitClearCustomLogo = rawUpdates.clearCustomLogo === true;
+            const explicitClearLogoUrl = rawUpdates.clearLogoUrl === true;
+            delete rawUpdates.clearCustomLogo;
+            delete rawUpdates.clearLogoUrl;
+
+            // Strictly retain existing tenant school logo unless explicitly replaced with a non-empty value or explicitly cleared
+            const nextLogoUrl = explicitClearLogoUrl
+              ? ''
+              : typeof rawUpdates.logoUrl === 'string' && rawUpdates.logoUrl.trim()
+              ? rawUpdates.logoUrl.trim()
+              : current.logoUrl || '';
+
+            const nextCustomLogo = explicitClearCustomLogo
+              ? undefined
+              : typeof rawUpdates.customLogoBase64 === 'string' && rawUpdates.customLogoBase64.trim()
+              ? rawUpdates.customLogoBase64.trim()
+              : current.customLogoBase64 || undefined;
+
+            const merged = {
+              ...current,
+              ...rawUpdates,
+              id: tenantId,
+              logoUrl: nextLogoUrl,
+              ...(nextCustomLogo ? { customLogoBase64: nextCustomLogo } : { customLogoBase64: undefined }),
+            };
+            if (!nextCustomLogo) {
+              delete merged.customLogoBase64;
+            }
+
             ingestCollectionData(db, 'edusmart_all_tenants_registry', [merged], false);
             upsertSettingStmt.run(
               tenantId,
@@ -1697,6 +1727,7 @@ export function registerDataRoutes(app: Express): void {
                 location: merged.location || 'Kenya',
                 primaryColor: merged.primaryColor || '#2563eb',
                 logoUrl: merged.logoUrl || '',
+                customLogoBase64: merged.customLogoBase64 || '',
               }),
               now
             );

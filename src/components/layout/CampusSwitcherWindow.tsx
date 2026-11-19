@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useTenant } from '../../context/TenantContext';
 import { Tenant } from '../../types/tenant';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 
 interface CampusSwitcherWindowProps {
   isOpen: boolean;
@@ -312,20 +313,11 @@ export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
               <div className="flex items-start sm:items-center gap-3 sm:gap-4">
                 
                 {/* Active School Logo */}
-                {currentTenant.customLogoBase64 || currentTenant.logoUrl ? (
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden bg-white p-1 border-2 border-emerald-400/40 shadow-md shrink-0 flex items-center justify-center">
-                    <img 
-                      src={currentTenant.customLogoBase64 || currentTenant.logoUrl} 
-                      alt={`${currentTenant.name} Crest`} 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-900 border-2 border-emerald-400/40 flex flex-col items-center justify-center text-white shrink-0 p-1">
-                    <GraduationCap className="w-7 h-7 text-amber-300" />
-                    <span className="text-[8px] font-mono font-bold mt-0.5 text-emerald-200">ACTIVE</span>
-                  </div>
-                )}
+                <TenantSchoolLogo
+                  variant="emblem"
+                  size="md"
+                  className="border-2 border-emerald-400/40 shadow-md"
+                />
 
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -405,19 +397,7 @@ export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
                         <div className="flex items-center gap-3">
                           
                           {/* Logo */}
-                          {tenant.customLogoBase64 || tenant.logoUrl ? (
-                            <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-xl overflow-hidden bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center">
-                              <img 
-                                src={tenant.customLogoBase64 || tenant.logoUrl} 
-                                alt={`${tenant.name} Logo`} 
-                                className="w-full h-full object-contain"
-                              />
-                            </div>
-                          ) : (
-                            <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-xl bg-slate-900 border border-slate-700 flex flex-col items-center justify-center text-white shrink-0 p-1">
-                              <School className="w-6 h-6 text-sky-400" />
-                            </div>
-                          )}
+                          <TenantSchoolLogo variant="emblem" size="sm" tenantOverride={tenant} />
 
                           <div>
                             <div className="flex items-center gap-1.5">

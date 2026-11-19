@@ -8,11 +8,13 @@ import {
   Save,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
   Wallet,
 } from 'lucide-react';
 import { ClientDataStore } from '../../utils/clientDataStore';
 import { useTenant } from '../../context/TenantContext';
 import { CollapsibleSection } from '../common/ResponsiveUIKit';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 
 interface SchoolSettingsPanelProps {
   schoolId: string;
@@ -32,6 +34,7 @@ interface SchoolSettingsShape {
     location: string;
     primaryColor: string;
     logoUrl: string;
+    customLogoBase64: string;
   };
   academic_calendar: {
     currentYear: string;
@@ -70,6 +73,7 @@ function buildDefaults(schoolId: string, tenant?: any): SchoolSettingsShape {
       location: tenant?.location || tenant?.city || 'Kenya',
       primaryColor: tenant?.primaryColor || '#2563eb',
       logoUrl: tenant?.logoUrl || '',
+      customLogoBase64: tenant?.customLogoBase64 || '',
     },
     academic_calendar: {
       currentYear: '2026',
@@ -105,7 +109,7 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
   title,
   subtitle,
 }) => {
-  const { allTenants } = useTenant();
+  const { allTenants, updateTenantBranding } = useTenant();
   const activeTenant = allTenants.find((t) => t.id === schoolId);
   const [settings, setSettings] = useState<SchoolSettingsShape>(() => buildDefaults(schoolId, activeTenant));
   const [loading, setLoading] = useState<boolean>(false);
@@ -119,8 +123,14 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
       const remote = await ClientDataStore.loadSchoolSettings(targetId);
       const t = allTenants.find((item) => item.id === targetId);
       const base = buildDefaults(targetId, t);
+      const remoteProfile = remote?.profile_and_branding || {};
       setSettings({
-        profile_and_branding: { ...base.profile_and_branding, ...(remote?.profile_and_branding || {}) },
+        profile_and_branding: {
+          ...base.profile_and_branding,
+          ...remoteProfile,
+          logoUrl: remoteProfile.logoUrl || base.profile_and_branding.logoUrl,
+          customLogoBase64: remoteProfile.customLogoBase64 || base.profile_and_branding.customLogoBase64,
+        },
         academic_calendar: { ...base.academic_calendar, ...(remote?.academic_calendar || {}) },
         portal_and_virtual_lab: { ...base.portal_and_virtual_lab, ...(remote?.portal_and_virtual_lab || {}) },
         operations_and_finance: { ...base.operations_and_finance, ...(remote?.operations_and_finance || {}) },
@@ -140,28 +150,92 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
     void loadFromDb(schoolId);
   }, [schoolId]);
 
+  const handleSettingsLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setStatusMessage({ text: 'Please select a school logo smaller than 2MB.', type: 'error' });
+      return;
+    }
+    try {
+      const uploaded = await ClientDataStore.uploadFile(file, 'school-logo');
+      setSettings((prev) => ({
+        ...prev,
+        profile_and_branding: {
+          ...prev.profile_and_branding,
+          customLogoBase64: uploaded.url,
+          logoUrl: prev.profile_and_branding.logoUrl || uploaded.url,
+        },
+      }));
+      setStatusMessage({ text: 'New school logo ready. Click "Save All Settings" to apply and retain it.', type: 'success' });
+    } catch {
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('Failed to read logo file.'));
+          reader.readAsDataURL(file);
+        });
+        setSettings((prev) => ({
+          ...prev,
+          profile_and_branding: {
+            ...prev.profile_and_branding,
+            customLogoBase64: dataUrl,
+            logoUrl: prev.profile_and_branding.logoUrl || dataUrl,
+          },
+        }));
+        setStatusMessage({ text: 'New school logo loaded. Click "Save All Settings" to apply and retain it.', type: 'success' });
+      } catch (readErr: any) {
+        setStatusMessage({ text: readErr?.message || 'Failed uploading school logo.', type: 'error' });
+      }
+    }
+  };
+
   const handleSaveAll = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setStatusMessage(null);
     try {
+      const preservedLogoUrl = settings.profile_and_branding.logoUrl || activeTenant?.logoUrl || '';
+      const preservedCustomLogo = settings.profile_and_branding.customLogoBase64 || activeTenant?.customLogoBase64 || '';
+      const nextSettings: SchoolSettingsShape = {
+        ...settings,
+        profile_and_branding: {
+          ...settings.profile_and_branding,
+          logoUrl: preservedLogoUrl,
+          customLogoBase64: preservedCustomLogo,
+        },
+      };
+
+      const tenantUpdatesPayload: Record<string, any> = {
+        name: nextSettings.profile_and_branding.name,
+        shortName: nextSettings.profile_and_branding.shortName,
+        code: nextSettings.profile_and_branding.code,
+        motto: nextSettings.profile_and_branding.motto,
+        ...(preservedLogoUrl ? { logoUrl: preservedLogoUrl } : {}),
+        ...(preservedCustomLogo ? { customLogoBase64: preservedCustomLogo } : {}),
+        curriculum: nextSettings.academic_calendar.curriculum,
+        term: nextSettings.academic_calendar.termLabel,
+        academicYear: `${nextSettings.academic_calendar.currentYear} Academic Year`,
+      };
+
       const saved = await ClientDataStore.saveSchoolSettings({
         tenantId: schoolId,
-        settings,
-        tenantUpdates: {
-          name: settings.profile_and_branding.name,
-          shortName: settings.profile_and_branding.shortName,
-          code: settings.profile_and_branding.code,
-          motto: settings.profile_and_branding.motto,
-          logoUrl: settings.profile_and_branding.logoUrl,
-          curriculum: settings.academic_calendar.curriculum,
-          term: settings.academic_calendar.termLabel,
-          academicYear: `${settings.academic_calendar.currentYear} Academic Year`,
-        },
+        settings: nextSettings,
+        tenantUpdates: tenantUpdatesPayload,
       });
+
+      updateTenantBranding(tenantUpdatesPayload, schoolId);
+
       const base = buildDefaults(schoolId, activeTenant);
+      const savedProfile = saved?.profile_and_branding || nextSettings.profile_and_branding;
       setSettings({
-        profile_and_branding: { ...base.profile_and_branding, ...(saved?.profile_and_branding || settings.profile_and_branding) },
+        profile_and_branding: {
+          ...base.profile_and_branding,
+          ...savedProfile,
+          logoUrl: savedProfile.logoUrl || preservedLogoUrl,
+          customLogoBase64: savedProfile.customLogoBase64 || preservedCustomLogo,
+        },
         academic_calendar: { ...base.academic_calendar, ...(saved?.academic_calendar || settings.academic_calendar) },
         portal_and_virtual_lab: { ...base.portal_and_virtual_lab, ...(saved?.portal_and_virtual_lab || settings.portal_and_virtual_lab) },
         operations_and_finance: { ...base.operations_and_finance, ...(saved?.operations_and_finance || settings.operations_and_finance) },
@@ -248,6 +322,33 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
           defaultOpen={true}
           defaultOpenDesktop={true}
         >
+          <div className="mb-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <TenantSchoolLogo
+                variant="emblem"
+                size="md"
+                tenantOverride={{
+                  ...(activeTenant || {}),
+                  id: schoolId,
+                  name: settings.profile_and_branding.name,
+                  logoUrl: settings.profile_and_branding.logoUrl || activeTenant?.logoUrl,
+                  customLogoBase64: settings.profile_and_branding.customLogoBase64 || activeTenant?.customLogoBase64,
+                }}
+              />
+              <div className="min-w-0">
+                <div className="font-bold text-slate-900 text-xs">Official Tenant School Logo (Shape & Visibility Retained)</div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  Preserved automatically in original proportions across headers, portals, mobile view, and printed reports.
+                </p>
+              </div>
+            </div>
+            <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-bold text-xs cursor-pointer shrink-0">
+              <Upload className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Update School Logo</span>
+              <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={handleSettingsLogoUpload} className="hidden" />
+            </label>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="block font-bold text-slate-700 mb-1">School Name</label>

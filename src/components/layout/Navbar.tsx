@@ -4,6 +4,7 @@ import { User, UserRole, AppNotification } from '../../types';
 import { Storage } from '../../utils/storage';
 import { useNotificationLayout } from '../../context/NotificationLayoutContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { 
   GraduationCap, 
   LogOut, 
@@ -183,28 +184,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : `${currentTenant.name} — ${currentTenant.motto}`
             }
           >
-            {/* School Crest Logo with Active Multi-Tenancy School Branding (Generous Mobile Visibility) */}
-            {(currentTenant.customLogoBase64 || currentTenant.logoUrl) ? (
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden shadow-xs shrink-0 border border-slate-200 bg-white flex items-center justify-center p-0.5 hover:ring-2 hover:ring-emerald-500/30 transition-all">
-                <img 
-                  src={currentTenant.customLogoBase64 || currentTenant.logoUrl} 
-                  alt={`${currentTenant.name} Crest Logo`} 
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            ) : (
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-slate-900 text-white flex flex-col items-center justify-center p-1.5 shadow-xs shrink-0 border border-slate-700">
-                {currentTenant.crestIcon === 'school' ? (
-                  <School className="w-6 h-6 text-sky-400" />
-                ) : currentTenant.crestIcon === 'book-open' ? (
-                  <BookOpen className="w-6 h-6 text-indigo-400" />
-                ) : currentTenant.crestIcon === 'shield' ? (
-                  <Shield className="w-6 h-6 text-amber-400" />
-                ) : (
-                  <GraduationCap className="w-6 h-6 text-amber-400" />
-                )}
-              </div>
-            )}
+            {/* School Crest Logo with Active Multi-Tenancy School Branding (Strict Shape & Visibility Retention) */}
+            <TenantSchoolLogo
+              variant="emblem"
+              size="sm"
+              className="hover:ring-2 hover:ring-emerald-500/30 transition-all"
+            />
 
             <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">

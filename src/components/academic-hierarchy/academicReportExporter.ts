@@ -81,8 +81,8 @@ export function printAcademicReportPdf(
     .toUpperCase();
 
   const logoMarkup = logoSrc
-    ? `<img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(tenant.name)}" style="width:68px;height:68px;object-fit:contain;border-radius:10px;border:1px solid #cbd5e1;padding:4px;background:#fff;" />`
-    : `<div style="width:68px;height:68px;border-radius:10px;background:${escapeHtml(primaryHex)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;">${escapeHtml(schoolInitials)}</div>`;
+    ? `<div style="width:72px;height:72px;border-radius:10px;border:1px solid #cbd5e1;padding:6px;background:#ffffff;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;flex-shrink:0;"><img src="${escapeHtml(logoSrc)}" alt="${escapeHtml(tenant.name)}" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;" /></div>`
+    : `<div style="width:72px;height:72px;border-radius:10px;background:${escapeHtml(primaryHex)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex-shrink:0;">${escapeHtml(schoolInitials)}</div>`;
 
   const kpiHtml = summaryPairs
     .map(

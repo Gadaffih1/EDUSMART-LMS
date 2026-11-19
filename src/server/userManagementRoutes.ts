@@ -577,7 +577,7 @@ export function registerUserManagementRoutes(app: Express): void {
           motto: tenantExtra.motto || '',
           location: tenantExtra.location || '',
           primaryColor: tenantExtra.primaryColor || '#2563eb',
-          logoUrl: tenantExtra.logoUrl || '',
+          logoUrl: tenantExtra.customLogoBase64 || tenantExtra.logoUrl || '',
           schoolAccount,
           totalUsers: users.length,
           users,

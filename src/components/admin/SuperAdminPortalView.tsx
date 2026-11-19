@@ -37,6 +37,7 @@ import { ClientDataStore } from '../../utils/clientDataStore';
 import { listPlatformAdmins } from '../../utils/platformAdminAuth';
 import { User, GradeLevel, StreamName, PRIMARY_STREAMS, getStreamsForGrade } from '../../types';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { SuperAdminDashboard, type SuperTab } from './SuperAdminDashboard';
 import { SuperAdminActionMenu, type SuperAdminTab } from './SuperAdminActionMenu';
 import { CampusSwitcherWindow } from '../layout/CampusSwitcherWindow';
@@ -450,16 +451,7 @@ export const SuperAdminPortalView: React.FC<SuperAdminPortalViewProps> = ({
                         <tr key={school.id} className="hover:bg-blue-50/50 transition-colors">
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-3">
-                              <div 
-                                className="w-8 h-8 rounded-lg shrink-0 border border-slate-200 flex items-center justify-center p-0.5"
-                                style={{ backgroundColor: school.backgroundColor || '#ffffff' }}
-                              >
-                                {school.logoUrl ? (
-                                  <img src={school.logoUrl} alt={school.name} className="w-full h-full object-contain" />
-                                ) : (
-                                  <School className="w-4 h-4 text-slate-700" />
-                                )}
-                              </div>
+                              <TenantSchoolLogo variant="emblem" size="xs" tenantOverride={school} />
                               <div>
                                 <div className="font-bold text-slate-900 text-xs sm:text-sm">{school.name}</div>
                                 <div className="text-[10px] text-slate-500">{school.city} · {school.code}</div>

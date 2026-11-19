@@ -31,6 +31,7 @@ import {
 } from '../../types/financeOperations';
 import { User } from '../../types';
 import { useTenant } from '../../context/TenantContext';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 
 interface HRPayrollPortalViewProps {
   currentUser: User;
@@ -660,12 +661,8 @@ export const HRPayrollPortalView: React.FC<HRPayrollPortalViewProps> = ({
                 style={{ borderColor: currentTenant.primaryColorHex || '#312e81' }}
               >
                 {/* School Logo */}
-                <div className="flex justify-center mb-1">
-                  {currentTenant.customLogoBase64 ? (
-                    <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain" />
-                  ) : currentTenant.logoUrl ? (
-                    <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain" />
-                  ) : null}
+                <div className="flex justify-center mb-1.5">
+                  <TenantSchoolLogo variant="emblem" size="sm" />
                 </div>
                 <div className="font-black text-base font-serif uppercase tracking-tight text-slate-950">{currentTenant.name}</div>
                 <div className="text-[10px] font-serif italic text-slate-700">"{currentTenant.motto}" {currentTenant.taglineNotes ? `· ${currentTenant.taglineNotes}` : ''}</div>

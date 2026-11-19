@@ -12,6 +12,7 @@ import {
   getCbcAttainmentFromScore
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { 
   Upload, 
   FileSpreadsheet, 
@@ -1270,15 +1271,7 @@ export const ResultUploadManager: React.FC<ResultUploadManagerProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <div className="shrink-0">
-                    {currentTenant.customLogoBase64 ? (
-                      <img src={currentTenant.customLogoBase64} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
-                    ) : currentTenant.logoUrl ? (
-                      <img src={currentTenant.logoUrl} alt={currentTenant.name} className="w-12 h-12 object-contain rounded-xl p-1 bg-white border border-slate-200 shadow-2xs" />
-                    ) : (
-                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-200">
-                        <EduSmartGadsaLogo variant="horizontal" size="sm" />
-                      </div>
-                    )}
+                    <TenantSchoolLogo variant="emblem" size="sm" />
                   </div>
                   <div>
                     <h2 className="text-base font-black tracking-tight uppercase font-serif">

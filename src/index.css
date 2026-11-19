@@ -42,6 +42,35 @@ table {
   outline-offset: 2px;
 }
 
+/* =========================================================================
+   TENANT SCHOOL LOGO — STRICT SHAPE & VISIBILITY RETENTION
+   ========================================================================= */
+.edusmart-tenant-logo {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background-color: #ffffff;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.edusmart-tenant-logo-img {
+  display: block !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -257,6 +286,18 @@ html.high-contrast .shadow-xl {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  .edusmart-tenant-logo,
+  .edusmart-tenant-logo-img {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    object-fit: contain !important;
+  }
+
+  .edusmart-tenant-logo-img {
+    display: block !important;
   }
 
   /* Portal-based print mode (e.g. Super Admin Credential Rosters) */

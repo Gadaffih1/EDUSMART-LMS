@@ -50,6 +50,7 @@ import { Tenant } from '../../types/tenant';
 import { useTenant } from '../../context/TenantContext';
 import { Storage } from '../../utils/storage';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo, resolveTenantLogoSrc } from '../common/TenantSchoolLogo';
 import { RegistryNumberKind } from '../../utils/systemRoles';
 import { addSystemRole, listSystemRoles } from '../../utils/systemRoles';
 import {
@@ -409,13 +410,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   // ========================================================
   // 2. BRANDING & BACKGROUND COLOR CUSTOMIZER
   // ========================================================
-  const [customLogoUrl, setCustomLogoUrl] = useState(targetSchool.logoUrl || '');
+  const [customLogoUrl, setCustomLogoUrl] = useState(resolveTenantLogoSrc(targetSchool));
   const [customBgColor, setCustomBgColor] = useState(targetSchool.backgroundColor || '#f8fafc');
   const [selectedHeaderGradient, setSelectedHeaderGradient] = useState(targetSchool.headerBgClass || HEADER_GRADIENTS[0].class);
   const [selectedCrest, setSelectedCrest] = useState<'school' | 'graduation-cap' | 'book-open' | 'shield'>(targetSchool.crestIcon || 'graduation-cap');
 
   useEffect(() => {
-    setCustomLogoUrl(targetSchool.logoUrl || '');
+    setCustomLogoUrl(resolveTenantLogoSrc(targetSchool));
     setCustomBgColor(targetSchool.backgroundColor || '#f8fafc');
     setSelectedHeaderGradient(targetSchool.headerBgClass || HEADER_GRADIENTS[0].class);
     setSelectedCrest(targetSchool.crestIcon || 'graduation-cap');
@@ -432,15 +433,35 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         const uploaded = await ClientDataStore.uploadFile(file, 'school-logo');
         setCustomLogoUrl(uploaded.url);
         showToast('School logo image uploaded. Click "Save Branding" to apply.');
-      } catch (err: any) {
-        showToast(err?.message || 'Failed to upload school logo.', 'error');
+      } catch {
+        try {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('Failed reading logo file.'));
+            reader.readAsDataURL(file);
+          });
+          setCustomLogoUrl(dataUrl);
+          showToast('School logo image loaded. Click "Save Branding" to apply.');
+        } catch (readErr: any) {
+          showToast(readErr?.message || 'Failed to upload school logo.', 'error');
+        }
       }
     }
   };
 
   const handleSaveBranding = () => {
+    const trimmedLogo = customLogoUrl.trim();
+    const logoUpdate: Partial<Tenant> = trimmedLogo
+      ? {
+          customLogoBase64: trimmedLogo,
+          logoUrl: targetSchool.logoUrl || trimmedLogo,
+        }
+      : {
+          customLogoBase64: undefined,
+        };
     updateTenantBranding({
-      logoUrl: customLogoUrl || undefined,
+      ...logoUpdate,
       backgroundColor: customBgColor,
       headerBgClass: selectedHeaderGradient,
       crestIcon: selectedCrest
@@ -1265,18 +1286,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      {school.logoUrl ? (
-                        <div className="w-12 h-12 rounded-xl bg-white p-1 border border-slate-200 shadow-xs shrink-0 flex items-center justify-center overflow-hidden">
-                          <img src={school.logoUrl} alt={school.name} className="w-full h-full object-contain" />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-slate-900 text-amber-400 flex items-center justify-center shrink-0 shadow-xs">
-                          {school.crestIcon === 'school' ? <School className="w-6 h-6" /> :
-                           school.crestIcon === 'shield' ? <Shield className="w-6 h-6" /> :
-                           school.crestIcon === 'book-open' ? <BookOpen className="w-6 h-6" /> :
-                           <GraduationCap className="w-6 h-6" />}
-                        </div>
-                      )}
+                      <TenantSchoolLogo variant="emblem" size="sm" tenantOverride={school} />
 
                       <div>
                         <div className="flex items-center gap-2">
@@ -1637,18 +1647,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 {/* Simulated Navbar Header */}
                 <div className={`p-3 rounded-xl bg-gradient-to-r ${selectedHeaderGradient} text-white shadow-md flex items-center justify-between gap-3`}>
                   <div className="flex items-center gap-2.5">
-                    {customLogoUrl ? (
-                      <div className="w-9 h-9 rounded-lg bg-white p-0.5 shrink-0 overflow-hidden flex items-center justify-center">
-                        <img src={customLogoUrl} alt="Preview Logo" className="w-full h-full object-contain" />
-                      </div>
-                    ) : (
-                      <div className="w-9 h-9 rounded-lg bg-white/20 text-amber-300 flex items-center justify-center shrink-0">
-                        {selectedCrest === 'school' ? <School className="w-5 h-5" /> :
-                         selectedCrest === 'shield' ? <Shield className="w-5 h-5" /> :
-                         selectedCrest === 'book-open' ? <BookOpen className="w-5 h-5" /> :
-                         <GraduationCap className="w-5 h-5" />}
-                      </div>
-                    )}
+                    <TenantSchoolLogo
+                      variant="emblem"
+                      size="xs"
+                      tenantOverride={{
+                        ...targetSchool,
+                        customLogoBase64: customLogoUrl || undefined,
+                        logoUrl: customLogoUrl || targetSchool.logoUrl,
+                        crestIcon: selectedCrest,
+                      }}
+                    />
                     <div>
                       <div className="text-xs font-black font-serif text-white">{targetSchool.name}</div>
                       <div className="text-[9px] text-slate-300 italic">{targetSchool.motto}</div>

@@ -3,6 +3,7 @@ import { GradeLevel, User, PRIMARY_STREAMS, JUNIOR_STREAMS, SchoolCalendarEvent 
 import { Storage } from '../../utils/storage';
 import { useTenant } from '../../context/TenantContext';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { EventTicketModal } from '../events/EventTicketModal';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { VirtualLabSubscriptionModal } from '../virtuallab/VirtualLabSubscriptionModal';
@@ -672,25 +673,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="relative group/logo">
             <div 
               onClick={() => setIsBrandingCustomizerOpen(true)}
-              className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[145px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-all cursor-pointer relative"
+              className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-xl border border-amber-400/80 mb-3 max-w-[160px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-all cursor-pointer relative"
               title="Click to customize school logo, theme & letterhead"
             >
-              {currentTenant.customLogoBase64 ? (
-                <img 
-                  src={currentTenant.customLogoBase64} 
-                  alt={currentTenant.name} 
-                  className="w-16 h-16 object-contain"
-                />
-              ) : currentTenant.logoUrl ? (
-                <img 
-                  src={currentTenant.logoUrl} 
-                  alt={currentTenant.name} 
-                  className="w-16 h-16 object-contain"
-                />
-              ) : (
-                <EduSmartGadsaLogo variant="full" size="sm" />
-              )}
-              <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase tracking-tight truncate max-w-full">
+              <TenantSchoolLogo variant="full" size="md" className="border-0 shadow-none" />
+              <div className="text-[9px] font-mono font-bold text-slate-700 mt-1.5 uppercase tracking-tight truncate max-w-full">
                 {currentTenant.portalCardBadge || 'By Gadsa Systems'}
               </div>
 

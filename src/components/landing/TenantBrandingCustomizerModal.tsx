@@ -25,6 +25,7 @@ import { useTenant } from '../../context/TenantContext';
 import { Tenant } from '../../types/tenant';
 import { TenantPrintHeader, TenantPrintFooter } from '../common/TenantPrintHeader';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
+import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { listHeroVideoPresets, listHeroImagePresets } from '../../utils/heroPresets';
 import { HeroBannerMedia } from '../common/HeroBannerMedia';
 import { ClientDataStore } from '../../utils/clientDataStore';
@@ -173,7 +174,7 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
 
   if (!isOpen) return null;
 
-  // Handle Logo File Upload (PNG, JPG, SVG)
+  // Handle Logo File Upload (PNG, JPG, SVG) with resilient DataURL fallback
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -190,8 +191,25 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
         ...prev,
         customLogoBase64: uploaded.url
       }));
-    } catch (err: any) {
-      setUploadError(err?.message || 'Failed to upload school logo.');
+    } catch {
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('Failed to read selected logo file.'));
+          reader.readAsDataURL(file);
+        });
+        if (!dataUrl) {
+          setUploadError('Could not read the selected logo image.');
+          return;
+        }
+        setFormData(prev => ({
+          ...prev,
+          customLogoBase64: dataUrl
+        }));
+      } catch (readErr: any) {
+        setUploadError(readErr?.message || 'Failed to upload school logo.');
+      }
     }
   };
 
@@ -343,23 +361,9 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
                       Hero Badge Preview
                     </span>
-                    <div className="bg-white rounded-2xl p-3 shadow-xl border border-amber-400/80 max-w-[130px] w-full flex flex-col items-center">
-                      {formData.customLogoBase64 ? (
-                        <img 
-                          src={formData.customLogoBase64} 
-                          alt="Custom School Logo" 
-                          className="w-16 h-16 object-contain"
-                        />
-                      ) : formData.logoUrl ? (
-                        <img 
-                          src={formData.logoUrl} 
-                          alt="School Logo" 
-                          className="w-16 h-16 object-contain"
-                        />
-                      ) : (
-                        <EduSmartGadsaLogo variant="full" size="sm" />
-                      )}
-                      <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase truncate max-w-full">
+                    <div className="bg-white rounded-2xl p-3 shadow-xl border border-amber-400/80 max-w-[148px] w-full flex flex-col items-center">
+                      <TenantSchoolLogo variant="full" size="md" tenantOverride={formData} className="border-0 shadow-none" />
+                      <div className="text-[9px] font-mono font-bold text-slate-700 mt-1.5 uppercase truncate max-w-full">
                         {formData.portalCardBadge || 'School Portal'}
                       </div>
                     </div>
@@ -1094,23 +1098,9 @@ export const TenantBrandingCustomizerModal: React.FC<TenantBrandingCustomizerMod
                 <div className="relative z-10 flex flex-col items-center max-w-3xl w-full mx-auto">
                   
                   {/* 1. CUSTOMIZABLE LOGO EMBLEM BADGE */}
-                  <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-2xl border border-amber-400/80 mb-3 max-w-[140px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-transform">
-                    {formData.customLogoBase64 ? (
-                      <img 
-                        src={formData.customLogoBase64} 
-                        alt="Logo" 
-                        className="w-16 h-16 object-contain"
-                      />
-                    ) : formData.logoUrl ? (
-                      <img 
-                        src={formData.logoUrl} 
-                        alt="Logo" 
-                        className="w-16 h-16 object-contain"
-                      />
-                    ) : (
-                      <EduSmartGadsaLogo variant="full" size="sm" />
-                    )}
-                    <div className="text-[9px] font-mono font-bold text-slate-700 mt-1 uppercase tracking-tight truncate max-w-full">
+                  <div className="bg-white rounded-2xl p-3 sm:p-3.5 shadow-2xl border border-amber-400/80 mb-3 max-w-[160px] w-full mx-auto flex flex-col items-center hover:scale-105 transition-transform">
+                    <TenantSchoolLogo variant="full" size="md" tenantOverride={formData} className="border-0 shadow-none" />
+                    <div className="text-[9px] font-mono font-bold text-slate-700 mt-1.5 uppercase tracking-tight truncate max-w-full">
                       {formData.portalCardBadge || 'By Gadsa Systems'}
                     </div>
                   </div>

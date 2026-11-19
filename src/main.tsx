@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { initPwaLifecycle } from './utils/pwaManager';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { SetPasswordPage } from './components/auth/SetPasswordPage';
@@ -33,6 +34,7 @@ async function mount() {
       createRoot(rootElement).render(
         <ErrorBoundary>
           <SetPasswordPage />
+          <SpeedInsights />
         </ErrorBoundary>
       );
     }
@@ -53,6 +55,7 @@ async function mount() {
     createRoot(rootElement).render(
       <ErrorBoundary>
         <App initialUser={initialUser} />
+        <SpeedInsights />
       </ErrorBoundary>
     );
   }

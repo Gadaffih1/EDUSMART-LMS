@@ -301,6 +301,9 @@ const SINGLETON_COLLECTIONS = new Set([
   'edusmart_role_permissions_v1',
   'edusmart_school_departments_seeded_v1',
   'edusmart_department_kinds_v1',
+  'edusmart_streaks_v1',
+  'edusmart_resource_views_v1',
+  'edusmart_system_settings_v1',
 ]);
 
 // Global collections shared across all tenants (platform-level or reference)
@@ -353,23 +356,36 @@ export function readCollectionForTenant(
     }
   }
 
-  let rows: Array<{ payload_json: string }>;
+  let rows: Array<{ record_id: string; payload_json: string }>;
   if (includeAllTenants || !tenantId) {
     rows = db
       .prepare(
-        `SELECT payload_json FROM collections_store
+        `SELECT record_id, payload_json FROM collections_store
          WHERE collection_key = ? AND deleted_at IS NULL
          ORDER BY rowid ASC`
       )
-      .all(collectionKey) as Array<{ payload_json: string }>;
+      .all(collectionKey) as Array<{ record_id: string; payload_json: string }>;
   } else {
     rows = db
       .prepare(
-        `SELECT payload_json FROM collections_store
+        `SELECT record_id, payload_json FROM collections_store
          WHERE collection_key = ? AND tenant_id IN (?, 'global') AND deleted_at IS NULL
          ORDER BY rowid ASC`
       )
-      .all(collectionKey, tenantId) as Array<{ payload_json: string }>;
+      .all(collectionKey, tenantId) as Array<{ record_id: string; payload_json: string }>;
+  }
+
+  // Preserve non-array singleton objects saved via /api/sync/push with record_id = 'singleton'
+  if (rows.length === 1 && rows[0].record_id === 'singleton') {
+    try {
+      const obj = JSON.parse(rows[0].payload_json);
+      if (obj !== null && typeof obj === 'object' && !Array.isArray(obj)) {
+        return stripSecrets(obj);
+      }
+      return obj;
+    } catch {
+      // Fall through to array parsing
+    }
   }
 
   const parsed: any[] = [];
@@ -586,7 +602,7 @@ export function registerDataRoutes(app: Express): void {
       const db = getDb();
 
       if (!session) {
-        // Unauthenticated bootstrap: strictly safe landing page & reference catalogs ONLY
+        // Unauthenticated bootstrap: strictly safe landing page, public tenant settings & reference catalogs ONLY
         const collections: Record<string, any> = {
           edusmart_all_tenants_registry: buildPublicTenantsList(),
         };
@@ -594,14 +610,34 @@ export function registerDataRoutes(app: Express): void {
           const val = readCollectionForTenant(key, 'global', true);
           if (val !== undefined) collections[key] = val;
         }
+        const defaultTenantId = collections.edusmart_all_tenants_registry?.[0]?.id || 'tenant-riara';
+        const publicSettingKeys = ['profile_and_branding', 'academic_calendar', 'portal_and_virtual_lab'];
+        const publicSchoolRows = db
+          .prepare(
+            `SELECT school_id, setting_key, payload_json FROM school_settings
+             WHERE setting_key IN ('profile_and_branding', 'academic_calendar', 'portal_and_virtual_lab')`
+          )
+          .all() as Array<{ school_id: string; setting_key: string; payload_json: string }>;
+        const schoolSettingsByTenant: Record<string, Record<string, any>> = {};
+        for (const r of publicSchoolRows) {
+          if (!publicSettingKeys.includes(r.setting_key)) continue;
+          if (!schoolSettingsByTenant[r.school_id]) schoolSettingsByTenant[r.school_id] = {};
+          try {
+            schoolSettingsByTenant[r.school_id][r.setting_key] = JSON.parse(r.payload_json);
+          } catch {
+            schoolSettingsByTenant[r.school_id][r.setting_key] = r.payload_json;
+          }
+        }
         const activeVlabPass = verifyVlabPassCookie(req);
         return res.json({
           success: true,
           authenticated: false,
           user: null,
-          activeTenantId: collections.edusmart_all_tenants_registry?.[0]?.id || 'tenant-riara',
+          activeTenantId: defaultTenantId,
           collections,
           preferences: {},
+          schoolSettings: schoolSettingsByTenant[defaultTenantId] || {},
+          schoolSettingsByTenant,
           activeVlabPass,
           timestamp: new Date().toISOString(),
         });
@@ -651,18 +687,36 @@ export function registerDataRoutes(app: Express): void {
         }
       }
 
-      // Also attach any school-level settings stored in school_settings
-      const settingRows = db
-        .prepare(`SELECT setting_key, payload_json FROM school_settings WHERE school_id = ?`)
-        .all(activeTenantId) as Array<{ setting_key: string; payload_json: string }>;
-      const schoolSettings: Record<string, any> = {};
-      for (const row of settingRows) {
+      // Ensure and attach all school-level settings stored in `school_settings`
+      const activeTenantRow = db
+        .prepare(`SELECT payload_json FROM tenants WHERE id = ?`)
+        .get(activeTenantId) as { payload_json: string } | undefined;
+      if (activeTenantRow?.payload_json) {
         try {
-          schoolSettings[row.setting_key] = JSON.parse(row.payload_json);
+          ensureDefaultSchoolSettings(db, JSON.parse(activeTenantRow.payload_json));
         } catch {
-          schoolSettings[row.setting_key] = row.payload_json;
+          // ignore malformed tenant row
         }
       }
+
+      const settingRows = isSuperAdmin
+        ? (db
+            .prepare(`SELECT school_id, setting_key, payload_json FROM school_settings`)
+            .all() as Array<{ school_id: string; setting_key: string; payload_json: string }>)
+        : (db
+            .prepare(`SELECT school_id, setting_key, payload_json FROM school_settings WHERE school_id = ?`)
+            .all(activeTenantId) as Array<{ school_id: string; setting_key: string; payload_json: string }>);
+
+      const schoolSettingsByTenant: Record<string, Record<string, any>> = {};
+      for (const row of settingRows) {
+        if (!schoolSettingsByTenant[row.school_id]) schoolSettingsByTenant[row.school_id] = {};
+        try {
+          schoolSettingsByTenant[row.school_id][row.setting_key] = JSON.parse(row.payload_json);
+        } catch {
+          schoolSettingsByTenant[row.school_id][row.setting_key] = row.payload_json;
+        }
+      }
+      const schoolSettings = schoolSettingsByTenant[activeTenantId] || {};
 
       const activeVlabPass = verifyVlabPassCookie(req);
       return res.json({
@@ -675,6 +729,7 @@ export function registerDataRoutes(app: Express): void {
         totalCollections: Object.keys(collections).length,
         preferences,
         schoolSettings,
+        schoolSettingsByTenant,
         activeVlabPass,
         timestamp: new Date().toISOString(),
       });
@@ -687,17 +742,39 @@ export function registerDataRoutes(app: Express): void {
   app.get('/api/bootstrap', bootstrapHandler);
   app.get('/api/sync/all', bootstrapHandler);
 
-  // Pull single collection
-  app.get('/api/sync/pull', requireAuth, (req: Request, res: Response) => {
+  // Pull single collection (allows public-safe catalog/customization collections without auth so live SSE works across all browsers)
+  app.get('/api/sync/pull', (req: Request, res: Response) => {
     try {
       const collection = String(req.query.collection || '').trim();
       if (!collection) {
         return res.status(400).json({ error: 'collection parameter is required' });
       }
+      const isPublicSafe =
+        PUBLIC_SAFE_COLLECTIONS.has(collection) || collection === 'edusmart_all_tenants_registry';
+
+      if (!req.authSession) {
+        if (!isPublicSafe) {
+          return res.status(401).json({ error: 'Authentication required' });
+        }
+        const data =
+          collection === 'edusmart_all_tenants_registry'
+            ? buildPublicTenantsList()
+            : readCollectionForTenant(collection, 'global', true);
+        return res.json({
+          success: true,
+          collection,
+          data: data ?? null,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       const tenantId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
       if (!tenantId) return;
 
-      const data = readCollectionForTenant(collection, tenantId, req.authSession!.isSuperAdmin);
+      const data =
+        collection === 'edusmart_all_tenants_registry'
+          ? buildPublicTenantsList()
+          : readCollectionForTenant(collection, tenantId, req.authSession.isSuperAdmin);
       return res.json({
         success: true,
         collection,
@@ -1063,6 +1140,7 @@ export function registerDataRoutes(app: Express): void {
         throw txErr;
       }
 
+      notifyMySqlTablesChanged(['collections_store', 'tenants', 'school_settings']);
       broadcastChange({
         type: 'collection:updated',
         collection,
@@ -1632,7 +1710,16 @@ export function registerDataRoutes(app: Express): void {
   app.put('/api/settings/school', requireAuth, (req: Request, res: Response) => {
     try {
       const session = req.authSession!;
-      const allowedRoles = ['admin', 'head_teacher', 'deputy_head', 'dean_of_studies'];
+      const allowedRoles = [
+        'admin',
+        'head_teacher',
+        'principal',
+        'director',
+        'deputy_head',
+        'dean_of_studies',
+        'school_admin_staff',
+        'curriculum_coordinator',
+      ];
       if (!session.isSuperAdmin && !sessionHasAnyRole(session, allowedRoles)) {
         return res.status(403).json({ error: 'Administrator privileges required to update school settings.' });
       }
@@ -1776,6 +1863,7 @@ export function registerDataRoutes(app: Express): void {
       const now = new Date().toISOString();
       upsertCollectionRecord(db, 'edusmart_platform_customization_v6', 'singleton', 'global', customization, false);
       upsertCollectionRecord(db, 'edusmart_platform_customization_pack_v1', 'singleton', 'global', customization, false);
+      notifyMySqlTablesChanged(['collections_store']);
 
       broadcastChange({
         type: 'settings:updated',
@@ -1785,13 +1873,13 @@ export function registerDataRoutes(app: Express): void {
         timestamp: now,
       });
 
-      return res.json({ success: true, timestamp: now });
+      return res.json({ success: true, customization, timestamp: now });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed updating platform settings', message: err?.message });
     }
   });
 
-  // User Preferences (Accessibility, Mobile Layout, Workspace Tab)
+  // User Preferences (Accessibility, Mobile Layout, Connectivity, Timetable View, Workspace Tab)
   app.get('/api/preferences', requireAuth, (req: Request, res: Response) => {
     try {
       const db = getDb();
@@ -1827,6 +1915,7 @@ export function registerDataRoutes(app: Express): void {
          DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`
       ).run(req.authSession!.userId, key, JSON.stringify(value ?? null), now);
 
+      notifyMySqlTablesChanged(['user_preferences']);
       broadcastChange({
         type: 'preferences:updated',
         collection: 'user_preferences',
@@ -1835,7 +1924,7 @@ export function registerDataRoutes(app: Express): void {
         timestamp: now,
       });
 
-      return res.json({ success: true, key, timestamp: now });
+      return res.json({ success: true, key, value: value ?? null, timestamp: now });
     } catch (err: any) {
       return res.status(500).json({ error: 'Failed saving preference', message: err?.message });
     }

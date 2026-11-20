@@ -21,7 +21,23 @@ import {
 } from 'lucide-react';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
 import { useTenant } from '../../context/TenantContext';
+import { useAccessibility } from '../../context/AccessibilityContext';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { BiometricPasskeysCard } from '../auth/BiometricPasskeysCard';
+
+const CONNECTIVITY_PREF_KEY = 'edusmart_connectivity_settings_v1';
+
+interface ConnectivitySettings {
+  autoBackgroundSync: boolean;
+  lowDataOptimization: boolean;
+  precacheFrequentNotes: boolean;
+}
+
+const DEFAULT_CONNECTIVITY_SETTINGS: ConnectivitySettings = {
+  autoBackgroundSync: true,
+  lowDataOptimization: true,
+  precacheFrequentNotes: true,
+};
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -39,6 +55,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const { isMobileOverlapProtectionEnabled, setMobileOverlapProtection } = useMobileLayout();
   const { currentTenant } = useTenant();
+  const { fontSize, setFontSize } = useAccessibility();
+  const [connectivitySettings, setConnectivitySettings] = useState<ConnectivitySettings>(() => ({
+    ...DEFAULT_CONNECTIVITY_SETTINGS,
+    ...(ClientDataStore.getPreference<Partial<ConnectivitySettings> | null>(CONNECTIVITY_PREF_KEY, null) || {}),
+  }));
+  const [savedIndicator, setSavedIndicator] = useState<string>('');
+
+  useEffect(() => {
+    const syncPrefs = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'user_preferences') {
+        const stored = ClientDataStore.getPreference<Partial<ConnectivitySettings> | null>(CONNECTIVITY_PREF_KEY, null);
+        if (stored && typeof stored === 'object') {
+          setConnectivitySettings({ ...DEFAULT_CONNECTIVITY_SETTINGS, ...stored });
+        }
+      }
+    };
+    window.addEventListener('edusmart:data-changed', syncPrefs);
+    return () => window.removeEventListener('edusmart:data-changed', syncPrefs);
+  }, []);
+
+  const updateConnectivitySetting = (field: keyof ConnectivitySettings, value: boolean) => {
+    setConnectivitySettings((prev) => {
+      const next = { ...prev, [field]: value };
+      ClientDataStore.setPreference(CONNECTIVITY_PREF_KEY, next);
+      return next;
+    });
+    setSavedIndicator('Saved to central database');
+    window.setTimeout(() => setSavedIndicator(''), 2500);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -209,7 +255,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="font-bold text-slate-800 block">Automatic Background Sync</span>
                       <span className="text-[11px] text-slate-500">Automatically update cached CBC lesson notes whenever connection is restored</span>
                     </div>
-                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-emerald-600" />
+                    <input
+                      type="checkbox"
+                      checked={connectivitySettings.autoBackgroundSync}
+                      onChange={(e) => updateConnectivitySetting('autoBackgroundSync', e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
                   </label>
 
                   <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 cursor-pointer">
@@ -217,7 +268,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="font-bold text-slate-800 block">Low Data / 2G-3G Optimization</span>
                       <span className="text-[11px] text-slate-500">Prioritize text-based notes and formulas before loading high-resolution multimedia</span>
                     </div>
-                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-emerald-600" />
+                    <input
+                      type="checkbox"
+                      checked={connectivitySettings.lowDataOptimization}
+                      onChange={(e) => updateConnectivitySetting('lowDataOptimization', e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
                   </label>
 
                   <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 cursor-pointer">
@@ -225,8 +281,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="font-bold text-slate-800 block">Pre-cache Frequently Accessed Notes</span>
                       <span className="text-[11px] text-slate-500">Keep Grade 4 to Grade 7 core strand summaries perpetually ready offline</span>
                     </div>
-                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-emerald-600" />
+                    <input
+                      type="checkbox"
+                      checked={connectivitySettings.precacheFrequentNotes}
+                      onChange={(e) => updateConnectivitySetting('precacheFrequentNotes', e.target.checked)}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
                   </label>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700">
+                      <Database className="w-3.5 h-3.5" />
+                      {savedIndicator || 'Stored in central database · retained across all browsers'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -241,7 +309,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-slate-900">Application Preferences</h4>
-                    <p className="text-[11px] text-slate-500">Customize reading contrast and typography</p>
+                    <p className="text-[11px] text-slate-500">Customize reading contrast and typography (synced across all browsers)</p>
                   </div>
                 </div>
 
@@ -251,10 +319,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="font-bold text-slate-800 block">Reading Text Size</span>
                       <span className="text-[11px] text-slate-500">Optimize font scaling for classroom tablets and mobile screens</span>
                     </div>
-                    <select className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700">
-                      <option>Standard (100%)</option>
-                      <option>Medium (110%)</option>
-                      <option>Large (125%)</option>
+                    <select
+                      value={fontSize}
+                      onChange={(e) => {
+                        setFontSize(Number(e.target.value) || 100);
+                        setSavedIndicator('Saved to central database');
+                        window.setTimeout(() => setSavedIndicator(''), 2500);
+                      }}
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700"
+                    >
+                      <option value={100}>Standard (100%)</option>
+                      <option value={110}>Medium (110%)</option>
+                      <option value={125}>Large (125%)</option>
+                      <option value={140}>Extra Large (140%)</option>
                     </select>
                   </div>
 

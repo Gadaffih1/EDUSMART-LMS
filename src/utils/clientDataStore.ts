@@ -22,8 +22,30 @@ type ChangeListener = (key: string) => void;
 
 const collections = new Map<string, any>();
 const preferences = new Map<string, any>();
+const pendingPreferences = new Map<string, any>();
 const schoolSettingsByTenant = new Map<string, Record<string, any>>();
 const listeners = new Set<ChangeListener>();
+
+// Settings & configuration collections flush immediately to the database with zero debounce delay
+const IMMEDIATE_PERSIST_COLLECTIONS = new Set([
+  'edusmart_platform_customization_v6',
+  'edusmart_platform_customization_pack_v1',
+  'edusmart_role_permissions_v1',
+  'edusmart_all_tenants_registry',
+  'edusmart_school_registry_v1',
+  'edusmart_system_roles_v1',
+  'edusmart_school_departments_v1',
+  'edusmart_subjects_v1',
+  'edusmart_activities_v1',
+  'edusmart_bell_schedule_v1',
+  'edusmart_fixed_lessons_v1',
+  'edusmart_shared_resources_v1',
+  'edusmart_exam_timetable_v1',
+  'edusmart_timetable_v1',
+  'edusmart_grade_passwords_v1',
+  'edusmart_library_policies_v1',
+  'edusmart_system_settings_v1',
+]);
 
 let sessionUser: User | null = null;
 let inMemorySessionToken: string | null = null;
@@ -33,6 +55,7 @@ let activeVlabPass: any | null = null;
 let hydrated = false;
 let hydratingPromise: Promise<void> | null = null;
 let sseSource: EventSource | null = null;
+let unloadHooksRegistered = false;
 
 export const ACTIVE_SWITCHED_ROLE_PREF_KEY = 'edusmart_active_switched_role_v1';
 const SWITCHED_ROLE_SESSION_PREFIX = 'edusmart_active_switched_role_user_';
@@ -132,8 +155,28 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
     : extra;
 }
 
-// Track pending per-key pushes so rapid mutations debounce minimally while still flushing immediately
+// Track pending per-key pushes so rapid mutations coalesce minimally while still flushing immediately
 const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function flushAllPendingPushes(): void {
+  for (const [key, timer] of Array.from(pushTimers.entries())) {
+    clearTimeout(timer);
+    pushTimers.delete(key);
+    void flushCollectionPush(key);
+  }
+}
+
+function ensureUnloadFlushHooks(): void {
+  if (unloadHooksRegistered || typeof window === 'undefined') return;
+  unloadHooksRegistered = true;
+  window.addEventListener('pagehide', flushAllPendingPushes);
+  window.addEventListener('beforeunload', flushAllPendingPushes);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushAllPendingPushes();
+    }
+  });
+}
 
 function emitWindowEvents(key: string): void {
   if (typeof window === 'undefined') return;
@@ -145,6 +188,14 @@ function emitWindowEvents(key: string): void {
       window.dispatchEvent(new CustomEvent('role-permissions-updated'));
     } else if (key === 'edusmart_all_tenants_registry' || key === 'tenants') {
       window.dispatchEvent(new CustomEvent('tenants-synced'));
+    } else if (key === 'school_settings') {
+      window.dispatchEvent(new CustomEvent('school-settings-updated'));
+    } else if (key === 'edusmart_timetable_v1' || key === 'edusmart_exam_timetable_v1') {
+      window.dispatchEvent(new CustomEvent('timetable-updated'));
+    } else if (key === 'edusmart_bell_schedule_v1') {
+      window.dispatchEvent(new CustomEvent('bell-schedule-updated'));
+    } else if (key === 'edusmart_subjects_v1') {
+      window.dispatchEvent(new CustomEvent('subjects-catalog-updated'));
     } else if (key.startsWith('edusmart_ops_')) {
       window.dispatchEvent(new CustomEvent('finance-updated'));
       window.dispatchEvent(new CustomEvent('procurement-updated'));
@@ -203,7 +254,16 @@ function connectRealtimeStream(): void {
           return;
         }
         if (payload?.type === 'settings:updated') {
-          void ClientDataStore.loadSchoolSettings(payload?.tenantId && payload.tenantId !== 'global' ? payload.tenantId : activeTenantId);
+          if (sessionUser) {
+            void ClientDataStore.loadSchoolSettings(
+              payload?.tenantId && payload.tenantId !== 'global' ? payload.tenantId : activeTenantId
+            ).catch(() => {});
+          }
+          if (col === 'edusmart_platform_customization_v6' || col === 'edusmart_platform_customization_pack_v1') {
+            void pullSingleCollection('edusmart_platform_customization_v6');
+            void pullSingleCollection('edusmart_platform_customization_pack_v1');
+            return;
+          }
         }
         if (col === 'executive_reports' || col === 'executive_report_groups') {
           window.dispatchEvent(new CustomEvent('executive-reports-updated', { detail: payload }));
@@ -321,13 +381,37 @@ export const ClientDataStore = {
           activeTenantId = sessionUser.schoolId;
         }
 
+        if (body.schoolSettingsByTenant && typeof body.schoolSettingsByTenant === 'object') {
+          for (const [tid, sObj] of Object.entries(body.schoolSettingsByTenant)) {
+            if (sObj && typeof sObj === 'object') {
+              schoolSettingsByTenant.set(tid, sObj as Record<string, any>);
+            }
+          }
+        }
         if (body.schoolSettings && typeof body.schoolSettings === 'object') {
           schoolSettingsByTenant.set(activeTenantId, body.schoolSettings);
         }
 
+        // Flush any preferences modified right before session hydration completed
+        if (sessionUser && pendingPreferences.size > 0) {
+          for (const [pk, pv] of Array.from(pendingPreferences.entries())) {
+            pendingPreferences.delete(pk);
+            preferences.set(pk, pv);
+            void fetch('/api/preferences', {
+              method: 'PUT',
+              credentials: 'include',
+              keepalive: true,
+              headers: authHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ key: pk, value: pv }),
+            }).catch(() => {});
+          }
+        }
+
+        ensureUnloadFlushHooks();
         hydrated = true;
         connectRealtimeStream();
         emitWindowEvents('*');
+        emitWindowEvents('school_settings');
       } catch (err) {
         console.warn('[ClientDataStore] hydrateFromBackend error:', err);
       } finally {
@@ -405,13 +489,23 @@ export const ClientDataStore = {
 
   /** Update in-memory collection immediately and persist to central backend database */
   setCollection<T>(key: string, value: T, opts: { persist?: boolean } = {}): void {
+    ensureUnloadFlushHooks();
     collections.set(key, value);
     emitWindowEvents(key);
 
     if (opts.persist === false) return;
 
     const existingTimer = pushTimers.get(key);
-    if (existingTimer) clearTimeout(existingTimer);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      pushTimers.delete(key);
+    }
+
+    // Settings and configuration collections write through to the database immediately (zero debounce risk)
+    if (IMMEDIATE_PERSIST_COLLECTIONS.has(key)) {
+      void flushCollectionPush(key);
+      return;
+    }
 
     // Near-immediate flush (15ms) coalesces bursts inside a single synchronous loop
     const timer = setTimeout(() => {
@@ -440,7 +534,11 @@ export const ClientDataStore = {
 
   setPreference<T>(key: string, value: T): void {
     preferences.set(key, value);
-    if (!sessionUser) return; // Unauthenticated visitors keep transient session prefs in memory only
+    emitWindowEvents('user_preferences');
+    if (!sessionUser) {
+      pendingPreferences.set(key, value);
+      return;
+    }
     void fetch('/api/preferences', {
       method: 'PUT',
       credentials: 'include',
@@ -645,8 +743,8 @@ export const ClientDataStore = {
   },
 
   async loadSchoolSettings(tenantId?: string): Promise<Record<string, any>> {
-    if (!sessionUser) return {};
     const target = tenantId || activeTenantId || 'tenant-riara';
+    if (!sessionUser) return schoolSettingsByTenant.get(target) || {};
     const res = await fetch(`/api/settings?tenantId=${encodeURIComponent(target)}`, {
       credentials: 'include',
       headers: authHeaders(),
@@ -691,6 +789,7 @@ export const ClientDataStore = {
     const res = await fetch('/api/settings/school', {
       method: 'PUT',
       credentials: 'include',
+      keepalive: true,
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         tenantId: target,
@@ -710,6 +809,26 @@ export const ClientDataStore = {
     await pullSingleCollection('edusmart_all_tenants_registry');
     emitWindowEvents('school_settings');
     return body.settings || this.getSchoolSettings(target);
+  },
+
+  async savePlatformSettings(customization: Record<string, any>): Promise<boolean> {
+    collections.set('edusmart_platform_customization_v6', customization);
+    collections.set('edusmart_platform_customization_pack_v1', customization);
+    emitWindowEvents('edusmart_platform_customization_v6');
+    if (!sessionUser) return false;
+    try {
+      const res = await fetch('/api/settings/platform', {
+        method: 'PUT',
+        credentials: 'include',
+        keepalive: true,
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ customization }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('[ClientDataStore] failed saving platform settings:', err);
+      return false;
+    }
   },
 
   async apiFetchUsers(params: {

@@ -660,6 +660,13 @@ export function registerTimetableRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(['tt_configs', 'tt_periods', 'tt_grade_schedules', 'tt_audit_logs']);
+    broadcastChange({
+      type: 'settings:updated',
+      collection: 'edusmart_timetable_v1',
+      tenantId,
+      actorId: req.authSession!.userId,
+      timestamp: now,
+    });
     res.json({ ok: true, configId });
   });
 
@@ -2652,6 +2659,13 @@ export function registerTimetableRoutes(app: Express): void {
     }
 
     notifyMySqlTablesChanged(['tt_versions', 'tt_configs', 'tt_audit_logs']);
+    broadcastChange({
+      type: 'collection:updated',
+      collection: 'edusmart_timetable_v1',
+      tenantId,
+      actorId: req.authSession!.userId,
+      timestamp: now,
+    });
     res.json({ ok: true, status: 'published' });
   });
 

@@ -1388,8 +1388,14 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
     }
   }
 
+  const alreadySeededSettings = db
+    .prepare(`SELECT value FROM migration_meta WHERE key = 'settings_seeded_v1'`)
+    .get() as { value: string } | undefined;
+
   const mergedPlatform = deepMergeRetainingExisting(DEFAULT_PLATFORM_CUSTOMIZATION as any, existingPack);
-  // Strictly enforce subscription-required Virtual Lab policy on public page
+
+  // Fill default Virtual Lab policy keys only when missing — never overwrite admin-saved values on restart
+  const existingVlabPolicy = existingPack?.globalSettings?.virtualLabPolicy;
   mergedPlatform.globalSettings = {
     ...(mergedPlatform.globalSettings || {}),
     virtualLabPolicy: {
@@ -1397,28 +1403,36 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
       requirePaidSubscriptionOnPublicPage: true,
       allowFreePublicDemo: false,
       freeForMemberSchools: true,
+      ...(existingVlabPolicy && typeof existingVlabPolicy === 'object' ? existingVlabPolicy : {}),
     },
   };
-  // Keep packages hidden from public portal view while retaining all other landing customization
+
+  // Only apply default pricing=false on first-time seed when pricing visibility wasn't explicitly set
   if (mergedPlatform.landingPage) {
-    mergedPlatform.landingPage.visibility = {
-      ...(mergedPlatform.landingPage.visibility || {}),
-      pricing: false,
-    };
-    if (Array.isArray(mergedPlatform.landingPage.header?.navLinks)) {
-      mergedPlatform.landingPage.header.navLinks = mergedPlatform.landingPage.header.navLinks.map(
-        (link: any) =>
-          link?.id === 'nav-pricing' || link?.sectionId === 'pricing-section'
-            ? { ...link, enabled: false }
-            : link
-      );
+    const existingPricingVis = existingPack?.landingPage?.visibility?.pricing;
+    if (!alreadySeededSettings && existingPricingVis === undefined) {
+      mergedPlatform.landingPage.visibility = {
+        ...(mergedPlatform.landingPage.visibility || {}),
+        pricing: false,
+      };
+      if (Array.isArray(mergedPlatform.landingPage.header?.navLinks)) {
+        mergedPlatform.landingPage.header.navLinks = mergedPlatform.landingPage.header.navLinks.map(
+          (link: any) =>
+            link?.id === 'nav-pricing' || link?.sectionId === 'pricing-section'
+              ? { ...link, enabled: false }
+              : link
+        );
+      }
     }
   }
 
-  upsertCollectionRecord(db, 'edusmart_platform_customization_v6', 'singleton', 'global', mergedPlatform, false);
-  upsertCollectionRecord(db, 'edusmart_platform_customization_pack_v1', 'singleton', 'global', mergedPlatform, false);
+  // Only write back if missing or if defaults filled previously missing keys
+  if (!existingPack || !alreadySeededSettings || !v6Row || !packRow) {
+    upsertCollectionRecord(db, 'edusmart_platform_customization_v6', 'singleton', 'global', mergedPlatform, false);
+    upsertCollectionRecord(db, 'edusmart_platform_customization_pack_v1', 'singleton', 'global', mergedPlatform, false);
+  }
 
-  // B. Seed per-school settings rows in `school_settings` for every tenant (INSERT OR IGNORE)
+  // B. Seed per-school settings rows in `school_settings` for every tenant (INSERT OR IGNORE — never overwrites saved settings)
   const tenants = db
     .prepare(`SELECT id, name, code, payload_json FROM tenants`)
     .all() as Array<{ id: string; name: string; code: string; payload_json: string }>;
@@ -1449,80 +1463,80 @@ export function seedAndRetainSettings(db: DatabaseSync): void {
   // Backfill encrypted credential vault for existing seeded accounts (non-destructive)
   backfillCredentialVault(db);
 
-  // C. Strictly set, save, and retain Platform Super Admin login credentials
-  const existingAdmin = db
+  // C. Seed Platform Super Admin credentials ONLY if no active platform admin exists yet — strictly retain admin updates across restarts
+  const activeAdmins = db
     .prepare(
       `SELECT id, name, email, password_hash, rights_json, access_scope, is_active
        FROM platform_admins
-       WHERE id = ? OR lower(email) = ?
-       ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END
-       LIMIT 1`
+       WHERE is_active = 1
+       ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END`
     )
-    .get(DEFAULT_SUPER_ADMIN_ID, DEFAULT_SUPER_ADMIN_EMAIL, DEFAULT_SUPER_ADMIN_ID) as any;
+    .all(DEFAULT_SUPER_ADMIN_ID) as any[];
 
-  const adminName = existingAdmin?.name || 'Platform Super Admin';
-  const adminRights = (() => {
-    try {
-      const parsed = JSON.parse(existingAdmin?.rights_json || '["super_admin_page"]');
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : ['super_admin_page'];
-    } catch {
-      return ['super_admin_page'];
-    }
-  })();
-
-  const needsAdminSeedUpdate =
-    !existingAdmin ||
-    existingAdmin.id !== DEFAULT_SUPER_ADMIN_ID ||
-    String(existingAdmin.email || '').trim().toLowerCase() !== DEFAULT_SUPER_ADMIN_EMAIL ||
-    !verifyPassword(DEFAULT_SUPER_ADMIN_PASSWORD, String(existingAdmin.password_hash || '')) ||
-    existingAdmin.access_scope !== 'super_admin_only' ||
-    existingAdmin.is_active !== 1;
-
-  if (needsAdminSeedUpdate) {
-    db.prepare(`DELETE FROM platform_admins WHERE lower(email) = ? AND id != ?`).run(
-      DEFAULT_SUPER_ADMIN_EMAIL,
-      DEFAULT_SUPER_ADMIN_ID
-    );
-    const retainedHash =
-      existingAdmin?.password_hash && verifyPassword(DEFAULT_SUPER_ADMIN_PASSWORD, String(existingAdmin.password_hash))
-        ? existingAdmin.password_hash
-        : hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD);
-
+  if (activeAdmins.length === 0) {
+    const defaultHash = hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD);
+    const defaultRights = ['super_admin_page'];
     db.prepare(
       `INSERT OR REPLACE INTO platform_admins
          (id, name, email, password_hash, rights_json, access_scope, is_active, updated_at)
        VALUES (?, ?, ?, ?, ?, 'super_admin_only', 1, ?)`
     ).run(
       DEFAULT_SUPER_ADMIN_ID,
-      adminName,
+      'Platform Super Admin',
       DEFAULT_SUPER_ADMIN_EMAIL,
-      retainedHash,
-      JSON.stringify(adminRights),
+      defaultHash,
+      JSON.stringify(defaultRights),
       now
     );
+
+    upsertCollectionRecord(
+      db,
+      'edusmart_platform_admins_v1',
+      DEFAULT_SUPER_ADMIN_ID,
+      'global',
+      {
+        id: DEFAULT_SUPER_ADMIN_ID,
+        name: 'Platform Super Admin',
+        email: DEFAULT_SUPER_ADMIN_EMAIL,
+        rights: defaultRights,
+        accessScope: 'super_admin_only',
+        isActive: true,
+      },
+      false
+    );
+
+    db.prepare(
+      `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+    ).run('superadmin_credentials_seeded_v1', DEFAULT_SUPER_ADMIN_EMAIL, now);
+  } else {
+    // Keep collections_store synchronized with the retained database platform_admins rows
+    for (const adm of activeAdmins) {
+      let parsedRights: string[] = ['super_admin_page'];
+      try {
+        const r = JSON.parse(adm.rights_json || '["super_admin_page"]');
+        if (Array.isArray(r) && r.length > 0) parsedRights = r;
+      } catch {
+        // default rights
+      }
+      upsertCollectionRecord(
+        db,
+        'edusmart_platform_admins_v1',
+        String(adm.id),
+        'global',
+        {
+          id: String(adm.id),
+          name: String(adm.name || 'Platform Super Admin'),
+          email: String(adm.email),
+          rights: parsedRights,
+          accessScope: String(adm.access_scope || 'super_admin_only'),
+          isActive: Number(adm.is_active) === 1,
+        },
+        false
+      );
+    }
   }
 
-  upsertCollectionRecord(
-    db,
-    'edusmart_platform_admins_v1',
-    DEFAULT_SUPER_ADMIN_ID,
-    'global',
-    {
-      id: DEFAULT_SUPER_ADMIN_ID,
-      name: adminName,
-      email: DEFAULT_SUPER_ADMIN_EMAIL,
-      rights: adminRights,
-      accessScope: 'super_admin_only',
-      isActive: true,
-    },
-    false
-  );
-
   db.prepare(
-    `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
-  ).run('superadmin_credentials_seeded_v1', DEFAULT_SUPER_ADMIN_EMAIL, now);
-
-  db.prepare(
-    `INSERT OR REPLACE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
+    `INSERT OR IGNORE INTO migration_meta (key, value, applied_at) VALUES (?, ?, ?)`
   ).run('settings_seeded_v1', `${tenants.length} tenants:${seededCount} inserted`, now);
 }

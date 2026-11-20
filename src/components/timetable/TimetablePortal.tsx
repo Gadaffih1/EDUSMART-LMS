@@ -14,6 +14,7 @@ import {
   TeacherAbsenceReport
 } from '../../types';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
 import { listSubjects } from '../../utils/catalogStore';
 import { getSubjectWeeklyLessonLimit } from '../../utils/curriculumDemand';
 import { useTenant } from '../../context/TenantContext';
@@ -327,8 +328,45 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [reliefBookingSlot, setReliefBookingSlot] = useState<TimetableSlot | null>(null);
   const [showCaptureModal, setShowCaptureModal] = useState<boolean>(false);
   const [captureModalMode, setCaptureModalMode] = useState<'daily' | 'weekly'>('daily');
-  const [teacherViewMode, setTeacherViewMode] = useState<'daily' | 'weekly'>('weekly');
-  const [classGridLayout, setClassGridLayout] = useState<'classic_sheet' | 'period_cards'>('classic_sheet');
+  const [teacherViewMode, setTeacherViewModeState] = useState<'daily' | 'weekly'>(() => {
+    const saved = ClientDataStore.getPreference<{ teacherViewMode?: 'daily' | 'weekly'; classGridLayout?: 'classic_sheet' | 'period_cards' } | null>('edusmart_timetable_view_prefs_v1', null);
+    return saved?.teacherViewMode === 'daily' ? 'daily' : 'weekly';
+  });
+  const [classGridLayout, setClassGridLayoutState] = useState<'classic_sheet' | 'period_cards'>(() => {
+    const saved = ClientDataStore.getPreference<{ teacherViewMode?: 'daily' | 'weekly'; classGridLayout?: 'classic_sheet' | 'period_cards' } | null>('edusmart_timetable_view_prefs_v1', null);
+    return saved?.classGridLayout === 'period_cards' ? 'period_cards' : 'classic_sheet';
+  });
+
+  const setTeacherViewMode = (mode: 'daily' | 'weekly') => {
+    setTeacherViewModeState(mode);
+    const cur = ClientDataStore.getPreference<Record<string, any>>('edusmart_timetable_view_prefs_v1', {});
+    ClientDataStore.setPreference('edusmart_timetable_view_prefs_v1', { ...cur, teacherViewMode: mode });
+  };
+
+  const setClassGridLayout = (layout: 'classic_sheet' | 'period_cards') => {
+    setClassGridLayoutState(layout);
+    const cur = ClientDataStore.getPreference<Record<string, any>>('edusmart_timetable_view_prefs_v1', {});
+    ClientDataStore.setPreference('edusmart_timetable_view_prefs_v1', { ...cur, classGridLayout: layout });
+  };
+
+  useEffect(() => {
+    const onPrefSync = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'user_preferences') {
+        const saved = ClientDataStore.getPreference<{ teacherViewMode?: 'daily' | 'weekly'; classGridLayout?: 'classic_sheet' | 'period_cards' } | null>('edusmart_timetable_view_prefs_v1', null);
+        if (saved && typeof saved === 'object') {
+          if (saved.teacherViewMode === 'daily' || saved.teacherViewMode === 'weekly') {
+            setTeacherViewModeState(saved.teacherViewMode);
+          }
+          if (saved.classGridLayout === 'classic_sheet' || saved.classGridLayout === 'period_cards') {
+            setClassGridLayoutState(saved.classGridLayout);
+          }
+        }
+      }
+    };
+    window.addEventListener('edusmart:data-changed', onPrefSync);
+    return () => window.removeEventListener('edusmart:data-changed', onPrefSync);
+  }, []);
   const [selectedTeacherDay, setSelectedTeacherDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>(() => {
     const todayIndex = new Date().getDay();
     if (todayIndex >= 1 && todayIndex <= 5) {

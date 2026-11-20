@@ -150,6 +150,19 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
     void loadFromDb(schoolId);
   }, [schoolId]);
 
+  useEffect(() => {
+    const onSettingsSync = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (!key || key === 'school_settings' || key === '*') {
+        if (!saving) {
+          void loadFromDb(schoolId);
+        }
+      }
+    };
+    window.addEventListener('school-settings-updated', onSettingsSync);
+    return () => window.removeEventListener('school-settings-updated', onSettingsSync);
+  }, [schoolId, saving]);
+
   const handleSettingsLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -212,6 +225,10 @@ export const SchoolSettingsPanel: React.FC<SchoolSettingsPanelProps> = ({
         shortName: nextSettings.profile_and_branding.shortName,
         code: nextSettings.profile_and_branding.code,
         motto: nextSettings.profile_and_branding.motto,
+        location: nextSettings.profile_and_branding.location,
+        city: nextSettings.profile_and_branding.location,
+        primaryColor: nextSettings.profile_and_branding.primaryColor,
+        primaryColorHex: nextSettings.profile_and_branding.primaryColor,
         ...(preservedLogoUrl ? { logoUrl: preservedLogoUrl } : {}),
         ...(preservedCustomLogo ? { customLogoBase64: preservedCustomLogo } : {}),
         curriculum: nextSettings.academic_calendar.curriculum,

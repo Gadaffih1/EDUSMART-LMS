@@ -243,7 +243,7 @@ export const PlatformCustomizationProvider: React.FC<{ children: React.ReactNode
   const commitCustomization = useCallback((updater: (prev: PlatformCustomizationState) => PlatformCustomizationState) => {
     setCustomization((prev) => {
       const next = updater(prev);
-      ClientDataStore.setCollection(STORAGE_KEY, next);
+      void ClientDataStore.savePlatformSettings(next);
       return next;
     });
   }, []);

@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Printer, Plus } from 'lucide-react';
 import { TimetableSlot, GradeLevel, StreamName } from '../../types';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { Storage } from '../../utils/storage';
+import { ClientDataStore } from '../../utils/clientDataStore';
+
+const SHEET_PREFS_KEY = 'edusmart_timetable_sheet_prefs_v1';
 
 export interface ClassicLessonSlotDef {
   lessonNumber: number;
@@ -183,8 +186,48 @@ export const ClassicTimetableSheet: React.FC<ClassicTimetableSheetProps> = ({
   printPageSize: initialPrintSize = 'A4',
 }) => {
   const { currentTenant } = useTenant();
-  const [useShortCodes, setUseShortCodes] = useState(true);
-  const [pageSize, setPageSize] = useState<'A4' | 'A3'>(initialPrintSize);
+  const [useShortCodes, setUseShortCodesState] = useState<boolean>(() => {
+    const saved = ClientDataStore.getPreference<{ useShortCodes?: boolean; pageSize?: 'A4' | 'A3' } | null>(SHEET_PREFS_KEY, null);
+    return typeof saved?.useShortCodes === 'boolean' ? saved.useShortCodes : true;
+  });
+  const [pageSize, setPageSizeState] = useState<'A4' | 'A3'>(() => {
+    const saved = ClientDataStore.getPreference<{ useShortCodes?: boolean; pageSize?: 'A4' | 'A3' } | null>(SHEET_PREFS_KEY, null);
+    return saved?.pageSize === 'A3' || saved?.pageSize === 'A4' ? saved.pageSize : initialPrintSize;
+  });
+
+  const setUseShortCodes = (val: boolean | ((prev: boolean) => boolean)) => {
+    setUseShortCodesState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      const cur = ClientDataStore.getPreference<Record<string, any>>(SHEET_PREFS_KEY, {});
+      ClientDataStore.setPreference(SHEET_PREFS_KEY, { ...cur, useShortCodes: next });
+      return next;
+    });
+  };
+
+  const setPageSize = (val: 'A4' | 'A3' | ((prev: 'A4' | 'A3') => 'A4' | 'A3')) => {
+    setPageSizeState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      const cur = ClientDataStore.getPreference<Record<string, any>>(SHEET_PREFS_KEY, {});
+      ClientDataStore.setPreference(SHEET_PREFS_KEY, { ...cur, pageSize: next });
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const onPrefSync = (evt: Event) => {
+      const key = (evt as CustomEvent)?.detail?.key;
+      if (key === '*' || key === 'user_preferences') {
+        const saved = ClientDataStore.getPreference<{ useShortCodes?: boolean; pageSize?: 'A4' | 'A3' } | null>(SHEET_PREFS_KEY, null);
+        if (saved && typeof saved === 'object') {
+          if (typeof saved.useShortCodes === 'boolean') setUseShortCodesState(saved.useShortCodes);
+          if (saved.pageSize === 'A4' || saved.pageSize === 'A3') setPageSizeState(saved.pageSize);
+        }
+      }
+    };
+    window.addEventListener('edusmart:data-changed', onPrefSync);
+    return () => window.removeEventListener('edusmart:data-changed', onPrefSync);
+  }, []);
+
   const [mobileDay, setMobileDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('Monday');
   const [mobileForceMatrix, setMobileForceMatrix] = useState(false);
 

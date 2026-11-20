@@ -1,13 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  Database,
   Edit3,
   Minus,
   Plus,
+  Power,
   RotateCcw,
   Save,
-  Power,
+  Search,
   Undo2,
   X,
 } from 'lucide-react';
@@ -25,9 +27,12 @@ import {
 interface CentralCategoryAllocationsTableProps {
   categories?: TTCategoryItem[];
   categoryAllocations?: TTCategoryAllocationItem[];
+  allCategoryAllocations?: TTCategoryAllocationItem[];
   gradeSchedules: TTGradeSchedule[];
   gradeAllocations: TTGradeAllocationItem[];
+  allGradeAllocations?: TTGradeAllocationItem[];
   subjects: TTSubjectItem[];
+  activeDepartmentFilter?: string;
   onRefresh: () => Promise<void>;
 }
 
@@ -62,8 +67,18 @@ const CURRICULUM_AND_ACTIVITY_SUGGESTIONS: Array<{ name: string; roomType: strin
   { name: 'Performing Arts', roomType: 'art_room', defaultWeekly: 2 },
 ];
 
-interface EditableRow {
-  key: string;
+const MIN_LESSONS = 0;
+const MAX_LESSONS = 20;
+
+type ScopeKey = `cat:${TTCategoryCode}` | `grade:${number}`;
+
+interface BaselineRow {
+  draftKey: string;
+  scopeKey: ScopeKey;
+  scopeType: 'category' | 'grade';
+  categoryCode: TTCategoryCode;
+  grade?: number;
+  subjectKey: string;
   id?: string;
   subjectName: string;
   requiredWeeklyPeriods: number;
@@ -76,17 +91,85 @@ interface EditableRow {
   isActive: boolean;
   isCategoryOverride: boolean;
   categoryDefaultPeriods?: number;
-  dirty?: boolean;
+}
+
+interface PendingDraft {
+  draftKey: string;
+  scopeKey: ScopeKey;
+  scopeType: 'category' | 'grade';
+  categoryCode: TTCategoryCode;
+  grade?: number;
+  subjectKey: string;
+  subjectName: string;
+  requiredWeeklyPeriods: number;
+  singleLessons: number;
+  doubleLessons: number;
+  tripleLessons: number;
+  requiredRoomType: string;
+  maxPerDay: number;
+  minSpacingDays: number;
+  isActive: boolean;
+}
+
+interface EditableRow extends BaselineRow {
+  dirty: boolean;
+  baselineWeeklyPeriods: number;
+  baselineIsActive: boolean;
+}
+
+function makeScopeKey(categoryCode: TTCategoryCode, scope: 'category' | number): ScopeKey {
+  return scope === 'category' ? `cat:${categoryCode}` : `grade:${scope}`;
+}
+
+function makeDraftKey(scopeKey: ScopeKey, subjectName: string): string {
+  return `${scopeKey}::${subjectName.trim().toLowerCase()}`;
+}
+
+function rebalanceLessonBlocks(
+  weeklyRaw: number,
+  currentDoubles: number,
+  currentTriples: number
+): { requiredWeeklyPeriods: number; singleLessons: number; doubleLessons: number; tripleLessons: number } {
+  const nextWeekly = Math.max(MIN_LESSONS, Math.min(MAX_LESSONS, Math.floor(Number.isFinite(weeklyRaw) ? weeklyRaw : 0)));
+  const safeDoubles = Math.min(Math.max(0, currentDoubles), Math.floor(nextWeekly / 2));
+  const remAfterDoubles = nextWeekly - safeDoubles * 2;
+  const safeTriples = Math.min(Math.max(0, currentTriples), Math.floor(remAfterDoubles / 3));
+  const singles = Math.max(0, nextWeekly - safeDoubles * 2 - safeTriples * 3);
+  return {
+    requiredWeeklyPeriods: nextWeekly,
+    singleLessons: singles,
+    doubleLessons: safeDoubles,
+    tripleLessons: safeTriples,
+  };
+}
+
+function isSameAsBaseline(draft: PendingDraft, base: BaselineRow): boolean {
+  return (
+    draft.requiredWeeklyPeriods === base.requiredWeeklyPeriods &&
+    draft.singleLessons === base.singleLessons &&
+    draft.doubleLessons === base.doubleLessons &&
+    draft.tripleLessons === base.tripleLessons &&
+    draft.requiredRoomType === base.requiredRoomType &&
+    draft.maxPerDay === base.maxPerDay &&
+    draft.minSpacingDays === base.minSpacingDays &&
+    draft.isActive === base.isActive
+  );
 }
 
 export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocationsTableProps> = ({
   categories,
   categoryAllocations = [],
+  allCategoryAllocations,
   gradeSchedules,
   gradeAllocations,
+  allGradeAllocations,
   subjects,
+  activeDepartmentFilter = '',
   onRefresh,
 }) => {
+  const fullCategoryAllocations = allCategoryAllocations || categoryAllocations;
+  const fullGradeAllocations = allGradeAllocations || gradeAllocations;
+
   const categoryList = useMemo(() => {
     if (categories && categories.length > 0) {
       return categories.map((c) => {
@@ -99,9 +182,14 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
   }, [categories]);
 
   const [activeCategory, setActiveCategory] = useState<TTCategoryCode>('lower_primary');
-  // 'category' edits the category default; a number edits an individual grade override inside this category
   const [activeScope, setActiveScope] = useState<'category' | number>('category');
-  const [rows, setRows] = useState<EditableRow[]>([]);
+  // Cross-tab & cross-scope tracked edits persisted in client state until saved to DB
+  const [pendingDrafts, setPendingDrafts] = useState<Record<string, PendingDraft>>({});
+  // Transient raw text buffer while typing inside a numeric Lessons Per Week input
+  const [editingNumericInputs, setEditingNumericInputs] = useState<Record<string, string>>({});
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [rowFilter, setRowFilter] = useState<'all' | 'active' | 'modified'>('all');
   const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSubjectName, setNewSubjectName] = useState('');
@@ -116,184 +204,420 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
     [categoryList, activeCategory]
   );
 
-  // Reset scope to category default whenever switching between Grades 1–3, 4–6, 7–9
+  // Reset grade sub-scope to category default when switching category tabs (tracked edits remain preserved!)
   useEffect(() => {
     setActiveScope('category');
     setEditingRowKey(null);
   }, [activeCategory]);
 
-  // Compute available weekly slots per category and per grade from tt_grade_schedules
-  const availableSlotsForGrade = (grade: number): number => {
-    const gs = gradeSchedules.find((g) => g.grade === grade);
-    if (!gs) return grade <= 3 ? 35 : 40;
-    const daysCount = gs.workingDays?.length || 5;
-    const assemblyDeduct = gs.assemblyPeriod > 0 ? 1 : 0;
-    return Math.max(1, daysCount * gs.periodsPerDay - assemblyDeduct);
-  };
+  // Warn before closing/reloading page if there are unsaved tracked changes
+  const totalPendingList = useMemo(() => Object.values(pendingDrafts), [pendingDrafts]);
+  const totalPendingCount = totalPendingList.length;
 
-  // Live summary per category tab (for independent tab headers)
-  const categoryStats = useMemo(() => {
-    const map = new Map<TTCategoryCode, { total: number; available: number; remaining: number; activeCount: number }>();
-    for (const cat of categoryList) {
-      const catRows = categoryAllocations.filter((a) => a.categoryCode === cat.code && a.isActive);
-      const total = catRows.reduce((s, r) => s + Number(r.requiredWeeklyPeriods || 0), 0);
-      const refGrade = cat.grades.find((g) => gradeSchedules.some((gs) => gs.grade === g)) || cat.grades[0];
-      const available = availableSlotsForGrade(refGrade);
-      map.set(cat.code, {
-        total,
-        available,
-        remaining: available - total,
-        activeCount: catRows.length,
-      });
-    }
-    return map;
-  }, [categoryList, categoryAllocations, gradeSchedules]);
-
-  // Hydrate editable table rows whenever category, scope, or DB allocations refresh
   useEffect(() => {
-    const catDefaults = categoryAllocations.filter((a) => a.categoryCode === activeCategory);
-    const catDefaultMap = new Map<string, TTCategoryAllocationItem>();
-    for (const d of catDefaults) {
-      catDefaultMap.set(d.subjectName.trim().toLowerCase(), d);
-    }
+    if (totalPendingCount === 0) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [totalPendingCount]);
 
-    if (activeScope === 'category') {
-      const next: EditableRow[] = catDefaults.map((a) => ({
-        key: `cat::${a.subjectName.toLowerCase()}`,
-        id: a.id,
-        subjectName: a.subjectName,
-        requiredWeeklyPeriods: a.requiredWeeklyPeriods,
-        singleLessons: a.singleLessons,
-        doubleLessons: a.doubleLessons,
-        tripleLessons: a.tripleLessons,
-        requiredRoomType: a.requiredRoomType || 'general',
-        maxPerDay: a.maxPerDay || 1,
-        minSpacingDays: a.minSpacingDays || 0,
-        isActive: a.isActive,
-        isCategoryOverride: false,
-        dirty: false,
-      }));
-      next.sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.subjectName.localeCompare(b.subjectName));
-      setRows(next);
-    } else {
-      const gRows = gradeAllocations.filter((g) => g.grade === activeScope);
-      const merged = new Map<string, EditableRow>();
+  // Compute available weekly periods per grade from tt_grade_schedules
+  const availableSlotsForGrade = useCallback(
+    (grade: number): number => {
+      const gs = gradeSchedules.find((g) => g.grade === grade);
+      if (!gs) return grade <= 3 ? 35 : 40;
+      const daysCount = gs.workingDays?.length || 5;
+      const assemblyDeduct = gs.assemblyPeriod > 0 ? 1 : 0;
+      return Math.max(1, daysCount * gs.periodsPerDay - assemblyDeduct);
+    },
+    [gradeSchedules]
+  );
 
-      // Start from category defaults so admin can see inherited subjects clearly
+  // Build baseline rows for any (categoryCode, scope) using either filtered or full allocations
+  const buildBaselineRowsForScope = useCallback(
+    (
+      catCode: TTCategoryCode,
+      scope: 'category' | number,
+      catSource: TTCategoryAllocationItem[],
+      gradeSource: TTGradeAllocationItem[]
+    ): BaselineRow[] => {
+      const scopeKey = makeScopeKey(catCode, scope);
+      const catDefaults = catSource.filter((a) => a.categoryCode === catCode);
+      const catDefaultMap = new Map<string, TTCategoryAllocationItem>();
+      for (const d of catDefaults) {
+        catDefaultMap.set(d.subjectName.trim().toLowerCase(), d);
+      }
+
+      if (scope === 'category') {
+        return catDefaults
+          .map((a) => {
+            const subjectKey = a.subjectName.trim().toLowerCase();
+            return {
+              draftKey: makeDraftKey(scopeKey, a.subjectName),
+              scopeKey,
+              scopeType: 'category' as const,
+              categoryCode: catCode,
+              subjectKey,
+              id: a.id,
+              subjectName: a.subjectName,
+              requiredWeeklyPeriods: Number(a.requiredWeeklyPeriods || 0),
+              singleLessons: Number(a.singleLessons || 0),
+              doubleLessons: Number(a.doubleLessons || 0),
+              tripleLessons: Number(a.tripleLessons || 0),
+              requiredRoomType: a.requiredRoomType || 'general',
+              maxPerDay: a.maxPerDay || 1,
+              minSpacingDays: a.minSpacingDays || 0,
+              isActive: Boolean(a.isActive),
+              isCategoryOverride: false,
+            };
+          })
+          .sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.subjectName.localeCompare(b.subjectName));
+      }
+
+      const gRows = gradeSource.filter((g) => g.grade === scope);
+      const merged = new Map<string, BaselineRow>();
+
       for (const cd of catDefaults) {
-        const k = cd.subjectName.trim().toLowerCase();
-        merged.set(k, {
-          key: `grade::${activeScope}::${k}`,
+        const subjectKey = cd.subjectName.trim().toLowerCase();
+        merged.set(subjectKey, {
+          draftKey: makeDraftKey(scopeKey, cd.subjectName),
+          scopeKey,
+          scopeType: 'grade',
+          categoryCode: catCode,
+          grade: scope,
+          subjectKey,
           subjectName: cd.subjectName,
-          requiredWeeklyPeriods: cd.requiredWeeklyPeriods,
-          singleLessons: cd.singleLessons,
-          doubleLessons: cd.doubleLessons,
-          tripleLessons: cd.tripleLessons,
+          requiredWeeklyPeriods: Number(cd.requiredWeeklyPeriods || 0),
+          singleLessons: Number(cd.singleLessons || 0),
+          doubleLessons: Number(cd.doubleLessons || 0),
+          tripleLessons: Number(cd.tripleLessons || 0),
           requiredRoomType: cd.requiredRoomType || 'general',
           maxPerDay: cd.maxPerDay || 1,
           minSpacingDays: cd.minSpacingDays || 0,
-          isActive: cd.isActive,
+          isActive: Boolean(cd.isActive),
           isCategoryOverride: false,
-          categoryDefaultPeriods: cd.requiredWeeklyPeriods,
-          dirty: false,
+          categoryDefaultPeriods: Number(cd.requiredWeeklyPeriods || 0),
         });
       }
 
-      // Layer actual grade rows on top
       for (const gr of gRows) {
-        const k = gr.subjectName.trim().toLowerCase();
-        const cd = catDefaultMap.get(k);
+        const subjectKey = gr.subjectName.trim().toLowerCase();
+        const cd = catDefaultMap.get(subjectKey);
         const differsFromCat =
           Boolean(gr.isCategoryOverride) ||
           !cd ||
           gr.requiredWeeklyPeriods !== cd.requiredWeeklyPeriods ||
           gr.isActive !== cd.isActive;
-        merged.set(k, {
-          key: `grade::${activeScope}::${k}`,
+        merged.set(subjectKey, {
+          draftKey: makeDraftKey(scopeKey, gr.subjectName),
+          scopeKey,
+          scopeType: 'grade',
+          categoryCode: catCode,
+          grade: scope,
+          subjectKey,
           id: gr.id,
           subjectName: gr.subjectName,
-          requiredWeeklyPeriods: gr.requiredWeeklyPeriods,
-          singleLessons: gr.singleLessons,
-          doubleLessons: gr.doubleLessons,
-          tripleLessons: gr.tripleLessons,
+          requiredWeeklyPeriods: Number(gr.requiredWeeklyPeriods || 0),
+          singleLessons: Number(gr.singleLessons || 0),
+          doubleLessons: Number(gr.doubleLessons || 0),
+          tripleLessons: Number(gr.tripleLessons || 0),
           requiredRoomType: gr.requiredRoomType || 'general',
           maxPerDay: gr.maxPerDay || 1,
           minSpacingDays: gr.minSpacingDays || 0,
-          isActive: gr.isActive,
+          isActive: Boolean(gr.isActive),
           isCategoryOverride: differsFromCat,
-          categoryDefaultPeriods: cd?.requiredWeeklyPeriods,
-          dirty: false,
+          categoryDefaultPeriods: cd !== undefined ? Number(cd.requiredWeeklyPeriods || 0) : undefined,
         });
       }
 
-      const list = Array.from(merged.values()).sort(
+      return Array.from(merged.values()).sort(
         (a, b) => Number(b.isActive) - Number(a.isActive) || a.subjectName.localeCompare(b.subjectName)
       );
-      setRows(list);
+    },
+    []
+  );
+
+  // Merge baseline rows with tracked pendingDrafts for the active view
+  const activeScopeKey = makeScopeKey(activeCategory, activeScope);
+
+  const baselineRows = useMemo(
+    () => buildBaselineRowsForScope(activeCategory, activeScope, categoryAllocations, gradeAllocations),
+    [buildBaselineRowsForScope, activeCategory, activeScope, categoryAllocations, gradeAllocations]
+  );
+
+  const baselineByDraftKey = useMemo(() => {
+    const map = new Map<string, BaselineRow>();
+    for (const r of baselineRows) map.set(r.draftKey, r);
+    return map;
+  }, [baselineRows]);
+
+  const rows: EditableRow[] = useMemo(() => {
+    return baselineRows.map((base) => {
+      const draft = pendingDrafts[base.draftKey];
+      if (!draft) {
+        return {
+          ...base,
+          dirty: false,
+          baselineWeeklyPeriods: base.requiredWeeklyPeriods,
+          baselineIsActive: base.isActive,
+        };
+      }
+      return {
+        ...base,
+        requiredWeeklyPeriods: draft.requiredWeeklyPeriods,
+        singleLessons: draft.singleLessons,
+        doubleLessons: draft.doubleLessons,
+        tripleLessons: draft.tripleLessons,
+        requiredRoomType: draft.requiredRoomType,
+        maxPerDay: draft.maxPerDay,
+        minSpacingDays: draft.minSpacingDays,
+        isActive: draft.isActive,
+        isCategoryOverride:
+          base.scopeType === 'grade'
+            ? base.isCategoryOverride ||
+              (base.categoryDefaultPeriods !== undefined &&
+                draft.requiredWeeklyPeriods !== base.categoryDefaultPeriods)
+            : false,
+        dirty: true,
+        baselineWeeklyPeriods: base.requiredWeeklyPeriods,
+        baselineIsActive: base.isActive,
+      };
+    });
+  }, [baselineRows, pendingDrafts]);
+
+  // Full (unfiltered) scope rows so remaining available periods are always true to the entire school week
+  const fullScopeRowsForCapacity = useMemo(() => {
+    const fullBase = buildBaselineRowsForScope(
+      activeCategory,
+      activeScope,
+      fullCategoryAllocations,
+      fullGradeAllocations
+    );
+    return fullBase.map((base) => {
+      const draft = pendingDrafts[base.draftKey];
+      return draft
+        ? {
+            ...base,
+            requiredWeeklyPeriods: draft.requiredWeeklyPeriods,
+            isActive: draft.isActive,
+          }
+        : base;
+    });
+  }, [
+    buildBaselineRowsForScope,
+    activeCategory,
+    activeScope,
+    fullCategoryAllocations,
+    fullGradeAllocations,
+    pendingDrafts,
+  ]);
+
+  // Live summary per category tab (reflects tracked pending edits immediately!)
+  const categoryStats = useMemo(() => {
+    const map = new Map<
+      TTCategoryCode,
+      { total: number; available: number; remaining: number; activeCount: number; pendingCount: number }
+    >();
+    for (const cat of categoryList) {
+      const catBase = buildBaselineRowsForScope(cat.code, 'category', fullCategoryAllocations, fullGradeAllocations);
+      let total = 0;
+      let activeCount = 0;
+      for (const r of catBase) {
+        const draft = pendingDrafts[r.draftKey];
+        const isActive = draft ? draft.isActive : r.isActive;
+        const periods = draft ? draft.requiredWeeklyPeriods : r.requiredWeeklyPeriods;
+        if (isActive) {
+          total += periods;
+          activeCount += 1;
+        }
+      }
+      const refGrade = cat.grades.find((g) => gradeSchedules.some((gs) => gs.grade === g)) || cat.grades[0];
+      const available = availableSlotsForGrade(refGrade);
+      const pendingCount = totalPendingList.filter((d) => d.categoryCode === cat.code).length;
+      map.set(cat.code, {
+        total,
+        available,
+        remaining: available - total,
+        activeCount,
+        pendingCount,
+      });
     }
-  }, [activeCategory, activeScope, categoryAllocations, gradeAllocations]);
+    return map;
+  }, [
+    categoryList,
+    buildBaselineRowsForScope,
+    fullCategoryAllocations,
+    fullGradeAllocations,
+    pendingDrafts,
+    gradeSchedules,
+    availableSlotsForGrade,
+    totalPendingList,
+  ]);
 
   const currentAvailableSlots = useMemo(() => {
     if (typeof activeScope === 'number') return availableSlotsForGrade(activeScope);
-    const refGrade = currentCategoryObj.grades.find((g) => gradeSchedules.some((gs) => gs.grade === g)) || currentCategoryObj.grades[0];
+    const refGrade =
+      currentCategoryObj.grades.find((g) => gradeSchedules.some((gs) => gs.grade === g)) ||
+      currentCategoryObj.grades[0];
     return availableSlotsForGrade(refGrade);
-  }, [activeScope, currentCategoryObj, gradeSchedules]);
+  }, [activeScope, currentCategoryObj, gradeSchedules, availableSlotsForGrade]);
 
-  const activeTotalLessons = useMemo(
+  const displayedTotalLessons = useMemo(
     () => rows.filter((r) => r.isActive).reduce((sum, r) => sum + Number(r.requiredWeeklyPeriods || 0), 0),
     [rows]
   );
+
+  const activeTotalLessons = useMemo(
+    () =>
+      fullScopeRowsForCapacity
+        .filter((r) => r.isActive)
+        .reduce((sum, r) => sum + Number(r.requiredWeeklyPeriods || 0), 0),
+    [fullScopeRowsForCapacity]
+  );
+
   const remainingSlots = currentAvailableSlots - activeTotalLessons;
+  const utilizationPct =
+    currentAvailableSlots > 0 ? Math.min(100, Math.round((activeTotalLessons / currentAvailableSlots) * 100)) : 0;
+
   const activeCount = rows.filter((r) => r.isActive).length;
   const disabledCount = rows.length - activeCount;
-  const dirtyRows = rows.filter((r) => r.dirty);
+  const currentScopeDirtyRows = useMemo(() => rows.filter((r) => r.dirty), [rows]);
+
+  // Visible rows after search & status filter
+  const visibleRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (rowFilter === 'active' && !r.isActive) return false;
+      if (rowFilter === 'modified' && !r.dirty) return false;
+      if (!q) return true;
+      const facility = (ROOM_TYPE_LABELS[r.requiredRoomType] || '').toLowerCase();
+      return r.subjectName.toLowerCase().includes(q) || facility.includes(q);
+    });
+  }, [rows, searchQuery, rowFilter]);
 
   const allocationWarnings = useMemo(() => {
     const warns: string[] = [];
     if (remainingSlots < 0) {
       warns.push(
-        `Over-allocated by ${Math.abs(remainingSlots)} lesson(s): total weekly lessons (${activeTotalLessons}) exceed available weekly slots (${currentAvailableSlots}). Reduce allocations or increase daily periods before generating.`
+        `Over-allocated by ${Math.abs(remainingSlots)} period(s): total weekly lessons (${activeTotalLessons}) exceed available weekly periods (${currentAvailableSlots}). Reduce lessons or increase daily periods before generating.`
       );
     } else if (remainingSlots > 5) {
       warns.push(
-        `${remainingSlots} available weekly lesson slots are currently unallocated (${activeTotalLessons} / ${currentAvailableSlots} used).`
+        `${remainingSlots} available weekly periods are currently unallocated (${activeTotalLessons} of ${currentAvailableSlots} periods assigned).`
       );
     }
     const zeroActive = rows.filter((r) => r.isActive && r.requiredWeeklyPeriods <= 0);
     if (zeroActive.length > 0) {
       warns.push(
-        `${zeroActive.map((z) => z.subjectName).join(', ')} has 0 weekly lessons. Set at least 1 lesson or disable it.`
+        `${zeroActive.map((z) => z.subjectName).join(', ')} set to 0 weekly lessons. Increase to at least 1 lesson or disable it.`
       );
     }
     return warns;
   }, [remainingSlots, activeTotalLessons, currentAvailableSlots, rows]);
 
-  const adjustRowLessons = (rowKey: string, nextWeeklyRaw: number) => {
-    const nextWeekly = Math.max(0, Math.min(20, Math.floor(nextWeeklyRaw)));
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.key !== rowKey) return r;
-        const safeDoubles = Math.min(r.doubleLessons, Math.floor(nextWeekly / 2));
-        const remAfterDoubles = nextWeekly - safeDoubles * 2;
-        const safeTriples = Math.min(r.tripleLessons, Math.floor(remAfterDoubles / 3));
-        const singles = Math.max(0, nextWeekly - safeDoubles * 2 - safeTriples * 3);
-        return {
-          ...r,
-          requiredWeeklyPeriods: nextWeekly,
-          singleLessons: singles,
-          doubleLessons: safeDoubles,
-          tripleLessons: safeTriples,
-          dirty: true,
+  // Core tracked change updater: compares against saved DB baseline and cleans up if reverted
+  const applyDraftMutation = useCallback(
+    (draftKey: string, mutate: (current: PendingDraft, base: BaselineRow) => PendingDraft) => {
+      const base = baselineByDraftKey.get(draftKey);
+      if (!base) return;
+      setPendingDrafts((prev) => {
+        const existing: PendingDraft = prev[draftKey] || {
+          draftKey: base.draftKey,
+          scopeKey: base.scopeKey,
+          scopeType: base.scopeType,
+          categoryCode: base.categoryCode,
+          grade: base.grade,
+          subjectKey: base.subjectKey,
+          subjectName: base.subjectName,
+          requiredWeeklyPeriods: base.requiredWeeklyPeriods,
+          singleLessons: base.singleLessons,
+          doubleLessons: base.doubleLessons,
+          tripleLessons: base.tripleLessons,
+          requiredRoomType: base.requiredRoomType,
+          maxPerDay: base.maxPerDay,
+          minSpacingDays: base.minSpacingDays,
+          isActive: base.isActive,
         };
-      })
-    );
-  };
+        const updated = mutate(existing, base);
+        if (isSameAsBaseline(updated, base)) {
+          if (!(draftKey in prev)) return prev;
+          const next = { ...prev };
+          delete next[draftKey];
+          return next;
+        }
+        return { ...prev, [draftKey]: updated };
+      });
+    },
+    [baselineByDraftKey]
+  );
 
-  const updateRowField = (rowKey: string, patch: Partial<EditableRow>) => {
-    setRows((prev) => prev.map((r) => (r.key === rowKey ? { ...r, ...patch, dirty: true } : r)));
-  };
+  const adjustRowLessons = useCallback(
+    (draftKey: string, nextWeeklyRaw: number) => {
+      applyDraftMutation(draftKey, (cur) => {
+        const balanced = rebalanceLessonBlocks(nextWeeklyRaw, cur.doubleLessons, cur.tripleLessons);
+        return {
+          ...cur,
+          ...balanced,
+        };
+      });
+      setEditingNumericInputs((prev) => {
+        if (!(draftKey in prev)) return prev;
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+    },
+    [applyDraftMutation]
+  );
 
-  const persistRows = async (targetRows: EditableRow[], label: string, extraFlag?: { resetToCategoryDefault?: boolean }) => {
+  const updateRowField = useCallback(
+    (draftKey: string, patch: Partial<PendingDraft>) => {
+      applyDraftMutation(draftKey, (cur) => ({ ...cur, ...patch }));
+    },
+    [applyDraftMutation]
+  );
+
+  const revertSingleRow = useCallback((draftKey: string) => {
+    setPendingDrafts((prev) => {
+      if (!(draftKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[draftKey];
+      return next;
+    });
+    setEditingNumericInputs((prev) => {
+      if (!(draftKey in prev)) return prev;
+      const next = { ...prev };
+      delete next[draftKey];
+      return next;
+    });
+  }, []);
+
+  const discardScopeDrafts = useCallback((scopeKey: ScopeKey) => {
+    setPendingDrafts((prev) => {
+      const next: Record<string, PendingDraft> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        if (v.scopeKey !== scopeKey) next[k] = v;
+      }
+      return next;
+    });
+    setEditingNumericInputs({});
+  }, []);
+
+  const discardAllDrafts = useCallback(() => {
+    setPendingDrafts({});
+    setEditingNumericInputs({});
+    setBanner(null);
+  }, []);
+
+  // Persist a specific set of rows in the active scope to PUT /api/timetable/allocations
+  const persistActiveScopeRows = async (
+    targetRows: EditableRow[],
+    label: string,
+    extraFlag?: { resetToCategoryDefault?: boolean }
+  ) => {
     if (targetRows.length === 0) return;
     setBusyKey(label);
     setBanner(null);
@@ -337,16 +661,26 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
         method: 'PUT',
         body: JSON.stringify(payload),
       });
+
+      // Clear only the saved rows from pendingDrafts so edits in other tabs/rows remain safe
+      const savedKeys = new Set(targetRows.map((r) => r.draftKey));
+      setPendingDrafts((prev) => {
+        const next: Record<string, PendingDraft> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          if (!savedKeys.has(k)) next[k] = v;
+        }
+        return next;
+      });
       await onRefresh();
       setEditingRowKey(null);
       setBanner({
         type: 'ok',
         text:
           activeScope === 'category'
-            ? `Saved ${label} for ${currentCategoryObj.label} (${currentCategoryObj.name}) and synced non-overridden grades in this category only.`
+            ? `Saved ${label} for ${currentCategoryObj.label} (${currentCategoryObj.name}) to database and synced non-overridden grades in this category.`
             : extraFlag?.resetToCategoryDefault
             ? `Restored ${label} on Grade ${activeScope} to ${currentCategoryObj.label} category default.`
-            : `Saved Grade ${activeScope} override for ${label} (other grades in ${currentCategoryObj.label} remain unchanged).`,
+            : `Saved Grade ${activeScope} override for ${label} to database (other grades in ${currentCategoryObj.label} unchanged).`,
       });
     } catch (err: any) {
       setBanner({ type: 'err', text: err?.message || 'Failed to save subject allocations.' });
@@ -355,21 +689,133 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
     }
   };
 
+  // Persist ALL tracked changes across ALL category tabs and grade scopes in one action
+  const persistAllTrackedDrafts = async () => {
+    if (totalPendingList.length === 0) return;
+    setBusyKey('save-all-tracked');
+    setBanner(null);
+
+    // Group drafts by scopeKey
+    const grouped = new Map<ScopeKey, PendingDraft[]>();
+    for (const draft of totalPendingList) {
+      const list = grouped.get(draft.scopeKey) || [];
+      list.push(draft);
+      grouped.set(draft.scopeKey, list);
+    }
+
+    const savedKeys = new Set<string>();
+    const savedScopeLabels: string[] = [];
+
+    try {
+      // Persist category-level changes first, then grade-level overrides so propagation order is deterministic
+      const orderedEntries = Array.from(grouped.entries()).sort((a, b) => {
+        const aIsCat = a[0].startsWith('cat:') ? 0 : 1;
+        const bIsCat = b[0].startsWith('cat:') ? 0 : 1;
+        return aIsCat - bIsCat || a[0].localeCompare(b[0]);
+      });
+
+      for (const [, drafts] of orderedEntries) {
+        const first = drafts[0];
+        const payload =
+          first.scopeType === 'category'
+            ? {
+                scope: 'category',
+                categoryCode: first.categoryCode,
+                propagateToGrades: true,
+                allocations: drafts.map((d) => ({
+                  subjectName: d.subjectName,
+                  requiredWeeklyPeriods: d.requiredWeeklyPeriods,
+                  singleLessons: d.singleLessons,
+                  doubleLessons: d.doubleLessons,
+                  tripleLessons: d.tripleLessons,
+                  requiredRoomType: d.requiredRoomType,
+                  maxPerDay: d.maxPerDay,
+                  minSpacingDays: d.minSpacingDays,
+                  isActive: d.isActive,
+                })),
+              }
+            : {
+                scope: 'grade',
+                grade: first.grade,
+                allocations: drafts.map((d) => ({
+                  subjectName: d.subjectName,
+                  requiredWeeklyPeriods: d.requiredWeeklyPeriods,
+                  singleLessons: d.singleLessons,
+                  doubleLessons: d.doubleLessons,
+                  tripleLessons: d.tripleLessons,
+                  requiredRoomType: d.requiredRoomType,
+                  maxPerDay: d.maxPerDay,
+                  minSpacingDays: d.minSpacingDays,
+                  isActive: d.isActive,
+                })),
+              };
+
+        await ttApiFetch('/api/timetable/allocations', {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+
+        for (const d of drafts) savedKeys.add(d.draftKey);
+        if (first.scopeType === 'category') {
+          const catObj = categoryList.find((c) => c.code === first.categoryCode);
+          savedScopeLabels.push(`${catObj?.label || first.categoryCode} (${drafts.length})`);
+        } else {
+          savedScopeLabels.push(`Grade ${first.grade} (${drafts.length})`);
+        }
+      }
+
+      setPendingDrafts((prev) => {
+        const next: Record<string, PendingDraft> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          if (!savedKeys.has(k)) next[k] = v;
+        }
+        return next;
+      });
+      await onRefresh();
+      setEditingRowKey(null);
+      setBanner({
+        type: 'ok',
+        text: `Persisted ${savedKeys.size} tracked allocation change(s) to database: ${savedScopeLabels.join(', ')}.`,
+      });
+    } catch (err: any) {
+      // Remove any scopes that succeeded before the error so user only retries the remaining failed ones
+      if (savedKeys.size > 0) {
+        setPendingDrafts((prev) => {
+          const next: Record<string, PendingDraft> = {};
+          for (const [k, v] of Object.entries(prev)) {
+            if (!savedKeys.has(k)) next[k] = v;
+          }
+          return next;
+        });
+        await onRefresh();
+      }
+      setBanner({ type: 'err', text: err?.message || 'Failed to save one or more allocation changes.' });
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
   const handleToggleDisableRow = async (row: EditableRow) => {
     const updated: EditableRow = { ...row, isActive: !row.isActive };
-    await persistRows([updated], `${row.subjectName} (${updated.isActive ? 'Restored' : 'Disabled'})`);
+    await persistActiveScopeRows([updated], `${row.subjectName} (${updated.isActive ? 'Restored' : 'Disabled'})`);
   };
 
   const handleAddSubjectOrActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = newSubjectName.trim();
     if (!clean) return;
-    const weekly = Math.max(1, Math.min(20, Math.floor(newWeeklyPeriods)));
+    const weekly = Math.max(1, Math.min(MAX_LESSONS, Math.floor(newWeeklyPeriods)));
     const doubles = Math.min(Math.max(0, Math.floor(newDoubleLessons)), Math.floor(weekly / 2));
     const singles = weekly - doubles * 2;
+    const scopeKey = makeScopeKey(activeCategory, activeScope);
 
     const newRow: EditableRow = {
-      key: `new::${clean.toLowerCase()}`,
+      draftKey: makeDraftKey(scopeKey, clean),
+      scopeKey,
+      scopeType: activeScope === 'category' ? 'category' : 'grade',
+      categoryCode: activeCategory,
+      grade: typeof activeScope === 'number' ? activeScope : undefined,
+      subjectKey: clean.toLowerCase(),
       subjectName: clean,
       requiredWeeklyPeriods: weekly,
       singleLessons: singles,
@@ -380,9 +826,12 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
       minSpacingDays: weekly <= 2 ? 1 : 0,
       isActive: true,
       isCategoryOverride: typeof activeScope === 'number',
+      dirty: false,
+      baselineWeeklyPeriods: weekly,
+      baselineIsActive: true,
     };
 
-    await persistRows([newRow], clean);
+    await persistActiveScopeRows([newRow], clean);
     setNewSubjectName('');
     setNewWeeklyPeriods(2);
     setNewDoubleLessons(0);
@@ -407,25 +856,64 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
   const gradeOverrideCounts = useMemo(() => {
     const map = new Map<number, number>();
     for (const g of currentCategoryObj.grades) {
-      const count = gradeAllocations.filter((ga) => ga.grade === g && ga.isCategoryOverride).length;
+      const count = fullGradeAllocations.filter((ga) => ga.grade === g && ga.isCategoryOverride).length;
       map.set(g, count);
     }
     return map;
-  }, [currentCategoryObj, gradeAllocations]);
+  }, [currentCategoryObj, fullGradeAllocations]);
+
+  const gradePendingCounts = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const g of currentCategoryObj.grades) {
+      const scopeKey = makeScopeKey(activeCategory, g);
+      map.set(
+        g,
+        totalPendingList.filter((d) => d.scopeKey === scopeKey).length
+      );
+    }
+    return map;
+  }, [currentCategoryObj, activeCategory, totalPendingList]);
+
+  const categoryDefaultPendingCount = useMemo(() => {
+    const key = makeScopeKey(activeCategory, 'category');
+    return totalPendingList.filter((d) => d.scopeKey === key).length;
+  }, [activeCategory, totalPendingList]);
+
+  // Group pending summary by category for the persistent change-tracker bar
+  const pendingSummaryByCategory = useMemo(() => {
+    const items: Array<{ code: TTCategoryCode; label: string; count: number }> = [];
+    for (const cat of categoryList) {
+      const count = totalPendingList.filter((d) => d.categoryCode === cat.code).length;
+      if (count > 0) items.push({ code: cat.code, label: cat.label, count });
+    }
+    return items;
+  }, [categoryList, totalPendingList]);
+
+  const activeScopeTitle =
+    activeScope === 'category'
+      ? `${currentCategoryObj.label} (${currentCategoryObj.name})`
+      : `Grade ${activeScope} (${currentCategoryObj.label} Override)`;
 
   return (
     <div className="space-y-4">
       {/* Three Independent Central Subject Allocation Category Tabs */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="grid grid-cols-1 sm:grid-cols-3 border-b border-slate-200 divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
+        <div
+          role="tablist"
+          aria-label="Subject allocation categories"
+          className="grid grid-cols-1 sm:grid-cols-3 border-b border-slate-200 divide-y sm:divide-y-0 sm:divide-x divide-slate-200"
+        >
           {categoryList.map((cat) => {
             const isSelected = activeCategory === cat.code;
             const st = categoryStats.get(cat.code);
             const over = st ? st.remaining < 0 : false;
+            const exact = st ? st.remaining === 0 : false;
             return (
               <button
                 key={cat.code}
                 type="button"
+                role="tab"
+                aria-selected={isSelected}
                 onClick={() => setActiveCategory(cat.code)}
                 className={`px-5 py-4 text-left transition-colors cursor-pointer ${
                   isSelected
@@ -440,46 +928,82 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                       isSelected
                         ? over
                           ? 'text-rose-300'
-                          : 'text-emerald-300'
+                          : exact
+                          ? 'text-emerald-300'
+                          : 'text-slate-200'
                         : over
                         ? 'text-rose-700'
-                        : 'text-slate-600'
+                        : exact
+                        ? 'text-emerald-700'
+                        : 'text-slate-700'
                     }`}
                   >
-                    {st ? `${st.total}/${st.available} lessons` : '—'}
+                    {st ? `${st.total} / ${st.available} periods` : '—'}
                   </span>
                 </div>
-                <div className={`text-xs mt-0.5 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                  {cat.name} · Independent Allocation
+                <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+                  <span className={isSelected ? 'text-slate-300' : 'text-slate-500'}>
+                    {cat.name}
+                    {st && (
+                      <span className="font-mono tabular-nums">
+                        {' '}
+                        ·{' '}
+                        {st.remaining > 0
+                          ? `${st.remaining} left`
+                          : st.remaining === 0
+                          ? 'Full'
+                          : `${Math.abs(st.remaining)} over`}
+                      </span>
+                    )}
+                  </span>
+                  {st && st.pendingCount > 0 && (
+                    <span
+                      className={`font-mono tabular-nums font-semibold ${
+                        isSelected ? 'text-amber-300' : 'text-amber-700'
+                      }`}
+                    >
+                      {st.pendingCount} unsaved
+                    </span>
+                  )}
                 </div>
               </button>
             );
           })}
         </div>
 
-        {/* Grade-Specific Adjustment Scope Bar */}
+        {/* Grade-Specific Adjustment Scope Bar & Primary Actions */}
         <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-semibold text-slate-600 mr-1">Allocation Scope:</span>
             <button
               type="button"
               onClick={() => setActiveScope('category')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 activeScope === 'category'
                   ? 'bg-slate-900 text-white'
                   : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
               }`}
             >
               Category Default ({currentCategoryObj.label})
+              {categoryDefaultPendingCount > 0 && (
+                <span
+                  className={`ml-1.5 font-mono tabular-nums text-[11px] ${
+                    activeScope === 'category' ? 'text-amber-300' : 'text-amber-700'
+                  }`}
+                >
+                  · {categoryDefaultPendingCount} unsaved
+                </span>
+              )}
             </button>
             {currentCategoryObj.grades.map((g) => {
               const ovCount = gradeOverrideCounts.get(g) || 0;
+              const pendCount = gradePendingCounts.get(g) || 0;
               return (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setActiveScope(g)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                     activeScope === g
                       ? 'bg-slate-900 text-white'
                       : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -487,8 +1011,21 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                 >
                   Grade {g}
                   {ovCount > 0 && (
-                    <span className={`ml-1.5 font-mono tabular-nums text-[11px] ${activeScope === g ? 'text-amber-300' : 'text-amber-700'}`}>
+                    <span
+                      className={`ml-1.5 font-mono tabular-nums text-[11px] ${
+                        activeScope === g ? 'text-slate-300' : 'text-slate-500'
+                      }`}
+                    >
                       · {ovCount} override{ovCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {pendCount > 0 && (
+                    <span
+                      className={`ml-1.5 font-mono tabular-nums text-[11px] ${
+                        activeScope === g ? 'text-amber-300' : 'text-amber-700'
+                      }`}
+                    >
+                      · {pendCount} unsaved
                     </span>
                   )}
                 </button>
@@ -500,7 +1037,7 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
             <button
               type="button"
               onClick={() => setShowAddForm((v) => !v)}
-              className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Subject / Activity</span>
@@ -508,46 +1045,68 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
 
             <button
               type="button"
-              disabled={dirtyRows.length === 0 || busyKey !== null}
-              onClick={() => persistRows(dirtyRows, `${dirtyRows.length} subject change(s)`)}
-              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-45 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+              disabled={totalPendingCount === 0 || busyKey !== null}
+              onClick={() =>
+                totalPendingCount > currentScopeDirtyRows.length
+                  ? persistAllTrackedDrafts()
+                  : persistActiveScopeRows(
+                      currentScopeDirtyRows,
+                      `${currentScopeDirtyRows.length} subject change(s)`
+                    )
+              }
+              className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-45 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
               <Save className="w-3.5 h-3.5" />
               <span>
-                {busyKey && busyKey.includes('change')
-                  ? 'Saving...'
-                  : dirtyRows.length > 0
-                  ? `Save Changes (${dirtyRows.length})`
-                  : 'Saved'}
+                {busyKey === 'save-all-tracked' || (busyKey && busyKey.includes('change'))
+                  ? 'Saving to Database...'
+                  : totalPendingCount > 0
+                  ? `Save Changes (${totalPendingCount})`
+                  : 'All Saved'}
               </span>
             </button>
           </div>
         </div>
 
-        {/* Summary KPI Metrics Strip */}
+        {/* Live Calculation KPI Strip & Capacity Utilization Bar */}
         <div className="grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 divide-x divide-slate-200 border-b border-slate-200 bg-white">
-          <div className="px-5 py-3">
+          <div className="px-5 py-3.5">
             <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
               Total Weekly Lessons
             </div>
-            <div className="mt-0.5 text-lg font-bold font-mono tabular-nums text-slate-900">
-              {activeTotalLessons}
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-xl font-bold font-mono tabular-nums text-slate-900">
+                {activeTotalLessons}
+              </span>
+              <span className="text-xs text-slate-500 font-mono tabular-nums">
+                / {currentAvailableSlots} periods
+              </span>
             </div>
+            {activeDepartmentFilter && displayedTotalLessons !== activeTotalLessons && (
+              <div className="mt-0.5 text-[11px] text-slate-500 font-mono tabular-nums">
+                {activeDepartmentFilter}: {displayedTotalLessons} lessons
+              </div>
+            )}
           </div>
-          <div className="px-5 py-3">
+
+          <div className="px-5 py-3.5">
             <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-              Available Weekly Slots
+              Available Weekly Periods
             </div>
-            <div className="mt-0.5 text-lg font-bold font-mono tabular-nums text-slate-900">
+            <div className="mt-1 text-xl font-bold font-mono tabular-nums text-slate-900">
               {currentAvailableSlots}
             </div>
+            <div className="mt-0.5 text-[11px] text-slate-500">
+              Net teaching slots (excl. assembly)
+            </div>
           </div>
-          <div className="px-5 py-3">
+
+          <div className="px-5 py-3.5">
             <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-              Remaining Slots
+              Remaining Available Periods
             </div>
             <div
-              className={`mt-0.5 text-lg font-bold font-mono tabular-nums ${
+              className={`mt-1 flex items-baseline gap-2 text-xl font-bold font-mono tabular-nums ${
                 remainingSlots < 0
                   ? 'text-rose-700'
                   : remainingSlots === 0
@@ -555,18 +1114,103 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                   : 'text-slate-900'
               }`}
             >
-              {remainingSlots >= 0 ? remainingSlots : `${remainingSlots} (Over)`}
+              <span>{remainingSlots > 0 ? remainingSlots : remainingSlots === 0 ? '0' : remainingSlots}</span>
+              <span className="text-xs font-sans font-semibold">
+                {remainingSlots < 0
+                  ? 'Over capacity'
+                  : remainingSlots === 0
+                  ? 'Exact fit'
+                  : 'Available'}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  remainingSlots < 0
+                    ? 'bg-rose-600'
+                    : remainingSlots === 0
+                    ? 'bg-emerald-600'
+                    : 'bg-slate-800'
+                }`}
+                style={{ width: `${utilizationPct}%` }}
+              />
             </div>
           </div>
-          <div className="px-5 py-3">
+
+          <div className="px-5 py-3.5">
             <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-              Active / Disabled
+              Persistence Status
             </div>
-            <div className="mt-0.5 text-lg font-bold font-mono tabular-nums text-slate-900">
-              {activeCount} <span className="text-xs font-normal text-slate-500">/ {disabledCount} disabled</span>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span
+                className={`text-xl font-bold font-mono tabular-nums ${
+                  totalPendingCount > 0 ? 'text-amber-700' : 'text-emerald-700'
+                }`}
+              >
+                {totalPendingCount}
+              </span>
+              <span className="text-xs font-medium text-slate-600">
+                {totalPendingCount === 0
+                  ? 'Synced with database'
+                  : totalPendingCount === 1
+                  ? 'Unsaved change tracked'
+                  : 'Unsaved changes tracked'}
+              </span>
+            </div>
+            <div className="mt-0.5 text-[11px] text-slate-500 font-mono tabular-nums">
+              {activeCount} active · {disabledCount} disabled
             </div>
           </div>
         </div>
+
+        {/* Persistent Cross-Tab Change Tracker Bar */}
+        {totalPendingCount > 0 && (
+          <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-amber-950">
+              <Database className="w-4 h-4 text-amber-700 shrink-0" />
+              <span className="font-semibold">
+                {totalPendingCount} unsaved change{totalPendingCount > 1 ? 's' : ''} ready for database persistence
+              </span>
+              <span className="text-amber-800 font-mono tabular-nums">
+                ({pendingSummaryByCategory.map((p) => `${p.label}: ${p.count}`).join(' · ')})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {currentScopeDirtyRows.length > 0 && currentScopeDirtyRows.length < totalPendingCount && (
+                <button
+                  type="button"
+                  disabled={busyKey !== null}
+                  onClick={() => discardScopeDrafts(activeScopeKey)}
+                  className="px-2.5 py-1 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 rounded-md font-semibold cursor-pointer whitespace-nowrap"
+                >
+                  Revert This View ({currentScopeDirtyRows.length})
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={busyKey !== null}
+                onClick={discardAllDrafts}
+                className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-md font-semibold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              >
+                <Undo2 className="w-3 h-3" />
+                <span>Discard All</span>
+              </button>
+              <button
+                type="button"
+                disabled={busyKey !== null}
+                onClick={persistAllTrackedDrafts}
+                className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-md font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>
+                  {busyKey === 'save-all-tracked'
+                    ? 'Saving...'
+                    : `Save All to Database (${totalPendingCount})`}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Inline Status & Warnings */}
         {banner && (
@@ -585,14 +1229,19 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
               )}
               <span>{banner.text}</span>
             </div>
-            <button type="button" onClick={() => setBanner(null)} className="text-slate-500 hover:text-slate-900">
+            <button
+              type="button"
+              onClick={() => setBanner(null)}
+              aria-label="Dismiss status message"
+              className="text-slate-500 hover:text-slate-900 cursor-pointer"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
 
         {allocationWarnings.length > 0 && (
-          <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-200 text-xs text-amber-900 space-y-1">
+          <div className="px-5 py-2.5 bg-amber-50/70 border-b border-amber-200 text-xs text-amber-900 space-y-1">
             {allocationWarnings.map((w, idx) => (
               <div key={idx} className="flex items-start gap-2">
                 <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-700" />
@@ -618,7 +1267,9 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                 onChange={(e) => {
                   const val = e.target.value;
                   setNewSubjectName(val);
-                  const matched = allQuickPickOptions.find((o) => o.name.toLowerCase() === val.trim().toLowerCase());
+                  const matched = allQuickPickOptions.find(
+                    (o) => o.name.toLowerCase() === val.trim().toLowerCase()
+                  );
                   if (matched) {
                     setNewRoomType(matched.roomType);
                     setNewWeeklyPeriods(matched.defaultWeekly);
@@ -640,9 +1291,9 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
               <input
                 type="number"
                 min={1}
-                max={20}
+                max={MAX_LESSONS}
                 value={newWeeklyPeriods}
-                onChange={(e) => setNewWeeklyPeriods(Math.max(1, Number(e.target.value || 1)))}
+                onChange={(e) => setNewWeeklyPeriods(Math.max(1, Math.min(MAX_LESSONS, Number(e.target.value || 1))))}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono tabular-nums text-slate-900"
               />
             </div>
@@ -678,9 +1329,9 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
               <button
                 type="submit"
                 disabled={busyKey !== null}
-                className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer"
+                className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap"
               >
-                Add & Save
+                Add &amp; Save
               </button>
               <button
                 type="button"
@@ -693,35 +1344,100 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
           </form>
         )}
 
-        {/* Central 3-Column Weekly Subject Allocation Table */}
+        {/* Table Filter & Quick Search Strip */}
+        <div className="px-5 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search subjects in ${currentCategoryObj.label}...`}
+              aria-label={`Search subjects in ${currentCategoryObj.label}`}
+              className="w-full pl-8 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-slate-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear subject search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs">
+            <button
+              type="button"
+              onClick={() => setRowFilter('all')}
+              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                rowFilter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({rows.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRowFilter('active')}
+              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                rowFilter === 'active' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Active ({activeCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRowFilter('modified')}
+              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                rowFilter === 'modified'
+                  ? 'bg-white text-amber-800 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Modified ({currentScopeDirtyRows.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Central 3-Column Interactive Weekly Subject Allocation Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 <th className="py-3 px-5">Subject / Activity Name</th>
-                <th className="py-3 px-4 w-56">Lessons Per Week</th>
+                <th className="py-3 px-4 w-64">Lessons Per Week</th>
                 <th className="py-3 px-5 text-right w-72">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
-              {rows.length === 0 ? (
+              {visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="py-10 px-5 text-center text-xs text-slate-500">
-                    No subjects or activities configured for {currentCategoryObj.label} yet. Click “Add Subject / Activity” above to add curriculum lessons.
+                    {rows.length === 0
+                      ? `No subjects or activities configured for ${currentCategoryObj.label} yet. Click “Add Subject / Activity” above to add curriculum lessons.`
+                      : 'No subjects match the current search or filter.'}
                   </td>
                 </tr>
               ) : (
-                rows.map((row) => {
-                  const isEditing = editingRowKey === row.key;
+                visibleRows.map((row) => {
+                  const isEditing = editingRowKey === row.draftKey;
                   const facilityLabel = ROOM_TYPE_LABELS[row.requiredRoomType] || 'Standard Classroom';
+                  const delta = row.requiredWeeklyPeriods - row.baselineWeeklyPeriods;
+                  const inputDisplayValue =
+                    row.draftKey in editingNumericInputs
+                      ? editingNumericInputs[row.draftKey]
+                      : String(row.requiredWeeklyPeriods);
+
                   return (
                     <tr
-                      key={row.key}
+                      key={row.draftKey}
                       className={`transition-colors ${
                         !row.isActive
                           ? 'bg-slate-50/70 text-slate-400'
                           : row.dirty
-                          ? 'bg-amber-50/35'
+                          ? 'bg-amber-50/40'
                           : 'hover:bg-slate-50/60'
                       }`}
                     >
@@ -729,7 +1445,11 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                       <td className="py-3 px-5 align-middle">
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
-                            <span className={`font-semibold text-sm ${row.isActive ? 'text-slate-900' : 'line-through text-slate-400'}`}>
+                            <span
+                              className={`font-semibold text-sm ${
+                                row.isActive ? 'text-slate-900' : 'line-through text-slate-400'
+                              }`}
+                            >
                               {row.subjectName}
                             </span>
                             {row.dirty && (
@@ -745,7 +1465,9 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                               row.isCategoryOverride ? (
                                 <span className="text-amber-700 font-medium">
                                   · Overridden for Grade {activeScope}
-                                  {row.categoryDefaultPeriods !== undefined ? ` (Category default: ${row.categoryDefaultPeriods})` : ''}
+                                  {row.categoryDefaultPeriods !== undefined
+                                    ? ` (Category default: ${row.categoryDefaultPeriods})`
+                                    : ''}
                                 </span>
                               ) : (
                                 <span className="text-slate-500">· Inherited from {currentCategoryObj.label}</span>
@@ -764,7 +1486,9 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                                 </label>
                                 <select
                                   value={row.requiredRoomType}
-                                  onChange={(e) => updateRowField(row.key, { requiredRoomType: e.target.value })}
+                                  onChange={(e) =>
+                                    updateRowField(row.draftKey, { requiredRoomType: e.target.value })
+                                  }
                                   className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800"
                                 >
                                   {Object.entries(ROOM_TYPE_LABELS).map(([k, lbl]) => (
@@ -784,9 +1508,18 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                                   max={Math.floor(row.requiredWeeklyPeriods / 2)}
                                   value={row.doubleLessons}
                                   onChange={(e) => {
-                                    const dbl = Math.max(0, Math.min(Math.floor(row.requiredWeeklyPeriods / 2), Number(e.target.value || 0)));
-                                    const sng = Math.max(0, row.requiredWeeklyPeriods - dbl * 2 - row.tripleLessons * 3);
-                                    updateRowField(row.key, {
+                                    const dbl = Math.max(
+                                      0,
+                                      Math.min(
+                                        Math.floor(row.requiredWeeklyPeriods / 2),
+                                        Number(e.target.value || 0)
+                                      )
+                                    );
+                                    const sng = Math.max(
+                                      0,
+                                      row.requiredWeeklyPeriods - dbl * 2 - row.tripleLessons * 3
+                                    );
+                                    updateRowField(row.draftKey, {
                                       doubleLessons: dbl,
                                       singleLessons: sng,
                                       maxPerDay: dbl > 0 ? Math.max(2, row.maxPerDay) : row.maxPerDay,
@@ -804,7 +1537,11 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                                   min={1}
                                   max={4}
                                   value={row.maxPerDay}
-                                  onChange={(e) => updateRowField(row.key, { maxPerDay: Math.max(1, Number(e.target.value || 1)) })}
+                                  onChange={(e) =>
+                                    updateRowField(row.draftKey, {
+                                      maxPerDay: Math.max(1, Math.min(4, Number(e.target.value || 1))),
+                                    })
+                                  }
                                   className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono tabular-nums text-slate-800"
                                 />
                               </div>
@@ -813,37 +1550,110 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                         </div>
                       </td>
 
-                      {/* COLUMN 2: Lessons Per Week */}
+                      {/* COLUMN 2: Interactive Lessons Per Week Numeric Stepper */}
                       <td className="py-3 px-4 align-middle">
-                        <div className="inline-flex items-center border border-slate-300 rounded-lg bg-white overflow-hidden">
-                          <button
-                            type="button"
-                            disabled={!row.isActive || row.requiredWeeklyPeriods <= 0}
-                            onClick={() => adjustRowLessons(row.key, row.requiredWeeklyPeriods - 1)}
-                            aria-label={`Decrease weekly lessons for ${row.subjectName}`}
-                            className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-35 cursor-pointer"
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`inline-flex items-center border rounded-lg bg-white overflow-hidden transition-colors ${
+                              row.dirty
+                                ? 'border-amber-400 ring-1 ring-amber-200'
+                                : 'border-slate-300 focus-within:border-slate-600'
+                            }`}
                           >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <input
-                            type="number"
-                            min={0}
-                            max={20}
-                            disabled={!row.isActive}
-                            value={row.requiredWeeklyPeriods}
-                            onChange={(e) => adjustRowLessons(row.key, Number(e.target.value || 0))}
-                            aria-label={`Weekly lessons for ${row.subjectName}`}
-                            className="w-12 py-1.5 text-center text-sm font-bold font-mono tabular-nums text-slate-900 border-x border-slate-200 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                          />
-                          <button
-                            type="button"
-                            disabled={!row.isActive || row.requiredWeeklyPeriods >= 20}
-                            onClick={() => adjustRowLessons(row.key, row.requiredWeeklyPeriods + 1)}
-                            aria-label={`Increase weekly lessons for ${row.subjectName}`}
-                            className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-35 cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
+                            <button
+                              type="button"
+                              disabled={!row.isActive || row.requiredWeeklyPeriods <= MIN_LESSONS}
+                              onClick={() => adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods - 1)}
+                              aria-label={`Decrease weekly lessons for ${row.subjectName}`}
+                              className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              disabled={!row.isActive}
+                              value={inputDisplayValue}
+                              onFocus={(e) => {
+                                setEditingNumericInputs((prev) => ({
+                                  ...prev,
+                                  [row.draftKey]: String(row.requiredWeeklyPeriods),
+                                }));
+                                e.currentTarget.select();
+                              }}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/[^0-9]/g, '');
+                                setEditingNumericInputs((prev) => ({ ...prev, [row.draftKey]: raw }));
+                                if (raw !== '') {
+                                  const parsed = Math.max(MIN_LESSONS, Math.min(MAX_LESSONS, Number(raw)));
+                                  applyDraftMutation(row.draftKey, (cur) => ({
+                                    ...cur,
+                                    ...rebalanceLessonBlocks(parsed, cur.doubleLessons, cur.tripleLessons),
+                                  }));
+                                }
+                              }}
+                              onBlur={() => {
+                                const raw = editingNumericInputs[row.draftKey];
+                                if (raw !== undefined) {
+                                  const parsed = raw === '' ? row.baselineWeeklyPeriods : Number(raw);
+                                  adjustRowLessons(row.draftKey, parsed);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods + 1);
+                                } else if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods - 1);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setEditingNumericInputs((prev) => {
+                                    const next = { ...prev };
+                                    delete next[row.draftKey];
+                                    return next;
+                                  });
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              aria-label={`Weekly lessons for ${row.subjectName}`}
+                              className="w-12 py-1.5 text-center text-sm font-bold font-mono tabular-nums text-slate-900 border-x border-slate-200 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
+                            />
+                            <button
+                              type="button"
+                              disabled={!row.isActive || row.requiredWeeklyPeriods >= MAX_LESSONS}
+                              onClick={() => adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods + 1)}
+                              aria-label={`Increase weekly lessons for ${row.subjectName}`}
+                              className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {row.dirty && (
+                            <div className="flex items-center gap-1.5">
+                              {delta !== 0 && (
+                                <span
+                                  className={`text-[11px] font-mono tabular-nums font-semibold ${
+                                    delta > 0 ? 'text-emerald-700' : 'text-amber-700'
+                                  }`}
+                                  title={`Saved value in database: ${row.baselineWeeklyPeriods}`}
+                                >
+                                  {delta > 0 ? `+${delta}` : delta} (was {row.baselineWeeklyPeriods})
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => revertSingleRow(row.draftKey)}
+                                title={`Revert ${row.subjectName} back to saved database value`}
+                                aria-label={`Revert unsaved changes for ${row.subjectName}`}
+                                className="p-1 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                              >
+                                <Undo2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
 
@@ -853,7 +1663,7 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                           <button
                             type="button"
                             disabled={busyKey !== null || !row.dirty}
-                            onClick={() => persistRows([row], row.subjectName)}
+                            onClick={() => persistActiveScopeRows([row], row.subjectName)}
                             className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
                           >
                             <Save className="w-3 h-3" />
@@ -862,7 +1672,7 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
 
                           <button
                             type="button"
-                            onClick={() => setEditingRowKey(isEditing ? null : row.key)}
+                            onClick={() => setEditingRowKey(isEditing ? null : row.draftKey)}
                             className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
                               isEditing
                                 ? 'bg-slate-100 border-slate-400 text-slate-900'
@@ -887,18 +1697,24 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                             <span>{row.isActive ? 'Disable' : 'Restore'}</span>
                           </button>
 
-                          {typeof activeScope === 'number' && row.isCategoryOverride && row.categoryDefaultPeriods !== undefined && (
-                            <button
-                              type="button"
-                              disabled={busyKey !== null}
-                              onClick={() => persistRows([row], row.subjectName, { resetToCategoryDefault: true })}
-                              title={`Restore ${row.subjectName} on Grade ${activeScope} to ${currentCategoryObj.label} default (${row.categoryDefaultPeriods} lessons)`}
-                              className="px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <Undo2 className="w-3 h-3" />
-                              <span>Reset Default</span>
-                            </button>
-                          )}
+                          {typeof activeScope === 'number' &&
+                            row.isCategoryOverride &&
+                            row.categoryDefaultPeriods !== undefined && (
+                              <button
+                                type="button"
+                                disabled={busyKey !== null}
+                                onClick={() =>
+                                  persistActiveScopeRows([row], row.subjectName, {
+                                    resetToCategoryDefault: true,
+                                  })
+                                }
+                                title={`Restore ${row.subjectName} on Grade ${activeScope} to ${currentCategoryObj.label} default (${row.categoryDefaultPeriods} lessons)`}
+                                className="px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Undo2 className="w-3 h-3" />
+                                <span>Reset Default</span>
+                              </button>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -906,6 +1722,78 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
                 })
               )}
             </tbody>
+
+            {/* Live Automatic Weekly Total & Remaining Available Periods Footer */}
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 bg-slate-50 text-xs">
+                <td className="py-3.5 px-5 align-middle">
+                  <div className="font-bold text-slate-900">
+                    Weekly Allocation Summary — {activeScopeTitle}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {utilizationPct}% of {currentAvailableSlots} available weekly periods allocated
+                    {activeDepartmentFilter && displayedTotalLessons !== activeTotalLessons
+                      ? ` (${displayedTotalLessons} in ${activeDepartmentFilter})`
+                      : ''}
+                  </div>
+                </td>
+                <td className="py-3.5 px-4 align-middle">
+                  <div className="flex flex-col">
+                    <div className="text-sm font-bold font-mono tabular-nums text-slate-900">
+                      {activeTotalLessons} / {currentAvailableSlots} lessons
+                    </div>
+                    <div
+                      className={`text-xs font-mono tabular-nums font-semibold mt-0.5 ${
+                        remainingSlots < 0
+                          ? 'text-rose-700'
+                          : remainingSlots === 0
+                          ? 'text-emerald-700'
+                          : 'text-slate-600'
+                      }`}
+                    >
+                      {remainingSlots > 0
+                        ? `${remainingSlots} remaining period${remainingSlots === 1 ? '' : 's'}`
+                        : remainingSlots === 0
+                        ? '0 remaining (exact fit)'
+                        : `${Math.abs(remainingSlots)} period${Math.abs(remainingSlots) === 1 ? '' : 's'} over limit`}
+                    </div>
+                  </div>
+                </td>
+                <td className="py-3.5 px-5 align-middle text-right">
+                  {currentScopeDirtyRows.length > 0 ? (
+                    <div className="inline-flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={busyKey !== null}
+                        onClick={() => discardScopeDrafts(activeScopeKey)}
+                        className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+                      >
+                        Revert ({currentScopeDirtyRows.length})
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyKey !== null}
+                        onClick={() =>
+                          persistActiveScopeRows(
+                            currentScopeDirtyRows,
+                            `${currentScopeDirtyRows.length} subject change(s)`
+                          )
+                        }
+                        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-45 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save Tab Changes</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-medium text-emerald-700 inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>All changes saved to database</span>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>

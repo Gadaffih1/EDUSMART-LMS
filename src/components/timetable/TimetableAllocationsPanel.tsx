@@ -814,9 +814,12 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
         <CentralCategoryAllocationsTable
           categories={categories}
           categoryAllocations={filteredCategoryAllocations}
+          allCategoryAllocations={categoryAllocations}
           gradeSchedules={gradeSchedules}
           gradeAllocations={filteredGradeAllocations}
+          allGradeAllocations={gradeAllocations}
           subjects={filteredSubjects}
+          activeDepartmentFilter={activeDeptFilter}
           onRefresh={onRefresh}
         />
       )}

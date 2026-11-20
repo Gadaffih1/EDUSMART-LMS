@@ -175,7 +175,7 @@ function addStreamAlloc(
   );
 }
 
-function runSolver(db: DatabaseSync, tenantId: string, versionId: string, preserveLocked = false, scope?: any) {
+async function runSolver(db: DatabaseSync, tenantId: string, versionId: string, preserveLocked = false, scope?: any) {
   const jobId = uid('ttjob');
   const now = new Date().toISOString();
   db.prepare(
@@ -183,7 +183,7 @@ function runSolver(db: DatabaseSync, tenantId: string, versionId: string, preser
        (id, tenant_id, version_id, status, progress_pct, stage_message, preserve_locked, scope_json, cancel_requested, retries, diagnostics_json, created_by, created_at)
      VALUES (?, ?, ?, 'queued', 0, 'Test queued', ?, ?, 0, 0, '{}', 'test-runner', ?)`
   ).run(jobId, tenantId, versionId, preserveLocked ? 1 : 0, JSON.stringify(scope || { mode: 'all' }), now);
-  runTimetableGenerationDirect(db, jobId);
+  await runTimetableGenerationDirect(db, jobId);
   return db.prepare(`SELECT * FROM tt_generation_jobs WHERE id = ?`).get(jobId) as any;
 }
 
@@ -191,7 +191,7 @@ function runSolver(db: DatabaseSync, tenantId: string, versionId: string, preser
 // PART 11: ALL 20 MANDATORY VERIFICATION SCENARIOS
 // ---------------------------------------------------------------------------
 
-test('1 & 2. Overlapping teacher assignment prevented & single teacher cannot teach 2 streams simultaneously (unless joint)', () => {
+test('1 & 2. Overlapping teacher assignment prevented & single teacher cannot teach 2 streams simultaneously (unless joint)', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t1';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -201,7 +201,7 @@ test('1 & 2. Overlapping teacher assignment prevented & single teacher cannot te
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Mathematics', weekly: 5, teacherIds: [teacher.id] });
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Eagle', subject: 'Mathematics', weekly: 5, teacherIds: [teacher.id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
   assert.equal(entries.length, 10, 'All 10 lessons placed across both streams');
 
@@ -217,7 +217,7 @@ test('1 & 2. Overlapping teacher assignment prevented & single teacher cannot te
   assert.equal(val.hardErrors, 0);
 });
 
-test('3. Stream cannot attend two lessons simultaneously (enforced by solver & independent validator)', () => {
+test('3. Stream cannot attend two lessons simultaneously (enforced by solver & independent validator)', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t3';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -228,7 +228,7 @@ test('3. Stream cannot attend two lessons simultaneously (enforced by solver & i
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'English', weekly: 5, teacherIds: [teachers[1].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Kiswahili', weekly: 4, teacherIds: [teachers[2].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
   assert.equal(entries.length, 14);
 
@@ -250,7 +250,7 @@ test('3. Stream cannot attend two lessons simultaneously (enforced by solver & i
   assert.ok(val.conflicts.some((c) => c.conflictType === 'CLASS_CLASH'), 'Validator detects CLASS_CLASH');
 });
 
-test('4. Swimming pool capacity (max_concurrent_classes = 1) strictly enforced across multiple streams', () => {
+test('4. Swimming pool capacity (max_concurrent_classes = 1) strictly enforced across multiple streams', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t4';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -265,7 +265,7 @@ test('4. Swimming pool capacity (max_concurrent_classes = 1) strictly enforced a
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Eagle', subject: 'Swimming', weekly: 3, triples: 1, roomType: 'swimming_pool', teacherIds: [teachers[1].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 7, stream: 'Chania', subject: 'Swimming', weekly: 3, triples: 1, roomType: 'swimming_pool', teacherIds: [teachers[2].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const poolEntries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND room_id = ?`).all(versionId, pool.id) as any[];
   assert.equal(poolEntries.length, 9, 'All 3 streams scheduled for 3-period Swimming in pool');
 
@@ -280,7 +280,7 @@ test('4. Swimming pool capacity (max_concurrent_classes = 1) strictly enforced a
   assert.equal(val.hardErrors, 0);
 });
 
-test('5. Computer lab capacity respected with double ICT/Robotics sessions', () => {
+test('5. Computer lab capacity respected with double ICT/Robotics sessions', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t5';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -293,7 +293,7 @@ test('5. Computer lab capacity respected with double ICT/Robotics sessions', () 
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Eagle', subject: 'Computer Studies', weekly: 2, doubles: 1, roomType: 'computer_lab', teacherIds: [teachers[1].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 7, stream: 'Chania', subject: 'Computer Studies', weekly: 2, doubles: 1, roomType: 'computer_lab', teacherIds: [teachers[2].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const labEntries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND room_id = ?`).all(versionId, lab.id) as any[];
   assert.equal(labEntries.length, 6);
 
@@ -305,7 +305,7 @@ test('5. Computer lab capacity respected with double ICT/Robotics sessions', () 
   }
 });
 
-test('6. Library capacity respected (enforces 1 class default and allows 2 classes when max_concurrent_classes = 2)', () => {
+test('6. Library capacity respected (enforces 1 class default and allows 2 classes when max_concurrent_classes = 2)', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t6';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -324,15 +324,15 @@ test('6. Library capacity respected (enforces 1 class default and allows 2 class
   ins.run(uid('ttent'), versionId, tenantId, 4, 'Eagle', 'Grade 4 Eagle', JSON.stringify([teachers[1].id]), '["T2"]', lib.id, lib.name, uid('blk'), now);
 
   let val = validateTimetableVersion(db, versionId);
-  assert.equal(val.conflicts.filter((c) => c.conflictType === 'ROOM_CLASH').length, 0, '2 concurrent classes permitted when Library max_concurrent_classes = 2');
+  assert.equal(val.conflicts.filter((c) => c.conflictType === 'CLASSROOM_CLASH').length, 0, '2 concurrent classes permitted when Library max_concurrent_classes = 2');
 
-  // Adding a 3rd class at the exact same slot must trigger ROOM_CLASH
+  // Adding a 3rd class at the exact same slot must trigger CLASSROOM_CLASH
   ins.run(uid('ttent'), versionId, tenantId, 7, 'Chania', 'Grade 7 Chania', JSON.stringify([teachers[2].id]), '["T3"]', lib.id, lib.name, uid('blk'), now);
   val = validateTimetableVersion(db, versionId);
-  assert.ok(val.conflicts.some((c) => c.conflictType === 'ROOM_CLASH'), '3rd class exceeds Library capacity of 2 and raises ROOM_CLASH');
+  assert.ok(val.conflicts.some((c) => c.conflictType === 'CLASSROOM_CLASH'), '3rd class exceeds Library capacity of 2 and raises CLASSROOM_CLASH');
 });
 
-test('7 & 8. Double lessons (2p) and Triple Swimming (3p) occupy consecutive periods without crossing break/lunch', () => {
+test('7 & 8. Double lessons (2p) and Triple Swimming (3p) occupy consecutive periods without crossing break/lunch', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t78';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -342,7 +342,7 @@ test('7 & 8. Double lessons (2p) and Triple Swimming (3p) occupy consecutive per
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Computer Studies', weekly: 2, doubles: 1, roomType: 'computer_lab', teacherIds: [teachers[0].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Swimming', weekly: 3, triples: 1, roomType: 'swimming_pool', teacherIds: [teachers[1].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? ORDER BY subject_name, block_index`).all(versionId) as any[];
 
   const ict = entries.filter((e) => e.subject_name === 'Computer Studies');
@@ -358,11 +358,11 @@ test('7 & 8. Double lessons (2p) and Triple Swimming (3p) occupy consecutive per
   assert.equal(swim[2].period_number, swim[1].period_number + 1, 'Triple Swimming P3 consecutive');
 
   const val = validateTimetableVersion(db, versionId);
-  assert.equal(val.conflicts.filter((c) => c.conflictType === 'BLOCK_SPLIT_ACROSS_BREAK').length, 0, 'Multi-period blocks never split across break/lunch');
+  assert.equal(val.conflicts.filter((c) => c.conflictType === 'INVALID_DOUBLE_LESSON').length, 0, 'Multi-period blocks never split across break/lunch');
   assert.equal(val.hardErrors, 0);
 });
 
-test('9. Teacher off-duty periods strictly respected by solver and validator', () => {
+test('9. Teacher off-duty periods strictly respected by solver and validator', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t9';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -380,7 +380,7 @@ test('9. Teacher off-duty periods strictly respected by solver and validator', (
   clearStreamAllocations(db, configId);
   addStreamAlloc(db, tenantId, configId, { grade: 7, stream: 'Chania', subject: 'Social Studies', weekly: 6, maxPerDay: 2, teacherIds: [teacher.id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
   assert.equal(entries.length, 6);
   for (const e of entries) {
@@ -399,7 +399,7 @@ test('9. Teacher off-duty periods strictly respected by solver and validator', (
   assert.ok(val.conflicts.some((c) => c.conflictType === 'TEACHER_OFF_DUTY'), 'Validator flags TEACHER_OFF_DUTY hard conflict');
 });
 
-test('10. Different teacher break/availability schedules handled accurately', () => {
+test('10. Different teacher break/availability schedules handled accurately', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t10';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -419,7 +419,7 @@ test('10. Different teacher break/availability schedules handled accurately', ()
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Mathematics', weekly: 5, teacherIds: [teachers[0].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'English', weekly: 5, teacherIds: [teachers[1].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
   for (const e of entries) {
     if (e.subject_name === 'Mathematics') assert.ok(e.period_number > 2, 'Teacher 0 never scheduled in P1-P2');
@@ -427,7 +427,7 @@ test('10. Different teacher break/availability schedules handled accurately', ()
   }
 });
 
-test('11. Different grade daily schedules supported (Grade 4 = 6 periods/day vs Grade 7 = 8 periods/day)', () => {
+test('11. Different grade daily schedules supported (Grade 4 = 6 periods/day vs Grade 7 = 8 periods/day)', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t11';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -440,7 +440,7 @@ test('11. Different grade daily schedules supported (Grade 4 = 6 periods/day vs 
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Mathematics', weekly: 5, teacherIds: [teachers[0].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 7, stream: 'Chania', subject: 'English', weekly: 5, teacherIds: [teachers[1].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const g4Entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND grade = 4`).all(versionId) as any[];
   assert.equal(g4Entries.length, 5);
   for (const e of g4Entries) {
@@ -448,7 +448,7 @@ test('11. Different grade daily schedules supported (Grade 4 = 6 periods/day vs 
   }
 });
 
-test('12. All allocated weekly lessons are either scheduled or explicitly reported in tt_unscheduled_sessions', () => {
+test('12. All allocated weekly lessons are either scheduled or explicitly reported in tt_unscheduled_sessions', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t12';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -467,7 +467,7 @@ test('12. All allocated weekly lessons are either scheduled or explicitly report
   clearStreamAllocations(db, configId);
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Mathematics', weekly: 5, maxPerDay: 2, teacherIds: [teacher.id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const placed = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
   const unscheduled = db.prepare(`SELECT * FROM tt_unscheduled_sessions WHERE version_id = ?`).all(versionId) as any[];
 
@@ -476,7 +476,7 @@ test('12. All allocated weekly lessons are either scheduled or explicitly report
   assert.ok(unscheduled.length > 0, 'Overflow sessions explicitly reported in tt_unscheduled_sessions');
 });
 
-test('13. Combined/joint stream lessons count once for teacher workload and appear for every participating stream', () => {
+test('13. Combined/joint stream lessons count once for teacher workload and appear for every participating stream', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t13';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -499,7 +499,7 @@ test('13. Combined/joint stream lessons count once for teacher workload and appe
     new Date().toISOString()
   );
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND joint_lesson_id = ?`).all(versionId, jlId) as any[];
   assert.equal(entries.length, 4, '2 weekly joint lessons × 2 participating streams = 4 entry rows');
 
@@ -510,7 +510,7 @@ test('13. Combined/joint stream lessons count once for teacher workload and appe
   assert.equal(val.hardErrors, 0, 'Joint lesson produces zero teacher or room clashes');
 });
 
-test('14. Manual move candidate validation rejects teacher and class conflicts', () => {
+test('14. Manual move candidate validation rejects teacher and class conflicts', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t14';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -520,7 +520,7 @@ test('14. Manual move candidate validation rejects teacher and class conflicts',
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Mathematics', weekly: 2, teacherIds: [teachers[0].id] });
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Eagle', subject: 'Mathematics', weekly: 2, teacherIds: [teachers[0].id] });
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
   const doveEntry = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND stream = 'Dove' LIMIT 1`).get(versionId) as any;
   const eagleEntry = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND stream = 'Eagle' LIMIT 1`).get(versionId) as any;
 
@@ -532,11 +532,11 @@ test('14. Manual move candidate validation rejects teacher and class conflicts',
     String(eagleEntry.day_of_week),
     Number(eagleEntry.period_number)
   );
-  assert.equal(check.ok, false, 'Moving into conflicting teacher slot is rejected');
+  assert.equal(check.valid, false, 'Moving into conflicting teacher slot is rejected');
   assert.ok(check.hardConflicts.length > 0);
 });
 
-test('15 & 16. Draft timetables are not published; publishing syncs effects cleanly without leaking drafts', () => {
+test('15 & 16. Draft timetables are not published; publishing syncs effects cleanly without leaking drafts', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t15';
   const { configId, versionId } = seedMinimalSchool(db, tenantId);
@@ -544,7 +544,7 @@ test('15 & 16. Draft timetables are not published; publishing syncs effects clea
 
   clearStreamAllocations(db, configId);
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Library Lesson', weekly: 1, roomType: 'library', teacherIds: [teachers[0].id] });
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
 
   // While status is 'draft', published query returns nothing
   const pubBefore = db.prepare(`SELECT * FROM tt_versions WHERE tenant_id = ? AND status = 'published'`).get(tenantId);
@@ -565,7 +565,7 @@ test('15 & 16. Draft timetables are not published; publishing syncs effects clea
   assert.equal(syncedLib.length, 1, 'Library Lesson synced to Library Timetable bookings');
 });
 
-test('17. Multi-tenant isolation verified (Tenant A schedules and queries never leak into Tenant B)', () => {
+test('17. Multi-tenant isolation verified (Tenant A schedules and queries never leak into Tenant B)', async () => {
   const db = createTestDb();
   const a = seedMinimalSchool(db, 'tenant-alpha');
   const b = seedMinimalSchool(db, 'tenant-beta');
@@ -578,8 +578,8 @@ test('17. Multi-tenant isolation verified (Tenant A schedules and queries never 
   addStreamAlloc(db, 'tenant-alpha', a.configId, { grade: 4, stream: 'Dove', subject: 'French', weekly: 2, teacherIds: [ta.id] });
   addStreamAlloc(db, 'tenant-beta', b.configId, { grade: 4, stream: 'Dove', subject: 'Music', weekly: 3, teacherIds: [tb.id] });
 
-  runSolver(db, 'tenant-alpha', a.versionId);
-  runSolver(db, 'tenant-beta', b.versionId);
+  await runSolver(db, 'tenant-alpha', a.versionId);
+  await runSolver(db, 'tenant-beta', b.versionId);
 
   const alphaEntries = db.prepare(`SELECT * FROM tt_entries WHERE tenant_id = 'tenant-alpha'`).all() as any[];
   const betaEntries = db.prepare(`SELECT * FROM tt_entries WHERE tenant_id = 'tenant-beta'`).all() as any[];
@@ -590,7 +590,7 @@ test('17. Multi-tenant isolation verified (Tenant A schedules and queries never 
   assert.ok(betaEntries.every((e) => e.subject_name === 'Music'));
 });
 
-test('18. Core LMS records (users, students, school_grades, school_streams) remain intact after seeding & generation', () => {
+test('18. Core LMS records (users, students, school_grades, school_streams) remain intact after seeding & generation', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t18';
   const { versionId } = seedMinimalSchool(db, tenantId);
@@ -602,7 +602,7 @@ test('18. Core LMS records (users, students, school_grades, school_streams) rema
     streams: (db.prepare(`SELECT COUNT(*) as c FROM school_streams WHERE school_id = ?`).get(tenantId) as any).c,
   };
 
-  runSolver(db, tenantId, versionId);
+  await runSolver(db, tenantId, versionId);
 
   const afterCounts = {
     users: (db.prepare(`SELECT COUNT(*) as c FROM users WHERE school_id = ?`).get(tenantId) as any).c,
@@ -614,7 +614,7 @@ test('18. Core LMS records (users, students, school_grades, school_streams) rema
   assert.deepEqual(afterCounts, beforeCounts, 'Zero duplicate or deleted core LMS records');
 });
 
-test('19 & 20. Cancelled/failed draft generation does not damage published version & historical versions remain intact', () => {
+test('19 & 20. Cancelled/failed draft generation does not damage published version & historical versions remain intact', async () => {
   const db = createTestDb();
   const tenantId = 'tenant-t19';
   const { configId, versionId: v1Id } = seedMinimalSchool(db, tenantId);
@@ -622,7 +622,7 @@ test('19 & 20. Cancelled/failed draft generation does not damage published versi
 
   clearStreamAllocations(db, configId);
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Dove', subject: 'Mathematics', weekly: 4, teacherIds: [teachers[0].id] });
-  runSolver(db, tenantId, v1Id);
+  await runSolver(db, tenantId, v1Id);
 
   const v1CountBefore = (db.prepare(`SELECT COUNT(*) as c FROM tt_entries WHERE version_id = ?`).get(v1Id) as any).c;
   assert.equal(v1CountBefore, 4);
@@ -644,7 +644,7 @@ test('19 & 20. Cancelled/failed draft generation does not damage published versi
      VALUES (?, ?, ?, 'queued', 0, 'Queued', 1, '{}', 1, 0, '{}', 'admin', ?)`
   ).run(cancelledJobId, tenantId, v2Id, now);
 
-  runTimetableGenerationDirect(db, cancelledJobId);
+  await runTimetableGenerationDirect(db, cancelledJobId);
   const jobAfter = db.prepare(`SELECT status FROM tt_generation_jobs WHERE id = ?`).get(cancelledJobId) as any;
   assert.equal(jobAfter.status, 'cancelled');
 
@@ -656,7 +656,7 @@ test('19 & 20. Cancelled/failed draft generation does not damage published versi
 
   // Verify scoped generation preserves out-of-scope streams cleanly
   addStreamAlloc(db, tenantId, configId, { grade: 4, stream: 'Eagle', subject: 'English', weekly: 3, teacherIds: [teachers[1].id] });
-  runSolver(db, tenantId, v2Id, false, { mode: 'stream', grade: 4, stream: 'Eagle' });
+  await runSolver(db, tenantId, v2Id, false, { mode: 'stream', grade: 4, stream: 'Eagle' });
   const v2Entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(v2Id) as any[];
   assert.equal(v2Entries.length, 3);
   assert.ok(v2Entries.every((e) => e.stream === 'Eagle'), 'Stream-scoped generation targets only Grade 4 Eagle');

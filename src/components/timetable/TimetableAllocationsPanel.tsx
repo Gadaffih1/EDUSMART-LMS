@@ -17,6 +17,7 @@ import {
   ttApiFetch,
 } from './timetableTypes';
 import { CentralCategoryAllocationsTable } from './CentralCategoryAllocationsTable';
+import { LessonsPerWeekStepper } from './SubjectAllocationTable';
 
 interface TimetableAllocationsPanelProps {
   categories?: TTCategoryItem[];
@@ -941,8 +942,8 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                  <th className="p-3">Subject</th>
-                  <th className="p-3">Weekly Target</th>
+                  <th className="p-3">Subject / Activity Name</th>
+                  <th className="p-3">Lessons Per Week</th>
                   <th className="p-3">Singles (1p)</th>
                   <th className="p-3">Doubles (2p)</th>
                   <th className="p-3">Triples (3p)</th>
@@ -969,32 +970,13 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                         )}
                       </td>
                       <td className="p-3">
-                        <div className="inline-flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setG(row.id, orig, { requiredWeeklyPeriods: Math.max(1, row.requiredWeeklyPeriods - 1) })}
-                            className="w-6 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
-                            title="Decrease weekly lessons"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min={1}
-                            max={15}
-                            value={row.requiredWeeklyPeriods}
-                            onChange={(e) => setG(row.id, orig, { requiredWeeklyPeriods: Math.max(1, Number(e.target.value || 1)) })}
-                            className="w-12 px-1.5 py-1 border border-slate-200 rounded font-mono tabular-nums text-center font-bold"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setG(row.id, orig, { requiredWeeklyPeriods: Math.min(15, row.requiredWeeklyPeriods + 1) })}
-                            className="w-6 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
-                            title="Increase weekly lessons"
-                          >
-                            +
-                          </button>
-                        </div>
+                        <LessonsPerWeekStepper
+                          value={row.requiredWeeklyPeriods}
+                          min={1}
+                          max={20}
+                          subjectLabel={row.subjectName}
+                          onChange={(nextVal) => setG(row.id, orig, { requiredWeeklyPeriods: nextVal })}
+                        />
                       </td>
                       <td className="p-3">
                         <input
@@ -1193,10 +1175,10 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                    <th className="p-3">Subject</th>
+                    <th className="p-3">Subject / Activity Name</th>
                     <th className="p-3">Source</th>
                     <th className="p-3">Group</th>
-                    <th className="p-3">Weekly / Split (1p·2p·3p)</th>
+                    <th className="p-3">Lessons Per Week / Split (1p·2p·3p)</th>
                     <th className="p-3">Assigned Teacher</th>
                     <th className="p-3">Preferred Room</th>
                     <th className="p-3 text-right">Actions</th>
@@ -1230,32 +1212,14 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                           </select>
                         </td>
                         <td className="p-3">
-                          <div className="flex items-center gap-1 font-mono tabular-nums">
-                            <button
-                              type="button"
-                              onClick={() => setS(row.id, orig, { requiredWeeklyPeriods: Math.max(1, row.requiredWeeklyPeriods - 1) })}
-                              className="w-5 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
-                              title="Decrease weekly lessons"
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              min={1}
-                              max={15}
+                          <div className="flex items-center gap-1.5 font-mono tabular-nums">
+                            <LessonsPerWeekStepper
                               value={row.requiredWeeklyPeriods}
-                              onChange={(e) => setS(row.id, orig, { requiredWeeklyPeriods: Math.max(1, Number(e.target.value || 1)) })}
-                              className="w-11 px-1 py-1 border border-slate-200 rounded text-center font-bold"
-                              title="Total Weekly Periods (strictly enforced)"
+                              min={1}
+                              max={20}
+                              subjectLabel={row.subjectName}
+                              onChange={(nextVal) => setS(row.id, orig, { requiredWeeklyPeriods: nextVal })}
                             />
-                            <button
-                              type="button"
-                              onClick={() => setS(row.id, orig, { requiredWeeklyPeriods: Math.min(15, row.requiredWeeklyPeriods + 1) })}
-                              className="w-5 h-6 rounded border border-slate-200 bg-slate-50 hover:bg-slate-200 font-bold text-slate-700 cursor-pointer"
-                              title="Increase weekly lessons"
-                            >
-                              +
-                            </button>
                             <span>=</span>
                             <input
                               type="number"

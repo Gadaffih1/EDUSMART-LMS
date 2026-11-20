@@ -3,11 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Database,
-  Edit3,
-  Minus,
   Plus,
-  Power,
-  RotateCcw,
   Save,
   Search,
   Undo2,
@@ -23,6 +19,7 @@ import {
   TTSubjectItem,
   ttApiFetch,
 } from './timetableTypes';
+import { SubjectAllocationTable, SubjectAllocationTableRow } from './SubjectAllocationTable';
 
 interface CentralCategoryAllocationsTableProps {
   categories?: TTCategoryItem[];
@@ -185,8 +182,6 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
   const [activeScope, setActiveScope] = useState<'category' | number>('category');
   // Cross-tab & cross-scope tracked edits persisted in client state until saved to DB
   const [pendingDrafts, setPendingDrafts] = useState<Record<string, PendingDraft>>({});
-  // Transient raw text buffer while typing inside a numeric Lessons Per Week input
-  const [editingNumericInputs, setEditingNumericInputs] = useState<Record<string, string>>({});
 
   const [searchQuery, setSearchQuery] = useState('');
   const [rowFilter, setRowFilter] = useState<'all' | 'active' | 'modified'>('all');
@@ -563,12 +558,6 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
           ...balanced,
         };
       });
-      setEditingNumericInputs((prev) => {
-        if (!(draftKey in prev)) return prev;
-        const next = { ...prev };
-        delete next[draftKey];
-        return next;
-      });
     },
     [applyDraftMutation]
   );
@@ -587,12 +576,6 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
       delete next[draftKey];
       return next;
     });
-    setEditingNumericInputs((prev) => {
-      if (!(draftKey in prev)) return prev;
-      const next = { ...prev };
-      delete next[draftKey];
-      return next;
-    });
   }, []);
 
   const discardScopeDrafts = useCallback((scopeKey: ScopeKey) => {
@@ -603,12 +586,10 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
       }
       return next;
     });
-    setEditingNumericInputs({});
   }, []);
 
   const discardAllDrafts = useCallback(() => {
     setPendingDrafts({});
-    setEditingNumericInputs({});
     setBanner(null);
   }, []);
 
@@ -911,9 +892,11 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
             return (
               <button
                 key={cat.code}
+                id={`allocation-tab-${cat.code}`}
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
+                aria-controls={`allocation-tabpanel-${cat.code}`}
                 onClick={() => setActiveCategory(cat.code)}
                 className={`px-5 py-4 text-left transition-colors cursor-pointer ${
                   isSelected
@@ -1402,400 +1385,50 @@ export const CentralCategoryAllocationsTable: React.FC<CentralCategoryAllocation
         </div>
 
         {/* Central 3-Column Interactive Weekly Subject Allocation Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                <th className="py-3 px-5">Subject / Activity Name</th>
-                <th className="py-3 px-4 w-64">Lessons Per Week</th>
-                <th className="py-3 px-5 text-right w-72">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              {visibleRows.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="py-10 px-5 text-center text-xs text-slate-500">
-                    {rows.length === 0
-                      ? `No subjects or activities configured for ${currentCategoryObj.label} yet. Click “Add Subject / Activity” above to add curriculum lessons.`
-                      : 'No subjects match the current search or filter.'}
-                  </td>
-                </tr>
-              ) : (
-                visibleRows.map((row) => {
-                  const isEditing = editingRowKey === row.draftKey;
-                  const facilityLabel = ROOM_TYPE_LABELS[row.requiredRoomType] || 'Standard Classroom';
-                  const delta = row.requiredWeeklyPeriods - row.baselineWeeklyPeriods;
-                  const inputDisplayValue =
-                    row.draftKey in editingNumericInputs
-                      ? editingNumericInputs[row.draftKey]
-                      : String(row.requiredWeeklyPeriods);
-
-                  return (
-                    <tr
-                      key={row.draftKey}
-                      className={`transition-colors ${
-                        !row.isActive
-                          ? 'bg-slate-50/70 text-slate-400'
-                          : row.dirty
-                          ? 'bg-amber-50/40'
-                          : 'hover:bg-slate-50/60'
-                      }`}
-                    >
-                      {/* COLUMN 1: Subject / Activity Name */}
-                      <td className="py-3 px-5 align-middle">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`font-semibold text-sm ${
-                                row.isActive ? 'text-slate-900' : 'line-through text-slate-400'
-                              }`}
-                            >
-                              {row.subjectName}
-                            </span>
-                            {row.dirty && (
-                              <span className="text-[11px] font-semibold text-amber-700">· Unsaved</span>
-                            )}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
-                            <span>{facilityLabel}</span>
-                            {row.doubleLessons > 0 && (
-                              <span className="font-mono tabular-nums">· {row.doubleLessons} double</span>
-                            )}
-                            {typeof activeScope === 'number' ? (
-                              row.isCategoryOverride ? (
-                                <span className="text-amber-700 font-medium">
-                                  · Overridden for Grade {activeScope}
-                                  {row.categoryDefaultPeriods !== undefined
-                                    ? ` (Category default: ${row.categoryDefaultPeriods})`
-                                    : ''}
-                                </span>
-                              ) : (
-                                <span className="text-slate-500">· Inherited from {currentCategoryObj.label}</span>
-                              )
-                            ) : (
-                              <span className="text-slate-500">· Default for {currentCategoryObj.label}</span>
-                            )}
-                            {!row.isActive && <span className="text-rose-600 font-medium">· Disabled</span>}
-                          </div>
-
-                          {isEditing && (
-                            <div className="mt-2.5 pt-2.5 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-lg">
-                              <div>
-                                <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-0.5">
-                                  Facility Type
-                                </label>
-                                <select
-                                  value={row.requiredRoomType}
-                                  onChange={(e) =>
-                                    updateRowField(row.draftKey, { requiredRoomType: e.target.value })
-                                  }
-                                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800"
-                                >
-                                  {Object.entries(ROOM_TYPE_LABELS).map(([k, lbl]) => (
-                                    <option key={k} value={k}>
-                                      {lbl}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-0.5">
-                                  Double Lessons
-                                </label>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={Math.floor(row.requiredWeeklyPeriods / 2)}
-                                  value={row.doubleLessons}
-                                  onChange={(e) => {
-                                    const dbl = Math.max(
-                                      0,
-                                      Math.min(
-                                        Math.floor(row.requiredWeeklyPeriods / 2),
-                                        Number(e.target.value || 0)
-                                      )
-                                    );
-                                    const sng = Math.max(
-                                      0,
-                                      row.requiredWeeklyPeriods - dbl * 2 - row.tripleLessons * 3
-                                    );
-                                    updateRowField(row.draftKey, {
-                                      doubleLessons: dbl,
-                                      singleLessons: sng,
-                                      maxPerDay: dbl > 0 ? Math.max(2, row.maxPerDay) : row.maxPerDay,
-                                    });
-                                  }}
-                                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono tabular-nums text-slate-800"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-0.5">
-                                  Max Per Day
-                                </label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={4}
-                                  value={row.maxPerDay}
-                                  onChange={(e) =>
-                                    updateRowField(row.draftKey, {
-                                      maxPerDay: Math.max(1, Math.min(4, Number(e.target.value || 1))),
-                                    })
-                                  }
-                                  className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono tabular-nums text-slate-800"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* COLUMN 2: Interactive Lessons Per Week Numeric Stepper */}
-                      <td className="py-3 px-4 align-middle">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`inline-flex items-center border rounded-lg bg-white overflow-hidden transition-colors ${
-                              row.dirty
-                                ? 'border-amber-400 ring-1 ring-amber-200'
-                                : 'border-slate-300 focus-within:border-slate-600'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              disabled={!row.isActive || row.requiredWeeklyPeriods <= MIN_LESSONS}
-                              onClick={() => adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods - 1)}
-                              aria-label={`Decrease weekly lessons for ${row.subjectName}`}
-                              className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              disabled={!row.isActive}
-                              value={inputDisplayValue}
-                              onFocus={(e) => {
-                                setEditingNumericInputs((prev) => ({
-                                  ...prev,
-                                  [row.draftKey]: String(row.requiredWeeklyPeriods),
-                                }));
-                                e.currentTarget.select();
-                              }}
-                              onChange={(e) => {
-                                const raw = e.target.value.replace(/[^0-9]/g, '');
-                                setEditingNumericInputs((prev) => ({ ...prev, [row.draftKey]: raw }));
-                                if (raw !== '') {
-                                  const parsed = Math.max(MIN_LESSONS, Math.min(MAX_LESSONS, Number(raw)));
-                                  applyDraftMutation(row.draftKey, (cur) => ({
-                                    ...cur,
-                                    ...rebalanceLessonBlocks(parsed, cur.doubleLessons, cur.tripleLessons),
-                                  }));
-                                }
-                              }}
-                              onBlur={() => {
-                                const raw = editingNumericInputs[row.draftKey];
-                                if (raw !== undefined) {
-                                  const parsed = raw === '' ? row.baselineWeeklyPeriods : Number(raw);
-                                  adjustRowLessons(row.draftKey, parsed);
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'ArrowUp') {
-                                  e.preventDefault();
-                                  adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods + 1);
-                                } else if (e.key === 'ArrowDown') {
-                                  e.preventDefault();
-                                  adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods - 1);
-                                } else if (e.key === 'Escape') {
-                                  e.preventDefault();
-                                  setEditingNumericInputs((prev) => {
-                                    const next = { ...prev };
-                                    delete next[row.draftKey];
-                                    return next;
-                                  });
-                                  e.currentTarget.blur();
-                                }
-                              }}
-                              aria-label={`Weekly lessons for ${row.subjectName}`}
-                              className="w-12 py-1.5 text-center text-sm font-bold font-mono tabular-nums text-slate-900 border-x border-slate-200 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
-                            />
-                            <button
-                              type="button"
-                              disabled={!row.isActive || row.requiredWeeklyPeriods >= MAX_LESSONS}
-                              onClick={() => adjustRowLessons(row.draftKey, row.requiredWeeklyPeriods + 1)}
-                              aria-label={`Increase weekly lessons for ${row.subjectName}`}
-                              className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          {row.dirty && (
-                            <div className="flex items-center gap-1.5">
-                              {delta !== 0 && (
-                                <span
-                                  className={`text-[11px] font-mono tabular-nums font-semibold ${
-                                    delta > 0 ? 'text-emerald-700' : 'text-amber-700'
-                                  }`}
-                                  title={`Saved value in database: ${row.baselineWeeklyPeriods}`}
-                                >
-                                  {delta > 0 ? `+${delta}` : delta} (was {row.baselineWeeklyPeriods})
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => revertSingleRow(row.draftKey)}
-                                title={`Revert ${row.subjectName} back to saved database value`}
-                                aria-label={`Revert unsaved changes for ${row.subjectName}`}
-                                className="p-1 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
-                              >
-                                <Undo2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* COLUMN 3: Actions */}
-                      <td className="py-3 px-5 align-middle text-right">
-                        <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            disabled={busyKey !== null || !row.dirty}
-                            onClick={() => persistActiveScopeRows([row], row.subjectName)}
-                            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <Save className="w-3 h-3" />
-                            <span>Save</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setEditingRowKey(isEditing ? null : row.draftKey)}
-                            className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
-                              isEditing
-                                ? 'bg-slate-100 border-slate-400 text-slate-900'
-                                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <Edit3 className="w-3 h-3" />
-                            <span>{isEditing ? 'Done' : 'Edit'}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busyKey !== null}
-                            onClick={() => handleToggleDisableRow(row)}
-                            className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
-                              row.isActive
-                                ? 'bg-white border-slate-200 text-slate-700 hover:border-rose-300 hover:text-rose-700'
-                                : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                            }`}
-                          >
-                            {row.isActive ? <Power className="w-3 h-3" /> : <RotateCcw className="w-3 h-3" />}
-                            <span>{row.isActive ? 'Disable' : 'Restore'}</span>
-                          </button>
-
-                          {typeof activeScope === 'number' &&
-                            row.isCategoryOverride &&
-                            row.categoryDefaultPeriods !== undefined && (
-                              <button
-                                type="button"
-                                disabled={busyKey !== null}
-                                onClick={() =>
-                                  persistActiveScopeRows([row], row.subjectName, {
-                                    resetToCategoryDefault: true,
-                                  })
-                                }
-                                title={`Restore ${row.subjectName} on Grade ${activeScope} to ${currentCategoryObj.label} default (${row.categoryDefaultPeriods} lessons)`}
-                                className="px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
-                              >
-                                <Undo2 className="w-3 h-3" />
-                                <span>Reset Default</span>
-                              </button>
-                            )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-
-            {/* Live Automatic Weekly Total & Remaining Available Periods Footer */}
-            <tfoot>
-              <tr className="border-t-2 border-slate-200 bg-slate-50 text-xs">
-                <td className="py-3.5 px-5 align-middle">
-                  <div className="font-bold text-slate-900">
-                    Weekly Allocation Summary — {activeScopeTitle}
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    {utilizationPct}% of {currentAvailableSlots} available weekly periods allocated
-                    {activeDepartmentFilter && displayedTotalLessons !== activeTotalLessons
-                      ? ` (${displayedTotalLessons} in ${activeDepartmentFilter})`
-                      : ''}
-                  </div>
-                </td>
-                <td className="py-3.5 px-4 align-middle">
-                  <div className="flex flex-col">
-                    <div className="text-sm font-bold font-mono tabular-nums text-slate-900">
-                      {activeTotalLessons} / {currentAvailableSlots} lessons
-                    </div>
-                    <div
-                      className={`text-xs font-mono tabular-nums font-semibold mt-0.5 ${
-                        remainingSlots < 0
-                          ? 'text-rose-700'
-                          : remainingSlots === 0
-                          ? 'text-emerald-700'
-                          : 'text-slate-600'
-                      }`}
-                    >
-                      {remainingSlots > 0
-                        ? `${remainingSlots} remaining period${remainingSlots === 1 ? '' : 's'}`
-                        : remainingSlots === 0
-                        ? '0 remaining (exact fit)'
-                        : `${Math.abs(remainingSlots)} period${Math.abs(remainingSlots) === 1 ? '' : 's'} over limit`}
-                    </div>
-                  </div>
-                </td>
-                <td className="py-3.5 px-5 align-middle text-right">
-                  {currentScopeDirtyRows.length > 0 ? (
-                    <div className="inline-flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        disabled={busyKey !== null}
-                        onClick={() => discardScopeDrafts(activeScopeKey)}
-                        className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
-                      >
-                        Revert ({currentScopeDirtyRows.length})
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busyKey !== null}
-                        onClick={() =>
-                          persistActiveScopeRows(
-                            currentScopeDirtyRows,
-                            `${currentScopeDirtyRows.length} subject change(s)`
-                          )
-                        }
-                        className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-45 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Save Tab Changes</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs font-medium text-emerald-700 inline-flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>All changes saved to database</span>
-                    </span>
-                  )}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <SubjectAllocationTable
+          tabId={activeCategory}
+          categoryLabel={currentCategoryObj.label}
+          activeScope={activeScope}
+          activeScopeTitle={activeScopeTitle}
+          rows={visibleRows}
+          totalRowsInScope={rows.length}
+          editingRowKey={editingRowKey}
+          busyKey={busyKey}
+          activeTotalLessons={activeTotalLessons}
+          displayedTotalLessons={displayedTotalLessons}
+          currentAvailableSlots={currentAvailableSlots}
+          remainingSlots={remainingSlots}
+          utilizationPct={utilizationPct}
+          activeDepartmentFilter={activeDepartmentFilter}
+          dirtyCountInScope={currentScopeDirtyRows.length}
+          onAdjustLessons={adjustRowLessons}
+          onUpdateRowField={updateRowField}
+          onRevertRow={revertSingleRow}
+          onSaveRow={(row: SubjectAllocationTableRow) => {
+            const fullRow = rows.find((r) => r.draftKey === row.draftKey);
+            if (fullRow) persistActiveScopeRows([fullRow], fullRow.subjectName);
+          }}
+          onToggleEditRow={(draftKey) => setEditingRowKey((prev) => (prev === draftKey ? null : draftKey))}
+          onToggleDisableRow={(row: SubjectAllocationTableRow) => {
+            const fullRow = rows.find((r) => r.draftKey === row.draftKey);
+            if (fullRow) handleToggleDisableRow(fullRow);
+          }}
+          onResetRowDefault={(row: SubjectAllocationTableRow) => {
+            const fullRow = rows.find((r) => r.draftKey === row.draftKey);
+            if (fullRow) {
+              persistActiveScopeRows([fullRow], fullRow.subjectName, {
+                resetToCategoryDefault: true,
+              });
+            }
+          }}
+          onDiscardScope={() => discardScopeDrafts(activeScopeKey)}
+          onSaveScope={() =>
+            persistActiveScopeRows(
+              currentScopeDirtyRows,
+              `${currentScopeDirtyRows.length} subject change(s)`
+            )
+          }
+        />
       </div>
     </div>
   );

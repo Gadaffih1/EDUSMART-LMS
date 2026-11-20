@@ -292,26 +292,6 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   } | null>(null);
   const [selectedFacilityId, setSelectedFacilityId] = useState<string>('');
 
-  useEffect(() => {
-    if (perspective !== 'rooms') return;
-    let cancelled = false;
-    ttApiFetch<any>('/api/timetable/facilities/schedules')
-      .then((data) => {
-        if (cancelled) return;
-        setFacilitySchedules(data);
-        const sharedFirst = (data?.facilities || []).find((f: any) => f.isSharedFacility) || data?.facilities?.[0];
-        if (sharedFirst && !selectedFacilityId) {
-          setSelectedFacilityId(sharedFirst.id);
-        }
-      })
-      .catch(() => {
-        // Fallback to local roomSlots if backend schedule unavailable
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [perspective, ttWorkspace?.activeVersion?.id]);
-
   const [catalogRevision, setCatalogRevision] = useState(0);
 
   // Listen for storage updates
@@ -571,6 +551,26 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   });
   const [selectedDay, setSelectedDay] = useState<'All' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('All');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (perspective !== 'rooms') return;
+    let cancelled = false;
+    ttApiFetch<any>('/api/timetable/facilities/schedules')
+      .then((data) => {
+        if (cancelled) return;
+        setFacilitySchedules(data);
+        const sharedFirst = (data?.facilities || []).find((f: any) => f.isSharedFacility) || data?.facilities?.[0];
+        if (sharedFirst && !selectedFacilityId) {
+          setSelectedFacilityId(sharedFirst.id);
+        }
+      })
+      .catch(() => {
+        // Fallback to local roomSlots if backend schedule unavailable
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [perspective, ttWorkspace?.activeVersion?.id]);
 
   // Allowed perspectives based on role
   const availablePerspectives: TimetablePerspective[] = useMemo(() => {

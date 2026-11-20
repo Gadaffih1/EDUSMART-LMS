@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   User, 
   SanatoriumRecord, 
@@ -38,6 +38,8 @@ import {
   RotateCcw,
   Sparkles,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download
 } from 'lucide-react';
 
@@ -185,6 +187,8 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
 
   // Modal states
   const [showEntryModal, setShowEntryModal] = useState(false);
+  const [recordFormPage, setRecordFormPage] = useState<1 | 2>(1);
+  const entryFormBodyRef = useRef<HTMLDivElement | null>(null);
   const [selectedRecord, setSelectedRecord] = useState<SanatoriumRecord | null>(null);
   const [printStudentMode, setPrintStudentMode] = useState<SanatoriumRecord | null>(null);
   const [printAllRegister, setPrintAllRegister] = useState(false);
@@ -260,29 +264,101 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
     }
   };
 
+  const scrollEntryFormTop = () => {
+    entryFormBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateRecordFormPage = (page: 1 | 2) => {
+    setRecordFormPage(page);
+    setFormErrors([]);
+    requestAnimationFrame(scrollEntryFormTop);
+  };
+
+  const closeEntryModal = () => {
+    setShowEntryModal(false);
+    setFormErrors([]);
+    setRecordFormPage(1);
+  };
+
+  const validatePage1Fields = () => {
+    const errors: string[] = [];
+    if (!selectedStudent) {
+      errors.push('Page 1: Please search and select a registered student.');
+    }
+    if (!formNurseInCharge.trim()) {
+      errors.push('Page 1: Nurse in-charge name is required.');
+    }
+    if (!formDate.trim()) {
+      errors.push('Page 1: Date of visit is required.');
+    }
+    if (!formArrivalTime.trim()) {
+      errors.push('Page 1: Arrival time is required.');
+    }
+    if (!formVisitReason.trim()) {
+      errors.push('Page 1: Please enter the chief complaint / reason for clinic visit.');
+    }
+    return errors;
+  };
+
+  const validatePage2Fields = () => {
+    const errors: string[] = [];
+    if (!vitalTemp.trim() || Number.isNaN(parseFloat(vitalTemp))) {
+      errors.push('Page 2: Please enter a valid body temperature (°C).');
+    }
+    if (!formTreatment.trim()) {
+      errors.push('Page 2: Please specify clinical treatment administered.');
+    }
+    if (!formRecommendations.trim()) {
+      errors.push('Page 2: Please provide specific medical recommendations for teachers and parent.');
+    }
+    return errors;
+  };
+
+  const isPage1Complete = Boolean(
+    selectedStudent &&
+    formNurseInCharge.trim() &&
+    formDate.trim() &&
+    formArrivalTime.trim() &&
+    formVisitReason.trim()
+  );
+
+  const isPage2Complete = Boolean(
+    vitalTemp.trim() &&
+    !Number.isNaN(parseFloat(vitalTemp)) &&
+    formTreatment.trim() &&
+    formRecommendations.trim()
+  );
+
+  const handleProceedToPage2 = () => {
+    const page1Errors = validatePage1Fields();
+    if (page1Errors.length > 0) {
+      setFormErrors(page1Errors);
+      scrollEntryFormTop();
+      return;
+    }
+    navigateRecordFormPage(2);
+  };
+
   // Submit Sanatorium Form
   const handleSubmitEntry = (e: React.FormEvent) => {
     e.preventDefault();
-    const errors: string[] = [];
 
-    if (!selectedStudent) {
-      errors.push('Please search and select a registered student.');
+    // If user presses Enter on Page 1, advance cleanly to Page 2
+    if (recordFormPage === 1) {
+      handleProceedToPage2();
+      return;
     }
-    if (!formVisitReason.trim()) {
-      errors.push('Please enter the primary reason for clinic visit.');
-    }
-    if (!formNurseInCharge.trim()) {
-      errors.push('Nurse in-charge name is required.');
-    }
-    if (!formTreatment.trim()) {
-      errors.push('Please specify clinical treatment administered.');
-    }
-    if (!formRecommendations.trim()) {
-      errors.push('Please provide specific medical recommendations for teachers and parent.');
-    }
+
+    const page1Errors = validatePage1Fields();
+    const page2Errors = validatePage2Fields();
+    const errors = [...page1Errors, ...page2Errors];
 
     if (errors.length > 0) {
       setFormErrors(errors);
+      if (page1Errors.length > 0 && page2Errors.length === 0) {
+        setRecordFormPage(1);
+      }
+      requestAnimationFrame(scrollEntryFormTop);
       return;
     }
 
@@ -329,6 +405,7 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
 
     Storage.addSanatoriumRecord(newRecord);
     setShowEntryModal(false);
+    setRecordFormPage(1);
 
     // Reset Form
     setSelectedStudent(null);
@@ -440,6 +517,7 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
             <button
               onClick={() => {
                 setFormErrors([]);
+                setRecordFormPage(1);
                 setShowEntryModal(true);
               }}
               className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-rose-600/20 cursor-pointer"
@@ -851,390 +929,543 @@ export const SanatoriumSection: React.FC<SanatoriumSectionProps> = ({
       </div>
 
       {/* ========================================================
-          MODAL: RECORD STUDENT ATTENDANCE FORM
+          MODAL: RECORD STUDENT ATTENDANCE FORM (2-PAGE FLOW)
           ======================================================== */}
       {showEntryModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                  <Stethoscope className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-lg">
-                    Record Sanatorium Attendance
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Log student clinic admission, nurse in-charge, vitals, treatment, and medical recommendations.
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowEntryModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {formErrors.length > 0 && (
-              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 text-rose-600" />
-                  <span>Please resolve the following required fields:</span>
-                </div>
-                <ul className="list-disc list-inside space-y-0.5 pl-1">
-                  {formErrors.map((err, i) => (
-                    <li key={i}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmitEntry} className="space-y-4 text-xs">
-              
-              {/* 1. STUDENT SEARCH & SELECTION */}
-              <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center justify-between">
-                  <span>Student Name / Admission No *</span>
-                  {selectedStudent && (
-                    <span className="text-emerald-700 font-bold font-mono">
-                      ✓ Student Selected: Grade {selectedStudent.grade} {selectedStudent.stream}
-                    </span>
-                  )}
-                </label>
-                
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={studentSearchTerm}
-                    onChange={(e) => {
-                      setStudentSearchTerm(e.target.value);
-                      if (selectedStudent && e.target.value !== selectedStudent.name) {
-                        setSelectedStudent(null);
-                      }
-                    }}
-                    placeholder="Type student name (e.g. Brian Otieno, Sharon Cherono, Kelvin Kiprop)..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:bg-white font-medium"
-                  />
-                  {filteredStudentCandidates.length > 0 && !selectedStudent && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden divide-y divide-slate-100">
-                      {filteredStudentCandidates.map((stu) => (
-                        <div
-                          key={stu.id}
-                          onClick={() => handleSelectStudent(stu)}
-                          className="p-2.5 hover:bg-rose-50 cursor-pointer flex items-center justify-between transition-colors"
-                        >
-                          <div>
-                            <div className="font-bold text-slate-900">{stu.name}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              {stu.admissionNumber} · Grade {stu.grade} ({stu.stream})
-                            </div>
-                          </div>
-                          <span className="text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full">
-                            Select
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 2. NURSE IN-CHARGE & CLINIC DETAILS */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Nurse In-Charge *</label>
-                  <input
-                    type="text"
-                    value={formNurseInCharge}
-                    onChange={(e) => setFormNurseInCharge(e.target.value)}
-                    placeholder="e.g. Sister Grace Wambui, RN"
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Nurse License / Reg No</label>
-                  <input
-                    type="text"
-                    value={formNurseLicense}
-                    onChange={(e) => setFormNurseLicense(e.target.value)}
-                    placeholder="e.g. NCK/RN-58921"
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Nurse Staff No</label>
-                  <input
-                    type="text"
-                    value={formNurseStaffNo}
-                    onChange={(e) => setFormNurseStaffNo(e.target.value)}
-                    placeholder="e.g. SAN/002"
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* 3. TIME OF VISIT */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Date of Visit *</label>
-                  <input
-                    type="date"
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Arrival Time *</label>
-                  <input
-                    type="text"
-                    value={formArrivalTime}
-                    onChange={(e) => setFormArrivalTime(e.target.value)}
-                    placeholder="e.g. 09:30 AM"
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Departure / Discharge Time</label>
-                  <input
-                    type="text"
-                    value={formDepartureTime}
-                    onChange={(e) => setFormDepartureTime(e.target.value)}
-                    placeholder="e.g. 10:15 AM (leave blank if ongoing)"
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* 4. CHIEF COMPLAINT / REASON FOR VISIT */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Chief Complaint / Reason for Visit *</label>
-                <input
-                  type="text"
-                  value={formVisitReason}
-                  onChange={(e) => setFormVisitReason(e.target.value)}
-                  placeholder="e.g. Sudden high fever with rigors, abdominal cramps, sports knee sprain..."
-                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                  required
-                />
-              </div>
-
-              {/* 5. SYMPTOMS CHECKLIST */}
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Observed Symptoms Checklist</label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {COMMON_SYMPTOMS.map((sym) => {
-                    const active = selectedSymptoms.includes(sym);
-                    return (
-                      <button
-                        type="button"
-                        key={sym}
-                        onClick={() => toggleSymptom(sym)}
-                        className={`px-2 py-1 rounded-md text-[11px] font-semibold border transition-all ${
-                          active
-                            ? 'bg-rose-600 text-white border-rose-600'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {sym}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customSymptom}
-                    onChange={(e) => setCustomSymptom(e.target.value)}
-                    placeholder="Add custom symptom..."
-                    className="flex-1 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomSymptom}
-                    className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              {/* 6. VITAL SIGNS CHECKED */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-                <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
-                  <Activity className="w-4 h-4 text-emerald-600" />
-                  <span>Clinical Vital Signs (Stethoscope & Thermometer Check)</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div>
-                    <label className="text-[10px] text-slate-500 font-bold block">Body Temp (°C) *</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={vitalTemp}
-                      onChange={(e) => setVitalTemp(e.target.value)}
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono text-xs"
-                      required
-                    />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+            {/* Pinned Modal Header & 2-Page Switcher */}
+            <div className="shrink-0 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-200 bg-white space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-100">
+                    <Stethoscope className="w-5 h-5" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 font-bold block">Pulse (bpm)</label>
-                    <input
-                      type="number"
-                      value={vitalPulse}
-                      onChange={(e) => setVitalPulse(e.target.value)}
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 font-bold block">Blood Pressure</label>
-                    <input
-                      type="text"
-                      value={vitalBP}
-                      onChange={(e) => setVitalBP(e.target.value)}
-                      placeholder="115/75"
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 font-bold block">Resp Rate (/min)</label>
-                    <input
-                      type="number"
-                      value={vitalResp}
-                      onChange={(e) => setVitalResp(e.target.value)}
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono text-xs"
-                    />
+                    <h3 className="font-black text-slate-900 text-base sm:text-lg leading-tight">
+                      Record Sanatorium Attendance
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {recordFormPage === 1
+                        ? 'Page 1 of 2 · Student identification, visit timing, chief complaint & observed symptoms.'
+                        : 'Page 2 of 2 · Clinical vital signs, treatment administered, disposition & medical recommendations.'}
+                    </p>
                   </div>
                 </div>
-              </div>
-
-              {/* 7. TREATMENT & DISPOSITION */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Treatment Administered *</label>
-                  <textarea
-                    rows={2}
-                    value={formTreatment}
-                    onChange={(e) => setFormTreatment(e.target.value)}
-                    placeholder="e.g. Paracetamol 500mg, wound dressing with povidone-iodine, cold compress, ORS..."
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Clinic Disposition *</label>
-                  <select
-                    value={formDisposition}
-                    onChange={(e) => setFormDisposition(e.target.value as any)}
-                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold"
-                  >
-                    <option value="treated_returned_to_class">Treated & Returned to Class</option>
-                    <option value="admitted_observation_bay">Resting in Observation Bay</option>
-                    <option value="signed_out_to_parent">Signed Out to Parent / Picked Up</option>
-                    <option value="referred_to_hospital">Referred to External Hospital / Emergency</option>
-                  </select>
-
-                  {formDisposition === 'admitted_observation_bay' && (
-                    <input
-                      type="text"
-                      value={formBedNumber}
-                      onChange={(e) => setFormBedNumber(e.target.value)}
-                      placeholder="Bed designation e.g. Observation Bed #02"
-                      className="w-full p-1.5 mt-2 bg-amber-50 border border-amber-300 rounded text-xs font-mono"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* 8. SPECIFIC MEDICAL RECOMMENDATIONS */}
-              <div className="p-3 bg-rose-50/60 border border-rose-200 rounded-xl space-y-2">
-                <div className="font-bold text-rose-950 flex items-center gap-1.5 text-xs">
-                  <FileText className="w-4 h-4 text-rose-600" />
-                  <span>Specific Medical Recommendations & Exemptions *</span>
-                </div>
-                
-                <div>
-                  <label className="text-[10px] text-slate-600 font-bold block mb-0.5">Clinical Remarks for Teachers & Parent *</label>
-                  <textarea
-                    rows={2}
-                    value={formRecommendations}
-                    onChange={(e) => setFormRecommendations(e.target.value)}
-                    placeholder="e.g. Student experienced high fever; avoid strenuous physical strain. Re-evaluate before afternoon classes..."
-                    className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-slate-600 font-bold block mb-0.5">Activity / Sports Exemption</label>
-                    <input
-                      type="text"
-                      value={formActivityRestrictions}
-                      onChange={(e) => setFormActivityRestrictions(e.target.value)}
-                      placeholder="e.g. Excused from PE & running for 48 hours"
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-600 font-bold block mb-0.5">Follow-Up Schedule</label>
-                    <input
-                      type="text"
-                      value={formFollowUpPlan}
-                      onChange={(e) => setFormFollowUpPlan(e.target.value)}
-                      placeholder="e.g. Review at 02:00 PM before prep"
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* Parent Alert Toggle */}
-                <div className="pt-2 border-t border-rose-200/80 flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formParentNotified}
-                      onChange={(e) => setFormParentNotified(e.target.checked)}
-                      className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
-                    />
-                    <span className="font-bold text-slate-800 text-[11px]">Notify Parent / Guardian (Phone / SMS)</span>
-                  </label>
-                  {formParentNotified && (
-                    <input
-                      type="text"
-                      value={formParentNotes}
-                      onChange={(e) => setFormParentNotes(e.target.value)}
-                      placeholder="Call logged with parent..."
-                      className="p-1 px-2 bg-white border border-slate-300 rounded text-[11px] w-60"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Form Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowEntryModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                  onClick={closeEntryModal}
+                  className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer"
+                  aria-label="Close modal"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl shadow-md transition-colors flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4 stroke-[3]" />
-                  <span>Save & Record Clinic Attendance</span>
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
+              {/* Interactive 2-Page Stepper Bar */}
+              <div className="grid grid-cols-2 gap-2.5" role="tablist" aria-label="Student record form pages">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={recordFormPage === 1}
+                  onClick={() => navigateRecordFormPage(1)}
+                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    recordFormPage === 1
+                      ? 'bg-rose-50 border-rose-300 text-rose-950 shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  }`}
+                >
+                  <span
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 tabular-nums ${
+                      recordFormPage === 1
+                        ? 'bg-rose-600 text-white'
+                        : isPage1Complete
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {isPage1Complete && recordFormPage !== 1 ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '1'}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Page 1 of 2</div>
+                    <div className="text-xs font-bold truncate">Student & Visit Intake</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={recordFormPage === 2}
+                  onClick={() => navigateRecordFormPage(2)}
+                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    recordFormPage === 2
+                      ? 'bg-rose-50 border-rose-300 text-rose-950 shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  }`}
+                >
+                  <span
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 tabular-nums ${
+                      recordFormPage === 2
+                        ? 'bg-rose-600 text-white'
+                        : isPage2Complete
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {isPage2Complete && recordFormPage !== 2 ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '2'}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-75">Page 2 of 2</div>
+                    <div className="text-xs font-bold truncate">Vitals, Treatment & Notes</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitEntry} noValidate className="flex-1 min-h-0 flex flex-col text-xs">
+              {/* Scrollable Form Body */}
+              <div ref={entryFormBodyRef} className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-5">
+                {formErrors.length > 0 && (
+                  <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1.5">
+                    <div className="font-bold flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Please resolve the following required fields:</span>
+                      </span>
+                      {recordFormPage === 2 && formErrors.some(err => err.startsWith('Page 1:')) && (
+                        <button
+                          type="button"
+                          onClick={() => setRecordFormPage(1)}
+                          className="text-[11px] font-bold text-rose-700 underline hover:text-rose-900 cursor-pointer shrink-0"
+                        >
+                          Go to Page 1
+                        </button>
+                      )}
+                    </div>
+                    <ul className="list-disc list-inside space-y-0.5 pl-1">
+                      {formErrors.map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {recordFormPage === 1 ? (
+                  <>
+                    {/* 1. STUDENT SEARCH & SELECTION */}
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex flex-wrap items-center justify-between gap-2">
+                        <span>Student Name / Admission No *</span>
+                        {selectedStudent && (
+                          <span className="text-emerald-700 font-bold font-mono">
+                            ✓ Student Selected: Grade {selectedStudent.grade} {selectedStudent.stream}
+                          </span>
+                        )}
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={studentSearchTerm}
+                          onChange={(e) => {
+                            setStudentSearchTerm(e.target.value);
+                            if (selectedStudent && e.target.value !== selectedStudent.name) {
+                              setSelectedStudent(null);
+                            }
+                          }}
+                          placeholder="Type student name (e.g. Brian Otieno, Sharon Cherono, Kelvin Kiprop)..."
+                          className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-rose-500 focus:bg-white font-medium"
+                        />
+                        {filteredStudentCandidates.length > 0 && !selectedStudent && (
+                          <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-20 overflow-hidden divide-y divide-slate-100">
+                            {filteredStudentCandidates.map((stu) => (
+                              <div
+                                key={stu.id}
+                                onClick={() => handleSelectStudent(stu)}
+                                className="p-2.5 hover:bg-rose-50 cursor-pointer flex items-center justify-between transition-colors"
+                              >
+                                <div>
+                                  <div className="font-bold text-slate-900">{stu.name}</div>
+                                  <div className="text-[10px] text-slate-500 font-mono">
+                                    {stu.admissionNumber} · Grade {stu.grade} ({stu.stream})
+                                  </div>
+                                </div>
+                                <span className="text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-md">
+                                  Select
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. NURSE IN-CHARGE & CLINIC DETAILS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Nurse In-Charge *</label>
+                        <input
+                          type="text"
+                          value={formNurseInCharge}
+                          onChange={(e) => setFormNurseInCharge(e.target.value)}
+                          placeholder="e.g. Sister Grace Wambui, RN"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Nurse License / Reg No</label>
+                        <input
+                          type="text"
+                          value={formNurseLicense}
+                          onChange={(e) => setFormNurseLicense(e.target.value)}
+                          placeholder="e.g. NCK/RN-58921"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Nurse Staff No</label>
+                        <input
+                          type="text"
+                          value={formNurseStaffNo}
+                          onChange={(e) => setFormNurseStaffNo(e.target.value)}
+                          placeholder="e.g. SAN/002"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 3. TIME OF VISIT */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Date of Visit *</label>
+                        <input
+                          type="date"
+                          value={formDate}
+                          onChange={(e) => setFormDate(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Arrival Time *</label>
+                        <input
+                          type="text"
+                          value={formArrivalTime}
+                          onChange={(e) => setFormArrivalTime(e.target.value)}
+                          placeholder="e.g. 09:30 AM"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1">Departure / Discharge Time</label>
+                        <input
+                          type="text"
+                          value={formDepartureTime}
+                          onChange={(e) => setFormDepartureTime(e.target.value)}
+                          placeholder="e.g. 10:15 AM (blank if ongoing)"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* 4. CHIEF COMPLAINT / REASON FOR VISIT */}
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Chief Complaint / Reason for Visit *</label>
+                      <input
+                        type="text"
+                        value={formVisitReason}
+                        onChange={(e) => setFormVisitReason(e.target.value)}
+                        placeholder="e.g. Sudden high fever with rigors, abdominal cramps, sports knee sprain..."
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-rose-500"
+                      />
+                    </div>
+
+                    {/* 5. SYMPTOMS CHECKLIST */}
+                    <div className="space-y-2">
+                      <label className="font-bold text-slate-700 block">Observed Symptoms Checklist</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {COMMON_SYMPTOMS.map((sym) => {
+                          const active = selectedSymptoms.includes(sym);
+                          return (
+                            <button
+                              type="button"
+                              key={sym}
+                              onClick={() => toggleSymptom(sym)}
+                              className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                                active
+                                  ? 'bg-rose-600 text-white border-rose-600'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {sym}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={customSymptom}
+                          onChange={(e) => setCustomSymptom(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddCustomSymptom();
+                            }
+                          }}
+                          placeholder="Add custom symptom..."
+                          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddCustomSymptom}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Compact Page 1 Student Summary Strip on Page 2 */}
+                    <div className={`px-3.5 py-2.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${
+                      selectedStudent
+                        ? 'bg-slate-50 border-slate-200 text-slate-800'
+                        : 'bg-amber-50 border-amber-200 text-amber-900'
+                    }`}>
+                      {selectedStudent ? (
+                        <div className="text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="font-bold text-slate-900">{selectedStudent.name}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="font-mono text-slate-600">{selectedStudent.admissionNumber || 'ADM'}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="font-semibold text-emerald-700">
+                            Grade {selectedStudent.grade} ({selectedStudent.stream})
+                          </span>
+                          <span className="text-slate-300">·</span>
+                          <span className="font-mono text-slate-500 tabular-nums">
+                            {formDate} · {formArrivalTime}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-semibold flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>No student selected yet on Page 1.</span>
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => navigateRecordFormPage(1)}
+                        className="text-[11px] font-bold text-rose-700 hover:text-rose-900 underline cursor-pointer shrink-0"
+                      >
+                        {selectedStudent ? 'Edit Page 1' : 'Select Student'}
+                      </button>
+                    </div>
+
+                    {/* 6. VITAL SIGNS CHECKED */}
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                      <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                        <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Clinical Vital Signs (Stethoscope & Thermometer Check)</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                          <label className="text-[11px] text-slate-600 font-bold block mb-1">Body Temp (°C) *</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={vitalTemp}
+                            onChange={(e) => setVitalTemp(e.target.value)}
+                            className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg font-mono text-xs tabular-nums focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-600 font-bold block mb-1">Pulse (bpm)</label>
+                          <input
+                            type="number"
+                            value={vitalPulse}
+                            onChange={(e) => setVitalPulse(e.target.value)}
+                            className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg font-mono text-xs tabular-nums focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-600 font-bold block mb-1">Blood Pressure</label>
+                          <input
+                            type="text"
+                            value={vitalBP}
+                            onChange={(e) => setVitalBP(e.target.value)}
+                            placeholder="115/75"
+                            className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg font-mono text-xs tabular-nums focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-600 font-bold block mb-1">Resp Rate (/min)</label>
+                          <input
+                            type="number"
+                            value={vitalResp}
+                            onChange={(e) => setVitalResp(e.target.value)}
+                            className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg font-mono text-xs tabular-nums focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 7. TREATMENT & DISPOSITION */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1.5">Treatment Administered *</label>
+                        <textarea
+                          rows={3}
+                          value={formTreatment}
+                          onChange={(e) => setFormTreatment(e.target.value)}
+                          placeholder="e.g. Paracetamol 500mg, wound dressing with povidone-iodine, cold compress, ORS..."
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-bold text-slate-700 block mb-1.5">Clinic Disposition *</label>
+                        <select
+                          value={formDisposition}
+                          onChange={(e) => setFormDisposition(e.target.value as SanatoriumDisposition)}
+                          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-rose-500"
+                        >
+                          <option value="treated_returned_to_class">Treated & Returned to Class</option>
+                          <option value="admitted_observation_bay">Resting in Observation Bay</option>
+                          <option value="signed_out_to_parent">Signed Out to Parent / Picked Up</option>
+                          <option value="referred_to_hospital">Referred to External Hospital / Emergency</option>
+                        </select>
+
+                        {formDisposition === 'admitted_observation_bay' && (
+                          <input
+                            type="text"
+                            value={formBedNumber}
+                            onChange={(e) => setFormBedNumber(e.target.value)}
+                            placeholder="Bed designation e.g. Observation Bed #02"
+                            className="w-full px-3 py-2 mt-2.5 bg-amber-50 border border-amber-300 rounded-lg text-xs font-mono"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 8. SPECIFIC MEDICAL RECOMMENDATIONS */}
+                    <div className="p-4 bg-rose-50/60 border border-rose-200 rounded-xl space-y-3">
+                      <div className="font-bold text-rose-950 flex items-center gap-1.5 text-xs">
+                        <FileText className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Specific Medical Recommendations & Exemptions *</span>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-slate-700 font-bold block mb-1">Clinical Remarks for Teachers & Parent *</label>
+                        <textarea
+                          rows={3}
+                          value={formRecommendations}
+                          onChange={(e) => setFormRecommendations(e.target.value)}
+                          placeholder="e.g. Student experienced high fever; avoid strenuous physical strain. Re-evaluate before afternoon classes..."
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-slate-700 font-bold block mb-1">Activity / Sports Exemption</label>
+                          <input
+                            type="text"
+                            value={formActivityRestrictions}
+                            onChange={(e) => setFormActivityRestrictions(e.target.value)}
+                            placeholder="e.g. Excused from PE & running for 48 hours"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-700 font-bold block mb-1">Follow-Up Schedule</label>
+                          <input
+                            type="text"
+                            value={formFollowUpPlan}
+                            onChange={(e) => setFormFollowUpPlan(e.target.value)}
+                            placeholder="e.g. Review at 02:00 PM before prep"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-rose-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Parent Alert Toggle */}
+                      <div className="pt-3 border-t border-rose-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={formParentNotified}
+                            onChange={(e) => setFormParentNotified(e.target.checked)}
+                            className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                          />
+                          <span className="font-bold text-slate-800 text-xs">Notify Parent / Guardian (Phone / SMS)</span>
+                        </label>
+                        {formParentNotified && (
+                          <input
+                            type="text"
+                            value={formParentNotes}
+                            onChange={(e) => setFormParentNotes(e.target.value)}
+                            placeholder="Call logged with parent..."
+                            className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs w-full sm:w-64 focus:ring-2 focus:ring-rose-500"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Pinned Form Footer Navigation */}
+              <div className="shrink-0 px-5 sm:px-6 py-3.5 border-t border-slate-200 bg-slate-50/90 flex flex-wrap items-center justify-between gap-2.5">
+                {recordFormPage === 1 ? (
+                  <button
+                    type="button"
+                    onClick={closeEntryModal}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => navigateRecordFormPage(1)}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Back to Page 1</span>
+                  </button>
+                )}
+
+                <div className="flex items-center gap-2">
+                  {recordFormPage === 2 && (
+                    <button
+                      type="button"
+                      onClick={closeEntryModal}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  )}
+
+                  {recordFormPage === 1 ? (
+                    <button
+                      type="button"
+                      onClick={handleProceedToPage2}
+                      className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Next: Vitals & Recommendations</span>
+                      <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>Save & Record Clinic Attendance</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </form>
           </div>
         </div>

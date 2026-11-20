@@ -335,6 +335,77 @@ export function initTimetableSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_tt_jobs_tenant_version
       ON tt_generation_jobs(tenant_id, version_id, created_at);
 
+    CREATE TABLE IF NOT EXISTS tt_categories (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      label TEXT NOT NULL,
+      min_grade INTEGER NOT NULL,
+      max_grade INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 1,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_categories_tenant_code
+      ON tt_categories(tenant_id, code);
+
+    CREATE TABLE IF NOT EXISTS tt_category_subject_allocations (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      config_id TEXT NOT NULL,
+      category_code TEXT NOT NULL,
+      subject_name TEXT NOT NULL,
+      required_weekly_periods INTEGER NOT NULL DEFAULT 3,
+      single_lessons INTEGER NOT NULL DEFAULT 3,
+      double_lessons INTEGER NOT NULL DEFAULT 0,
+      triple_lessons INTEGER NOT NULL DEFAULT 0,
+      pattern_preference TEXT NOT NULL DEFAULT 'spread',
+      max_per_day INTEGER NOT NULL DEFAULT 1,
+      min_spacing_days INTEGER NOT NULL DEFAULT 0,
+      required_room_type TEXT DEFAULT 'general',
+      default_room_id TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_cat_alloc_unique
+      ON tt_category_subject_allocations(config_id, category_code, lower(subject_name));
+
+    CREATE TABLE IF NOT EXISTS tt_teacher_bookings (
+      version_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
+      day_of_week TEXT NOT NULL,
+      period_number INTEGER NOT NULL,
+      session_block_id TEXT NOT NULL,
+      subject_name TEXT NOT NULL DEFAULT '',
+      grade INTEGER NOT NULL DEFAULT 0,
+      stream TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (version_id, teacher_id, day_of_week, period_number),
+      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_tt_teacher_bookings_block
+      ON tt_teacher_bookings(version_id, session_block_id);
+
+    CREATE TABLE IF NOT EXISTS tt_stream_bookings (
+      version_id TEXT NOT NULL,
+      tenant_id TEXT NOT NULL,
+      grade INTEGER NOT NULL,
+      stream TEXT NOT NULL,
+      group_key TEXT NOT NULL DEFAULT 'WHOLE',
+      day_of_week TEXT NOT NULL,
+      period_number INTEGER NOT NULL,
+      session_block_id TEXT NOT NULL,
+      subject_name TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (version_id, grade, stream, group_key, day_of_week, period_number),
+      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_tt_stream_bookings_block
+      ON tt_stream_bookings(version_id, session_block_id);
+
     CREATE TABLE IF NOT EXISTS tt_audit_logs (
       id TEXT PRIMARY KEY,
       tenant_id TEXT NOT NULL,
@@ -363,4 +434,7 @@ export function initTimetableSchema(db: DatabaseSync): void {
   ensureColumn('tt_classrooms', 'max_concurrent_classes', `INTEGER NOT NULL DEFAULT 1`);
   ensureColumn('tt_classrooms', 'responsible_staff', `TEXT DEFAULT ''`);
   ensureColumn('tt_generation_jobs', 'scope_json', `TEXT NOT NULL DEFAULT '{}'`);
+  ensureColumn('tt_grade_subject_allocations', 'category_code', `TEXT DEFAULT ''`);
+  ensureColumn('tt_grade_subject_allocations', 'category_allocation_id', `TEXT`);
+  ensureColumn('tt_grade_subject_allocations', 'is_category_override', `INTEGER NOT NULL DEFAULT 0`);
 }

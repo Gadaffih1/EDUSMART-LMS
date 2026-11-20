@@ -326,7 +326,7 @@ test('TEST 1: Generate clash-free timetables for Grades 1–3 (Lower Primary)', 
   const { job, entries, unscheduled, validation } = await configureAndGenerate(db, tenantId, configId, versionId, allocs);
   assert.equal(job.status, 'completed');
   assert.equal(unscheduled.length, 0, 'Expected 0 unscheduled lessons for Grades 1-3');
-  assert.equal(validation.hardErrors.length, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
+  assert.equal(validation.hardErrors, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
   assert.equal(entries.length, 3 * 2 * 18, 'Expected 6 streams x 18 lessons = 108 entries');
   assertZeroTeacherCollisions(entries);
 });
@@ -364,7 +364,7 @@ test('TEST 2: Generate clash-free timetables for Grades 4–6 (Upper Primary)', 
   const { job, entries, unscheduled, validation } = await configureAndGenerate(db, tenantId, configId, versionId, allocs);
   assert.equal(job.status, 'completed');
   assert.equal(unscheduled.length, 0);
-  assert.equal(validation.hardErrors.length, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
+  assert.equal(validation.hardErrors, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
   assert.equal(entries.length, 3 * 2 * 20);
   assertZeroTeacherCollisions(entries);
 });
@@ -402,7 +402,7 @@ test('TEST 3: Generate clash-free timetables for Grades 7–9 (Junior School)', 
   const { job, entries, unscheduled, validation } = await configureAndGenerate(db, tenantId, configId, versionId, allocs);
   assert.equal(job.status, 'completed');
   assert.equal(unscheduled.length, 0);
-  assert.equal(validation.hardErrors.length, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
+  assert.equal(validation.hardErrors, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
   assert.equal(entries.length, 3 * 2 * 22);
   assertZeroTeacherCollisions(entries);
 });
@@ -554,7 +554,7 @@ test('TEST 6 & TEST 7: Every stream receives all required lessons and every teac
 
   const { entries, unscheduled, validation } = await configureAndGenerate(db, tenantId, configId, versionId, allocs);
   assert.equal(unscheduled.length, 0);
-  assert.equal(validation.hardErrors.length, 0);
+  assert.equal(validation.hardErrors, 0);
 
   // TEST 6: Every stream receives exact total (21 periods each)
   for (const g of [4, 5]) {
@@ -776,7 +776,7 @@ test('TEST 10: Combined-stream joint lesson counts for both streams without teac
   assert.equal(teacherBookings.length, 2, 'Teacher workload must count each joint session once (2 bookings, not 4)');
 
   const validation = validateTimetableVersion(db, versionId);
-  assert.equal(validation.hardErrors.length, 0, `Joint lesson should produce 0 hard errors: ${JSON.stringify(validation.hardErrors)}`);
+  assert.equal(validation.hardErrors, 0, `Joint lesson should produce 0 hard errors: ${JSON.stringify(validation.hardErrors)}`);
 });
 
 /* =========================================================================
@@ -789,8 +789,8 @@ test('TEST 11: Scheduled subject & activity counts match allocations exactly (Sw
   const { configId, versionId, addTeacher } = seedCategorySchool(db, tenantId, [5], ['Dove']);
 
   const curriculum = [
-    { subject: 'Mathematics', periods: 5, teacherId: 't-m', roomType: 'regular' },
-    { subject: 'English', periods: 5, teacherId: 't-e', roomType: 'regular' },
+    { subject: 'Mathematics', periods: 5, teacherId: 't-m', roomType: 'general' },
+    { subject: 'English', periods: 5, teacherId: 't-e', roomType: 'general' },
     { subject: 'Swimming', periods: 2, teacherId: 't-sw', roomType: 'swimming_pool' },
     { subject: 'Computer Studies / ICT', periods: 2, teacherId: 't-ic', roomType: 'computer_lab' },
     { subject: 'Library', periods: 1, teacherId: 't-lb', roomType: 'library' },
@@ -815,7 +815,7 @@ test('TEST 11: Scheduled subject & activity counts match allocations exactly (Sw
 
   const { entries, unscheduled, validation } = await configureAndGenerate(db, tenantId, configId, versionId, allocs);
   assert.equal(unscheduled.length, 0);
-  assert.equal(validation.hardErrors.length, 0);
+  assert.equal(validation.hardErrors, 0);
 
   for (const c of curriculum) {
     const count = entries.filter((e) => e.subject_name.toLowerCase() === c.subject.toLowerCase()).length;
@@ -958,7 +958,7 @@ test('TEST 14: Published timetable serves exact stream entries for students and 
     { grade: 7, stream: 'Chania', subject: 'Integrated Science', periods: 4, teacherId: 't-g7' },
   ]);
   assert.equal(unscheduled.length, 0);
-  assert.equal(validation.hardErrors.length, 0);
+  assert.equal(validation.hardErrors, 0);
 
   // Publish the timetable version
   db.prepare(`UPDATE tt_versions SET status = 'published', published_at = ? WHERE id = ?`).run(
@@ -986,7 +986,7 @@ test('TEST 14: Published timetable serves exact stream entries for students and 
 
   // Verify synced collections_store timetables collection matches published entries
   const syncedSlots = db
-    .prepare(`SELECT * FROM collections_store WHERE tenant_id = ? AND collection_key = 'timetables' AND deleted_at IS NULL`)
+    .prepare(`SELECT * FROM collections_store WHERE tenant_id = ? AND collection_key = 'edusmart_timetable_v1' AND deleted_at IS NULL`)
     .all(tenantId) as any[];
   assert.equal(syncedSlots.length, 8);
 });
@@ -1137,6 +1137,6 @@ test('TEST 16: Strict multi-tenant isolation between School A and School B', asy
   // Verify pre-generation input validator is strictly tenant-scoped
   const diagA = validateTimetableInputs(db, 'school-alpha', schoolA.configId);
   const diagB = validateTimetableInputs(db, 'school-beta', schoolB.configId);
-  assert.equal(diagA.summary.totalStreams, 1);
-  assert.equal(diagB.summary.totalStreams, 1);
+  assert.equal(diagA.streamLoadSummary.length, 1);
+  assert.equal(diagB.streamLoadSummary.length, 1);
 });

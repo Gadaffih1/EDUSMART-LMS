@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Calendar, Clock, Plus, Save, Trash2, CheckCircle2, AlertCircle, Pencil, BookOpen, FolderKanban, X, UserCheck } from 'lucide-react';
+import { ArrowUpRight, Building2, Calendar, Clock, Plus, Save, Trash2, CheckCircle2, AlertCircle, Pencil, BookOpen, FolderKanban, X, UserCheck } from 'lucide-react';
 import {
   ROOM_TYPE_LABELS,
+  TTCategoryAllocationItem,
   TTClassroomItem,
   TTConfigData,
   TTDepartmentItem,
+  TTGradeAllocationItem,
   TTGradeSchedule,
   TTPeriodItem,
   TTSubjectItem,
@@ -21,7 +23,10 @@ interface TimetableConfigPanelProps {
   classrooms: TTClassroomItem[];
   subjects?: TTSubjectItem[];
   departments?: TTDepartmentItem[];
+  categoryAllocations?: TTCategoryAllocationItem[];
+  gradeAllocations?: TTGradeAllocationItem[];
   schoolId?: string;
+  onOpenSubjectAllocations?: (departmentName?: string) => void;
   onRefresh: () => Promise<void>;
 }
 
@@ -34,7 +39,10 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
   classrooms,
   subjects = [],
   departments = [],
+  categoryAllocations = [],
+  gradeAllocations = [],
   schoolId,
+  onOpenSubjectAllocations,
   onRefresh,
 }) => {
   const [academicYear, setAcademicYear] = useState(config.academicYear);
@@ -44,7 +52,6 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
   const [defaultPeriodsPerDay, setDefaultPeriodsPerDay] = useState(config.defaultPeriodsPerDay);
   const [cycleLabel, setCycleLabel] = useState(config.cycleLabel);
   const [localPeriods, setLocalPeriods] = useState<TTPeriodItem[]>(periods);
-  const [localGradeScheds, setLocalGradeScheds] = useState<TTGradeSchedule[]>(gradeSchedules);
   const [savingConfig, setSavingConfig] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -116,10 +123,6 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
     setLocalPeriods(periods);
   }, [periods]);
 
-  useEffect(() => {
-    setLocalGradeScheds(gradeSchedules);
-  }, [gradeSchedules]);
-
   const toggleWorkingDay = (day: string) => {
     const next = workingDays.includes(day)
       ? workingDays.filter((d) => d !== day)
@@ -162,10 +165,6 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
     setLocalPeriods((prev) => prev.filter((_, i) => i !== idx).map((p, i) => ({ ...p, sortOrder: i + 1 })));
   };
 
-  const updateGradeSchedRow = (grade: number, patch: Partial<TTGradeSchedule>) => {
-    setLocalGradeScheds((prev) => prev.map((g) => (g.grade === grade ? { ...g, ...patch } : g)));
-  };
-
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     setStatusMsg(null);
@@ -180,11 +179,11 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
           defaultPeriodsPerDay,
           cycleLabel,
           periods: localPeriods,
-          gradeSchedules: localGradeScheds,
+          gradeSchedules,
         }),
       });
       await onRefresh();
-      setStatusMsg({ type: 'ok', text: 'Timetable configuration, bell slots, and grade schedules saved.' });
+      setStatusMsg({ type: 'ok', text: 'Timetable configuration and bell schedule saved.' });
     } catch (err: any) {
       setStatusMsg({ type: 'err', text: err?.message || 'Failed to save configuration.' });
     } finally {
@@ -702,74 +701,6 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
         </div>
       </section>
 
-      {/* 3. Different Schedules per Grade Level */}
-      <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900">03. Per-Grade Level Schedule Limits</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Adjust daily teaching periods and assembly day individually for lower primary, upper primary, and junior secondary grades.
-          </p>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-500 font-semibold">
-                <th className="py-2 pr-3">Grade</th>
-                <th className="py-2 pr-3">Periods / Day</th>
-                <th className="py-2 pr-3">Assembly Day</th>
-                <th className="py-2 pr-3">Assembly Period</th>
-                <th className="py-2">Weekly Capacity</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {localGradeScheds.map((gs) => {
-                const cap = gs.workingDays.length * gs.periodsPerDay - (gs.assemblyPeriod > 0 ? 1 : 0);
-                return (
-                  <tr key={gs.grade}>
-                    <td className="py-2 pr-3 font-semibold text-slate-900">Grade {gs.grade}</td>
-                    <td className="py-2 pr-3">
-                      <input
-                        type="number"
-                        min={4}
-                        max={12}
-                        value={gs.periodsPerDay}
-                        onChange={(e) => updateGradeSchedRow(gs.grade, { periodsPerDay: Number(e.target.value || 8) })}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded font-mono tabular-nums"
-                      />
-                    </td>
-                    <td className="py-2 pr-3">
-                      <select
-                        value={gs.assemblyDay}
-                        onChange={(e) => updateGradeSchedRow(gs.grade, { assemblyDay: e.target.value })}
-                        className="px-2 py-1 border border-slate-200 rounded bg-white"
-                      >
-                        {WEEK_DAYS.map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-2 pr-3">
-                      <input
-                        type="number"
-                        min={0}
-                        max={gs.periodsPerDay}
-                        value={gs.assemblyPeriod}
-                        onChange={(e) => updateGradeSchedRow(gs.grade, { assemblyPeriod: Number(e.target.value || 0) })}
-                        className="w-16 px-2 py-1 border border-slate-200 rounded font-mono tabular-nums"
-                      />
-                    </td>
-                    <td className="py-2 font-mono tabular-nums text-slate-700 font-semibold">
-                      {cap} periods / week
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       {/* 4. Classrooms & Specialized Facilities */}
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
         <div className="border-b border-slate-100 pb-3">
@@ -898,16 +829,28 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
         </div>
       </section>
 
-      {/* 5. Academic Departments (Add, Edit & Remove) */}
+      {/* 5. Academic Departments (Linked to Subject Allocations) */}
       <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-        <div className="border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <FolderKanban className="w-4 h-4 text-slate-600" />
-            <span>05. Academic Departments ({departments.length})</span>
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Add, rename, edit, or remove academic departments used when preparing the Master Timetable, assigning subjects, and organizing teachers.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <FolderKanban className="w-4 h-4 text-slate-600" />
+              <span>05. Academic Departments ({departments.length})</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Add, rename, edit, or remove academic departments and jump directly into their linked weekly Subject Allocations.
+            </p>
+          </div>
+          {onOpenSubjectAllocations && (
+            <button
+              type="button"
+              onClick={() => onOpenSubjectAllocations()}
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <span>Open Subject Allocations</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <form onSubmit={handleCreateDepartment} className="grid grid-cols-1 sm:grid-cols-6 gap-2 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -971,16 +914,25 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                 <th className="py-2 pr-3">Code</th>
                 <th className="py-2 pr-3">Department Name</th>
                 <th className="py-2 pr-3">Linked HoD</th>
-                <th className="py-2 pr-3">Subjects</th>
+                <th className="py-2 pr-3">Subject Allocations</th>
                 <th className="py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {departments.map((dept) => {
                 const isEditing = editingDeptId === dept.id;
-                const linkedSubCount = subjects.filter(
+                const deptSubjects = subjects.filter(
                   (s) => s.department.toLowerCase() === dept.name.toLowerCase()
+                );
+                const deptSubNamesLower = new Set(deptSubjects.map((s) => s.name.toLowerCase()));
+                const linkedSubCount = deptSubjects.length;
+                const activeCatAllocCount = categoryAllocations.filter(
+                  (a) => a.isActive && deptSubNamesLower.has(a.subjectName.toLowerCase())
                 ).length;
+                const activeGradeAllocCount = gradeAllocations.filter(
+                  (a) => a.isActive && deptSubNamesLower.has(a.subjectName.toLowerCase())
+                ).length;
+                const totalLinkedAllocs = activeCatAllocCount || activeGradeAllocCount;
                 return (
                   <tr key={dept.id} className="hover:bg-slate-50">
                     {isEditing ? (
@@ -1071,7 +1023,25 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="py-2 pr-3 font-mono text-slate-600">{linkedSubCount}</td>
+                        <td className="py-2 pr-3">
+                          {onOpenSubjectAllocations ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenSubjectAllocations(dept.name)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-[11px] font-bold cursor-pointer transition-colors"
+                              title={`Open Subject Allocations filtered to ${dept.name}`}
+                            >
+                              <span className="font-mono tabular-nums">{linkedSubCount}</span>
+                              <span>subj</span>
+                              <span className="text-indigo-400">·</span>
+                              <span className="font-mono tabular-nums">{totalLinkedAllocs}</span>
+                              <span>allocs</span>
+                              <ArrowUpRight className="w-3 h-3" />
+                            </button>
+                          ) : (
+                            <span className="font-mono text-slate-600">{linkedSubCount}</span>
+                          )}
+                        </td>
                         <td className="py-2 text-right whitespace-nowrap">
                           {confirmDeleteDeptId === dept.id ? (
                             <span className="inline-flex items-center gap-1">
@@ -1093,6 +1063,17 @@ export const TimetableConfigPanel: React.FC<TimetableConfigPanelProps> = ({
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1">
+                              {onOpenSubjectAllocations && (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenSubjectAllocations(dept.name)}
+                                  className="px-2 py-1 text-emerald-700 hover:bg-emerald-50 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
+                                  title={`View and edit Subject Allocations for ${dept.name}`}
+                                >
+                                  <ArrowUpRight className="w-3 h-3" />
+                                  <span>Allocations</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {

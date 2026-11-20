@@ -5141,6 +5141,6 @@ export function registerTimetableRoutes(app: Express): void {
     const check = checkGlobalTeacherConflict(db, String(req.params.id), [], '', []);
     validateTimetableVersion(db, String(req.params.id));
     notifyMySqlTablesChanged(['tt_entries', 'tt_teacher_bookings', 'tt_stream_bookings', 'tt_validation_conflicts']);
-    res.json({ ok: true, ...result, check });
+    res.json({ ...result, check });
   });
 }

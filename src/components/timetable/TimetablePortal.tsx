@@ -147,6 +147,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
     }
   }, [initialSuiteTab, isTimetableAdminUser]);
   const [mobileGridDay, setMobileGridDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('Monday');
+  const [allocationsDepartmentFilter, setAllocationsDepartmentFilter] = useState<string>('');
   const [ttWorkspace, setTtWorkspace] = useState<TTWorkspacePayload | null>(null);
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -1621,7 +1622,13 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   classrooms={ttWorkspace.classrooms}
                   subjects={ttWorkspace.subjects}
                   departments={ttWorkspace.departments || []}
+                  categoryAllocations={ttWorkspace.categoryAllocations || []}
+                  gradeAllocations={ttWorkspace.gradeAllocations}
                   schoolId={currentTenant.id}
+                  onOpenSubjectAllocations={(deptName) => {
+                    setAllocationsDepartmentFilter(deptName || '');
+                    setSuiteTab('allocations');
+                  }}
                   onRefresh={async () => {
                     await loadWorkspace(ttWorkspace.activeVersion?.id);
                   }}
@@ -1632,6 +1639,10 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                 <TimetableAllocationsPanel
                   categories={ttWorkspace.categories || []}
                   categoryAllocations={ttWorkspace.categoryAllocations || []}
+                  departments={ttWorkspace.departments || []}
+                  departmentFilter={allocationsDepartmentFilter}
+                  onDepartmentFilterChange={setAllocationsDepartmentFilter}
+                  onOpenDepartmentsConfig={() => setSuiteTab('config')}
                   gradeSchedules={ttWorkspace.gradeSchedules}
                   subjects={ttWorkspace.subjects}
                   classrooms={ttWorkspace.classrooms}

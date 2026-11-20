@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx';
 import { AlertTriangle, CheckCircle2, Copy, Layers, Plus, RotateCcw, Save, Trash2, Upload, Users } from 'lucide-react';
 import {
   ROOM_TYPE_LABELS,
+  TTCategoryAllocationItem,
+  TTCategoryItem,
   TTClassroomItem,
   TTGradeAllocationItem,
   TTGradeSchedule,
@@ -13,8 +15,11 @@ import {
   TTTeacherProfileItem,
   ttApiFetch,
 } from './timetableTypes';
+import { CentralCategoryAllocationsTable } from './CentralCategoryAllocationsTable';
 
 interface TimetableAllocationsPanelProps {
+  categories?: TTCategoryItem[];
+  categoryAllocations?: TTCategoryAllocationItem[];
   gradeSchedules: TTGradeSchedule[];
   subjects: TTSubjectItem[];
   classrooms: TTClassroomItem[];
@@ -41,6 +46,8 @@ const GRADE_BANDS = [
 ];
 
 export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps> = ({
+  categories,
+  categoryAllocations,
   gradeSchedules,
   subjects,
   classrooms,
@@ -66,7 +73,7 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
   }, [grades]);
   const selectedGradeBand = gradeBandOptions.find((band) => band.grades.includes(selectedGrade));
   const [applyEditsToWholeBand, setApplyEditsToWholeBand] = useState<boolean>(true);
-  const [subTab, setSubTab] = useState<'grade_template' | 'stream_allocations' | 'groups_joint'>('grade_template');
+  const [subTab, setSubTab] = useState<'category_allocations' | 'grade_template' | 'stream_allocations' | 'groups_joint'>('category_allocations');
   const [selectedStream, setSelectedStream] = useState<string>('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -586,7 +593,16 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
             ))}
           </select>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+          <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setSubTab('category_allocations')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md cursor-pointer ${
+                subTab === 'category_allocations' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'
+              }`}
+            >
+              Central Category Table (1–3 / 4–6 / 7–9)
+            </button>
             <button
               type="button"
               onClick={() => setSubTab('grade_template')}
@@ -594,7 +610,7 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                 subTab === 'grade_template' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'
               }`}
             >
-              Grade Template
+              Grade Templates &amp; Import
             </button>
             <button
               type="button"
@@ -687,6 +703,18 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
           </div>
         )}
       </div>
+
+      {/* Sub-view 0: Central Weekly Subject Allocation Table (Grades 1–3, 4–6, 7–9 + Grade Overrides) */}
+      {subTab === 'category_allocations' && (
+        <CentralCategoryAllocationsTable
+          categories={categories}
+          categoryAllocations={categoryAllocations}
+          gradeSchedules={gradeSchedules}
+          gradeAllocations={gradeAllocations}
+          subjects={subjects}
+          onRefresh={onRefresh}
+        />
+      )}
 
       {/* Sub-view 1: Grade Template */}
       {subTab === 'grade_template' && (

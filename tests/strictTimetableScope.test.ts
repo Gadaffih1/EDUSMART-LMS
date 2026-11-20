@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { initTimetableSchema } from '../src/server/timetableSchema.ts';
 import {
+  bookEntryAtomically,
   checkTeacherAssignmentScope,
   ensureTenantTimetableSeeded,
   loadTenantTeacherScopes,
@@ -11,8 +12,6 @@ import {
   validateSingleMoveCandidate,
   validateTimetableVersion,
 } from '../src/server/timetableEngine.ts';
-import { generateAutomatedTimetable } from '../src/utils/timetableGenerator.ts';
-import type { FixedLessonCondition, SharedResourceFacility, User } from '../src/types';
 
 function createStrictScopeTestDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');
@@ -292,68 +291,74 @@ test('3. Validator & Manual Move Candidate reject any unauthorized teacher entry
   assert.ok(moveCheck.hardConflicts.some((m) => m.includes('not assigned to teach Mathematics')));
 });
 
-test('4. Client-side generateAutomatedTimetable strictly blocks unassigned subjects, grades, and streams', () => {
-  const teachers: User[] = [
-    {
-      id: 't1',
-      name: 'Mr. Otieno',
-      email: 'otieno@school.ke',
-      role: 'teacher',
-      assignedSubjects: ['Mathematics'],
-      assignedSubjectAllocations: [
-        { grade: 4, stream: 'Dove', subject: 'Mathematics', periodsPerWeek: 4 },
-      ],
-    },
-    {
-      id: 't2',
-      name: 'Ms. Wanjiku',
-      email: 'wanjiku@school.ke',
-      role: 'teacher',
-      assignedSubjects: ['English'],
-      // Explicitly empty assignedSubjectAllocations -> must NOT fall back to legacy Cartesian product
-      assignedSubjectAllocations: [],
-      assignedStreams: [{ grade: 4, stream: 'Eagle' }],
-    },
-  ];
+test('4. Database-backed bookEntryAtomically strictly blocks unassigned subjects, grades, and streams', () => {
+  const db = createStrictScopeTestDb();
+  const tenantId = 'tenant-atomic-scope';
+  db.prepare(`INSERT INTO school_grades (id, school_id, name) VALUES (?, ?, 'Grade 4')`).run('g4', tenantId);
+  db.prepare(`INSERT INTO school_streams (id, school_id, grade_id, name, display_name) VALUES (?, ?, 'g4', 'Dove', '4 Dove')`).run('s4d', tenantId);
+  db.prepare(`INSERT INTO school_streams (id, school_id, grade_id, name, display_name) VALUES (?, ?, 'g4', 'Eagle', '4 Eagle')`).run('s4e', tenantId);
+  db.prepare(`INSERT INTO grades (id, school_id, name, grade_number, is_active) VALUES ('g4', ?, 'Grade 4', 4, 1)`).run(tenantId);
+  db.prepare(`INSERT INTO streams (id, school_id, grade_id, name, is_active) VALUES ('s4d', ?, 'g4', 'Dove', 1)`).run(tenantId);
+  db.prepare(`INSERT INTO streams (id, school_id, grade_id, name, is_active) VALUES ('s4e', ?, 'g4', 'Eagle', 1)`).run(tenantId);
+  db.prepare(
+    `INSERT INTO users (id, school_id, email, name, role, is_active, payload_json)
+     VALUES ('t1', ?, 'otieno@school.ke', 'Mr. Otieno', 'teacher', 1, ?)`
+  ).run(tenantId, JSON.stringify({ id: 't1', name: 'Mr. Otieno', role: 'teacher' }));
+  db.prepare(
+    `INSERT INTO grade_teacher_assignments (id, school_id, grade_id, stream_id, teacher_id, teacher_name, subject_name, periods_per_week, is_active)
+     VALUES ('gta-1', ?, 'g4', 's4d', 't1', 'Mr. Otieno', 'Mathematics', 4, 1)`
+  ).run(tenantId);
 
-  const fixedConditions: FixedLessonCondition[] = [
-    {
-      id: 'fx-bad',
-      title: 'Unauthorized English Fixed Slot',
-      subject: 'English',
-      grades: [4],
-      streams: ['Dove'],
-      dayOfWeek: 'Monday',
-      period: 1,
-      teacherName: 'Mr. Otieno', // NOT assigned to English!
-      isActive: true,
-    },
-  ];
-  const facilities: SharedResourceFacility[] = [];
+  const { configId } = ensureTenantTimetableSeeded(db, tenantId);
+  const versionId = String(
+    (db.prepare(`SELECT id FROM tt_versions WHERE config_id = ? LIMIT 1`).get(configId) as any).id
+  );
+  const tProfile = db
+    .prepare(`SELECT id FROM tt_teacher_profiles WHERE tenant_id = ? AND user_id = 't1' LIMIT 1`)
+    .get(tenantId) as any;
+  const teacherId = String(tProfile?.id || 't1');
 
-  const result = generateAutomatedTimetable(teachers, fixedConditions, facilities, {
-    gradesToGenerate: [4],
-    allocatedStreamSubjects: [
-      // Valid
-      { grade: 4, stream: 'Dove', subject: 'Mathematics', periodsPerWeek: 4, teacherName: 'Mr. Otieno', teacherEmail: 'otieno@school.ke' },
-      // Invalid stream for Mr. Otieno
-      { grade: 4, stream: 'Eagle', subject: 'Mathematics', periodsPerWeek: 3, teacherName: 'Mr. Otieno', teacherEmail: 'otieno@school.ke' },
-      // Invalid subject for Mr. Otieno
-      { grade: 4, stream: 'Dove', subject: 'Kiswahili', periodsPerWeek: 3, teacherName: 'Mr. Otieno', teacherEmail: 'otieno@school.ke' },
-    ],
+  // Valid scoped booking succeeds
+  const validBooking = bookEntryAtomically(db, {
+    versionId,
+    tenantId,
+    dayOfWeek: 'Monday',
+    periods: [1],
+    grade: 4,
+    stream: 'Dove',
+    subjectName: 'Mathematics',
+    teacherIds: [teacherId],
+    teacherNames: ['Mr. Otieno'],
   });
+  assert.equal(validBooking.ok, true, `Expected valid scoped booking to succeed, got: ${JSON.stringify(validBooking)}`);
 
-  // ONLY the 4 valid Grade 4 Dove Mathematics lessons for Mr. Otieno should exist
-  assert.equal(result.slots.length, 4);
-  for (const s of result.slots) {
-    assert.equal(s.teacherName, 'Mr. Otieno');
-    assert.equal(s.grade, 4);
-    assert.equal(s.stream, 'Dove');
-    assert.equal(s.subject, 'Mathematics');
-  }
-  // Ms. Wanjiku (empty assignedSubjectAllocations: []) must NOT appear at all
-  assert.equal(result.slots.filter((s) => s.teacherName === 'Ms. Wanjiku').length, 0);
-  // Conflict report must document the blocked out-of-scope allocations & fixed lesson
-  assert.ok(result.conflictReport.some((m) => m.includes('Blocked out-of-scope allocation')));
-  assert.ok(result.conflictReport.some((m) => m.includes('Blocked out-of-scope fixed lesson')));
+  // Wrong stream for Mr. Otieno is strictly rejected
+  const wrongStream = bookEntryAtomically(db, {
+    versionId,
+    tenantId,
+    dayOfWeek: 'Monday',
+    periods: [2],
+    grade: 4,
+    stream: 'Eagle',
+    subjectName: 'Mathematics',
+    teacherIds: [teacherId],
+    teacherNames: ['Mr. Otieno'],
+  });
+  assert.equal(wrongStream.ok, false);
+  if (!wrongStream.ok) assert.ok(wrongStream.code.includes('SCOPE') || wrongStream.error.includes('not assigned'));
+
+  // Wrong subject for Mr. Otieno is strictly rejected
+  const wrongSubject = bookEntryAtomically(db, {
+    versionId,
+    tenantId,
+    dayOfWeek: 'Monday',
+    periods: [3],
+    grade: 4,
+    stream: 'Dove',
+    subjectName: 'Kiswahili',
+    teacherIds: [teacherId],
+    teacherNames: ['Mr. Otieno'],
+  });
+  assert.equal(wrongSubject.ok, false);
+  if (!wrongSubject.ok) assert.ok(wrongSubject.code.includes('SCOPE') || wrongSubject.error.includes('not assigned'));
 });

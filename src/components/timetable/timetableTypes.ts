@@ -98,9 +98,42 @@ export interface TTTeacherProfileItem {
   archivedAt: string | null;
 }
 
+export type TTCategoryCode = 'lower_primary' | 'upper_primary' | 'junior_school';
+
+export interface TTCategoryItem {
+  id: string;
+  code: TTCategoryCode;
+  name: string;
+  label: string;
+  minGrade: number;
+  maxGrade: number;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface TTCategoryAllocationItem {
+  id: string;
+  categoryCode: TTCategoryCode;
+  subjectName: string;
+  requiredWeeklyPeriods: number;
+  singleLessons: number;
+  doubleLessons: number;
+  tripleLessons: number;
+  patternPreference: string;
+  maxPerDay: number;
+  minSpacingDays: number;
+  requiredRoomType: string;
+  defaultRoomId: string | null;
+  isActive: boolean;
+  updatedAt?: string;
+}
+
 export interface TTGradeAllocationItem {
   id: string;
   grade: number;
+  categoryCode?: TTCategoryCode;
+  categoryAllocationId?: string | null;
+  isCategoryOverride?: boolean;
   subjectName: string;
   requiredWeeklyPeriods: number;
   singleLessons: number;
@@ -255,6 +288,8 @@ export interface TTVersionDetail extends TTVersionSummary {
 export interface TTWorkspacePayload {
   tenantId: string;
   config: TTConfigData;
+  categories?: TTCategoryItem[];
+  categoryAllocations?: TTCategoryAllocationItem[];
   gradeSchedules: TTGradeSchedule[];
   periods: TTPeriodItem[];
   subjects: TTSubjectItem[];
@@ -318,6 +353,8 @@ export const ROOM_TYPE_LABELS: Record<string, string> = {
   workshop: 'Pre-Tech Workshop',
   art_room: 'Creative Arts & Music Studio',
   library: 'School Library / Reading Hall',
+  maktaba: 'Maktaba Reading Room',
+  clubs: 'Clubs Activity Room',
   swimming_pool: 'Swimming Pool',
   field: 'Sports Field',
   hall: 'Assembly Hall',

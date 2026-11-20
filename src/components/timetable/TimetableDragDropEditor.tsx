@@ -1038,27 +1038,129 @@ export const TimetableDragDropEditor: React.FC<TimetableDragDropEditorProps> = (
             )}
           </div>
 
-          {/* Conflict Diagnostics Snapshot */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
-              Validation Diagnostics
-            </h3>
+          {/* Collision Detection & Validation Dashboard */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Collision Detection &amp; Validation
+              </h3>
+              <span className="text-[11px] font-mono tabular-nums font-semibold text-slate-600">
+                {hardErrors.length} err · {warnings.length} warn
+              </span>
+            </div>
+
+            {/* Publication Gate Banner */}
+            {hardErrors.length > 0 || teacherClashCount > 0 ? (
+              <div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-900 text-xs">
+                <div className="font-bold">Publication Blocked</div>
+                <div className="text-[11px] text-rose-800 mt-0.5">
+                  Resolve {hardErrors.length} hard error(s) and {teacherClashCount} teacher collision(s) before publishing.
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 text-xs">
+                <div className="font-bold">Verified Clash-Free</div>
+                <div className="text-[11px] text-emerald-800 mt-0.5">
+                  0 teacher collisions · 0 stream clashes · ready to approve &amp; publish.
+                </div>
+              </div>
+            )}
+
+            {/* Categorized Collision Breakdown */}
+            {(() => {
+              const allIssues = [...hardErrors, ...warnings];
+              const countBy = (matcher: (t: string) => boolean) =>
+                allIssues.filter((c) => matcher(String(c.conflictType || '').toLowerCase())).length;
+
+              const categories = [
+                {
+                  label: 'Teacher Collisions',
+                  count: Math.max(teacherClashCount, countBy((t) => t.includes('teacher_double') || t.includes('teacher_clash') || t.includes('teacher_booking'))),
+                  critical: true,
+                },
+                {
+                  label: 'Stream Clashes',
+                  count: countBy((t) => t.includes('stream_double') || t.includes('stream_clash') || t.includes('stream_booking') || t.includes('group_overlap')),
+                  critical: true,
+                },
+                {
+                  label: 'Facility Clashes',
+                  count: countBy((t) => t.includes('room') || t.includes('facility')),
+                  critical: true,
+                },
+                {
+                  label: 'Missing / Excess Lessons',
+                  count: countBy((t) => t.includes('quota') || t.includes('unscheduled') || t.includes('missing') || t.includes('excess')),
+                  critical: true,
+                },
+                {
+                  label: 'Unassigned / Scope',
+                  count: countBy((t) => t.includes('scope') || t.includes('unassigned') || t.includes('subject_mismatch')),
+                  critical: true,
+                },
+                {
+                  label: 'Availability / Off-Duty',
+                  count: countBy((t) => t.includes('unavail') || t.includes('off_duty') || t.includes('break') || t.includes('lunch')),
+                  critical: true,
+                },
+                {
+                  label: 'Workload Warnings',
+                  count: countBy((t) => t.includes('load') || t.includes('consecutive') || t.includes('spread') || t.includes('gap')),
+                  critical: false,
+                },
+              ];
+
+              return (
+                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                  {categories.map((cat) => (
+                    <div
+                      key={cat.label}
+                      className={`px-2 py-1.5 rounded border flex items-center justify-between gap-1 ${
+                        cat.count > 0
+                          ? cat.critical
+                            ? 'border-rose-200 bg-rose-50/70 text-rose-900'
+                            : 'border-amber-200 bg-amber-50/70 text-amber-900'
+                          : 'border-slate-200 bg-slate-50/60 text-slate-600'
+                      }`}
+                    >
+                      <span className="truncate font-medium">{cat.label}</span>
+                      <span className="font-mono tabular-nums font-bold shrink-0">{cat.count}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
             {hardErrors.length === 0 && warnings.length === 0 ? (
-              <div className="text-xs text-emerald-700 font-semibold">
-                Zero clashes or policy errors detected.
+              <div className="text-[11px] text-slate-500">
+                All streams, teachers, and shared facilities pass validation.
               </div>
             ) : (
               <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-1 text-[11px]">
                 {hardErrors.map((c) => (
                   <div key={c.id} className="p-2 rounded border border-rose-200 bg-rose-50 text-rose-900">
-                    <div className="font-bold uppercase text-[10px]">{c.conflictType}</div>
-                    <div>{c.message}</div>
+                    <div className="flex items-center justify-between gap-1 font-bold uppercase text-[10px]">
+                      <span>{c.conflictType}</span>
+                      {c.dayOfWeek && (
+                        <span className="font-mono tabular-nums text-rose-700">
+                          {c.dayOfWeek}{c.periodNumber ? ` P${c.periodNumber}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5">{c.message}</div>
                   </div>
                 ))}
                 {warnings.map((w) => (
                   <div key={w.id} className="p-2 rounded border border-amber-200 bg-amber-50 text-amber-900">
-                    <div className="font-bold uppercase text-[10px]">Warning · {w.conflictType}</div>
-                    <div>{w.message}</div>
+                    <div className="flex items-center justify-between gap-1 font-bold uppercase text-[10px]">
+                      <span>Warning · {w.conflictType}</span>
+                      {w.dayOfWeek && (
+                        <span className="font-mono tabular-nums text-amber-700">
+                          {w.dayOfWeek}{w.periodNumber ? ` P${w.periodNumber}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5">{w.message}</div>
                   </div>
                 ))}
               </div>

@@ -16,10 +16,8 @@ import {
 import { Storage } from '../../utils/storage';
 import { ClientDataStore } from '../../utils/clientDataStore';
 import { listSubjects } from '../../utils/catalogStore';
-import { getSubjectWeeklyLessonLimit } from '../../utils/curriculumDemand';
 import { useTenant } from '../../context/TenantContext';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
-import { TimetableAutoGeneratorModal } from './TimetableAutoGeneratorModal';
 import { TeacherAbsenceReportModal } from './TeacherAbsenceReportModal';
 import { ReliefBookingModal } from './ReliefBookingModal';
 import { TeacherTimetableCaptureModal } from './TeacherTimetableCaptureModal';
@@ -85,6 +83,7 @@ interface TimetablePortalProps {
   initialGrade?: GradeLevel;
   initialStream?: StreamName;
   initialPerspective?: TimetablePerspective;
+  initialSuiteTab?: 'published' | 'config' | 'allocations' | 'teachers' | 'load_dashboard' | 'editor' | 'approvals';
   readOnly?: boolean;
 }
 
@@ -105,6 +104,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   initialGrade,
   initialStream,
   initialPerspective,
+  initialSuiteTab,
   readOnly = false
 }) => {
   // Timetable slots & exams state from Storage (placed early for RBAC lookup)
@@ -140,7 +140,13 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       heldUserRoles.some((r) => ADMIN_SUITE_ROLES.includes(r)));
 
   type SuiteTabId = 'published' | 'config' | 'allocations' | 'teachers' | 'load_dashboard' | 'editor' | 'approvals';
-  const [suiteTab, setSuiteTab] = useState<SuiteTabId>('published');
+  const [suiteTab, setSuiteTab] = useState<SuiteTabId>(initialSuiteTab || 'published');
+  useEffect(() => {
+    if (initialSuiteTab && isTimetableAdminUser) {
+      setSuiteTab(initialSuiteTab);
+    }
+  }, [initialSuiteTab, isTimetableAdminUser]);
+  const [mobileGridDay, setMobileGridDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday'>('Monday');
   const [ttWorkspace, setTtWorkspace] = useState<TTWorkspacePayload | null>(null);
   const [loadingWorkspace, setLoadingWorkspace] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -194,36 +200,93 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   const loadPublishedBackendSchedule = async () => {
     try {
-      // Request teacher-only subset ONLY when explicitly opened in standalone teacher-only perspective;
-      // otherwise load synced entries for Teacher View, Class/Stream View, and Master View together.
-      const shouldRequestTeacherScope = initialPerspective === 'teacher';
-      const publishedUrl = shouldRequestTeacherScope
-        ? '/api/timetable/published?viewAs=teacher'
-        : '/api/timetable/published';
-      const pub = await ttApiFetch<{
-        published: boolean;
-        periods?: Array<{ periodNumber: number; label: string; kind: string; startTime: string; endTime: string }>;
-        entries?: Array<{
-          id: string;
-          dayOfWeek: string;
-          periodNumber: number;
-          grade: number;
-          stream: string;
-          groupName: string;
-          subjectName: string;
-          teacherNames: string[];
-          roomName: string;
-        }>;
-      }>(publishedUrl);
+      type PubEntry = {
+        id: string;
+        dayOfWeek: string;
+        periodNumber: number;
+        grade: number;
+        stream: string;
+        groupName?: string;
+        subjectName: string;
+        teacherNames?: string[];
+        roomName?: string;
+      };
+      type PubPeriod = { periodNumber: number; label: string; kind: string; startTime: string; endTime: string };
 
-      if (pub?.published && Array.isArray(pub.entries) && pub.entries.length > 0) {
+      let resolvedPeriods: PubPeriod[] = [];
+      let resolvedEntries: PubEntry[] = [];
+
+      // Use role-scoped canonical endpoints for Student and Parent portals, falling back to /api/timetable/published
+      const primaryRole = String(currentUser.role || '').toLowerCase();
+      if (primaryRole === 'student' && currentUser.id) {
+        try {
+          const stuRes = await ttApiFetch<{
+            published?: boolean;
+            periods?: PubPeriod[];
+            entries?: PubEntry[];
+          }>(`/api/timetable/student/${encodeURIComponent(currentUser.id)}`);
+          if (stuRes?.published && Array.isArray(stuRes.entries) && stuRes.entries.length > 0) {
+            resolvedPeriods = stuRes.periods || [];
+            resolvedEntries = stuRes.entries;
+          }
+        } catch {
+          // fallback to /api/timetable/published below
+        }
+      } else if (primaryRole === 'parent' && currentUser.id) {
+        try {
+          const parRes = await ttApiFetch<{
+            published?: boolean;
+            periods?: PubPeriod[];
+            children?: Array<{ entries?: PubEntry[] }>;
+          }>(`/api/timetable/parent/${encodeURIComponent(currentUser.id)}`);
+          if (parRes?.published && Array.isArray(parRes.children)) {
+            const seenIds = new Set<string>();
+            const merged: PubEntry[] = [];
+            for (const ch of parRes.children) {
+              for (const entry of ch.entries || []) {
+                if (!seenIds.has(entry.id)) {
+                  seenIds.add(entry.id);
+                  merged.push(entry);
+                }
+              }
+            }
+            if (merged.length > 0) {
+              resolvedPeriods = parRes.periods || [];
+              resolvedEntries = merged;
+            }
+          }
+        } catch {
+          // fallback to /api/timetable/published below
+        }
+      }
+
+      if (resolvedEntries.length === 0) {
+        // Request teacher-only subset ONLY when explicitly opened in standalone teacher-only perspective;
+        // otherwise load synced entries for Teacher View, Class/Stream View, and Master View together.
+        const shouldRequestTeacherScope = initialPerspective === 'teacher';
+        const publishedUrl = shouldRequestTeacherScope
+          ? '/api/timetable/published?viewAs=teacher'
+          : '/api/timetable/published';
+        const pub = await ttApiFetch<{
+          published: boolean;
+          periods?: PubPeriod[];
+          entries?: PubEntry[];
+        }>(publishedUrl);
+
+        if (pub?.published && Array.isArray(pub.entries) && pub.entries.length > 0) {
+          resolvedPeriods = pub.periods || [];
+          resolvedEntries = pub.entries;
+        }
+      }
+
+      if (resolvedEntries.length > 0) {
         const periodTimeMap = new Map<number, { startTime: string; endTime: string }>();
-        (pub.periods || []).forEach((p) => {
+        resolvedPeriods.forEach((p) => {
           if (p.kind === 'lesson' && p.periodNumber > 0) {
             periodTimeMap.set(p.periodNumber, { startTime: p.startTime, endTime: p.endTime });
           }
         });
-        const mappedSlots: TimetableSlot[] = pub.entries.map((e) => {
+        const mappedSlots: TimetableSlot[] = resolvedEntries.map((e) => {
           const tm = periodTimeMap.get(e.periodNumber);
           return {
             id: e.id,
@@ -696,7 +759,6 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   const [showEditModal, setShowEditModal] = useState(false);
   const [slotToEdit, setSlotToEdit] = useState<TimetableSlot | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [showAutoGenModal, setShowAutoGenModal] = useState(false);
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null);
 
   // Edit / Add form states
@@ -799,9 +861,12 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         if (String(alloc.stream || '').trim().toLowerCase() !== String(selectedStream).trim().toLowerCase()) continue;
         const key = String(alloc.subject || '').trim().toLowerCase();
         if (!key || map.has(key)) continue;
+        const dbGradeAlloc = (ttWorkspace?.gradeAllocations || []).find(
+          (ga) => ga.isActive && ga.grade === Number(selectedGrade) && ga.subjectName.toLowerCase() === key
+        );
         map.set(key, {
           subject: alloc.subject as SubjectName,
-          requiredWeeklyPeriods: getSubjectWeeklyLessonLimit(selectedGrade, alloc.subject, alloc.periodsPerWeek),
+          requiredWeeklyPeriods: dbGradeAlloc?.requiredWeeklyPeriods || alloc.periodsPerWeek || 4,
           teacherName: teacher.name,
         });
       }
@@ -1272,9 +1337,9 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             {isExecutiveLeadership && (
               <button
-                onClick={() => setShowAutoGenModal(true)}
+                onClick={() => setSuiteTab('editor')}
                 className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl border border-emerald-500 transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer"
-                title="Automate timetable generation using teacher allocations, fixed conditions, and shared facilities"
+                title="Open the database-backed Automatic Timetable Generation Engine"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Auto-Generate Timetable</span>
@@ -1565,6 +1630,8 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
               {suiteTab === 'allocations' && (
                 <TimetableAllocationsPanel
+                  categories={ttWorkspace.categories || []}
+                  categoryAllocations={ttWorkspace.categoryAllocations || []}
                   gradeSchedules={ttWorkspace.gradeSchedules}
                   subjects={ttWorkspace.subjects}
                   classrooms={ttWorkspace.classrooms}
@@ -1980,6 +2047,67 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
             </div>
           </div>
 
+          {/* Mobile Daily Schedule Cards (< md) */}
+          <div className="md:hidden bg-white rounded-xl border border-slate-200 p-3 space-y-3 print:hidden">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+              {DAYS_OF_WEEK.map((day) => {
+                const isActive = mobileGridDay === day;
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => setMobileGridDay(day)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 cursor-pointer transition-colors ${
+                      isActive
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {day.slice(0, 3)}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="space-y-2">
+              {(() => {
+                const daySlots = displayedSlots
+                  .filter((s) => s.dayOfWeek === mobileGridDay)
+                  .sort((a, b) => a.period - b.period);
+                if (daySlots.length === 0) {
+                  return (
+                    <div className="p-4 text-center text-xs text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                      No lessons scheduled for Grade {selectedGrade} {selectedStream} on {mobileGridDay}.
+                    </div>
+                  );
+                }
+                return daySlots.map((slot) => (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => setSelectedSlotForDetail(slot)}
+                    className="w-full text-left p-3 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-slate-100/70 transition-colors flex items-start justify-between gap-3 cursor-pointer"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-mono tabular-nums text-slate-500">
+                        Period {slot.period} · {slot.startTime}–{slot.endTime}
+                      </div>
+                      <div className="text-sm font-bold text-slate-900 truncate mt-0.5">
+                        {slot.subject}
+                      </div>
+                      <div className="text-xs text-slate-600 truncate mt-0.5">
+                        {slot.teacherName} · {slot.roomName}
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono tabular-nums font-semibold text-slate-500 shrink-0">
+                      G{slot.grade} {slot.stream}
+                    </span>
+                  </button>
+                ));
+              })()}
+            </div>
+          </div>
+
+          <div className="hidden md:block print:block">
           {classGridLayout === 'classic_sheet' ? (
             <ClassicTimetableSheet
               mode="class"
@@ -2220,6 +2348,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           </ScrollableMatrixTableWrapper>
         </div>
           )}
+          </div>
         </div>
       )}
 
@@ -4240,21 +4369,6 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         </div>
       )}
 
-      {/* Auto-Generator Modal */}
-      {isExecutiveLeadership && (
-        <TimetableAutoGeneratorModal
-          currentUser={currentUser}
-          isOpen={showAutoGenModal}
-          onClose={() => setShowAutoGenModal(false)}
-          streamAllocations={ttWorkspace?.streamAllocations || []}
-          teacherProfiles={ttWorkspace?.teachers || []}
-          onTimetablePublished={() => {
-            setAllSlots(Storage.getAllTimetableSlots());
-            setNotificationMsg('Master, Class/Stream, and Teacher timetables successfully generated and synchronized with zero teacher clashes!');
-            setTimeout(() => setNotificationMsg(null), 4000);
-          }}
-        />
-      )}
         </React.Fragment>
       )}
 

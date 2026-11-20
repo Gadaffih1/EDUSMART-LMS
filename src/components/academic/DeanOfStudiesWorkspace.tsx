@@ -18,9 +18,6 @@ import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
 import { TimetablePortal } from '../timetable/TimetablePortal';
-import { FacultyAllocationManager } from '../timetable/FacultyAllocationManager';
-import { FixedLessonsManager } from '../timetable/FixedLessonsManager';
-import { TimetableAutoGeneratorModal } from '../timetable/TimetableAutoGeneratorModal';
 import { ExamScheduleManager } from '../timetable/ExamScheduleManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
@@ -98,8 +95,6 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
     | 'report_cards' 
     | 'curriculum' 
     | 'timetable' 
-    | 'faculty_allocations' 
-    | 'fixed_lessons' 
     | 'work_entries' 
     | 'sanatorium' 
     | 'lunch_register'
@@ -111,7 +106,7 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
   const [activeTab, setActiveTab] = useState<DeanTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [analyticsSubView, setAnalyticsSubView] = useState<'school_health' | 'exam_means'>('school_health');
-  const [showAutoGenModal, setShowAutoGenModal] = useState(false);
+  const [timetableSuiteTab, setTimetableSuiteTab] = useState<'published' | 'config' | 'allocations' | 'teachers' | 'load_dashboard' | 'editor' | 'approvals'>('published');
   const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
   const workLogs = Storage.getWorkEntryLogs();
 
@@ -120,8 +115,14 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['analytics', 'results_upload', 'assessments', 'report_cards', 'curriculum', 'timetable', 'faculty_allocations', 'fixed_lessons', 'work_entries', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
+        if (['analytics', 'results_upload', 'assessments', 'report_cards', 'curriculum', 'timetable', 'work_entries', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
           setActiveTab(tab as DeanTab);
+        } else if (tab === 'faculty_allocations') {
+          setTimetableSuiteTab('allocations');
+          setActiveTab('timetable');
+        } else if (tab === 'fixed_lessons') {
+          setTimetableSuiteTab('editor');
+          setActiveTab('timetable');
         } else if (tab === 'gradebook' || tab === 'marks' || tab === 'results') {
           setActiveTab('results_upload');
         } else if (tab === 'reports' || tab === 'report') {
@@ -353,8 +354,6 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
       title: 'TIMETABLE & ACADEMIC DEPT',
       items: [
         { id: 'timetable' as DeanTab, label: 'Master School Timetable', icon: CalendarDays },
-        { id: 'faculty_allocations' as DeanTab, label: 'Academic Dept Allocations', icon: Users },
-        { id: 'fixed_lessons' as DeanTab, label: 'Fixed Lesson Parameters', icon: Lock },
         { id: 'work_entries' as DeanTab, label: 'Teacher Work Entry Sign-Ins', icon: FileCheck, badge: `${workLogs.length}` },
       ]
     },
@@ -1097,23 +1096,26 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
 
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setActiveTab('faculty_allocations')}
+                onClick={() => setTimetableSuiteTab('allocations')}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5 text-blue-600" />
-                <span>Teacher Allocations</span>
+                <span>Category &amp; Subject Allocations</span>
               </button>
 
               <button
-                onClick={() => setActiveTab('fixed_lessons')}
+                onClick={() => setTimetableSuiteTab('teachers')}
                 className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Lock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Fixed Lessons</span>
+                <span>Teachers &amp; Constraints</span>
               </button>
 
               <button
-                onClick={() => setTimetablePerspective('relief')}
+                onClick={() => {
+                  setTimetableSuiteTab('published');
+                  setTimetablePerspective('relief');
+                }}
                 className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
                   timetablePerspective === 'relief'
                     ? 'bg-amber-600 text-white shadow-md'
@@ -1124,14 +1126,14 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
                 <UserCheck className="w-3.5 h-3.5" />
                 <span>Book Relief Teachers</span>
                 {Storage.getTeacherAbsenceReports().length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white">
                     {Storage.getTeacherAbsenceReports().length} Absent
                   </span>
                 )}
               </button>
 
               <button
-                onClick={() => setShowAutoGenModal(true)}
+                onClick={() => setTimetableSuiteTab('editor')}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -1144,27 +1146,9 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
             currentUser={currentUser} 
             initialGrade={selectedGrade} 
             initialPerspective={timetablePerspective}
+            initialSuiteTab={timetableSuiteTab}
           />
         </div>
-      )}
-
-      {/* ========================================================
-          TAB: FACULTY SUBJECT & STREAM ALLOCATIONS (DEAN EDITABLE)
-          ======================================================== */}
-      {activeTab === 'faculty_allocations' && (
-        <FacultyAllocationManager
-          currentUser={currentUser}
-          onTriggerAutoGeneration={() => setShowAutoGenModal(true)}
-        />
-      )}
-
-      {/* ========================================================
-          TAB: FIXED LESSONS & PRE-PUBLICATION CONDITIONS
-          ======================================================== */}
-      {activeTab === 'fixed_lessons' && (
-        <FixedLessonsManager
-          onTriggerAutoGeneration={() => setShowAutoGenModal(true)}
-        />
       )}
 
       {/* ========================================================
@@ -1233,16 +1217,6 @@ export const DeanOfStudiesWorkspace: React.FC<DeanOfStudiesWorkspaceProps> = ({ 
 
         </main>
       </div>
-
-      {/* Auto-Generator Modal */}
-      <TimetableAutoGeneratorModal
-        currentUser={currentUser}
-        isOpen={showAutoGenModal}
-        onClose={() => setShowAutoGenModal(false)}
-        onTimetablePublished={() => {
-          setActiveTab('timetable');
-        }}
-      />
     </div>
   );
 };

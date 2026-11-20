@@ -326,7 +326,7 @@ test('TEST 1: Generate clash-free timetables for Grades 1–3 (Lower Primary)', 
   const { job, entries, unscheduled, validation } = await configureAndGenerate(db, tenantId, configId, versionId, allocs);
   assert.equal(job.status, 'completed');
   assert.equal(unscheduled.length, 0, 'Expected 0 unscheduled lessons for Grades 1-3');
-  assert.equal(validation.hardErrors, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
+  assert.equal(validation.conflicts, 0, `Unexpected hard errors: ${JSON.stringify(validation.hardErrors)}`);
   assert.equal(entries.length, 3 * 2 * 18, 'Expected 6 streams x 18 lessons = 108 entries');
   assertZeroTeacherCollisions(entries);
 });

@@ -7,7 +7,7 @@ import {
   FixedLessonCondition,
   SharedResourceFacility,
 } from '../types';
-import { getSubjectDemandMeta, getSubjectWeeklyLessonLimit } from './curriculumDemand';
+import { getCurriculumDemandForGrade, getSubjectDemandMeta, getSubjectWeeklyLessonLimit } from './curriculumDemand';
 
 export interface ExplicitAllocatedSubject {
   grade: GradeLevel;
@@ -228,6 +228,82 @@ export function generateAutomatedTimetable(
   // ========================================================
   const strictAllocations = new Map<string, ResolvedAllocation>();
 
+  // Build teacher lookup & strict authorization helper so no teacher can EVER appear for an unassigned subject, grade, or stream
+  const teacherByEmailLower = new Map<string, User>();
+  const teacherByNameLower = new Map<string, User>();
+  for (const t of teachers) {
+    if (t.email) teacherByEmailLower.set(t.email.trim().toLowerCase(), t);
+    if (t.name) teacherByNameLower.set(t.name.trim().toLowerCase(), t);
+  }
+
+  const isTeacherStrictlyAuthorized = (
+    teacher: User | undefined,
+    grade: number,
+    stream: string,
+    subject: string
+  ): { ok: boolean; reason?: string } => {
+    if (!teacher) return { ok: true };
+    const subLower = subject.trim().toLowerCase();
+    const stLower = stream.trim().toLowerCase();
+
+    if (Array.isArray(teacher.assignedSubjectAllocations)) {
+      const exactMatch = teacher.assignedSubjectAllocations.some((a: any) => {
+        if (Number(a?.grade) !== Number(grade)) return false;
+        const aStreams: string[] = Array.isArray(a?.streams)
+          ? a.streams
+          : a?.stream
+          ? [String(a.stream)]
+          : [];
+        const aSubjects: string[] = Array.isArray(a?.subjects)
+          ? a.subjects
+          : a?.subject
+          ? [String(a.subject)]
+          : [];
+        return (
+          aStreams.some((s) => String(s).trim().toLowerCase() === stLower) &&
+          aSubjects.some((s) => String(s).trim().toLowerCase() === subLower)
+        );
+      });
+      if (!exactMatch) {
+        return {
+          ok: false,
+          reason: `${teacher.name} is not strictly assigned to Grade ${grade} ${stream} · ${subject}.`,
+        };
+      }
+      return { ok: true };
+    }
+
+    if (Array.isArray(teacher.assignedSubjects) && teacher.assignedSubjects.length > 0) {
+      const teachesSub = teacher.assignedSubjects.some(
+        (s) => String(s || '').trim().toLowerCase() === subLower
+      );
+      if (!teachesSub) {
+        return {
+          ok: false,
+          reason: `${teacher.name} is not assigned to teach ${subject}.`,
+        };
+      }
+    }
+
+    const legacyStreams = [...(teacher.assignedStreams || [])];
+    if (teacher.grade && teacher.stream) {
+      legacyStreams.push({ grade: teacher.grade, stream: teacher.stream });
+    }
+    if (legacyStreams.length > 0) {
+      const teachesStream = legacyStreams.some(
+        (st) => Number(st.grade) === Number(grade) && String(st.stream || '').trim().toLowerCase() === stLower
+      );
+      if (!teachesStream) {
+        return {
+          ok: false,
+          reason: `${teacher.name} is not assigned to Grade ${grade} ${stream}.`,
+        };
+      }
+    }
+
+    return { ok: true };
+  };
+
   // Priority A: Explicit Master Timetable / Stream-Subject allocations passed in options
   if (Array.isArray(options.allocatedStreamSubjects) && options.allocatedStreamSubjects.length > 0) {
     for (const item of options.allocatedStreamSubjects) {
@@ -247,6 +323,19 @@ export function generateAutomatedTimetable(
       const key = allocKey(grade, stream, subject);
       if (strictAllocations.has(key)) continue;
 
+      const tName = item.teacherName?.trim() || '';
+      const tEmail = item.teacherEmail?.trim() || '';
+      const matchedTeacher =
+        (tEmail ? teacherByEmailLower.get(tEmail.toLowerCase()) : undefined) ||
+        (tName ? teacherByNameLower.get(tName.toLowerCase()) : undefined);
+      if (matchedTeacher) {
+        const auth = isTeacherStrictlyAuthorized(matchedTeacher, grade, stream, subject);
+        if (!auth.ok) {
+          conflictReport.push(`Blocked out-of-scope allocation: ${auth.reason}`);
+          continue;
+        }
+      }
+
       const demandMeta = getSubjectDemandMeta(grade, subject);
       const periodsPerWeek = getSubjectWeeklyLessonLimit(grade, subject, item.periodsPerWeek);
       strictAllocations.set(key, {
@@ -254,8 +343,8 @@ export function generateAutomatedTimetable(
         stream,
         subject,
         periodsPerWeek,
-        teacherName: item.teacherName?.trim() || '',
-        teacherEmail: item.teacherEmail?.trim() || 'faculty@edusmart.ac.ke',
+        teacherName: tName,
+        teacherEmail: tEmail || 'faculty@edusmart.ac.ke',
         requiresSpecialistFacility: item.requiresSpecialistFacility ?? demandMeta?.requiresSpecialistFacility,
         preferredFacilityType: item.preferredFacilityType ?? demandMeta?.preferredFacilityType,
       });
@@ -265,48 +354,62 @@ export function generateAutomatedTimetable(
   // Priority B: Explicit Faculty Grade + Stream + Subject Allocations (assignedSubjectAllocations)
   for (const teacher of teachers) {
     const explicitAllocs = teacher.assignedSubjectAllocations || [];
-    for (const a of explicitAllocs) {
+    for (const a of explicitAllocs as any[]) {
       const grade = Number(a.grade) as GradeLevel;
-      const stream = String(a.stream || '').trim() as StreamName;
-      const subject = String(a.subject || '').trim() as SubjectName;
-      if (!grade || !stream || !subject) continue;
-      if (allowedGradesFilter && !allowedGradesFilter.has(grade)) continue;
-      if (
-        options.activeStreamsOverride &&
-        options.activeStreamsOverride[grade] &&
-        !options.activeStreamsOverride[grade].some((s) => s.toLowerCase() === stream.toLowerCase())
-      ) {
-        continue;
-      }
+      const aStreams: string[] = Array.isArray(a?.streams)
+        ? a.streams
+        : a?.stream
+        ? [String(a.stream)]
+        : [];
+      const aSubjects: string[] = Array.isArray(a?.subjects)
+        ? a.subjects
+        : a?.subject
+        ? [String(a.subject)]
+        : [];
+      for (const rawStream of aStreams) {
+        for (const rawSubj of aSubjects) {
+          const stream = String(rawStream || '').trim() as StreamName;
+          const subject = String(rawSubj || '').trim() as SubjectName;
+          if (!grade || !stream || !subject) continue;
+          if (allowedGradesFilter && !allowedGradesFilter.has(grade)) continue;
+          if (
+            options.activeStreamsOverride &&
+            options.activeStreamsOverride[grade] &&
+            !options.activeStreamsOverride[grade].some((s) => s.toLowerCase() === stream.toLowerCase())
+          ) {
+            continue;
+          }
 
-      const key = allocKey(grade, stream, subject);
-      const existing = strictAllocations.get(key);
-      if (existing) {
-        if (!existing.teacherName) {
-          existing.teacherName = teacher.name;
-          existing.teacherEmail = teacher.email || existing.teacherEmail;
+          const key = allocKey(grade, stream, subject);
+          const existing = strictAllocations.get(key);
+          if (existing) {
+            if (!existing.teacherName) {
+              existing.teacherName = teacher.name;
+              existing.teacherEmail = teacher.email || existing.teacherEmail;
+            }
+            continue;
+          }
+
+          const demandMeta = getSubjectDemandMeta(grade, subject);
+          const periodsPerWeek = getSubjectWeeklyLessonLimit(grade, subject, a.periodsPerWeek);
+          strictAllocations.set(key, {
+            grade,
+            stream,
+            subject,
+            periodsPerWeek,
+            teacherName: teacher.name,
+            teacherEmail: teacher.email || 'faculty@edusmart.ac.ke',
+            requiresSpecialistFacility: demandMeta?.requiresSpecialistFacility,
+            preferredFacilityType: demandMeta?.preferredFacilityType,
+          });
         }
-        continue;
       }
-
-      const demandMeta = getSubjectDemandMeta(grade, subject);
-      const periodsPerWeek = getSubjectWeeklyLessonLimit(grade, subject, a.periodsPerWeek);
-      strictAllocations.set(key, {
-        grade,
-        stream,
-        subject,
-        periodsPerWeek,
-        teacherName: teacher.name,
-        teacherEmail: teacher.email || 'faculty@edusmart.ac.ke',
-        requiresSpecialistFacility: demandMeta?.requiresSpecialistFacility,
-        preferredFacilityType: demandMeta?.preferredFacilityType,
-      });
     }
   }
 
-  // Priority C: Legacy teacher assignedStreams × assignedSubjects ONLY for teachers without assignedSubjectAllocations
+  // Priority C: Legacy teacher assignedStreams × assignedSubjects ONLY for teachers without assignedSubjectAllocations array
   for (const teacher of teachers) {
-    if (teacher.assignedSubjectAllocations && teacher.assignedSubjectAllocations.length > 0) {
+    if (Array.isArray(teacher.assignedSubjectAllocations)) {
       continue;
     }
     const streams = teacher.assignedStreams || [];
@@ -334,9 +437,11 @@ export function generateAutomatedTimetable(
         continue;
       }
 
+      const validGradeSubjects = new Set(getCurriculumDemandForGrade(grade).map((d) => String(d.subject).trim().toLowerCase()));
       for (const sub of subjects) {
         const subject = String(sub || '').trim() as SubjectName;
         if (!subject) continue;
+        if (validGradeSubjects.size > 0 && !validGradeSubjects.has(subject.toLowerCase())) continue;
         const key = allocKey(grade, stream, subject);
         if (strictAllocations.has(key)) continue;
 
@@ -473,6 +578,20 @@ export function generateAutomatedTimetable(
           teacherName.toLowerCase() !== 'faculty lead' &&
           teacherName.toLowerCase() !== 'all staff';
         const teacherKey = `${teacherName.toLowerCase()}-${condition.dayOfWeek}-${condition.period}`;
+
+        // Strict assignment scope guard on fixed lessons with a named teacher
+        if (isNamedTeacher && condition.subject) {
+          const matchedT = teacherByNameLower.get(teacherName.trim().toLowerCase());
+          if (matchedT) {
+            const auth = isTeacherStrictlyAuthorized(matchedT, grade, stream, String(condition.subject));
+            if (!auth.ok) {
+              conflictReport.push(
+                `Blocked out-of-scope fixed lesson "${condition.title}" (${condition.dayOfWeek} P${condition.period}): ${auth.reason}`
+              );
+              return;
+            }
+          }
+        }
 
         // Strictly prevent any teacher from having more than 1 lesson at a time
         if (isNamedTeacher && teacherSchedule.has(teacherKey)) {

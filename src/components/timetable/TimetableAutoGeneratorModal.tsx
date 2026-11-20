@@ -76,16 +76,21 @@ export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalPr
       .map((a) => {
         const primaryTeacherId = a.teacherIds?.[0];
         const tProf = primaryTeacherId ? tMap.get(primaryTeacherId) : undefined;
+        if (!tProf) return null;
+        const quals = (tProf.qualifiedSubjects || []).map((q) => String(q || '').trim().toLowerCase()).filter(Boolean);
+        if (quals.length > 0 && !quals.includes(String(a.subjectName || '').trim().toLowerCase())) {
+          return null;
+        }
         return {
           grade: a.grade as GradeLevel,
           stream: a.stream as StreamName,
           subject: a.subjectName as any,
           periodsPerWeek: a.requiredWeeklyPeriods,
-          teacherName: tProf?.teacherName || '',
-          teacherEmail: tProf?.teacherEmail || '',
+          teacherName: tProf.teacherName || '',
+          teacherEmail: tProf.teacherEmail || '',
         };
       })
-      .filter((item) => Boolean(item.teacherName));
+      .filter((item): item is NonNullable<typeof item> => Boolean(item && item.teacherName));
   }, [streamAllocations, teacherProfiles]);
 
   // Run the generation solver
@@ -238,8 +243,9 @@ export const TimetableAutoGeneratorModal: React.FC<TimetableAutoGeneratorModalPr
                       Subjects & grade streams configured by Dean of Studies are automatically mapped to curriculum requirements.
                     </p>
                   </div>
-                  <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-600 font-medium">
-                    ✓ Zero teacher clashes enforced
+                  <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-600 font-medium space-y-0.5">
+                    <div>✓ Strictly assigned subject, grade &amp; stream only</div>
+                    <div>✓ Zero teacher clashes enforced</div>
                   </div>
                 </div>
 

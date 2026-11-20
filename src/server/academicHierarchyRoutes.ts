@@ -1974,6 +1974,16 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       assignedSubjects: uniqueSubjects,
       assignedStreams: uniqueStreams,
     });
+
+    try {
+      db.prepare(
+        `UPDATE tt_teacher_profiles
+         SET qualified_subjects_json = ?, updated_at = ?
+         WHERE tenant_id = ? AND user_id = ?`
+      ).run(JSON.stringify(uniqueSubjects), nowIso(), schoolId, teacherId);
+    } catch {
+      // ignore if tt_teacher_profiles has not been initialized yet
+    }
   };
 
   const syncStreamSubjectToTimetable = (

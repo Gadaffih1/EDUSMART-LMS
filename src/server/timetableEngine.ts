@@ -84,6 +84,7 @@ export interface TTSessionUnit {
   minSpacingDays: number;
   patternPreference: string;
   studentCount: number;
+  scopeViolationReason?: string;
 }
 
 export const ALL_WORKING_DAYS = [
@@ -195,6 +196,229 @@ export function classKeyOf(grade: number, stream: string): string {
 
 export function uid(prefix: string): string {
   return `${prefix}-${crypto.randomUUID().slice(0, 10)}`;
+}
+
+export interface TeacherStrictScope {
+  teacherProfileId: string;
+  userId: string;
+  teacherName: string;
+  activeInTimetable: boolean;
+  qualifiedSubjectsLower: Set<string>;
+  assignedSubjectsLower: Set<string>;
+  hasStrictSubjectScope: boolean;
+  assignedTuples: Set<string>; // `${grade}::${streamLower}::${subjectLower}`
+  assignedGradeWide: Set<string>; // `${grade}::${subjectLower}` when stream_id IS NULL
+  hasStrictTupleScope: boolean;
+}
+
+export interface TenantTeacherScopes {
+  byProfileId: Map<string, TeacherStrictScope>;
+  byUserId: Map<string, TeacherStrictScope>;
+}
+
+/**
+ * Resolve every teacher's authoritative subject qualifications and exact
+ * (grade, stream, subject) assignments across tt_teacher_profiles, users,
+ * provisioned_accounts, and grade_teacher_assignments.
+ */
+export function loadTenantTeacherScopes(db: DatabaseSync, tenantId: string): TenantTeacherScopes {
+  const byProfileId = new Map<string, TeacherStrictScope>();
+  const byUserId = new Map<string, TeacherStrictScope>();
+
+  const profileRows = db
+    .prepare(
+      `SELECT id, user_id, teacher_name, qualified_subjects_json, active_in_timetable
+       FROM tt_teacher_profiles WHERE tenant_id = ?`
+    )
+    .all(tenantId) as any[];
+
+  for (const tp of profileRows) {
+    const quals = safeJsonParse<string[]>(tp.qualified_subjects_json, [])
+      .map((s) => String(s || '').trim().toLowerCase())
+      .filter(Boolean);
+    const scope: TeacherStrictScope = {
+      teacherProfileId: String(tp.id),
+      userId: String(tp.user_id || ''),
+      teacherName: String(tp.teacher_name || 'Teacher'),
+      activeInTimetable: Number(tp.active_in_timetable) !== 0,
+      qualifiedSubjectsLower: new Set(quals),
+      assignedSubjectsLower: new Set(),
+      hasStrictSubjectScope: quals.length > 0,
+      assignedTuples: new Set(),
+      assignedGradeWide: new Set(),
+      hasStrictTupleScope: false,
+    };
+    byProfileId.set(scope.teacherProfileId, scope);
+    if (scope.userId) byUserId.set(scope.userId, scope);
+  }
+
+  const mergeUserPayload = (userId: string, rawPayload: any) => {
+    const scope = byUserId.get(userId);
+    if (!scope) return;
+    const payload = safeJsonParse<Record<string, any>>(rawPayload, {});
+    if (!payload || typeof payload !== 'object') return;
+
+    if (Array.isArray(payload.subjects)) {
+      for (const s of payload.subjects) {
+        const clean = String(s || '').trim().toLowerCase();
+        if (clean) scope.qualifiedSubjectsLower.add(clean);
+      }
+    }
+    if (typeof payload.subject === 'string' && payload.subject.trim()) {
+      scope.qualifiedSubjectsLower.add(payload.subject.trim().toLowerCase());
+    }
+    if (Array.isArray(payload.assignedSubjects)) {
+      for (const s of payload.assignedSubjects) {
+        const clean = String(s || '').trim().toLowerCase();
+        if (clean) {
+          scope.qualifiedSubjectsLower.add(clean);
+          scope.assignedSubjectsLower.add(clean);
+        }
+      }
+    }
+    if (Array.isArray(payload.assignedSubjectAllocations)) {
+      scope.hasStrictTupleScope = true;
+      for (const alloc of payload.assignedSubjectAllocations) {
+        if (!alloc || typeof alloc !== 'object') continue;
+        const gNum = Number(alloc.grade);
+        if (!Number.isFinite(gNum) || gNum <= 0) continue;
+        const streamsList: string[] = Array.isArray(alloc.streams)
+          ? alloc.streams.map((x: any) => String(x || '').trim()).filter(Boolean)
+          : alloc.stream
+          ? [String(alloc.stream).trim()]
+          : [];
+        const subjectsList: string[] = Array.isArray(alloc.subjects)
+          ? alloc.subjects.map((x: any) => String(x || '').trim()).filter(Boolean)
+          : alloc.subject
+          ? [String(alloc.subject).trim()]
+          : [];
+        for (const sub of subjectsList) {
+          const subLower = sub.toLowerCase();
+          scope.qualifiedSubjectsLower.add(subLower);
+          scope.assignedSubjectsLower.add(subLower);
+          if (streamsList.length > 0) {
+            for (const st of streamsList) {
+              scope.assignedTuples.add(`${gNum}::${st.toLowerCase()}::${subLower}`);
+            }
+          } else {
+            scope.assignedGradeWide.add(`${gNum}::${subLower}`);
+          }
+        }
+      }
+    }
+  };
+
+  try {
+    const userRows = db
+      .prepare(`SELECT id, payload_json FROM users WHERE school_id = ?`)
+      .all(tenantId) as Array<{ id: string; payload_json: string }>;
+    for (const u of userRows) mergeUserPayload(String(u.id), u.payload_json);
+  } catch {
+    // ignore if users table is unavailable
+  }
+
+  try {
+    const provRows = db
+      .prepare(`SELECT id, payload_json FROM provisioned_accounts WHERE school_id = ?`)
+      .all(tenantId) as Array<{ id: string; payload_json: string }>;
+    for (const p of provRows) mergeUserPayload(String(p.id), p.payload_json);
+  } catch {
+    // ignore if provisioned_accounts table is unavailable
+  }
+
+  try {
+    const gtaRows = db
+      .prepare(
+        `SELECT gta.teacher_id, gta.subject_name, gta.stream_id, g.grade_number, g.name as grade_name, s.name as stream_name
+         FROM grade_teacher_assignments gta
+         JOIN grades g ON g.id = gta.grade_id
+         LEFT JOIN streams s ON s.id = gta.stream_id
+         WHERE gta.school_id = ? AND gta.is_active = 1`
+      )
+      .all(tenantId) as any[];
+    for (const r of gtaRows) {
+      const scope = byUserId.get(String(r.teacher_id || ''));
+      if (!scope) continue;
+      scope.hasStrictTupleScope = true;
+      const gNum = Number(r.grade_number || String(r.grade_name || '').match(/\d+/)?.[0] || 0);
+      const subLower = String(r.subject_name || '').trim().toLowerCase();
+      if (!subLower) continue;
+      scope.qualifiedSubjectsLower.add(subLower);
+      scope.assignedSubjectsLower.add(subLower);
+      if (gNum > 0 && r.stream_name) {
+        scope.assignedTuples.add(`${gNum}::${String(r.stream_name).trim().toLowerCase()}::${subLower}`);
+      } else if (gNum > 0 && !r.stream_id) {
+        scope.assignedGradeWide.add(`${gNum}::${subLower}`);
+      }
+    }
+  } catch {
+    // ignore if academic hierarchy tables are not present in minimal test schemas
+  }
+
+  for (const scope of byProfileId.values()) {
+    scope.hasStrictSubjectScope = scope.qualifiedSubjectsLower.size > 0 || scope.hasStrictTupleScope;
+  }
+
+  return { byProfileId, byUserId };
+}
+
+/**
+ * Strictly verify that a teacher is authorized for a given (grade, stream, subject).
+ * No teacher may appear on the timetable for a subject, grade, or stream not assigned to them.
+ */
+export function checkTeacherAssignmentScope(
+  scopes: TenantTeacherScopes,
+  teacherProfileId: string,
+  grade: number,
+  stream: string,
+  subjectName: string,
+  options: { checkSubjectOnly?: boolean } = {}
+): { ok: boolean; code?: 'TEACHER_SUBJECT_NOT_ASSIGNED' | 'TEACHER_SCOPE_VIOLATION'; reason?: string } {
+  const scope = scopes.byProfileId.get(String(teacherProfileId));
+  if (!scope) {
+    return {
+      ok: false,
+      code: 'TEACHER_SCOPE_VIOLATION',
+      reason: `Assigned teacher (${teacherProfileId}) is not in this school's active timetable roster.`,
+    };
+  }
+
+  const subj = String(subjectName || '').trim();
+  const subjLower = subj.toLowerCase();
+  const streamTrim = String(stream || '').trim();
+  const streamLower = streamTrim.toLowerCase();
+  const gradeNum = Number(grade);
+
+  // 1. Strict Subject Check: never allow a teacher to teach an unassigned/unqualified subject
+  if (scope.hasStrictSubjectScope && !scope.qualifiedSubjectsLower.has(subjLower)) {
+    return {
+      ok: false,
+      code: 'TEACHER_SUBJECT_NOT_ASSIGNED',
+      reason: `${scope.teacherName} is not assigned to teach ${subj}. No teacher may teach a subject not strictly assigned to them.`,
+    };
+  }
+
+  // 2. Strict Grade + Stream + Subject Tuple Check
+  if (!options.checkSubjectOnly && scope.hasStrictTupleScope) {
+    const exactKey = `${gradeNum}::${streamLower}::${subjLower}`;
+    const gradeWideKey = `${gradeNum}::${subjLower}`;
+    if (!scope.assignedTuples.has(exactKey) && !scope.assignedGradeWide.has(gradeWideKey)) {
+      if (!scope.assignedSubjectsLower.has(subjLower)) {
+        return {
+          ok: false,
+          code: 'TEACHER_SUBJECT_NOT_ASSIGNED',
+          reason: `${scope.teacherName} is not assigned to teach ${subj}. No teacher may teach an unassigned subject.`,
+        };
+      }
+      return {
+        ok: false,
+        code: 'TEACHER_SCOPE_VIOLATION',
+        reason: `${scope.teacherName} is not assigned to Grade ${gradeNum} ${streamTrim} for ${subj}. Teachers can only appear on the timetable for their exact assigned subject, grade, and stream(s).`,
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -570,14 +794,46 @@ export function ensureTenantTimetableSeeded(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', 6, 28, 3, '[]', ?, ?)`
   );
 
+  const gtaSubjectsByUserId = new Map<string, Set<string>>();
+  try {
+    const gtaSubRows = db
+      .prepare(
+        `SELECT teacher_id, subject_name FROM grade_teacher_assignments
+         WHERE school_id = ? AND is_active = 1`
+      )
+      .all(tenantId) as Array<{ teacher_id: string; subject_name: string }>;
+    for (const r of gtaSubRows) {
+      const uidKey = String(r.teacher_id || '');
+      const sub = String(r.subject_name || '').trim();
+      if (!uidKey || !sub) continue;
+      if (!gtaSubjectsByUserId.has(uidKey)) gtaSubjectsByUserId.set(uidKey, new Set());
+      gtaSubjectsByUserId.get(uidKey)!.add(sub);
+    }
+  } catch {
+    // ignore if academic hierarchy table is not yet initialized
+  }
+
   for (const staff of staffCandidates) {
     const payload = safeJsonParse<any>(staff.payload_json, {});
     const subjectsRaw: string[] = [];
-    if (Array.isArray(payload?.subjects)) subjectsRaw.push(...payload.subjects);
-    if (typeof payload?.subject === 'string' && payload.subject) subjectsRaw.push(payload.subject);
-    if (subjectsRaw.length === 0) {
-      subjectsRaw.push('Mathematics', 'English', 'Kiswahili', 'Integrated Science', 'Social Studies', 'Religious Education');
+    if (Array.isArray(payload?.subjects)) subjectsRaw.push(...payload.subjects.map((s: any) => String(s || '').trim()).filter(Boolean));
+    if (typeof payload?.subject === 'string' && payload.subject.trim()) subjectsRaw.push(payload.subject.trim());
+    if (Array.isArray(payload?.assignedSubjects)) {
+      subjectsRaw.push(...payload.assignedSubjects.map((s: any) => String(s || '').trim()).filter(Boolean));
     }
+    if (Array.isArray(payload?.assignedSubjectAllocations)) {
+      for (const a of payload.assignedSubjectAllocations) {
+        if (Array.isArray(a?.subjects)) {
+          subjectsRaw.push(...a.subjects.map((s: any) => String(s || '').trim()).filter(Boolean));
+        } else if (typeof a?.subject === 'string' && a.subject.trim()) {
+          subjectsRaw.push(a.subject.trim());
+        }
+      }
+    }
+    const fromGta = gtaSubjectsByUserId.get(String(staff.id));
+    if (fromGta) subjectsRaw.push(...fromGta);
+
+    // Strictly retain only explicitly configured/assigned subjects — never fabricate default subjects
     const qualUnique = Array.from(new Set(subjectsRaw));
     const activeFlag = staff.is_active === 0 ? 0 : 1;
     insTeacher.run(
@@ -650,6 +906,36 @@ export function ensureTenantTimetableSeeded(
       // ignore if hierarchy tables not yet initialized
     }
 
+    // Also include explicit stream-subject assignments from users.payload_json.assignedSubjectAllocations
+    for (const staff of staffCandidates) {
+      const ttTid = ttTeacherByUserId.get(String(staff.id));
+      if (!ttTid) continue;
+      const payload = safeJsonParse<any>(staff.payload_json, {});
+      if (!Array.isArray(payload?.assignedSubjectAllocations)) continue;
+      for (const alloc of payload.assignedSubjectAllocations) {
+        const gNum = Number(alloc?.grade || 0);
+        if (gNum <= 0) continue;
+        const streamsList: string[] = Array.isArray(alloc?.streams)
+          ? alloc.streams.map((x: any) => String(x || '').trim()).filter(Boolean)
+          : alloc?.stream
+          ? [String(alloc.stream).trim()]
+          : [];
+        const subjectsList: string[] = Array.isArray(alloc?.subjects)
+          ? alloc.subjects.map((x: any) => String(x || '').trim()).filter(Boolean)
+          : alloc?.subject
+          ? [String(alloc.subject).trim()]
+          : [];
+        for (const st of streamsList) {
+          for (const sub of subjectsList) {
+            const key = `${gNum}::${st.toLowerCase()}::${sub.toLowerCase()}`;
+            if (!explicitStreamTeacherMap.has(key)) {
+              explicitStreamTeacherMap.set(key, ttTid);
+            }
+          }
+        }
+      }
+    }
+
     const wholeGroups = db
       .prepare(`SELECT id, grade, stream FROM tt_student_groups WHERE tenant_id = ? AND is_whole_class = 1`)
       .all(tenantId) as any[];
@@ -667,16 +953,10 @@ export function ensureTenantTimetableSeeded(
           : JUNIOR_SUBJECT_PRESETS;
       const streams = gradeStreamsMap.get(grade) || [];
 
-      presets.forEach((p, subIdx) => {
+      presets.forEach((p) => {
         const gaId = uid('ttga');
-        // Pick default qualified teacher if available
-        const matchingTeachers = teacherProfiles.filter((t) => {
-          const quals = safeJsonParse<string[]>(t.qualified_subjects_json, []);
-          return quals.some((q) => q.toLowerCase() === p.subject.toLowerCase());
-        });
-        const chosenPool = matchingTeachers.length > 0 ? matchingTeachers : teacherProfiles;
-        const defaultTeacher = chosenPool.length > 0 ? chosenPool[(grade + subIdx) % chosenPool.length] : null;
-        const defaultTeacherIds = defaultTeacher ? [String(defaultTeacher.id)] : [];
+        // Never invent or round-robin default teachers onto grade templates or unassigned streams
+        const defaultTeacherIds: string[] = [];
 
         const specialRoom = rooms.find((r) => r.room_type === p.roomType && !r.assigned_grade);
         insGradeAlloc.run(
@@ -697,16 +977,11 @@ export function ensureTenantTimetableSeeded(
           now
         );
 
-        streams.forEach((stream, sIdx) => {
+        streams.forEach((stream) => {
           const linkedTeacherId = explicitStreamTeacherMap.get(
             `${grade}::${stream.toLowerCase()}::${p.subject.toLowerCase()}`
           );
-          const streamTeacher = chosenPool.length > 0 ? chosenPool[(grade + subIdx + sIdx) % chosenPool.length] : null;
-          const streamTeacherIds = linkedTeacherId
-            ? [linkedTeacherId]
-            : streamTeacher
-            ? [String(streamTeacher.id)]
-            : [];
+          const streamTeacherIds = linkedTeacherId ? [linkedTeacherId] : [];
           const homeRoom = rooms.find(
             (r) => Number(r.assigned_grade) === grade && String(r.assigned_stream || '').toLowerCase() === stream.toLowerCase()
           );
@@ -809,6 +1084,7 @@ export function expandRequirementUnits(
     .all(tenantId) as any[];
   const teacherNameMap = new Map<string, string>();
   for (const t of teachers) teacherNameMap.set(String(t.id), String(t.teacher_name));
+  const teacherScopes = loadTenantTeacherScopes(db, tenantId);
 
   const groups = db
     .prepare(`SELECT * FROM tt_student_groups WHERE tenant_id = ?`)
@@ -893,6 +1169,34 @@ export function expandRequirementUnits(
 
     const teacherIds = safeJsonParse<string[]>(jl.teacher_ids_json, []).filter((id) => teacherNameMap.has(id));
     const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Assigned Teacher');
+
+    let jointScopeViolation: string | undefined;
+    if (teacherIds.length === 0) {
+      allocationIssues.push({
+        grade: classTargets[0].grade,
+        stream: classTargets.map((c) => c.stream).join('+'),
+        subject: subjName,
+        message: `No subject teacher assigned to joint lesson "${jl.title}" (${subjName}).`,
+      });
+    } else {
+      for (const tid of teacherIds) {
+        for (const ct of classTargets) {
+          const check = checkTeacherAssignmentScope(teacherScopes, tid, ct.grade, ct.stream, subjName);
+          if (!check.ok) {
+            jointScopeViolation = check.reason;
+            allocationIssues.push({
+              grade: ct.grade,
+              stream: ct.stream,
+              subject: subjName,
+              message: check.reason || `Teacher is not strictly assigned to Grade ${ct.grade} ${ct.stream} · ${subjName}.`,
+            });
+            break;
+          }
+        }
+        if (jointScopeViolation) break;
+      }
+    }
+
     const len = Math.min(3, Math.max(1, Number(jl.lesson_length || 1))) as 1 | 2 | 3;
     const weeklyPeriods = Number(jl.weekly_periods || len);
     if (weeklyPeriods < 1 || weeklyPeriods % len !== 0) {
@@ -935,6 +1239,7 @@ export function expandRequirementUnits(
         minSpacingDays: 1,
         patternPreference: 'spread',
         studentCount: combinedCount,
+        scopeViolationReason: jointScopeViolation,
       });
     }
   }
@@ -1036,6 +1341,7 @@ export function expandRequirementUnits(
     }
     const teacherIds = uniqueTeacherIds.slice(0, 1);
     const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Unassigned Teacher');
+    let scopeViolationReason: string | undefined;
     if (teacherIds.length === 0) {
       allocationIssues.push({
         grade,
@@ -1043,6 +1349,17 @@ export function expandRequirementUnits(
         subject: subjectName,
         message: `No subject teacher assigned to Grade ${grade} ${stream} · ${subjectName}.`,
       });
+    } else {
+      const scopeCheck = checkTeacherAssignmentScope(teacherScopes, teacherIds[0], grade, stream, subjectName);
+      if (!scopeCheck.ok) {
+        scopeViolationReason = scopeCheck.reason;
+        allocationIssues.push({
+          grade,
+          stream,
+          subject: subjectName,
+          message: scopeCheck.reason || `Teacher is not strictly assigned to Grade ${grade} ${stream} · ${subjectName}.`,
+        });
+      }
     }
 
     const prefDays = safeJsonParse<string[]>(sa.preferred_days_json, []);
@@ -1070,6 +1387,7 @@ export function expandRequirementUnits(
       minSpacingDays: Number(sa.min_spacing_days || 0),
       patternPreference: String(sa.pattern_preference || 'spread'),
       studentCount,
+      scopeViolationReason,
     });
 
     for (let i = 1; i <= triples; i++) units.push(makeUnit(3, i));
@@ -1205,6 +1523,7 @@ export function validateTimetableVersion(
       offDutySlots: safeJsonParse<Array<{ day: string; period: number }>>(t.off_duty_slots_json, []),
     });
   }
+  const teacherScopes = loadTenantTeacherScopes(db, tenantId);
 
   const roomMap = new Map<string, any>();
   for (const r of db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ?`).all(tenantId) as any[]) {
@@ -1343,8 +1662,32 @@ export function validateTimetableVersion(
     }
     classSubjectDayCount.set(sdKey, dayCounts);
 
-    // Teacher slot & availability
+    // Strict Teacher Assignment Presence & Scope Check (every entry must have a strictly assigned teacher for this exact grade, stream & subject)
+    if (teacherIds.length === 0) {
+      pushConflict(
+        'error',
+        'NO_ASSIGNED_TEACHER',
+        `Unassigned lesson on ${day} Period ${period}: Grade ${grade} ${stream} · ${e.subject_name} has no assigned subject teacher.`,
+        day,
+        period,
+        { grade, stream, subject: e.subject_name, entryId: e.id }
+      );
+    }
+
+    // Teacher slot, availability & strict (subject, grade, stream) scope verification
     for (const tid of teacherIds) {
+      const scopeCheck = checkTeacherAssignmentScope(teacherScopes, tid, grade, stream, String(e.subject_name || ''));
+      if (!scopeCheck.ok) {
+        pushConflict(
+          'error',
+          scopeCheck.code || 'TEACHER_SCOPE_VIOLATION',
+          `${day} Period ${period}: ${scopeCheck.reason}`,
+          day,
+          period,
+          { teacherId: tid, grade, stream, subject: e.subject_name, entryId: e.id }
+        );
+      }
+
       const tsKey = `${tid}|${day}|${period}`;
       if (!teacherSlotEvents.has(tsKey)) teacherSlotEvents.set(tsKey, new Map());
       teacherSlotEvents.get(tsKey)!.set(blockEventKey, e);
@@ -1621,15 +1964,44 @@ export function validateTimetableVersion(
     }
   }
 
-  // 3) Verify scheduled non-joint lessons strictly match their stream allocation's assigned teacher
+  // 3) Verify scheduled lessons strictly match their stream/joint allocation's assigned teacher
   const checkedBlockTeacherMismatch = new Set<string>();
+  const jointMap = new Map<string, any>();
+  for (const jl of db.prepare(`SELECT * FROM tt_joint_lessons WHERE config_id = ?`).all(configId) as any[]) {
+    jointMap.set(String(jl.id), jl);
+  }
+
   for (const e of entries) {
-    if (e.joint_lesson_id || Number(e.block_index || 0) !== 0) continue;
+    if (Number(e.block_index || 0) !== 0) continue;
+    const entryTeachers = safeJsonParse<string[]>(e.teacher_ids_json, []).filter(Boolean);
+    if (e.joint_lesson_id) {
+      const jl = jointMap.get(String(e.joint_lesson_id));
+      if (!jl || Number(jl.is_active) !== 1) continue;
+      const expectedTeachers = safeJsonParse<string[]>(jl.teacher_ids_json, []).filter(Boolean);
+      const matchesTeacher =
+        entryTeachers.length === expectedTeachers.length &&
+        expectedTeachers.every((tid) => entryTeachers.includes(tid));
+      if (!matchesTeacher) {
+        const mKey = `jl|${e.joint_lesson_id}|${e.session_block_id}`;
+        if (!checkedBlockTeacherMismatch.has(mKey)) {
+          checkedBlockTeacherMismatch.add(mKey);
+          const expectedNames = expectedTeachers.map((id) => teacherMap.get(id)?.teacher_name || id).join(', ') || 'Unassigned';
+          const actualNames = safeJsonParse<string[]>(e.teacher_names_json, []).join(', ') || 'Unassigned';
+          pushConflict(
+            'error',
+            'TEACHER_ALLOCATION_MISMATCH',
+            `Teacher allocation mismatch on ${e.day_of_week} P${e.period_number}: Joint lesson ${e.subject_name} is assigned to ${actualNames}, but allocation restricts it to ${expectedNames}.`,
+            String(e.day_of_week),
+            Number(e.period_number),
+            { jointLessonId: e.joint_lesson_id, subject: String(e.subject_name), expectedTeachers, entryTeachers }
+          );
+        }
+      }
+      continue;
+    }
     const alloc = e.allocation_id ? allocMap.get(String(e.allocation_id)) : null;
     if (!alloc || Number(alloc.is_active) !== 1) continue;
     const expectedTeachers = safeJsonParse<string[]>(alloc.teacher_ids_json, []).filter(Boolean);
-    if (expectedTeachers.length === 0) continue;
-    const entryTeachers = safeJsonParse<string[]>(e.teacher_ids_json, []).filter(Boolean);
     const matchesTeacher =
       entryTeachers.length === expectedTeachers.length &&
       expectedTeachers.every((tid) => entryTeachers.includes(tid));
@@ -1637,7 +2009,7 @@ export function validateTimetableVersion(
       const mKey = `${e.grade}|${e.stream}|${e.subject_name}|${e.session_block_id}`;
       if (!checkedBlockTeacherMismatch.has(mKey)) {
         checkedBlockTeacherMismatch.add(mKey);
-        const expectedNames = expectedTeachers.map((id) => teacherMap.get(id)?.teacher_name || id).join(', ');
+        const expectedNames = expectedTeachers.map((id) => teacherMap.get(id)?.teacher_name || id).join(', ') || 'Unassigned';
         const actualNames = safeJsonParse<string[]>(e.teacher_names_json, []).join(', ') || 'Unassigned';
         pushConflict(
           'error',
@@ -1892,8 +2264,33 @@ export function validateSingleMoveCandidate(
     )
     .all(versionId, targetDay, ...matchingWindow, sessionBlockId) as any[];
 
-  const teacherIds = safeJsonParse<string[]>(blockEntries[0].teacher_ids_json, []);
+  const teacherIds = safeJsonParse<string[]>(blockEntries[0].teacher_ids_json, []).filter(Boolean);
   const roomId = targetRoomId !== undefined ? targetRoomId : (blockEntries[0].room_id ? String(blockEntries[0].room_id) : null);
+
+  // Strict Teacher Assignment Presence & Scope Check on manual moves/placements
+  const teacherScopes = loadTenantTeacherScopes(db, tenantId);
+  if (teacherIds.length === 0) {
+    hardConflicts.push(
+      `No assigned subject teacher for Grade ${firstEntry.grade} ${firstEntry.stream} · ${firstEntry.subject_name}. Assign an authorized teacher before placing on the timetable.`
+    );
+  }
+  for (const tid of teacherIds) {
+    for (const ce of uniqueClasses) {
+      const scopeCheck = checkTeacherAssignmentScope(
+        teacherScopes,
+        tid,
+        Number(ce.grade),
+        String(ce.stream),
+        String(ce.subject_name || firstEntry.subject_name || '')
+      );
+      if (!scopeCheck.ok) {
+        hardConflicts.push(
+          scopeCheck.reason ||
+            `Teacher is not strictly assigned to Grade ${ce.grade} ${ce.stream} · ${ce.subject_name}.`
+        );
+      }
+    }
+  }
 
   // Teacher clashes, availability & off-duty enforcement
   for (const tid of teacherIds) {
@@ -2195,6 +2592,7 @@ async function runTimetableGenerationWorker(jobId: string, injectedDb?: Database
       if (!lockedByBlock.has(bId)) lockedByBlock.set(bId, []);
       lockedByBlock.get(bId)!.push(le);
     }
+    const teacherScopes = loadTenantTeacherScopes(db, tenantId);
     for (const [bId, segs] of lockedByBlock.entries()) {
       const head = segs.find((s) => Number(s.block_index || 0) === 0) || segs[0];
       const k = head.joint_lesson_id
@@ -2202,7 +2600,20 @@ async function runTimetableGenerationWorker(jobId: string, injectedDb?: Database
         : `sa:${head.allocation_id}:${head.block_length}`;
       const maxAllowed = allowedBlockCountByKey.get(k) || 0;
       const alreadyKept = keptLockedCountByKey.get(k) || 0;
-      if (maxAllowed > 0 && alreadyKept < maxAllowed) {
+      const headTeachers = safeJsonParse<string[]>(head.teacher_ids_json, []).filter(Boolean);
+      const isTeacherScopeValid =
+        headTeachers.length > 0 &&
+        headTeachers.every(
+          (tid) =>
+            checkTeacherAssignmentScope(
+              teacherScopes,
+              tid,
+              Number(head.grade),
+              String(head.stream),
+              String(head.subject_name || '')
+            ).ok
+        );
+      if (maxAllowed > 0 && alreadyKept < maxAllowed && isTeacherScopeValid) {
         keptLockedCountByKey.set(k, alreadyKept + 1);
         lockedEntries.push(...segs);
       } else {
@@ -2332,7 +2743,14 @@ async function runTimetableGenerationWorker(jobId: string, injectedDb?: Database
         const tId =
           teacherIdByUserOrName.get(String(fl.teacherId || '')) ||
           teacherIdByUserOrName.get(String(fl.teacherName || '').trim().toLowerCase());
-        if (tId) {
+        const fixedSubject = String(fl.subject || fl.subjectName || '').trim();
+        const fixedTeacherAllowed =
+          !tId ||
+          !fixedSubject ||
+          !fl.grade ||
+          !fl.stream ||
+          checkTeacherAssignmentScope(teacherScopes, tId, Number(fl.grade), String(fl.stream), fixedSubject).ok;
+        if (tId && fixedTeacherAllowed) {
           state.teacherBusy.add(`${tId}|${day}|${period}`);
           const tdKey = `${tId}|${day}`;
           if (!state.teacherDayPeriods.has(tdKey)) state.teacherDayPeriods.set(tdKey, new Set());
@@ -2634,6 +3052,36 @@ async function runTimetableGenerationWorker(jobId: string, injectedDb?: Database
         }
       }
 
+      // Strict assignment scope guard: NEVER place lessons with an unauthorized teacher or without an assigned teacher
+      if (unit.scopeViolationReason) {
+        unscheduledOut.push({
+          unit,
+          reason: unit.scopeViolationReason,
+          diagnostics: {
+            code: 'TEACHER_SCOPE_VIOLATION',
+            blockLength: unit.blockLength,
+            requiredRoomType: unit.requiredRoomType,
+            teachers: unit.teacherNames,
+            studentCount: unit.studentCount,
+          },
+        });
+        continue;
+      }
+      if (unit.teacherIds.length === 0) {
+        unscheduledOut.push({
+          unit,
+          reason: `No strictly assigned teacher for Grade ${unit.grade} ${unit.stream} · ${unit.subjectName}. Unassigned lessons are not placed on the timetable.`,
+          diagnostics: {
+            code: 'NO_ASSIGNED_TEACHER',
+            blockLength: unit.blockLength,
+            requiredRoomType: unit.requiredRoomType,
+            teachers: [],
+            studentCount: unit.studentCount,
+          },
+        });
+        continue;
+      }
+
       const maxGradeP = Math.min(
         ...unit.classTargets.map((ct) => gradeSchedMap.get(ct.grade)?.periodsPerDay || Number(cfg?.default_periods_per_day || 8))
       );
@@ -2666,9 +3114,7 @@ async function runTimetableGenerationWorker(jobId: string, injectedDb?: Database
         unscheduledOut.push({
           unit,
           reason:
-            unit.teacherIds.length === 0
-              ? 'No qualified teacher assigned to subject.'
-              : unit.blockLength > 1
+            unit.blockLength > 1
               ? `No clash-free ${unit.blockLength}-period contiguous slot with ${unit.requiredRoomType} availability.`
               : `All valid teaching slots conflicted with teacher, class, or room availability.`,
           diagnostics: {

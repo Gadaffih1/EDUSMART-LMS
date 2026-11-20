@@ -10,10 +10,12 @@ import {
 import { upsertCollectionRecord } from './migrate.ts';
 import { broadcastChange } from './realtimeBus.ts';
 import {
+  checkTeacherAssignmentScope,
   classKeyOf,
   enqueueTimetableGenerationJob,
   ensureTenantTimetableSeeded,
   expandRequirementUnits,
+  loadTenantTeacherScopes,
   publishVersionEffects,
   safeJsonParse,
   uid,
@@ -1248,6 +1250,23 @@ export function registerTimetableRoutes(app: Express): void {
       res.status(400).json({ error: 'No subject in any stream can have more than one teacher.' });
       return;
     }
+    if (teacherIds.length === 1) {
+      const scopes = loadTenantTeacherScopes(db, tenantId);
+      const subjectScopeCheck = checkTeacherAssignmentScope(
+        scopes,
+        teacherIds[0],
+        targetGradesRaw[0],
+        '',
+        subjectName,
+        { checkSubjectOnly: true }
+      );
+      if (!subjectScopeCheck.ok) {
+        res.status(400).json({
+          error: subjectScopeCheck.reason || `Selected teacher is not assigned or qualified to teach ${subjectName}.`,
+        });
+        return;
+      }
+    }
 
     const single = Math.floor(Number(b.singleLessons ?? 0));
     const dbl = Math.floor(Number(b.doubleLessons ?? 0));
@@ -1465,16 +1484,17 @@ export function registerTimetableRoutes(app: Express): void {
             const linkedStreamTeacher = explicitStreamTeacherMap.get(
               `${targetGrade}::${stream.toLowerCase()}::${String(tpl.subject_name).toLowerCase()}`
             );
-            const fallbackTeachersJson = linkedStreamTeacher
-              ? JSON.stringify([linkedStreamTeacher])
-              : String(tpl.teacher_ids_json || '[]');
+            // Strictly assign ONLY the teacher explicitly assigned to this exact (grade, stream, subject) — never smear grade template teachers across streams
+            const strictStreamTeachersJson = linkedStreamTeacher ? JSON.stringify([linkedStreamTeacher]) : '[]';
 
             if (existing) {
               const existingTeachers = safeJsonParse<string[]>(existing.teacher_ids_json, []).filter(Boolean);
               const resolvedTeachersJson =
-                !overwriteTeachers && existingTeachers.length > 0
+                linkedStreamTeacher
+                  ? JSON.stringify([linkedStreamTeacher])
+                  : !overwriteTeachers && existingTeachers.length > 0
                   ? JSON.stringify(existingTeachers)
-                  : fallbackTeachersJson;
+                  : strictStreamTeachersJson;
 
               db.prepare(
                 `UPDATE tt_stream_subject_allocations
@@ -1526,7 +1546,7 @@ export function registerTimetableRoutes(app: Express): void {
                 tpl.preferred_periods_json,
                 tpl.required_room_type,
                 tpl.default_room_id,
-                fallbackTeachersJson,
+                strictStreamTeachersJson,
                 tpl.is_active,
                 now
               );
@@ -1608,6 +1628,27 @@ export function registerTimetableRoutes(app: Express): void {
         .get(tenantId, subjectName);
       if (!subjRow) {
         res.status(400).json({ error: `Subject "${subjectName}" is not an active subject in the school curriculum catalog.` });
+        return;
+      }
+    }
+
+    // Strict subject qualification guard: no teacher may be assigned to a subject outside their assigned/qualified subjects
+    if (teacherIds.length === 1) {
+      const scopes = loadTenantTeacherScopes(db, tenantId);
+      const subjectCheck = checkTeacherAssignmentScope(
+        scopes,
+        teacherIds[0],
+        gradeNum,
+        streamName,
+        subjectName,
+        { checkSubjectOnly: true }
+      );
+      if (!subjectCheck.ok) {
+        res.status(400).json({
+          error:
+            subjectCheck.reason ||
+            `Selected teacher is not qualified or assigned to teach ${subjectName}. Update their subject qualifications in Teachers & Limits first.`,
+        });
         return;
       }
     }
@@ -1964,6 +2005,24 @@ export function registerTimetableRoutes(app: Express): void {
       }
       if (Number(b.combinedStudents || 0) <= 0) {
         combinedStudents += Number(gRow?.student_count || 38);
+      }
+    }
+
+    // Strict teacher scope guard for joint lessons: teacher must be assigned/qualified for the subject and participating classes
+    if (jlTeacherIds.length === 1) {
+      const scopes = loadTenantTeacherScopes(db, tenantId);
+      for (const pc of b.participatingClasses) {
+        const pGrade = Number(pc.grade);
+        const pStream = String(pc.stream || '').trim();
+        const check = checkTeacherAssignmentScope(scopes, jlTeacherIds[0], pGrade, pStream, jlSubjectName);
+        if (!check.ok) {
+          res.status(400).json({
+            error:
+              check.reason ||
+              `Selected teacher is not strictly assigned to Grade ${pGrade} ${pStream} for ${jlSubjectName}.`,
+          });
+          return;
+        }
       }
     }
 
@@ -2403,6 +2462,33 @@ export function registerTimetableRoutes(app: Express): void {
       if (alreadyPlaced + blockLen > maxWeekly) {
         res.status(409).json({
           error: `Weekly lesson quota exceeded for Grade ${unsched.grade} ${unsched.stream} · ${unsched.subject_name}: placing ${blockLen} period(s) would total ${alreadyPlaced + blockLen}, exceeding the strict limit of ${maxWeekly} lessons/week.`,
+        });
+        return;
+      }
+    }
+
+    // Strict teacher assignment presence & scope check before placing an unscheduled session
+    const unschedTeachers = safeJsonParse<string[]>(unsched.teacher_ids_json, []).filter(Boolean);
+    if (unschedTeachers.length === 0) {
+      res.status(409).json({
+        error: `Cannot place Grade ${unsched.grade} ${unsched.stream} · ${unsched.subject_name}: no subject teacher is assigned. Assign a qualified teacher first.`,
+      });
+      return;
+    }
+    const placementScopes = loadTenantTeacherScopes(db, tenantId);
+    for (const tid of unschedTeachers) {
+      const scopeCheck = checkTeacherAssignmentScope(
+        placementScopes,
+        tid,
+        Number(unsched.grade),
+        String(unsched.stream),
+        String(unsched.subject_name || '')
+      );
+      if (!scopeCheck.ok) {
+        res.status(409).json({
+          error:
+            scopeCheck.reason ||
+            `Teacher is not strictly assigned to Grade ${unsched.grade} ${unsched.stream} · ${unsched.subject_name}.`,
         });
         return;
       }
@@ -2970,6 +3056,35 @@ export function registerTimetableRoutes(app: Express): void {
       return;
     }
 
+    const ttTeacherByUserIdForCopy = new Map<string, string>();
+    for (const tp of db.prepare(`SELECT id, user_id FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]) {
+      ttTeacherByUserIdForCopy.set(String(tp.user_id), String(tp.id));
+    }
+    const explicitCopyTeacherMap = new Map<string, string>();
+    try {
+      const gtaRows = db
+        .prepare(
+          `SELECT gta.teacher_id, gta.subject_name, g.grade_number, g.name as grade_name, s.name as stream_name
+           FROM grade_teacher_assignments gta
+           JOIN grades g ON g.id = gta.grade_id
+           JOIN streams s ON s.id = gta.stream_id
+           WHERE gta.school_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL`
+        )
+        .all(tenantId) as any[];
+      for (const r of gtaRows) {
+        const gNum = Number(r.grade_number || String(r.grade_name || '').match(/\d+/)?.[0] || 0);
+        const ttTid = ttTeacherByUserIdForCopy.get(String(r.teacher_id));
+        if (gNum > 0 && r.stream_name && ttTid) {
+          explicitCopyTeacherMap.set(
+            `${gNum}::${String(r.stream_name).toLowerCase()}::${String(r.subject_name).toLowerCase()}`,
+            ttTid
+          );
+        }
+      }
+    } catch {
+      // ignore if hierarchy tables are unavailable
+    }
+
     const now = new Date().toISOString();
     let copiedCount = 0;
 
@@ -2985,10 +3100,11 @@ export function registerTimetableRoutes(app: Express): void {
             .prepare(`SELECT id FROM tt_grade_subject_allocations WHERE config_id = ? AND grade = ? AND lower(subject_name) = lower(?)`)
             .get(configId, tg, r.subject_name) as any;
           const allocId = existing ? String(existing.id) : uid('ttga');
+          // Strictly copy curriculum lesson counts & room type ONLY — never copy source grade teachers onto target grades
           db.prepare(
             `INSERT INTO tt_grade_subject_allocations
                (id, tenant_id, config_id, grade, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, default_room_id, teacher_ids_json, student_group_label, is_active, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, 1, ?)
              ON CONFLICT(config_id, grade, subject_name) DO UPDATE SET
                required_weekly_periods = excluded.required_weekly_periods,
                single_lessons = excluded.single_lessons,
@@ -3020,7 +3136,6 @@ export function registerTimetableRoutes(app: Express): void {
             r.preferred_periods_json,
             r.required_room_type,
             r.default_room_id,
-            r.teacher_ids_json,
             r.student_group_label,
             now
           );
@@ -3028,6 +3143,10 @@ export function registerTimetableRoutes(app: Express): void {
 
           if (applyToStreams) {
             for (const st of streamsForGrade) {
+              const targetStreamTeacher = explicitCopyTeacherMap.get(
+                `${tg}::${st.toLowerCase()}::${String(r.subject_name).toLowerCase()}`
+              );
+              const targetStreamTeachersJson = targetStreamTeacher ? JSON.stringify([targetStreamTeacher]) : '[]';
               db.prepare(
                 `INSERT INTO tt_stream_subject_allocations
                    (id, tenant_id, config_id, grade, stream, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
@@ -3058,7 +3177,7 @@ export function registerTimetableRoutes(app: Express): void {
                 r.preferred_periods_json,
                 r.required_room_type,
                 r.default_room_id,
-                r.teacher_ids_json,
+                targetStreamTeachersJson,
                 now
               );
             }
@@ -3124,15 +3243,34 @@ export function registerTimetableRoutes(app: Express): void {
         }
         const requiredRoomType = String(raw.requiredRoomType ?? raw.roomType ?? 'general').trim() || 'general';
         const teacherNameRaw = String(raw.teacherName ?? raw.teacher ?? raw.Teacher ?? '').trim();
+        const streamRaw = String(raw.stream ?? raw.Stream ?? '').trim();
         const matchedTeacherId = teacherNameRaw ? teacherByName.get(teacherNameRaw.toLowerCase()) : undefined;
-        const teacherIds = matchedTeacherId ? [matchedTeacherId] : [];
+        let teacherIds: string[] = [];
+        if (teacherNameRaw && !matchedTeacherId) {
+          errors.push(`Row ${i + 1}: teacher "${teacherNameRaw}" not found in school roster — lesson imported without teacher.`);
+        } else if (matchedTeacherId) {
+          const importScopes = loadTenantTeacherScopes(db, tenantId);
+          const check = checkTeacherAssignmentScope(
+            importScopes,
+            matchedTeacherId,
+            gradeNum,
+            streamRaw,
+            subjectName,
+            { checkSubjectOnly: !streamRaw }
+          );
+          if (!check.ok) {
+            errors.push(`Row ${i + 1}: ${check.reason}`);
+          } else {
+            teacherIds = [matchedTeacherId];
+          }
+        }
         const maxPerDay = Math.max(1, Number(raw.maxPerDay || (triples > 0 ? 3 : doubles > 0 ? 2 : 1)));
 
         const allocId = uid('ttga');
         db.prepare(
           `INSERT INTO tt_grade_subject_allocations
              (id, tenant_id, config_id, grade, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, teacher_ids_json, student_group_label, is_active, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'spread', ?, 0, '[]', '[]', ?, ?, 'Whole Class', 1, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'spread', ?, 0, '[]', '[]', ?, '[]', 'Whole Class', 1, ?)
            ON CONFLICT(config_id, grade, subject_name) DO UPDATE SET
              required_weekly_periods = excluded.required_weekly_periods,
              single_lessons = excluded.single_lessons,
@@ -3140,10 +3278,9 @@ export function registerTimetableRoutes(app: Express): void {
              triple_lessons = excluded.triple_lessons,
              max_per_day = excluded.max_per_day,
              required_room_type = excluded.required_room_type,
-             teacher_ids_json = CASE WHEN excluded.teacher_ids_json != '[]' THEN excluded.teacher_ids_json ELSE teacher_ids_json END,
              is_active = 1,
              updated_at = excluded.updated_at`
-        ).run(allocId, tenantId, configId, gradeNum, subjectName, weekly, singles, doubles, triples, maxPerDay, requiredRoomType, JSON.stringify(teacherIds), now);
+        ).run(allocId, tenantId, configId, gradeNum, subjectName, weekly, singles, doubles, triples, maxPerDay, requiredRoomType, now);
 
         // Ensure subject exists in tt_subjects
         db.prepare(
@@ -3152,10 +3289,15 @@ export function registerTimetableRoutes(app: Express): void {
         ).run(uid('ttsub'), tenantId, subjectName, subjectName.slice(0, 4).toUpperCase(), requiredRoomType, now);
 
         if (applyToStreams) {
-          const streams = (
+          const allGradeStreams = (
             db.prepare(`SELECT DISTINCT stream FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND is_whole_class = 1`).all(tenantId, gradeNum) as any[]
           ).map((s) => String(s.stream));
-          for (const st of streams) {
+          const targetStreams = streamRaw
+            ? allGradeStreams.filter((s) => s.toLowerCase() === streamRaw.toLowerCase())
+            : allGradeStreams;
+          for (const st of targetStreams) {
+            // Only attach teacher to stream if an explicit stream column was provided in the row (never smear across all streams)
+            const streamTeacherIds = streamRaw ? teacherIds : [];
             db.prepare(
               `INSERT INTO tt_stream_subject_allocations
                  (id, tenant_id, config_id, grade, stream, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, teacher_ids_json, is_active, updated_at)
@@ -3169,7 +3311,7 @@ export function registerTimetableRoutes(app: Express): void {
                  required_room_type = excluded.required_room_type,
                  teacher_ids_json = CASE WHEN excluded.teacher_ids_json != '[]' THEN excluded.teacher_ids_json ELSE teacher_ids_json END,
                  updated_at = excluded.updated_at`
-            ).run(uid('ttsa'), tenantId, configId, gradeNum, st, subjectName, allocId, weekly, singles, doubles, triples, maxPerDay, requiredRoomType, JSON.stringify(teacherIds), now);
+            ).run(uid('ttsa'), tenantId, configId, gradeNum, st, subjectName, allocId, weekly, singles, doubles, triples, maxPerDay, requiredRoomType, JSON.stringify(streamTeacherIds), now);
           }
         }
         importedCount++;

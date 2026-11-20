@@ -495,6 +495,22 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
     [studentGroups]
   );
 
+  // Strictly filter selectable teachers to those qualified/assigned for the specific subject
+  const getEligibleTeachersForSubject = (subjectName: string, currentSelectedId?: string) => {
+    const subjLower = String(subjectName || '').trim().toLowerCase();
+    const activeTeachers = teachers.filter((t) => t.activeInTimetable);
+    const eligible = activeTeachers.filter((t) => {
+      const quals = (t.qualifiedSubjects || []).map((q) => String(q || '').trim().toLowerCase()).filter(Boolean);
+      if (!subjLower) return quals.length > 0;
+      return quals.includes(subjLower);
+    });
+    const outOfScopeCurrent =
+      currentSelectedId && !eligible.some((t) => t.id === currentSelectedId)
+        ? teachers.find((t) => t.id === currentSelectedId) || null
+        : null;
+    return { eligible, outOfScopeCurrent };
+  };
+
   return (
     <div className="space-y-5">
       {statusMsg && (
@@ -510,14 +526,14 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
         </div>
       )}
 
-      {/* Strict Allocation & Adjustable Weekly Lessons Policy */}
+      {/* Strict Allocation & Assignment Scope Policy */}
       <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/70 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-start gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
           <div>
-            <span className="font-bold text-emerald-950">Strict Weekly Lesson Adherence Active: </span>
+            <span className="font-bold text-emerald-950">Strict Assignment Scope &amp; Weekly Lesson Adherence Active: </span>
             <span>
-              Timetable production schedules lessons strictly for the grades, streams, and subjects allocated below, matching each subject&apos;s exact weekly lesson count. Adjust lessons per week anytime using the <strong className="font-mono">- / +</strong> controls and save.
+              Teachers can only appear on the timetable for the exact subject, grade, and stream(s) strictly assigned to them — no teacher may teach an unassigned subject. Adjust weekly lesson counts anytime with <strong className="font-mono">- / +</strong> and save.
             </span>
           </div>
         </div>
@@ -769,8 +785,8 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
               onChange={(e) => setAddTplTeacherId(e.target.value)}
               className="px-2.5 py-2 border border-slate-200 rounded-lg bg-white"
             >
-              <option value="">-- Default Teacher --</option>
-              {teachers.filter((t) => t.activeInTimetable).map((t) => (
+              <option value="">-- Qualified Teacher (Optional) --</option>
+              {getEligibleTeachersForSubject(addTplSubject, addTplTeacherId).eligible.map((t) => (
                 <option key={t.id} value={t.id}>{t.teacherName}</option>
               ))}
             </select>
@@ -906,16 +922,31 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                         </select>
                       </td>
                       <td className="p-3">
-                        <select
-                          value={row.teacherIds[0] || ''}
-                          onChange={(e) => setG(row.id, orig, { teacherIds: e.target.value ? [e.target.value] : [] })}
-                          className="w-40 px-2 py-1 border border-slate-200 rounded bg-white"
-                        >
-                          <option value="">-- Unassigned --</option>
-                          {teachers.filter((t) => t.activeInTimetable).map((t) => (
-                            <option key={t.id} value={t.id}>{t.teacherName}</option>
-                          ))}
-                        </select>
+                        {(() => {
+                          const { eligible, outOfScopeCurrent } = getEligibleTeachersForSubject(
+                            row.subjectName,
+                            row.teacherIds[0]
+                          );
+                          return (
+                            <select
+                              value={row.teacherIds[0] || ''}
+                              onChange={(e) => setG(row.id, orig, { teacherIds: e.target.value ? [e.target.value] : [] })}
+                              className={`w-44 px-2 py-1 border rounded bg-white ${
+                                outOfScopeCurrent ? 'border-rose-400 text-rose-700 bg-rose-50' : 'border-slate-200'
+                              }`}
+                            >
+                              <option value="">-- Assign per stream --</option>
+                              {outOfScopeCurrent && (
+                                <option value={outOfScopeCurrent.id}>
+                                  {outOfScopeCurrent.teacherName} (Not assigned to {row.subjectName})
+                                </option>
+                              )}
+                              {eligible.map((t) => (
+                                <option key={t.id} value={t.id}>{t.teacherName}</option>
+                              ))}
+                            </select>
+                          );
+                        })()}
                       </td>
                       <td className="p-3 text-right whitespace-nowrap space-x-1">
                         {confirmRemoveGradeAllocId === row.id ? (
@@ -1017,7 +1048,7 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2 text-[11px] text-slate-600 flex items-center justify-between gap-2">
             <span>
-              <strong className="text-slate-900">Single-Teacher Rule:</strong> Each subject in a specific stream can have at most one assigned teacher. Saving updates Faculty Workload &amp; Academic Hierarchy automatically.
+              <strong className="text-slate-900">Strict Subject-Stream Rule:</strong> Only teachers qualified/assigned to a subject may be selected for that stream (at most one teacher per subject per stream). Saving updates Faculty Workload &amp; Academic Hierarchy automatically.
             </span>
           </div>
 
@@ -1123,18 +1154,35 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                           </div>
                         </td>
                         <td className="p-3">
-                          <select
-                            value={row.teacherIds[0] || ''}
-                            onChange={(e) => {
-                              setS(row.id, orig, { teacherIds: e.target.value ? [e.target.value] : [] });
-                            }}
-                            className="w-44 px-2 py-1 border border-slate-200 rounded bg-white"
-                          >
-                            <option value="">-- Unassigned --</option>
-                            {teachers.filter((t) => t.activeInTimetable).map((t) => (
-                              <option key={t.id} value={t.id}>{t.teacherName}</option>
-                            ))}
-                          </select>
+                          {(() => {
+                            const { eligible, outOfScopeCurrent } = getEligibleTeachersForSubject(
+                              row.subjectName,
+                              row.teacherIds[0]
+                            );
+                            return (
+                              <select
+                                value={row.teacherIds[0] || ''}
+                                onChange={(e) => {
+                                  setS(row.id, orig, { teacherIds: e.target.value ? [e.target.value] : [] });
+                                }}
+                                className={`w-48 px-2 py-1 border rounded bg-white ${
+                                  outOfScopeCurrent ? 'border-rose-400 text-rose-700 bg-rose-50' : 'border-slate-200'
+                                }`}
+                              >
+                                <option value="">
+                                  {eligible.length === 0 ? '-- No qualified teacher --' : '-- Unassigned --'}
+                                </option>
+                                {outOfScopeCurrent && (
+                                  <option value={outOfScopeCurrent.id}>
+                                    {outOfScopeCurrent.teacherName} (Not assigned to {row.subjectName})
+                                  </option>
+                                )}
+                                {eligible.map((t) => (
+                                  <option key={t.id} value={t.id}>{t.teacherName}</option>
+                                ))}
+                              </select>
+                            );
+                          })()}
                         </td>
                         <td className="p-3">
                           <select
@@ -1353,8 +1401,8 @@ export const TimetableAllocationsPanel: React.FC<TimetableAllocationsPanelProps>
                   onChange={(e) => setJlTeacherId(e.target.value)}
                   className="sm:col-span-2 px-2 py-1.5 border border-slate-200 rounded bg-white"
                 >
-                  <option value="">-- Lead Teacher --</option>
-                  {teachers.filter((t) => t.activeInTimetable).map((t) => (
+                  <option value="">-- Qualified Lead Teacher --</option>
+                  {getEligibleTeachersForSubject(jlSubject, jlTeacherId).eligible.map((t) => (
                     <option key={t.id} value={t.id}>{t.teacherName}</option>
                   ))}
                 </select>

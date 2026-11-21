@@ -403,3 +403,309 @@ test('Scheduling engine enforces independent allocations, zero teacher collision
   );
   assert.deepEqual(overlapAudit.studentGroupConflicts[0].overlappingStudentIds, ['s2']);
 });
+
+test('Option 1 (individual_teacher): Individual teacher-subject-grade-stream-lessonsPerWeek assignments sync directly to zero-collision timetable processing', () => {
+  const scheduleConfigs: Record<TimetableCategoryId, EngineScheduleConfig> = {
+    cat_1_3: {
+      categoryId: 'cat_1_3',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'category_redistribution',
+    },
+    cat_4_6: {
+      categoryId: 'cat_4_6',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'individual_teacher',
+    },
+    cat_7_9: {
+      categoryId: 'cat_7_9',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 40,
+      periods: buildDefaultPeriodSlots(4, 40),
+      allocationMode: 'category_redistribution',
+    },
+  };
+
+  const streams: EngineStream[] = [
+    { grade: 4, stream: 'North', categoryId: 'cat_4_6', studentIds: ['s1', 's2'] },
+    { grade: 4, stream: 'South', categoryId: 'cat_4_6', studentIds: ['s3', 's4'] },
+  ];
+
+  // Category-level lessonsPerWeek intentionally left at 0 to prove Option 1 reads individual teacher assignments
+  const subjects: EngineSubject[] = [
+    { id: 'c2_mat', categoryId: 'cat_4_6', code: 'mathematics', name: 'Mathematics', shortCode: 'MAT', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 0, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 1 },
+    { id: 'c2_eng', categoryId: 'cat_4_6', code: 'english', name: 'English', shortCode: 'ENG', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 0, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 2 },
+    { id: 'c2_sci', categoryId: 'cat_4_6', code: 'integrated_science', name: 'Integrated Science', shortCode: 'SCI', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 0, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 3 },
+  ];
+
+  // Grade 4 North gets 8 Math + 7 Eng + 5 Sci = 20 lessons/wk
+  // Grade 4 South gets 6 Math + 8 Eng + 6 Sci = 20 lessons/wk
+  // Same Math teacher (t_math) teaches BOTH streams (8 + 6 = 14 <= 20 physical slots) -> must schedule with ZERO collisions!
+  const teacherAssignments: EngineTeacherAssignment[] = [
+    {
+      id: 'ind_1', teacherId: 't_math', teacherName: 'Mr. Kamau', teacherEmail: 'kamau@test',
+      categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 4, stream: 'North', lessonsPerWeek: 8,
+      allocationSource: 'individual', roleType: 'subject_teacher', maxWeeklyPeriods: 28,
+      facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true,
+    },
+    {
+      id: 'ind_2', teacherId: 't_eng', teacherName: 'Ms. Wanjiku', teacherEmail: 'wanjiku@test',
+      categoryId: 'cat_4_6', subjectId: 'c2_eng', grade: 4, stream: 'North', lessonsPerWeek: 7,
+      allocationSource: 'individual', roleType: 'subject_teacher', maxWeeklyPeriods: 28,
+      facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true,
+    },
+    {
+      id: 'ind_3', teacherId: 't_sci', teacherName: 'Mr. Ochieng', teacherEmail: 'ochieng@test',
+      categoryId: 'cat_4_6', subjectId: 'c2_sci', grade: 4, stream: 'North', lessonsPerWeek: 5,
+      allocationSource: 'individual', roleType: 'subject_teacher', maxWeeklyPeriods: 28,
+      facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true,
+    },
+    {
+      id: 'ind_4', teacherId: 't_math', teacherName: 'Mr. Kamau', teacherEmail: 'kamau@test',
+      categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 4, stream: 'South', lessonsPerWeek: 6,
+      allocationSource: 'individual', roleType: 'subject_teacher', maxWeeklyPeriods: 28,
+      facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true,
+    },
+    {
+      id: 'ind_5', teacherId: 't_eng', teacherName: 'Ms. Wanjiku', teacherEmail: 'wanjiku@test',
+      categoryId: 'cat_4_6', subjectId: 'c2_eng', grade: 4, stream: 'South', lessonsPerWeek: 8,
+      allocationSource: 'individual', roleType: 'subject_teacher', maxWeeklyPeriods: 28,
+      facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true,
+    },
+    {
+      id: 'ind_6', teacherId: 't_sci', teacherName: 'Mr. Ochieng', teacherEmail: 'ochieng@test',
+      categoryId: 'cat_4_6', subjectId: 'c2_sci', grade: 4, stream: 'South', lessonsPerWeek: 6,
+      allocationSource: 'individual', roleType: 'subject_teacher', maxWeeklyPeriods: 28,
+      facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true,
+    },
+  ];
+
+  const input: EngineInput = {
+    scheduleConfigs,
+    subjects,
+    facilities: [],
+    teacherAssignments,
+    remedialConfigs: [],
+    streams,
+  };
+
+  const result = generateTimetableSchedule(input);
+  assert.equal(result.success, true, `Option 1 should schedule cleanly: ${JSON.stringify(result.unplacedTasks)}`);
+  assert.equal(result.audit.isValid, true);
+  assert.equal(result.audit.teacherCollisions.length, 0, 'Zero teacher collisions across streams');
+  assert.equal(result.audit.unexplainedBlankSessions.length, 0, 'Zero blank sessions');
+
+  // Verify exact per-stream individual counts
+  const northMath = result.entries.filter((e) => e.grade === 4 && e.stream === 'North' && e.subjectId === 'c2_mat');
+  const southMath = result.entries.filter((e) => e.grade === 4 && e.stream === 'South' && e.subjectId === 'c2_mat');
+  assert.equal(northMath.length, 8);
+  assert.equal(southMath.length, 6);
+
+  const mathWorkload = result.audit.teacherWorkloads.find((w) => w.teacherId === 't_math');
+  assert.equal(mathWorkload?.scheduledTotal, 14);
+});
+
+test('Strict Zero-Collision Guards block duplicate stream-subject ownership, teacher impossible weekly load, and stream over-allocation', () => {
+  const scheduleConfigs: Record<TimetableCategoryId, EngineScheduleConfig> = {
+    cat_1_3: {
+      categoryId: 'cat_1_3',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'individual_teacher',
+    },
+    cat_4_6: {
+      categoryId: 'cat_4_6',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'category_redistribution',
+    },
+    cat_7_9: {
+      categoryId: 'cat_7_9',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 40,
+      periods: buildDefaultPeriodSlots(4, 40),
+      allocationMode: 'category_redistribution',
+    },
+  };
+
+  const streams: EngineStream[] = [
+    { grade: 1, stream: 'North', categoryId: 'cat_1_3', studentIds: [] },
+    { grade: 1, stream: 'South', categoryId: 'cat_1_3', studentIds: [] },
+    { grade: 2, stream: 'North', categoryId: 'cat_1_3', studentIds: [] },
+  ];
+
+  const subjects: EngineSubject[] = [
+    { id: 'c1_lit', categoryId: 'cat_1_3', code: 'literacy', name: 'Literacy', shortCode: 'LIT', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 0, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 1 },
+    { id: 'c1_mat', categoryId: 'cat_1_3', code: 'mathematical_activities', name: 'Mathematical Activities', shortCode: 'MAT', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 0, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 2 },
+  ];
+
+  // 1. Duplicate ownership conflict: two different teachers assigned to Grade 1 North Literacy
+  const dupReadiness = validateTimetableReadiness({
+    scheduleConfigs,
+    subjects,
+    facilities: [],
+    remedialConfigs: [],
+    streams,
+    teacherAssignments: [
+      {
+        id: 'd1', teacherId: 't1', teacherName: 'Ms. A', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_lit', grade: 1, stream: 'North', lessonsPerWeek: 5, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+      {
+        id: 'd2', teacherId: 't2', teacherName: 'Mr. B', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_lit', grade: 1, stream: 'North', lessonsPerWeek: 5, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+    ],
+  });
+  assert.equal(dupReadiness.readyToGenerate, false);
+  assert.ok(
+    dupReadiness.issues.some((i) => i.code === 'DUPLICATE_STREAM_SUBJECT_ASSIGNMENT'),
+    'Must flag DUPLICATE_STREAM_SUBJECT_ASSIGNMENT'
+  );
+
+  // 2. Teacher impossible weekly load: single teacher assigned 10 + 10 + 5 = 25 lessons/wk when only 20 physical slots exist
+  const overloadReadiness = validateTimetableReadiness({
+    scheduleConfigs,
+    subjects,
+    facilities: [],
+    remedialConfigs: [],
+    streams,
+    teacherAssignments: [
+      {
+        id: 'o1', teacherId: 't_over', teacherName: 'Mr. Overloaded', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_lit', grade: 1, stream: 'North', lessonsPerWeek: 10, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 30, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+      {
+        id: 'o2', teacherId: 't_over', teacherName: 'Mr. Overloaded', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_lit', grade: 1, stream: 'South', lessonsPerWeek: 10, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 30, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+      {
+        id: 'o3', teacherId: 't_over', teacherName: 'Mr. Overloaded', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_lit', grade: 2, stream: 'North', lessonsPerWeek: 5, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 30, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+    ],
+  });
+  assert.equal(overloadReadiness.readyToGenerate, false);
+  assert.ok(
+    overloadReadiness.issues.some((i) => i.code === 'TEACHER_IMPOSSIBLE_WEEKLY_LOAD'),
+    'Must flag TEACHER_IMPOSSIBLE_WEEKLY_LOAD'
+  );
+
+  // 3. Stream over-allocation: Grade 1 North assigned 12 + 10 = 22 > 20 available periods
+  const overStreamReadiness = validateTimetableReadiness({
+    scheduleConfigs,
+    subjects,
+    facilities: [],
+    remedialConfigs: [],
+    streams: [streams[0]],
+    teacherAssignments: [
+      {
+        id: 's1', teacherId: 't1', teacherName: 'Ms. A', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_lit', grade: 1, stream: 'North', lessonsPerWeek: 12, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+      {
+        id: 's2', teacherId: 't2', teacherName: 'Mr. B', teacherEmail: '', categoryId: 'cat_1_3',
+        subjectId: 'c1_mat', grade: 1, stream: 'North', lessonsPerWeek: 10, allocationSource: 'individual',
+        roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '',
+        allowedDays: [], allowedPeriods: [], isActive: true,
+      },
+    ],
+  });
+  assert.equal(overStreamReadiness.readyToGenerate, false);
+  assert.ok(
+    overStreamReadiness.issues.some((i) => i.code === 'OVER_ALLOCATED_CATEGORY'),
+    'Must flag OVER_ALLOCATED_CATEGORY when stream exceeds available weekly periods'
+  );
+});
+
+test('Option 2 (category_redistribution): Category weekly allocations redistribute across multiple streams and strictly link to assigned teachers with zero collisions', () => {
+  const scheduleConfigs: Record<TimetableCategoryId, EngineScheduleConfig> = {
+    cat_1_3: {
+      categoryId: 'cat_1_3',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'category_redistribution',
+    },
+    cat_4_6: {
+      categoryId: 'cat_4_6',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'category_redistribution',
+    },
+    cat_7_9: {
+      categoryId: 'cat_7_9',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 40,
+      periods: buildDefaultPeriodSlots(4, 40),
+      allocationMode: 'category_redistribution',
+    },
+  };
+
+  const streams: EngineStream[] = [
+    { grade: 4, stream: 'North', categoryId: 'cat_4_6', studentIds: [] },
+    { grade: 4, stream: 'South', categoryId: 'cat_4_6', studentIds: [] },
+    { grade: 5, stream: 'North', categoryId: 'cat_4_6', studentIds: [] },
+  ];
+
+  // Category 2 allocates 10 Math + 10 English = 20 regular periods -> redistributes to all 3 streams (60 total lessons)
+  const subjects: EngineSubject[] = [
+    { id: 'c2_mat', categoryId: 'cat_4_6', code: 'mathematics', name: 'Mathematics', shortCode: 'MAT', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 10, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 1 },
+    { id: 'c2_eng', categoryId: 'cat_4_6', code: 'english', name: 'English', shortCode: 'ENG', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 10, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 2 },
+  ];
+
+  // Strictly linked stream teachers (each teacher takes <= 20 periods/wk so 0 collisions)
+  const teacherAssignments: EngineTeacherAssignment[] = [
+    { id: 'r1', teacherId: 'tm1', teacherName: 'Mr. Math A', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 4, stream: 'North', lessonsPerWeek: 10, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'r2', teacherId: 'tm1', teacherName: 'Mr. Math A', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 4, stream: 'South', lessonsPerWeek: 10, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'r3', teacherId: 'tm2', teacherName: 'Ms. Math B', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 5, stream: 'North', lessonsPerWeek: 10, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'r4', teacherId: 'te1', teacherName: 'Ms. Eng A', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_eng', grade: 4, stream: 'North', lessonsPerWeek: 10, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'r5', teacherId: 'te1', teacherName: 'Ms. Eng A', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_eng', grade: 4, stream: 'South', lessonsPerWeek: 10, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'r6', teacherId: 'te2', teacherName: 'Mr. Eng B', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_eng', grade: 5, stream: 'North', lessonsPerWeek: 10, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+  ];
+
+  const result = generateTimetableSchedule({
+    scheduleConfigs,
+    subjects,
+    facilities: [],
+    teacherAssignments,
+    remedialConfigs: [],
+    streams,
+  });
+
+  assert.equal(result.success, true, `Option 2 redistribution must succeed: ${JSON.stringify(result.unplacedTasks)}`);
+  assert.equal(result.audit.isValid, true);
+  assert.equal(result.audit.teacherCollisions.length, 0);
+  assert.equal(result.audit.unexplainedBlankSessions.length, 0);
+  assert.equal(result.entries.length, 60);
+  assert.equal(result.audit.streamAllocations.length, 6);
+  assert.ok(result.audit.streamAllocations.every((ra) => ra.status === 'linked'));
+});
+

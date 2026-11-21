@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import type {
+  AllocationProcessingMode,
+  AssignmentAllocationSource,
   FacilityType,
   PeriodSlotDefinition,
   StudentGroupMode,
@@ -15,6 +17,7 @@ export interface EngineScheduleConfig {
   periodsPerDay: number;
   periodDurationMins: number;
   periods: PeriodSlotDefinition[];
+  allocationMode?: AllocationProcessingMode;
 }
 
 export interface EngineSubject {
@@ -57,6 +60,8 @@ export interface EngineTeacherAssignment {
   subjectId: string;
   grade: number | null;
   stream: string | null;
+  lessonsPerWeek?: number | null;
+  allocationSource?: AssignmentAllocationSource;
   roleType: TeacherAssignmentRole;
   maxWeeklyPeriods: number;
   facilityId: string | null;
@@ -140,6 +145,7 @@ export interface ValidationIssue {
 export interface CategoryAllocationSummary {
   categoryId: TimetableCategoryId;
   label: string;
+  allocationMode: AllocationProcessingMode;
   availableRegularPeriods: number;
   allocatedCoreLessons: number;
   allocatedCommonLessons: number;
@@ -147,6 +153,26 @@ export interface CategoryAllocationSummary {
   totalAllocatedRegularLessons: number;
   remainingRegularPeriods: number;
   activeStreamCount: number;
+  linkedStreamSlots: number;
+  unlinkedStreamSlots: number;
+  duplicateConflicts: number;
+}
+
+export interface ResolvedStreamAllocation {
+  categoryId: TimetableCategoryId;
+  grade: number;
+  stream: string;
+  subjectId: string;
+  subjectName: string;
+  subjectKind: TimetableSubjectKind;
+  lessonsPerWeek: number;
+  source: AssignmentAllocationSource;
+  linkedAssignmentId: string | null;
+  teacherId: string | null;
+  teacherName: string | null;
+  candidateAssignments: EngineTeacherAssignment[];
+  status: 'linked' | 'unassigned' | 'duplicate_conflict';
+  conflictTeachers: string[];
 }
 
 export interface TeacherWorkloadReport {
@@ -222,6 +248,7 @@ export interface TimetableAuditReport {
     periodNumber: number;
   }>;
   categoryTotals: CategoryAllocationSummary[];
+  streamAllocations: ResolvedStreamAllocation[];
   teacherWorkloads: TeacherWorkloadReport[];
   facilityUtilization: FacilityUtilizationReport[];
   streamCompleteness: StreamCompletenessReport[];
@@ -275,71 +302,251 @@ function findMatchingAssignments(
   grade: number,
   stream: string
 ): EngineTeacherAssignment[] {
+  const normStream = stream.trim().toLowerCase();
   const active = assignments.filter(
     (a) => a.isActive && a.categoryId === categoryId && a.subjectId === subjectId
   );
-  const exact = active.filter((a) => a.grade === grade && a.stream === stream);
+  const exact = active.filter(
+    (a) => a.grade === grade && (a.stream || '').trim().toLowerCase() === normStream
+  );
   if (exact.length > 0) return exact;
-  const byGrade = active.filter((a) => a.grade === grade && (!a.stream || a.stream === ''));
+  const byGrade = active.filter((a) => a.grade === grade && (!a.stream || a.stream.trim() === ''));
   if (byGrade.length > 0) return byGrade;
-  return active.filter((a) => a.grade === null && (!a.stream || a.stream === ''));
+  return active.filter((a) => a.grade === null && (!a.stream || a.stream.trim() === ''));
 }
 
-export function computeCategoryTotals(input: EngineInput): CategoryAllocationSummary[] {
+/**
+ * Unified, strictly-linked stream allocation resolver supporting both processing modes:
+ *  - Option 1 (`individual_teacher`): Uses individual teacher assignments capturing
+ *    (teacher, category, subject, grade, stream, lessonsPerWeek) directly.
+ *  - Option 2 (`category_redistribution`): Takes category-level subject weekly allocations,
+ *    redistributes them to every active stream in the category, and strictly links each
+ *    stream-subject demand to its assigned teacher (enforcing zero duplicate ownership).
+ */
+export function resolveEffectiveStreamAllocations(
+  input: EngineInput
+): ResolvedStreamAllocation[] {
+  const subjectById = new Map(input.subjects.map((s) => [s.id, s]));
+  const resolved: ResolvedStreamAllocation[] = [];
+
+  for (const st of input.streams) {
+    const cfg = input.scheduleConfigs[st.categoryId];
+    const mode: AllocationProcessingMode = cfg?.allocationMode ?? 'category_redistribution';
+    const normStream = st.stream.trim().toLowerCase();
+
+    if (mode === 'individual_teacher') {
+      const streamIndiv = input.teacherAssignments.filter(
+        (a) =>
+          a.isActive &&
+          a.categoryId === st.categoryId &&
+          a.grade === st.grade &&
+          (a.stream || '').trim().toLowerCase() === normStream &&
+          (Number(a.lessonsPerWeek) || 0) > 0
+      );
+
+      const bySubject = new Map<string, EngineTeacherAssignment[]>();
+      for (const a of streamIndiv) {
+        const sub = subjectById.get(a.subjectId);
+        if (!sub || !sub.isActive || sub.subjectKind === 'remedial') continue;
+        if (!bySubject.has(a.subjectId)) bySubject.set(a.subjectId, []);
+        bySubject.get(a.subjectId)!.push(a);
+      }
+
+      for (const [subId, list] of bySubject.entries()) {
+        const sub = subjectById.get(subId)!;
+        const uniqueTeachers = Array.from(new Set(list.map((x) => x.teacherId)));
+        const hasDuplicate = uniqueTeachers.length > 1 || list.length > 1;
+        const primary = list[0];
+        resolved.push({
+          categoryId: st.categoryId,
+          grade: st.grade,
+          stream: st.stream,
+          subjectId: sub.id,
+          subjectName: sub.name,
+          subjectKind: sub.subjectKind,
+          lessonsPerWeek: Number(primary.lessonsPerWeek) || 0,
+          source: 'individual',
+          linkedAssignmentId: primary.id,
+          teacherId: primary.teacherId,
+          teacherName: primary.teacherName,
+          candidateAssignments: list,
+          status: hasDuplicate ? 'duplicate_conflict' : 'linked',
+          conflictTeachers: hasDuplicate ? list.map((x) => x.teacherName) : [],
+        });
+      }
+    } else {
+      const catSubjects = input.subjects.filter(
+        (s) =>
+          s.categoryId === st.categoryId &&
+          s.isActive &&
+          s.lessonsPerWeek > 0 &&
+          s.subjectKind !== 'remedial'
+      );
+
+      for (const sub of catSubjects) {
+        const matches = findMatchingAssignments(
+          input.teacherAssignments,
+          st.categoryId,
+          sub.id,
+          st.grade,
+          st.stream
+        );
+
+        const distinctTeacherIds = Array.from(new Set(matches.map((m) => m.teacherId)));
+        if (matches.length === 0) {
+          resolved.push({
+            categoryId: st.categoryId,
+            grade: st.grade,
+            stream: st.stream,
+            subjectId: sub.id,
+            subjectName: sub.name,
+            subjectKind: sub.subjectKind,
+            lessonsPerWeek: sub.lessonsPerWeek,
+            source: 'category_redistribution',
+            linkedAssignmentId: null,
+            teacherId: null,
+            teacherName: null,
+            candidateAssignments: [],
+            status: 'unassigned',
+            conflictTeachers: [],
+          });
+        } else if (distinctTeacherIds.length > 1) {
+          resolved.push({
+            categoryId: st.categoryId,
+            grade: st.grade,
+            stream: st.stream,
+            subjectId: sub.id,
+            subjectName: sub.name,
+            subjectKind: sub.subjectKind,
+            lessonsPerWeek: sub.lessonsPerWeek,
+            source: 'category_redistribution',
+            linkedAssignmentId: matches[0].id,
+            teacherId: matches[0].teacherId,
+            teacherName: matches[0].teacherName,
+            candidateAssignments: matches,
+            status: 'duplicate_conflict',
+            conflictTeachers: matches.map((m) => m.teacherName),
+          });
+        } else {
+          resolved.push({
+            categoryId: st.categoryId,
+            grade: st.grade,
+            stream: st.stream,
+            subjectId: sub.id,
+            subjectName: sub.name,
+            subjectKind: sub.subjectKind,
+            lessonsPerWeek: sub.lessonsPerWeek,
+            source: 'category_redistribution',
+            linkedAssignmentId: matches[0].id,
+            teacherId: matches[0].teacherId,
+            teacherName: matches[0].teacherName,
+            candidateAssignments: [matches[0]],
+            status: 'linked',
+            conflictTeachers: [],
+          });
+        }
+      }
+    }
+  }
+
+  return resolved;
+}
+
+export function computeCategoryTotals(
+  input: EngineInput,
+  resolvedAllocations?: ResolvedStreamAllocation[]
+): CategoryAllocationSummary[] {
+  const effective = resolvedAllocations ?? resolveEffectiveStreamAllocations(input);
+
   return TIMETABLE_CATEGORIES.map((cat) => {
     const cfg = input.scheduleConfigs[cat.id];
+    const mode: AllocationProcessingMode = cfg?.allocationMode ?? 'category_redistribution';
     const regularSlotsCount = cfg ? cfg.days.length * getRegularPeriods(cfg).length : 0;
     const catSubjects = input.subjects.filter((s) => s.categoryId === cat.id && s.isActive);
+    const catStreams = input.streams.filter((st) => st.categoryId === cat.id);
+    const catResolved = effective.filter((r) => r.categoryId === cat.id);
 
     let allocatedCoreLessons = 0;
     let allocatedCommonLessons = 0;
     let allocatedRemedialLessons = 0;
 
-    for (const s of catSubjects) {
-      if (s.subjectKind === 'core') {
-        allocatedCoreLessons += s.lessonsPerWeek;
-      } else if (s.subjectKind === 'common_activity') {
-        allocatedCommonLessons += s.lessonsPerWeek;
-      } else if (s.subjectKind === 'remedial') {
-        allocatedRemedialLessons += s.lessonsPerWeek;
+    if (mode === 'individual_teacher' && catStreams.length > 0) {
+      // Average/representative per-stream total in individual mode (or max stream load for capacity visibility)
+      let maxStreamRegular = -1;
+      for (const st of catStreams) {
+        const stRows = catResolved.filter((r) => r.grade === st.grade && r.stream === st.stream);
+        const core = stRows
+          .filter((r) => r.subjectKind === 'core')
+          .reduce((acc, r) => acc + r.lessonsPerWeek, 0);
+        const common = stRows
+          .filter((r) => r.subjectKind === 'common_activity')
+          .reduce((acc, r) => acc + r.lessonsPerWeek, 0);
+        if (core + common > maxStreamRegular) {
+          maxStreamRegular = core + common;
+          allocatedCoreLessons = core;
+          allocatedCommonLessons = common;
+        }
+      }
+      allocatedRemedialLessons = catSubjects
+        .filter((s) => s.subjectKind === 'remedial')
+        .reduce((acc, s) => acc + s.lessonsPerWeek, 0);
+    } else {
+      for (const s of catSubjects) {
+        if (s.subjectKind === 'core') {
+          allocatedCoreLessons += s.lessonsPerWeek;
+        } else if (s.subjectKind === 'common_activity') {
+          allocatedCommonLessons += s.lessonsPerWeek;
+        } else if (s.subjectKind === 'remedial') {
+          allocatedRemedialLessons += s.lessonsPerWeek;
+        }
       }
     }
 
-    // Core + non-remedial common activities fill the regular stream periods.
-    // Remedial 1 & 2 can be scheduled in regular or post-class remedial slots,
-    // so we report regular total clearly and include remedial separately & in total tracking.
     const totalAllocatedRegularLessons = allocatedCoreLessons + allocatedCommonLessons;
     const remainingRegularPeriods = regularSlotsCount - totalAllocatedRegularLessons;
-    const activeStreamCount = input.streams.filter((st) => st.categoryId === cat.id).length;
+
+    const linkedStreamSlots = catResolved.filter((r) => r.status === 'linked').length;
+    const unlinkedStreamSlots = catResolved.filter((r) => r.status === 'unassigned').length;
+    const duplicateConflicts = catResolved.filter((r) => r.status === 'duplicate_conflict').length;
 
     return {
       categoryId: cat.id,
       label: cat.label,
+      allocationMode: mode,
       availableRegularPeriods: regularSlotsCount,
       allocatedCoreLessons,
       allocatedCommonLessons,
       allocatedRemedialLessons,
       totalAllocatedRegularLessons,
       remainingRegularPeriods,
-      activeStreamCount,
+      activeStreamCount: catStreams.length,
+      linkedStreamSlots,
+      unlinkedStreamSlots,
+      duplicateConflicts,
     };
   });
 }
 
 /**
- * Strict Requirement F & G readiness validation prior to generation:
- * - No automatic assumptions about teachers or frequencies.
- * - Verifies every subject/activity with lessonsPerWeek > 0 has an authorized teacher/supervisor.
- * - Verifies shared facilities exist and have sufficient weekly slot capacity across ALL 3 categories.
- * - Verifies Remedial 1 & 2 configs have assigned teachers, valid periods, and valid student groups.
+ * Strict Requirement F & G readiness validation prior to generation (works seamlessly for BOTH
+ * Option 1 Individual Teacher Assignment and Option 2 Category Redistribution):
+ * - Enforces zero duplicate teacher ownership on any (subject, grade, stream).
+ * - Enforces stream period budget (no over-allocation).
+ * - Enforces every stream-subject allocation has an authorized linked teacher.
+ * - Enforces teacher cumulative weekly load does not exceed physical weekly school slots.
+ * - Enforces shared facility capacity across all 3 categories.
+ * - Enforces Remedial 1 & 2 configuration completeness.
  */
 export function validateTimetableReadiness(input: EngineInput): {
   readyToGenerate: boolean;
   issues: ValidationIssue[];
   categoryTotals: CategoryAllocationSummary[];
+  streamAllocations: ResolvedStreamAllocation[];
 } {
   const issues: ValidationIssue[] = [];
-  const categoryTotals = computeCategoryTotals(input);
+  const streamAllocations = resolveEffectiveStreamAllocations(input);
+  const categoryTotals = computeCategoryTotals(input, streamAllocations);
+  const subjectById = new Map(input.subjects.map((s) => [s.id, s]));
 
   if (input.streams.length === 0) {
     issues.push({
@@ -351,84 +558,100 @@ export function validateTimetableReadiness(input: EngineInput): {
 
   let totalConfiguredLessonsAcrossSchool = 0;
 
-  for (const summary of categoryTotals) {
-    const catStreams = input.streams.filter((st) => st.categoryId === summary.categoryId);
-    const catSubjects = input.subjects.filter(
-      (s) => s.categoryId === summary.categoryId && s.isActive
-    );
-    const totalCatWithRemedial =
-      summary.totalAllocatedRegularLessons + summary.allocatedRemedialLessons;
-    totalConfiguredLessonsAcrossSchool += totalCatWithRemedial;
+  // 1. Validate every resolved stream allocation (duplicate conflicts, missing teachers, facilities)
+  for (const alloc of streamAllocations) {
+    totalConfiguredLessonsAcrossSchool += alloc.lessonsPerWeek;
+    const catLabel =
+      TIMETABLE_CATEGORIES.find((c) => c.id === alloc.categoryId)?.label || alloc.categoryId;
 
-    if (catStreams.length === 0) continue;
+    if (alloc.status === 'duplicate_conflict') {
+      issues.push({
+        code: 'DUPLICATE_STREAM_SUBJECT_ASSIGNMENT',
+        severity: 'error',
+        categoryId: alloc.categoryId,
+        grade: alloc.grade,
+        stream: alloc.stream,
+        message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${alloc.subjectName}" has conflicting duplicate teacher assignments (${alloc.conflictTeachers.join(', ')}). Keep exactly one assigned teacher per stream-subject to guarantee zero collisions.`,
+      });
+    } else if (alloc.status === 'unassigned') {
+      issues.push({
+        code: 'UNASSIGNED_TEACHER',
+        severity: 'error',
+        categoryId: alloc.categoryId,
+        grade: alloc.grade,
+        stream: alloc.stream,
+        message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${alloc.subjectName}" has ${alloc.lessonsPerWeek} lesson(s)/week allocated but no authorized teacher/supervisor assigned.`,
+      });
+    }
 
-    if (summary.totalAllocatedRegularLessons > summary.availableRegularPeriods) {
+    const sub = subjectById.get(alloc.subjectId);
+    if (sub?.requiresFacilityType) {
+      const preferredFacId = alloc.candidateAssignments[0]?.facilityId || sub.defaultFacilityId;
+      const fac = preferredFacId
+        ? input.facilities.find((f) => f.id === preferredFacId && f.isActive)
+        : input.facilities.find(
+            (f) => f.facilityType === sub.requiresFacilityType && f.isActive
+          );
+      if (!fac) {
+        issues.push({
+          code: 'MISSING_FACILITY',
+          severity: 'error',
+          categoryId: alloc.categoryId,
+          grade: alloc.grade,
+          stream: alloc.stream,
+          message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${sub.name}" requires an active shared facility (${sub.requiresFacilityType.replace(/_/g, ' ')}), but none is configured.`,
+        });
+      }
+    }
+  }
+
+  // 2. Per-stream period budget check across all streams
+  for (const st of input.streams) {
+    const cfg = input.scheduleConfigs[st.categoryId];
+    if (!cfg) continue;
+    const availableRegular = cfg.days.length * getRegularPeriods(cfg).length;
+    const stRows = streamAllocations.filter((r) => r.grade === st.grade && r.stream === st.stream);
+    const streamRegularTotal = stRows.reduce((acc, r) => acc + r.lessonsPerWeek, 0);
+    const catLabel =
+      TIMETABLE_CATEGORIES.find((c) => c.id === st.categoryId)?.label || st.categoryId;
+
+    if (streamRegularTotal > availableRegular) {
       issues.push({
         code: 'OVER_ALLOCATED_CATEGORY',
         severity: 'error',
-        categoryId: summary.categoryId,
-        message: `${summary.label}: Allocated regular lessons (${summary.totalAllocatedRegularLessons}) exceed available weekly periods (${summary.availableRegularPeriods}). Reduce allocations or increase periods per day.`,
+        categoryId: st.categoryId,
+        grade: st.grade,
+        stream: st.stream,
+        message: `${catLabel} · Grade ${st.grade} ${st.stream}: Allocated weekly lessons (${streamRegularTotal}) exceed available weekly periods (${availableRegular}). Reduce lessons or increase periods per day.`,
       });
-    } else if (
-      summary.totalAllocatedRegularLessons > 0 &&
-      summary.remainingRegularPeriods > 0
-    ) {
+    } else if (streamRegularTotal > 0 && streamRegularTotal < availableRegular) {
       issues.push({
         code: 'UNEXPLAINED_BLANK_POTENTIAL',
         severity: 'warning',
-        categoryId: summary.categoryId,
-        message: `${summary.label}: ${summary.remainingRegularPeriods} regular weekly period(s) remain unallocated (${summary.totalAllocatedRegularLessons}/${summary.availableRegularPeriods}). To satisfy the zero-unexplained-blank-session rule, allocate all ${summary.availableRegularPeriods} periods.`,
+        categoryId: st.categoryId,
+        grade: st.grade,
+        stream: st.stream,
+        message: `${catLabel} · Grade ${st.grade} ${st.stream}: ${availableRegular - streamRegularTotal} regular weekly period(s) remain unallocated (${streamRegularTotal}/${availableRegular}).`,
       });
     }
+  }
 
-    // Check teacher assignments for every subject/activity with lessonsPerWeek > 0 (non-remedial)
-    for (const sub of catSubjects) {
-      if (sub.lessonsPerWeek <= 0) continue;
-      if (sub.subjectKind === 'remedial') continue; // Checked via remedial configs below
-
-      for (const st of catStreams) {
-        const matches = findMatchingAssignments(
-          input.teacherAssignments,
-          summary.categoryId,
-          sub.id,
-          st.grade,
-          st.stream
-        );
-        if (matches.length === 0) {
-          issues.push({
-            code: 'UNASSIGNED_TEACHER',
-            severity: 'error',
-            categoryId: summary.categoryId,
-            grade: st.grade,
-            stream: st.stream,
-            message: `${summary.label} · Grade ${st.grade} ${st.stream}: "${sub.name}" has ${sub.lessonsPerWeek} lesson(s)/week allocated but no authorized teacher/supervisor assigned.`,
-          });
-        }
-      }
-
-      // Check required shared facility exists
-      if (sub.requiresFacilityType) {
-        const fac = sub.defaultFacilityId
-          ? input.facilities.find((f) => f.id === sub.defaultFacilityId && f.isActive)
-          : input.facilities.find(
-              (f) => f.facilityType === sub.requiresFacilityType && f.isActive
-            );
-        if (!fac) {
-          issues.push({
-            code: 'MISSING_FACILITY',
-            severity: 'error',
-            categoryId: summary.categoryId,
-            message: `${summary.label}: "${sub.name}" requires an active shared facility (${sub.requiresFacilityType.replace(/_/g, ' ')}), but none is configured.`,
-          });
-        }
-      }
-    }
-
-    // Check Remedial 1 and Remedial 2
+  // 3. Check Remedial 1 and Remedial 2 per category
+  for (const summary of categoryTotals) {
+    const catStreams = input.streams.filter((st) => st.categoryId === summary.categoryId);
+    if (catStreams.length === 0) continue;
+    const catSubjects = input.subjects.filter(
+      (s) => s.categoryId === summary.categoryId && s.isActive
+    );
     const remedialSubjects = catSubjects.filter((s) => s.subjectKind === 'remedial');
+
     for (const remSub of remedialSubjects) {
       const configsForSub = input.remedialConfigs.filter(
         (rc) => rc.isActive && rc.categoryId === summary.categoryId && rc.subjectId === remSub.id
+      );
+      totalConfiguredLessonsAcrossSchool += configsForSub.reduce(
+        (acc, rc) => acc + rc.weeklyFrequency,
+        0
       );
       if (remSub.lessonsPerWeek > 0 && configsForSub.length === 0) {
         issues.push({
@@ -467,20 +690,23 @@ export function validateTimetableReadiness(input: EngineInput): {
     issues.push({
       code: 'ZERO_LESSONS_CONFIGURED',
       severity: 'error',
-      message: 'No weekly lessons have been allocated yet. Configure weekly lesson counts in Subject Allocations before generating a timetable.',
+      message: 'No weekly lessons have been allocated yet. Configure individual teacher stream assignments (Option 1) or category weekly allocations (Option 2) before generating.',
     });
   }
 
-  // Cross-category shared facility total weekly demand vs capacity check
+  // 4. Cross-category shared facility total weekly demand vs capacity check (from effective resolved allocations)
   const facilityDemand = new Map<string, number>();
-  for (const sub of input.subjects) {
-    if (!sub.isActive || sub.lessonsPerWeek <= 0 || !sub.requiresFacilityType) continue;
-    const fac = sub.defaultFacilityId
-      ? input.facilities.find((f) => f.id === sub.defaultFacilityId && f.isActive)
-      : input.facilities.find((f) => f.facilityType === sub.requiresFacilityType && f.isActive);
+  for (const alloc of streamAllocations) {
+    const sub = subjectById.get(alloc.subjectId);
+    if (!sub) continue;
+    const preferredFacId = alloc.candidateAssignments[0]?.facilityId || sub.defaultFacilityId;
+    const fac = preferredFacId
+      ? input.facilities.find((f) => f.id === preferredFacId && f.isActive)
+      : sub.requiresFacilityType
+        ? input.facilities.find((f) => f.facilityType === sub.requiresFacilityType && f.isActive)
+        : undefined;
     if (!fac) continue;
-    const streamCount = input.streams.filter((st) => st.categoryId === sub.categoryId).length;
-    facilityDemand.set(fac.id, (facilityDemand.get(fac.id) || 0) + sub.lessonsPerWeek * streamCount);
+    facilityDemand.set(fac.id, (facilityDemand.get(fac.id) || 0) + alloc.lessonsPerWeek);
   }
 
   for (const [facId, totalDemand] of facilityDemand.entries()) {
@@ -497,50 +723,60 @@ export function validateTimetableReadiness(input: EngineInput): {
     }
   }
 
-  // Teacher aggregate workload pre-check
-  const teacherProjectedDemand = new Map<string, { name: string; demand: number; max: number }>();
-  for (const st of input.streams) {
-    const catSubjects = input.subjects.filter(
-      (s) => s.categoryId === st.categoryId && s.isActive && s.lessonsPerWeek > 0 && s.subjectKind !== 'remedial'
-    );
-    for (const sub of catSubjects) {
-      const matches = findMatchingAssignments(
-        input.teacherAssignments,
-        st.categoryId,
-        sub.id,
-        st.grade,
-        st.stream
-      );
-      if (matches.length === 1) {
-        const a = matches[0];
-        const prev = teacherProjectedDemand.get(a.teacherId) || {
-          name: a.teacherName,
-          demand: 0,
-          max: a.maxWeeklyPeriods,
-        };
-        prev.demand += sub.lessonsPerWeek;
-        prev.max = Math.max(prev.max, a.maxWeeklyPeriods);
-        teacherProjectedDemand.set(a.teacherId, prev);
-      }
-    }
+  // 5. Teacher aggregate workload & physical weekly slot collision feasibility check
+  const maxPhysicalRegularSlots = Math.max(
+    1,
+    ...Object.values(input.scheduleConfigs).map((c) => c.days.length * getRegularPeriods(c).length)
+  );
+  const maxPhysicalTotalSlots = Math.max(
+    maxPhysicalRegularSlots,
+    ...Object.values(input.scheduleConfigs).map((c) => c.days.length * getAllPeriods(c).length)
+  );
+
+  const teacherProjectedDemand = new Map<
+    string,
+    { name: string; regularDemand: number; totalDemand: number; max: number }
+  >();
+
+  for (const alloc of streamAllocations) {
+    if (alloc.status !== 'linked' || !alloc.teacherId) continue;
+    const a = alloc.candidateAssignments[0];
+    const prev = teacherProjectedDemand.get(alloc.teacherId) || {
+      name: alloc.teacherName || a?.teacherName || alloc.teacherId,
+      regularDemand: 0,
+      totalDemand: 0,
+      max: a?.maxWeeklyPeriods ?? 28,
+    };
+    prev.regularDemand += alloc.lessonsPerWeek;
+    prev.totalDemand += alloc.lessonsPerWeek;
+    if (a) prev.max = Math.max(prev.max, a.maxWeeklyPeriods);
+    teacherProjectedDemand.set(alloc.teacherId, prev);
   }
+
   for (const rc of input.remedialConfigs) {
     if (!rc.isActive || !rc.teacherId || rc.weeklyFrequency <= 0) continue;
     const prev = teacherProjectedDemand.get(rc.teacherId) || {
       name: rc.teacherName,
-      demand: 0,
+      regularDemand: 0,
+      totalDemand: 0,
       max: 35,
     };
-    prev.demand += rc.weeklyFrequency;
+    prev.totalDemand += rc.weeklyFrequency;
     teacherProjectedDemand.set(rc.teacherId, prev);
   }
 
   for (const [, info] of teacherProjectedDemand.entries()) {
-    if (info.demand > info.max) {
+    if (info.regularDemand > maxPhysicalRegularSlots || info.totalDemand > maxPhysicalTotalSlots) {
+      issues.push({
+        code: 'TEACHER_IMPOSSIBLE_WEEKLY_LOAD',
+        severity: 'error',
+        message: `Teacher ${info.name} is assigned ${info.regularDemand} regular (${info.totalDemand} total) periods/week, which exceeds the school's ${maxPhysicalRegularSlots} regular (${maxPhysicalTotalSlots} total) weekly slots and would cause a guaranteed teacher collision. Reassign some streams to another teacher.`,
+      });
+    } else if (info.totalDemand > info.max) {
       issues.push({
         code: 'TEACHER_MAX_LOAD_EXCEEDED',
         severity: 'warning',
-        message: `Teacher ${info.name} is projected for ${info.demand} periods/week, exceeding their configured maximum of ${info.max} periods/week.`,
+        message: `Teacher ${info.name} is projected for ${info.totalDemand} periods/week, exceeding their configured maximum of ${info.max} periods/week.`,
       });
     }
   }
@@ -550,6 +786,7 @@ export function validateTimetableReadiness(input: EngineInput): {
     readyToGenerate: !hasError,
     issues,
     categoryTotals,
+    streamAllocations,
   };
 }
 
@@ -612,77 +849,67 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
     return null;
   };
 
-  // Build regular + common activity tasks per stream
-  for (const st of input.streams) {
-    const cfg = input.scheduleConfigs[st.categoryId];
-    if (!cfg) continue;
+  // Build regular + common activity tasks directly from resolved, strictly-linked stream allocations
+  // (Supports BOTH Option 1 Individual Teacher Assignment and Option 2 Category Redistribution)
+  const subjectById = new Map(input.subjects.map((s) => [s.id, s]));
+  const streamByKey = new Map(
+    input.streams.map((st) => [`${st.grade}::${st.stream.trim().toLowerCase()}`, st])
+  );
+
+  for (const alloc of readiness.streamAllocations) {
+    if (alloc.status !== 'linked' || alloc.lessonsPerWeek <= 0) continue;
+    const sub = subjectById.get(alloc.subjectId);
+    const cfg = input.scheduleConfigs[alloc.categoryId];
+    const st = streamByKey.get(`${alloc.grade}::${alloc.stream.trim().toLowerCase()}`);
+    if (!sub || !cfg || !st || alloc.candidateAssignments.length === 0) continue;
+
     const regularPeriods = getRegularPeriods(cfg).map((p) => p.periodNumber);
-    const catSubjects = input.subjects.filter(
-      (s) =>
-        s.categoryId === st.categoryId &&
-        s.isActive &&
-        s.lessonsPerWeek > 0 &&
-        s.subjectKind !== 'remedial'
+    const primaryAssignment = alloc.candidateAssignments[0];
+    const fac = resolveFacility(
+      primaryAssignment.facilityId || sub.defaultFacilityId,
+      sub.requiresFacilityType
     );
 
-    for (const sub of catSubjects) {
-      const matches = findMatchingAssignments(
-        input.teacherAssignments,
-        st.categoryId,
-        sub.id,
-        st.grade,
-        st.stream
-      );
-      if (matches.length === 0) continue;
+    let allowedDays = cfg.days.slice();
+    if (sub.allowedDays.length > 0) {
+      allowedDays = allowedDays.filter((d) => sub.allowedDays.includes(d));
+    }
+    if (fac && fac.availableDays.length > 0) {
+      allowedDays = allowedDays.filter((d) => fac.availableDays.includes(d));
+    }
 
-      const primaryAssignment = matches[0];
-      const fac = resolveFacility(
-        primaryAssignment.facilityId || sub.defaultFacilityId,
-        sub.requiresFacilityType
-      );
+    let allowedPeriods = regularPeriods.slice();
+    if (sub.allowedPeriods.length > 0) {
+      allowedPeriods = allowedPeriods.filter((p) => sub.allowedPeriods.includes(p));
+    }
+    if (fac && fac.availablePeriods.length > 0) {
+      allowedPeriods = allowedPeriods.filter((p) => fac.availablePeriods.includes(p));
+    }
 
-      let allowedDays = cfg.days.slice();
-      if (sub.allowedDays.length > 0) {
-        allowedDays = allowedDays.filter((d) => sub.allowedDays.includes(d));
-      }
-      if (fac && fac.availableDays.length > 0) {
-        allowedDays = allowedDays.filter((d) => fac.availableDays.includes(d));
-      }
+    const tightness =
+      (fac ? 0 : 100) +
+      allowedDays.length * allowedPeriods.length +
+      alloc.candidateAssignments.length * 10 +
+      (sub.subjectKind === 'common_activity' ? -20 : 0);
 
-      let allowedPeriods = regularPeriods.slice();
-      if (sub.allowedPeriods.length > 0) {
-        allowedPeriods = allowedPeriods.filter((p) => sub.allowedPeriods.includes(p));
-      }
-      if (fac && fac.availablePeriods.length > 0) {
-        allowedPeriods = allowedPeriods.filter((p) => fac.availablePeriods.includes(p));
-      }
-
-      // Compute domain size for MRV ordering (tighter constraints placed first)
-      const tightness =
-        (fac ? 0 : 100) +
-        allowedDays.length * allowedPeriods.length +
-        matches.length * 10 +
-        (sub.subjectKind === 'common_activity' ? -20 : 0);
-
-      for (let i = 0; i < sub.lessonsPerWeek; i++) {
-        tasks.push({
-          taskId: `${st.grade}_${st.stream}_${sub.id}_${i}`,
-          categoryId: st.categoryId,
-          grade: st.grade,
-          stream: st.stream,
-          subject: sub,
-          remedialConfig: null,
-          candidateAssignments: matches,
-          facility: fac,
-          allowedDays,
-          allowedPeriods,
-          studentGroupMode: 'whole_stream',
-          studentGroupName: `Grade ${st.grade} ${st.stream}`,
-          studentIds: st.studentIds,
-          durationMinsOverride: null,
-          constraintTightness: tightness,
-        });
-      }
+    for (let i = 0; i < alloc.lessonsPerWeek; i++) {
+      tasks.push({
+        taskId: `${st.grade}_${st.stream}_${sub.id}_${i}`,
+        categoryId: st.categoryId,
+        grade: st.grade,
+        stream: st.stream,
+        subject: sub,
+        remedialConfig: null,
+        candidateAssignments: alloc.candidateAssignments,
+        facility: fac,
+        allowedDays,
+        allowedPeriods,
+        studentGroupMode: 'whole_stream',
+        studentGroupName: `Grade ${st.grade} ${st.stream}`,
+        studentIds: st.studentIds,
+        durationMinsOverride: null,
+        constraintTightness: tightness,
+      });
     }
   }
 
@@ -1294,17 +1521,17 @@ export function validateTimetableEntries(
       }
     }
 
-    // Per-subject expected vs scheduled completeness
-    const catSubjects = input.subjects.filter(
-      (s) => s.categoryId === st.categoryId && s.isActive && s.lessonsPerWeek > 0 && s.subjectKind !== 'remedial'
+    // Per-subject expected vs scheduled completeness (synced with effective Option 1 or Option 2 allocations)
+    const streamExpectedAllocs = readiness.streamAllocations.filter(
+      (a) => a.grade === st.grade && a.stream === st.stream && a.lessonsPerWeek > 0
     );
     const missingLessons: StreamCompletenessReport['missingLessons'] = [];
-    for (const sub of catSubjects) {
-      const scheduled = streamEntries.filter((e) => e.subjectId === sub.id).length;
-      if (scheduled < sub.lessonsPerWeek) {
+    for (const alloc of streamExpectedAllocs) {
+      const scheduled = streamEntries.filter((e) => e.subjectId === alloc.subjectId).length;
+      if (scheduled < alloc.lessonsPerWeek) {
         missingLessons.push({
-          subjectName: sub.name,
-          expected: sub.lessonsPerWeek,
+          subjectName: alloc.subjectName,
+          expected: alloc.lessonsPerWeek,
           scheduled,
         });
       }
@@ -1412,6 +1639,7 @@ export function validateTimetableEntries(
     studentGroupConflicts,
     unexplainedBlankSessions,
     categoryTotals: readiness.categoryTotals,
+    streamAllocations: readiness.streamAllocations,
     teacherWorkloads,
     facilityUtilization,
     streamCompleteness,

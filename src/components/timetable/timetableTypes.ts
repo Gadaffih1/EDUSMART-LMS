@@ -12,6 +12,8 @@ export type FacilityType =
   | 'general_room';
 export type TeacherAssignmentRole = 'subject_teacher' | 'supervisor' | 'remedial_teacher';
 export type StudentGroupMode = 'whole_stream' | 'selected_learners';
+export type AllocationProcessingMode = 'individual_teacher' | 'category_redistribution';
+export type AssignmentAllocationSource = 'individual' | 'category_redistribution';
 
 export interface TimetableCategoryMeta {
   id: TimetableCategoryId;
@@ -37,6 +39,7 @@ export interface ScheduleConfig {
   periodsPerDay: number;
   periodDurationMins: number;
   periods: PeriodSlotDefinition[];
+  allocationMode?: AllocationProcessingMode;
 }
 
 export interface TimetableSubject {
@@ -79,6 +82,8 @@ export interface TimetableTeacherAssignment {
   subjectId: string;
   grade: number | null;
   stream: string | null;
+  lessonsPerWeek?: number | null;
+  allocationSource?: AssignmentAllocationSource;
   roleType: TeacherAssignmentRole;
   maxWeeklyPeriods: number;
   facilityId: string | null;
@@ -179,6 +184,7 @@ export interface ValidationIssue {
 export interface CategoryAllocationSummary {
   categoryId: TimetableCategoryId;
   label: string;
+  allocationMode: AllocationProcessingMode;
   availableRegularPeriods: number;
   allocatedCoreLessons: number;
   allocatedCommonLessons: number;
@@ -186,6 +192,25 @@ export interface CategoryAllocationSummary {
   totalAllocatedRegularLessons: number;
   remainingRegularPeriods: number;
   activeStreamCount: number;
+  linkedStreamSlots: number;
+  unlinkedStreamSlots: number;
+  duplicateConflicts: number;
+}
+
+export interface ResolvedStreamAllocation {
+  categoryId: TimetableCategoryId;
+  grade: number;
+  stream: string;
+  subjectId: string;
+  subjectName: string;
+  subjectKind: TimetableSubjectKind;
+  lessonsPerWeek: number;
+  source: AssignmentAllocationSource;
+  linkedAssignmentId: string | null;
+  teacherId: string | null;
+  teacherName: string | null;
+  status: 'linked' | 'unassigned' | 'duplicate_conflict';
+  conflictTeachers: string[];
 }
 
 export interface TeacherWorkloadReport {
@@ -261,6 +286,7 @@ export interface TimetableAuditReport {
     periodNumber: number;
   }>;
   categoryTotals: CategoryAllocationSummary[];
+  streamAllocations: ResolvedStreamAllocation[];
   teacherWorkloads: TeacherWorkloadReport[];
   facilityUtilization: FacilityUtilizationReport[];
   streamCompleteness: StreamCompletenessReport[];

@@ -14,6 +14,8 @@ import {
   getCategoryForGrade,
   TIMETABLE_CATEGORIES,
   WEEKDAYS,
+  type AllocationProcessingMode,
+  type AssignmentAllocationSource,
   type FacilityType,
   type PeriodSlotDefinition,
   type StudentGroupMode,
@@ -23,6 +25,7 @@ import {
 } from './timetableSchema.ts';
 import {
   generateTimetableSchedule,
+  resolveEffectiveStreamAllocations,
   validateTimetableEntries,
   validateTimetableReadiness,
   type EngineFacility,
@@ -44,6 +47,14 @@ const TIMETABLE_ADMIN_ROLES = new Set([
 ]);
 
 const VALID_CATEGORIES = new Set<TimetableCategoryId>(['cat_1_3', 'cat_4_6', 'cat_7_9']);
+const VALID_ALLOCATION_MODES = new Set<AllocationProcessingMode>([
+  'individual_teacher',
+  'category_redistribution',
+]);
+const VALID_ALLOCATION_SOURCES = new Set<AssignmentAllocationSource>([
+  'individual',
+  'category_redistribution',
+]);
 const VALID_FACILITY_TYPES = new Set<FacilityType>([
   'computer_lab',
   'ict_robotics_lab',
@@ -343,12 +354,18 @@ function loadEngineInput(schoolId: string): {
     periods_per_day: number;
     period_duration_mins: number;
     periods_json: string;
+    allocation_mode?: string | null;
   }>;
 
   const scheduleConfigs = {} as Record<TimetableCategoryId, EngineScheduleConfig>;
   for (const cat of TIMETABLE_CATEGORIES) {
     const row = cfgRows.find((r) => r.category_id === cat.id);
     if (row) {
+      const mode: AllocationProcessingMode = VALID_ALLOCATION_MODES.has(
+        row.allocation_mode as AllocationProcessingMode
+      )
+        ? (row.allocation_mode as AllocationProcessingMode)
+        : 'category_redistribution';
       scheduleConfigs[cat.id] = {
         categoryId: cat.id,
         days: safeParseJson<string[]>(row.days_json, [...WEEKDAYS]),
@@ -358,6 +375,7 @@ function loadEngineInput(schoolId: string): {
           row.periods_json,
           buildDefaultPeriodSlots(row.periods_per_day, row.period_duration_mins)
         ),
+        allocationMode: mode,
       };
     } else {
       scheduleConfigs[cat.id] = {
@@ -366,6 +384,7 @@ function loadEngineInput(schoolId: string): {
         periodsPerDay: cat.defaultPeriodsPerDay,
         periodDurationMins: cat.defaultPeriodDurationMins,
         periods: buildDefaultPeriodSlots(cat.defaultPeriodsPerDay, cat.defaultPeriodDurationMins),
+        allocationMode: 'category_redistribution',
       };
     }
   }
@@ -426,6 +445,13 @@ function loadEngineInput(schoolId: string): {
     subjectId: r.subject_id,
     grade: r.grade === null || r.grade === undefined ? null : Number(r.grade),
     stream: r.stream || null,
+    lessonsPerWeek:
+      r.lessons_per_week === null || r.lessons_per_week === undefined
+        ? null
+        : Number(r.lessons_per_week),
+    allocationSource: VALID_ALLOCATION_SOURCES.has(r.allocation_source as AssignmentAllocationSource)
+      ? (r.allocation_source as AssignmentAllocationSource)
+      : 'individual',
     roleType: r.role_type as TeacherAssignmentRole,
     maxWeeklyPeriods: Number(r.max_weekly_periods) || 28,
     facilityId: r.facility_id || null,
@@ -669,17 +695,31 @@ export function registerTimetableRoutes(app: Express): void {
 
     const db = getDb();
     ensureTimetableSeedForSchool(db, schoolId);
+    const existingCfg = db
+      .prepare('SELECT allocation_mode FROM tt_schedule_config WHERE school_id = ? AND category_id = ?')
+      .get(schoolId, categoryId) as { allocation_mode?: string } | undefined;
+
+    const requestedMode = req.body?.allocationMode as AllocationProcessingMode | undefined;
+    const allocationMode: AllocationProcessingMode =
+      requestedMode && VALID_ALLOCATION_MODES.has(requestedMode)
+        ? requestedMode
+        : existingCfg?.allocation_mode &&
+            VALID_ALLOCATION_MODES.has(existingCfg.allocation_mode as AllocationProcessingMode)
+          ? (existingCfg.allocation_mode as AllocationProcessingMode)
+          : 'category_redistribution';
+
     const now = new Date().toISOString();
 
     db.prepare(
       `INSERT INTO tt_schedule_config (
-        school_id, category_id, days_json, periods_per_day, period_duration_mins, periods_json, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        school_id, category_id, days_json, periods_per_day, period_duration_mins, periods_json, allocation_mode, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(school_id, category_id) DO UPDATE SET
         days_json = excluded.days_json,
         periods_per_day = excluded.periods_per_day,
         period_duration_mins = excluded.period_duration_mins,
         periods_json = excluded.periods_json,
+        allocation_mode = excluded.allocation_mode,
         updated_at = excluded.updated_at`
     ).run(
       schoolId,
@@ -688,6 +728,7 @@ export function registerTimetableRoutes(app: Express): void {
       periodsPerDay,
       periodDurationMins,
       JSON.stringify(customPeriods),
+      allocationMode,
       now
     );
 
@@ -700,8 +741,294 @@ export function registerTimetableRoutes(app: Express): void {
       ok: true,
       scheduleConfig: input.scheduleConfigs[categoryId],
       categoryTotals: readiness.categoryTotals,
+      readiness,
     });
   });
+
+  // -------------------------------------------------------------------------
+  // PUT /api/timetable/allocation-mode/:categoryId
+  // -------------------------------------------------------------------------
+  app.put('/api/timetable/allocation-mode/:categoryId', requireAuth, (req: Request, res: Response) => {
+    const session = req.authSession!;
+    if (!isTimetableAdmin(session)) {
+      return res.status(403).json({ error: 'Administrator privileges required.' });
+    }
+    const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
+    if (!schoolId) return;
+
+    const categoryId = req.params.categoryId as TimetableCategoryId;
+    if (!VALID_CATEGORIES.has(categoryId)) {
+      return res.status(400).json({ error: 'Invalid category ID.' });
+    }
+
+    const allocationMode = req.body?.allocationMode as AllocationProcessingMode;
+    if (!VALID_ALLOCATION_MODES.has(allocationMode)) {
+      return res.status(400).json({
+        error: "Invalid allocation mode. Choose 'individual_teacher' or 'category_redistribution'.",
+      });
+    }
+
+    const db = getDb();
+    ensureTimetableSeedForSchool(db, schoolId);
+    const now = new Date().toISOString();
+
+    db.prepare(
+      `UPDATE tt_schedule_config
+       SET allocation_mode = ?, updated_at = ?
+       WHERE school_id = ? AND category_id = ?`
+    ).run(allocationMode, now, schoolId, categoryId);
+
+    writeSecurityAudit({
+      schoolId,
+      userId: session.userId,
+      userEmail: session.user?.email,
+      action: 'timetable_allocation_mode_changed',
+      resource: `tt_schedule_config:${categoryId}`,
+      details: `Switched ${categoryId} allocation mode to ${allocationMode}`,
+    });
+    notifyMySqlTablesChanged(['tt_schedule_config']);
+    emitTimetableBroadcast(schoolId, session.userId, 'record:updated', categoryId);
+
+    const { input } = loadEngineInput(schoolId);
+    const readiness = validateTimetableReadiness(input);
+    return res.json({
+      ok: true,
+      scheduleConfig: input.scheduleConfigs[categoryId],
+      categoryTotals: readiness.categoryTotals,
+      readiness,
+      streamAllocations: resolveEffectiveStreamAllocations(input),
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/timetable/redistribute-category/:categoryId
+  // Option 2: Allocate subjects & lessons/wk at category level -> redistribute
+  // to all active streams in category -> strictly link to assigned teacher.
+  // -------------------------------------------------------------------------
+  app.post(
+    '/api/timetable/redistribute-category/:categoryId',
+    requireAuth,
+    (req: Request, res: Response) => {
+      const session = req.authSession!;
+      if (!isTimetableAdmin(session)) {
+        return res.status(403).json({ error: 'Administrator privileges required.' });
+      }
+      const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
+      if (!schoolId) return;
+
+      const categoryId = req.params.categoryId as TimetableCategoryId;
+      if (!VALID_CATEGORIES.has(categoryId)) {
+        return res.status(400).json({ error: 'Invalid category ID.' });
+      }
+
+      const db = getDb();
+      ensureTimetableSeedForSchool(db, schoolId);
+      const now = new Date().toISOString();
+
+      // Switch category into Option 2 (category_redistribution)
+      db.prepare(
+        `UPDATE tt_schedule_config SET allocation_mode = 'category_redistribution', updated_at = ?
+         WHERE school_id = ? AND category_id = ?`
+      ).run(now, schoolId, categoryId);
+
+      const { input } = loadEngineInput(schoolId);
+      const cfg = input.scheduleConfigs[categoryId];
+      const availableRegularSlots = cfg.days.length * cfg.periodsPerDay;
+
+      const catSubjects = input.subjects.filter(
+        (s) => s.categoryId === categoryId && s.isActive && s.subjectKind !== 'remedial'
+      );
+      const allocatedRegularTotal = catSubjects.reduce(
+        (sum, s) => sum + (Number(s.lessonsPerWeek) || 0),
+        0
+      );
+
+      if (allocatedRegularTotal > availableRegularSlots) {
+        return res.status(422).json({
+          error: `Cannot redistribute ${allocatedRegularTotal} regular weekly lessons when only ${availableRegularSlots} periods are available (${cfg.days.length}d × ${cfg.periodsPerDay}p).`,
+        });
+      }
+
+      const catStreams = input.streams.filter((st) => st.categoryId === categoryId);
+      const maxPhysicalRegularSlots = Math.max(
+        ...Object.values(input.scheduleConfigs).map((c) => c.days.length * c.periodsPerDay)
+      );
+
+      // Zero out stale redistributed stream rows whose category subject was reduced to 0
+      const zeroSubjectIds = new Set(
+        catSubjects.filter((s) => s.lessonsPerWeek <= 0).map((s) => s.id)
+      );
+      for (const zSubId of zeroSubjectIds) {
+        db.prepare(
+          `UPDATE tt_teacher_assignments
+           SET lessons_per_week = 0, updated_at = ?
+           WHERE school_id = ? AND category_id = ? AND subject_id = ?
+             AND grade IS NOT NULL AND stream IS NOT NULL
+             AND allocation_source = 'category_redistribution'`
+        ).run(now, schoolId, categoryId, zSubId);
+      }
+
+      // Track live cumulative regular load per teacher across ALL categories so redistribution
+      // can never silently create an impossible teacher load collision.
+      const existingEffective = resolveEffectiveStreamAllocations(input);
+      const teacherRegularLoad = new Map<string, number>();
+      for (const ra of existingEffective) {
+        if (ra.teacherId && ra.status === 'linked') {
+          teacherRegularLoad.set(
+            ra.teacherId,
+            (teacherRegularLoad.get(ra.teacherId) || 0) + ra.lessonsPerWeek
+          );
+        }
+      }
+
+      let syncedCount = 0;
+      let createdCount = 0;
+      const unlinkedSlots: Array<{ grade: number; stream: string; subjectId: string; subjectName: string; lessonsPerWeek: number }> = [];
+      const conflictSlots: Array<{ grade: number; stream: string; subjectName: string; teachers: string[] }> = [];
+      const overloadedSlots: Array<{ grade: number; stream: string; subjectName: string; teacherName: string; projectedLoad: number; physicalLimit: number }> = [];
+
+      const updateExactStmt = db.prepare(
+        `UPDATE tt_teacher_assignments
+         SET lessons_per_week = ?, allocation_source = 'category_redistribution', updated_at = ?
+         WHERE id = ? AND school_id = ?`
+      );
+      const insertStreamStmt = db.prepare(`
+        INSERT INTO tt_teacher_assignments (
+          id, school_id, teacher_id, teacher_name, teacher_email, category_id, subject_id,
+          grade, stream, lessons_per_week, allocation_source, role_type, max_weekly_periods,
+          facility_id, equipment_notes, allowed_days_json, allowed_periods_json, is_active, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'category_redistribution', ?, ?, ?, ?, ?, ?, 1, ?)
+      `);
+
+      const activeCategorySubjects = catSubjects.filter((s) => s.lessonsPerWeek > 0);
+      for (const st of catStreams) {
+        const normStream = st.stream.trim().toLowerCase();
+        for (const sub of activeCategorySubjects) {
+          const matchingAll = input.teacherAssignments.filter(
+            (a) => a.isActive && a.categoryId === categoryId && a.subjectId === sub.id
+          );
+          const exactMatches = matchingAll.filter(
+            (a) => a.grade === st.grade && (a.stream || '').trim().toLowerCase() === normStream
+          );
+
+          if (exactMatches.length > 0) {
+            const distinctTeachers = Array.from(new Set(exactMatches.map((m) => m.teacherId)));
+            if (distinctTeachers.length > 1 || exactMatches.length > 1) {
+              conflictSlots.push({
+                grade: st.grade,
+                stream: st.stream,
+                subjectName: sub.name,
+                teachers: exactMatches.map((m) => m.teacherName),
+              });
+              continue;
+            }
+            const existing = exactMatches[0];
+            updateExactStmt.run(sub.lessonsPerWeek, now, existing.id, schoolId);
+            syncedCount++;
+            continue;
+          }
+
+          // No exact stream assignment yet — check grade-level or category-level authorized teacher
+          const byGrade = matchingAll.filter(
+            (a) => a.grade === st.grade && (!a.stream || a.stream.trim() === '')
+          );
+          const fallbackPool =
+            byGrade.length > 0
+              ? byGrade
+              : matchingAll.filter(
+                  (a) => a.grade === null && (!a.stream || a.stream.trim() === '')
+                );
+
+          if (fallbackPool.length === 0) {
+            // Strict Requirement F: NEVER auto-assign teachers!
+            unlinkedSlots.push({
+              grade: st.grade,
+              stream: st.stream,
+              subjectId: sub.id,
+              subjectName: sub.name,
+              lessonsPerWeek: sub.lessonsPerWeek,
+            });
+            continue;
+          }
+
+          const distinctFallback = Array.from(new Set(fallbackPool.map((m) => m.teacherId)));
+          if (distinctFallback.length > 1) {
+            conflictSlots.push({
+              grade: st.grade,
+              stream: st.stream,
+              subjectName: sub.name,
+              teachers: fallbackPool.map((m) => m.teacherName),
+            });
+            continue;
+          }
+
+          const template = fallbackPool[0];
+          const currentLoad = teacherRegularLoad.get(template.teacherId) || 0;
+          // Note: existingEffective already counted this slot via category/grade fallback if it was linked;
+          // check physical slot limit so we never create an impossible collision.
+          if (currentLoad > maxPhysicalRegularSlots) {
+            overloadedSlots.push({
+              grade: st.grade,
+              stream: st.stream,
+              subjectName: sub.name,
+              teacherName: template.teacherName,
+              projectedLoad: currentLoad,
+              physicalLimit: maxPhysicalRegularSlots,
+            });
+            continue;
+          }
+
+          const newId = `ta_${crypto.randomBytes(6).toString('hex')}`;
+          insertStreamStmt.run(
+            newId,
+            schoolId,
+            template.teacherId,
+            template.teacherName,
+            template.teacherEmail,
+            categoryId,
+            sub.id,
+            st.grade,
+            st.stream,
+            sub.lessonsPerWeek,
+            template.roleType,
+            template.maxWeeklyPeriods,
+            template.facilityId || sub.defaultFacilityId || null,
+            template.equipmentNotes || sub.equipmentNotes || '',
+            JSON.stringify(template.allowedDays),
+            JSON.stringify(template.allowedPeriods),
+            now
+          );
+          createdCount++;
+        }
+      }
+
+      writeSecurityAudit({
+        schoolId,
+        userId: session.userId,
+        userEmail: session.user?.email,
+        action: 'timetable_category_redistributed',
+        resource: `tt_teacher_assignments:${categoryId}`,
+        details: `Redistributed ${categoryId} to ${catStreams.length} stream(s): synced ${syncedCount}, created ${createdCount}, unlinked ${unlinkedSlots.length}, conflicts ${conflictSlots.length}`,
+      });
+      notifyMySqlTablesChanged(['tt_schedule_config', 'tt_teacher_assignments']);
+      emitTimetableBroadcast(schoolId, session.userId, 'record:updated', categoryId);
+
+      const { input: refreshed } = loadEngineInput(schoolId);
+      const readiness = validateTimetableReadiness(refreshed);
+      return res.json({
+        ok: true,
+        syncedCount,
+        createdCount,
+        unlinkedSlots,
+        conflictSlots,
+        overloadedSlots,
+        scheduleConfig: refreshed.scheduleConfigs[categoryId],
+        teacherAssignments: refreshed.teacherAssignments,
+        readiness,
+        streamAllocations: resolveEffectiveStreamAllocations(refreshed),
+      });
+    }
+  );
 
   // -------------------------------------------------------------------------
   // PUT /api/timetable/allocations/:categoryId
@@ -950,8 +1277,161 @@ export function registerTimetableRoutes(app: Express): void {
   });
 
   // -------------------------------------------------------------------------
-  // Teacher & Supervisor Assignments CRUD
+  // Teacher & Supervisor Assignments CRUD (Strict Zero-Collision Guards)
   // -------------------------------------------------------------------------
+  function validateAssignmentZeroCollision(
+    schoolId: string,
+    candidate: {
+      teacherId: string;
+      teacherName: string;
+      categoryId: TimetableCategoryId;
+      subjectId: string;
+      grade: number | null;
+      stream: string | null;
+      lessonsPerWeek: number | null;
+      allocationSource: AssignmentAllocationSource;
+      roleType: TeacherAssignmentRole;
+      maxWeeklyPeriods: number;
+      facilityId: string | null;
+      equipmentNotes: string;
+      allowedDays: string[];
+      allowedPeriods: number[];
+    },
+    options: { excludeId?: string; replaceExisting?: boolean } = {}
+  ):
+    | { ok: true; replaceId?: string }
+    | { ok: false; status: number; error: string; existingAssignmentId?: string } {
+    if (candidate.stream && candidate.grade === null) {
+      return {
+        ok: false,
+        status: 400,
+        error: 'Select a target grade before selecting a specific stream.',
+      };
+    }
+    if (candidate.grade !== null && getCategoryForGrade(candidate.grade) !== candidate.categoryId) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Grade ${candidate.grade} does not belong to the selected category.`,
+      };
+    }
+
+    const { input } = loadEngineInput(schoolId);
+    const normStream = (candidate.stream || '').trim().toLowerCase();
+
+    // 1. Strict Duplicate Scope Ownership Guard (zero duplicate teacher per subject+grade+stream)
+    const duplicate = input.teacherAssignments.find(
+      (a) =>
+        a.isActive &&
+        a.id !== options.excludeId &&
+        a.categoryId === candidate.categoryId &&
+        a.subjectId === candidate.subjectId &&
+        a.grade === candidate.grade &&
+        (a.stream || '').trim().toLowerCase() === normStream
+    );
+
+    let replaceId: string | undefined;
+    if (duplicate) {
+      if (options.replaceExisting) {
+        replaceId = duplicate.id;
+      } else {
+        const scopeText =
+          candidate.grade !== null
+            ? `Grade ${candidate.grade}${candidate.stream ? ` ${candidate.stream}` : ' (All streams)'}`
+            : 'Category-wide';
+        const subName =
+          input.subjects.find((s) => s.id === candidate.subjectId)?.name || candidate.subjectId;
+        return {
+          ok: false,
+          status: 409,
+          error: `Collision blocked: ${duplicate.teacherName} is already assigned to ${subName} for ${scopeText}. Remove or replace the existing assignment to prevent duplicate ownership.`,
+          existingAssignmentId: duplicate.id,
+        };
+      }
+    }
+
+    // 2. Simulate effective allocations to verify Stream Period Budget & Teacher Physical Slot Limit
+    const simAssignment: EngineTeacherAssignment = {
+      id: replaceId || options.excludeId || '__candidate__',
+      teacherId: candidate.teacherId,
+      teacherName: candidate.teacherName,
+      teacherEmail: '',
+      categoryId: candidate.categoryId,
+      subjectId: candidate.subjectId,
+      grade: candidate.grade,
+      stream: candidate.stream,
+      lessonsPerWeek: candidate.lessonsPerWeek,
+      allocationSource: candidate.allocationSource,
+      roleType: candidate.roleType,
+      maxWeeklyPeriods: candidate.maxWeeklyPeriods,
+      facilityId: candidate.facilityId,
+      equipmentNotes: candidate.equipmentNotes,
+      allowedDays: candidate.allowedDays,
+      allowedPeriods: candidate.allowedPeriods,
+      isActive: true,
+    };
+
+    const simAssignments = [
+      ...input.teacherAssignments.filter(
+        (a) => a.id !== options.excludeId && a.id !== replaceId
+      ),
+      simAssignment,
+    ];
+    const simInput: EngineInput = {
+      ...input,
+      teacherAssignments: simAssignments,
+    };
+
+    // Check concrete stream period budget when lessonsPerWeek > 0 on a concrete stream
+    if (candidate.grade !== null && candidate.stream && (candidate.lessonsPerWeek || 0) > 0) {
+      const cfg = input.scheduleConfigs[candidate.categoryId];
+      const maxStreamSlots = cfg.days.length * cfg.periodsPerDay;
+      const mode = cfg.allocationMode ?? 'category_redistribution';
+
+      if (mode === 'individual_teacher') {
+        const streamIndivTotal = simAssignments
+          .filter(
+            (a) =>
+              a.isActive &&
+              a.categoryId === candidate.categoryId &&
+              a.grade === candidate.grade &&
+              (a.stream || '').trim().toLowerCase() === normStream &&
+              (Number(a.lessonsPerWeek) || 0) > 0
+          )
+          .reduce((sum, a) => sum + (Number(a.lessonsPerWeek) || 0), 0);
+
+        if (streamIndivTotal > maxStreamSlots) {
+          const previousTotal = streamIndivTotal - (candidate.lessonsPerWeek || 0);
+          const remaining = Math.max(0, maxStreamSlots - previousTotal);
+          return {
+            ok: false,
+            status: 422,
+            error: `Stream period limit exceeded: Grade ${candidate.grade} ${candidate.stream} would have ${streamIndivTotal} weekly lessons, exceeding the ${maxStreamSlots} available weekly periods (${remaining} remaining).`,
+          };
+        }
+      }
+    }
+
+    // Check teacher cumulative physical weekly slot feasibility across ALL categories & streams
+    const simEffective = resolveEffectiveStreamAllocations(simInput);
+    const maxPhysicalRegularSlots = Math.max(
+      ...Object.values(input.scheduleConfigs).map((c) => c.days.length * c.periodsPerDay)
+    );
+    const teacherRegularTotal = simEffective
+      .filter((ra) => ra.teacherId === candidate.teacherId)
+      .reduce((sum, ra) => sum + ra.lessonsPerWeek, 0);
+
+    if (teacherRegularTotal > maxPhysicalRegularSlots) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Zero-collision guard: ${candidate.teacherName} would have ${teacherRegularTotal} regular weekly lessons across assigned streams, exceeding the ${maxPhysicalRegularSlots} physical weekly periods available in the timetable.`,
+      };
+    }
+
+    return { ok: true, replaceId };
+  }
+
   app.post('/api/timetable/teacher-assignments', requireAuth, (req: Request, res: Response) => {
     const session = req.authSession!;
     if (!isTimetableAdmin(session)) {
@@ -971,6 +1451,17 @@ export function registerTimetableRoutes(app: Express): void {
         : Number(req.body.grade);
     const stream =
       typeof req.body?.stream === 'string' && req.body.stream.trim() ? req.body.stream.trim() : null;
+    const rawLessons = req.body?.lessonsPerWeek;
+    const lessonsPerWeek =
+      rawLessons === null || rawLessons === '' || rawLessons === undefined
+        ? null
+        : Math.max(0, Math.min(30, Math.trunc(Number(rawLessons))));
+    const allocationSource: AssignmentAllocationSource = VALID_ALLOCATION_SOURCES.has(
+      req.body?.allocationSource
+    )
+      ? req.body.allocationSource
+      : 'individual';
+    const replaceExisting = Boolean(req.body?.replaceExisting);
     const roleType = (req.body?.roleType || 'subject_teacher') as TeacherAssignmentRole;
     const maxWeeklyPeriods = Math.max(1, Math.min(45, Math.trunc(Number(req.body?.maxWeeklyPeriods) || 28)));
     const facilityId =
@@ -1000,6 +1491,9 @@ export function registerTimetableRoutes(app: Express): void {
     if (grade !== null && (!Number.isInteger(grade) || grade < 1 || grade > 9)) {
       return res.status(400).json({ error: 'Grade must be between 1 and 9.' });
     }
+    if (lessonsPerWeek !== null && (!Number.isInteger(lessonsPerWeek) || lessonsPerWeek < 0 || lessonsPerWeek > 30)) {
+      return res.status(400).json({ error: 'Lessons per week must be between 0 and 30.' });
+    }
 
     const db = getDb();
     ensureTimetableSeedForSchool(db, schoolId);
@@ -1010,43 +1504,109 @@ export function registerTimetableRoutes(app: Express): void {
       return res.status(404).json({ error: 'Selected subject does not exist in this category.' });
     }
 
-    const id = `ta_${crypto.randomBytes(6).toString('hex')}`;
-    const now = new Date().toISOString();
-
-    db.prepare(`
-      INSERT INTO tt_teacher_assignments (
-        id, school_id, teacher_id, teacher_name, teacher_email, category_id, subject_id,
-        grade, stream, role_type, max_weekly_periods, facility_id, equipment_notes,
-        allowed_days_json, allowed_periods_json, is_active, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-    `).run(
-      id,
+    const guard = validateAssignmentZeroCollision(
       schoolId,
-      teacherId,
-      teacherName,
-      teacherEmail,
-      categoryId,
-      subjectId,
-      grade,
-      stream,
-      roleType,
-      maxWeeklyPeriods,
-      facilityId,
-      equipmentNotes,
-      JSON.stringify(allowedDays),
-      JSON.stringify(allowedPeriods),
-      now
+      {
+        teacherId,
+        teacherName,
+        categoryId,
+        subjectId,
+        grade,
+        stream,
+        lessonsPerWeek,
+        allocationSource,
+        roleType,
+        maxWeeklyPeriods,
+        facilityId,
+        equipmentNotes,
+        allowedDays,
+        allowedPeriods,
+      },
+      { replaceExisting }
     );
+    if (!guard.ok) {
+      return res.status(guard.status).json({
+        error: guard.error,
+        existingAssignmentId: guard.existingAssignmentId,
+      });
+    }
+
+    const now = new Date().toISOString();
+    let recordId: string;
+
+    if (guard.replaceId) {
+      recordId = guard.replaceId;
+      db.prepare(`
+        UPDATE tt_teacher_assignments
+        SET teacher_id = ?, teacher_name = ?, teacher_email = ?, grade = ?, stream = ?,
+            lessons_per_week = ?, allocation_source = ?, role_type = ?, max_weekly_periods = ?,
+            facility_id = ?, equipment_notes = ?, allowed_days_json = ?, allowed_periods_json = ?,
+            is_active = 1, updated_at = ?
+        WHERE id = ? AND school_id = ?
+      `).run(
+        teacherId,
+        teacherName,
+        teacherEmail,
+        grade,
+        stream,
+        lessonsPerWeek,
+        allocationSource,
+        roleType,
+        maxWeeklyPeriods,
+        facilityId,
+        equipmentNotes,
+        JSON.stringify(allowedDays),
+        JSON.stringify(allowedPeriods),
+        now,
+        recordId,
+        schoolId
+      );
+    } else {
+      recordId = `ta_${crypto.randomBytes(6).toString('hex')}`;
+      db.prepare(`
+        INSERT INTO tt_teacher_assignments (
+          id, school_id, teacher_id, teacher_name, teacher_email, category_id, subject_id,
+          grade, stream, lessons_per_week, allocation_source, role_type, max_weekly_periods,
+          facility_id, equipment_notes, allowed_days_json, allowed_periods_json, is_active, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      `).run(
+        recordId,
+        schoolId,
+        teacherId,
+        teacherName,
+        teacherEmail,
+        categoryId,
+        subjectId,
+        grade,
+        stream,
+        lessonsPerWeek,
+        allocationSource,
+        roleType,
+        maxWeeklyPeriods,
+        facilityId,
+        equipmentNotes,
+        JSON.stringify(allowedDays),
+        JSON.stringify(allowedPeriods),
+        now
+      );
+    }
 
     notifyMySqlTablesChanged(['tt_teacher_assignments']);
-    emitTimetableBroadcast(schoolId, session.userId, 'record:created', id);
+    emitTimetableBroadcast(
+      schoolId,
+      session.userId,
+      guard.replaceId ? 'record:updated' : 'record:created',
+      recordId
+    );
 
     const { input } = loadEngineInput(schoolId);
-    return res.status(201).json({
+    return res.status(guard.replaceId ? 200 : 201).json({
       ok: true,
-      id,
+      id: recordId,
+      replaced: Boolean(guard.replaceId),
       teacherAssignments: input.teacherAssignments,
       readiness: validateTimetableReadiness(input),
+      streamAllocations: resolveEffectiveStreamAllocations(input),
     });
   });
 
@@ -1058,43 +1618,133 @@ export function registerTimetableRoutes(app: Express): void {
     const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
     if (!schoolId) return;
 
+    const db = getDb();
+    const existing = db
+      .prepare('SELECT * FROM tt_teacher_assignments WHERE id = ? AND school_id = ?')
+      .get(req.params.id, schoolId) as any;
+    if (!existing) {
+      return res.status(404).json({ error: 'Teacher assignment not found.' });
+    }
+
+    const teacherId =
+      typeof req.body?.teacherId === 'string' && req.body.teacherId.trim()
+        ? req.body.teacherId.trim()
+        : existing.teacher_id;
+    const teacherName =
+      typeof req.body?.teacherName === 'string' && req.body.teacherName.trim()
+        ? req.body.teacherName.trim()
+        : existing.teacher_name;
+    const teacherEmail =
+      typeof req.body?.teacherEmail === 'string' ? req.body.teacherEmail.trim() : existing.teacher_email || '';
+    const categoryId = existing.category_id as TimetableCategoryId;
+    const subjectId = existing.subject_id as string;
+
     const grade =
-      req.body?.grade === null || req.body?.grade === '' || req.body?.grade === undefined
-        ? null
-        : Number(req.body.grade);
+      req.body?.grade === undefined
+        ? existing.grade === null
+          ? null
+          : Number(existing.grade)
+        : req.body.grade === null || req.body.grade === ''
+          ? null
+          : Number(req.body.grade);
     const stream =
-      typeof req.body?.stream === 'string' && req.body.stream.trim() ? req.body.stream.trim() : null;
-    const roleType = (req.body?.roleType || 'subject_teacher') as TeacherAssignmentRole;
-    const maxWeeklyPeriods = Math.max(1, Math.min(45, Math.trunc(Number(req.body?.maxWeeklyPeriods) || 28)));
+      req.body?.stream === undefined
+        ? existing.stream || null
+        : typeof req.body.stream === 'string' && req.body.stream.trim()
+          ? req.body.stream.trim()
+          : null;
+    const lessonsPerWeek =
+      req.body?.lessonsPerWeek === undefined
+        ? existing.lessons_per_week === null || existing.lessons_per_week === undefined
+          ? null
+          : Number(existing.lessons_per_week)
+        : req.body.lessonsPerWeek === null || req.body.lessonsPerWeek === ''
+          ? null
+          : Math.max(0, Math.min(30, Math.trunc(Number(req.body.lessonsPerWeek))));
+    const allocationSource: AssignmentAllocationSource =
+      req.body?.allocationSource && VALID_ALLOCATION_SOURCES.has(req.body.allocationSource)
+        ? req.body.allocationSource
+        : VALID_ALLOCATION_SOURCES.has(existing.allocation_source)
+          ? existing.allocation_source
+          : 'individual';
+    const roleType = (req.body?.roleType || existing.role_type || 'subject_teacher') as TeacherAssignmentRole;
+    const maxWeeklyPeriods = Math.max(
+      1,
+      Math.min(45, Math.trunc(Number(req.body?.maxWeeklyPeriods ?? existing.max_weekly_periods) || 28))
+    );
     const facilityId =
-      typeof req.body?.facilityId === 'string' && req.body.facilityId.trim()
-        ? req.body.facilityId.trim()
-        : null;
+      req.body?.facilityId === undefined
+        ? existing.facility_id || null
+        : typeof req.body.facilityId === 'string' && req.body.facilityId.trim()
+          ? req.body.facilityId.trim()
+          : null;
     const equipmentNotes =
-      typeof req.body?.equipmentNotes === 'string' ? req.body.equipmentNotes.trim().slice(0, 400) : '';
-    const allowedDays = Array.isArray(req.body?.allowedDays)
-      ? req.body.allowedDays.filter((d: unknown) => (WEEKDAYS as readonly string[]).includes(String(d)))
-      : [];
-    const allowedPeriods = Array.isArray(req.body?.allowedPeriods)
-      ? req.body.allowedPeriods
-          .map((p: unknown) => Math.trunc(Number(p)))
-          .filter((p: number) => p >= 1 && p <= 15)
-      : [];
+      req.body?.equipmentNotes === undefined
+        ? existing.equipment_notes || ''
+        : typeof req.body.equipmentNotes === 'string'
+          ? req.body.equipmentNotes.trim().slice(0, 400)
+          : '';
+    const allowedDays =
+      req.body?.allowedDays === undefined
+        ? safeParseJson<string[]>(existing.allowed_days_json, [])
+        : Array.isArray(req.body.allowedDays)
+          ? req.body.allowedDays.filter((d: unknown) => (WEEKDAYS as readonly string[]).includes(String(d)))
+          : [];
+    const allowedPeriods =
+      req.body?.allowedPeriods === undefined
+        ? safeParseJson<number[]>(existing.allowed_periods_json, [])
+        : Array.isArray(req.body.allowedPeriods)
+          ? req.body.allowedPeriods
+              .map((p: unknown) => Math.trunc(Number(p)))
+              .filter((p: number) => p >= 1 && p <= 15)
+          : [];
 
     if (!VALID_ASSIGNMENT_ROLES.has(roleType)) {
       return res.status(400).json({ error: 'Invalid role type.' });
     }
+    if (grade !== null && (!Number.isInteger(grade) || grade < 1 || grade > 9)) {
+      return res.status(400).json({ error: 'Grade must be between 1 and 9.' });
+    }
 
-    const db = getDb();
-    const result = db.prepare(`
+    const guard = validateAssignmentZeroCollision(
+      schoolId,
+      {
+        teacherId,
+        teacherName,
+        categoryId,
+        subjectId,
+        grade,
+        stream,
+        lessonsPerWeek,
+        allocationSource,
+        roleType,
+        maxWeeklyPeriods,
+        facilityId,
+        equipmentNotes,
+        allowedDays,
+        allowedPeriods,
+      },
+      { excludeId: req.params.id }
+    );
+    if (!guard.ok) {
+      return res.status(guard.status).json({ error: guard.error });
+    }
+
+    db.prepare(`
       UPDATE tt_teacher_assignments
-      SET grade = ?, stream = ?, role_type = ?, max_weekly_periods = ?,
+      SET teacher_id = ?, teacher_name = ?, teacher_email = ?, grade = ?, stream = ?,
+          lessons_per_week = ?, allocation_source = ?, role_type = ?, max_weekly_periods = ?,
           facility_id = ?, equipment_notes = ?, allowed_days_json = ?,
           allowed_periods_json = ?, updated_at = ?
       WHERE id = ? AND school_id = ?
     `).run(
+      teacherId,
+      teacherName,
+      teacherEmail,
       grade,
       stream,
+      lessonsPerWeek,
+      allocationSource,
       roleType,
       maxWeeklyPeriods,
       facilityId,
@@ -1106,8 +1756,6 @@ export function registerTimetableRoutes(app: Express): void {
       schoolId
     );
 
-    if (!result.changes) return res.status(404).json({ error: 'Teacher assignment not found.' });
-
     notifyMySqlTablesChanged(['tt_teacher_assignments']);
     emitTimetableBroadcast(schoolId, session.userId, 'record:updated', req.params.id);
 
@@ -1116,6 +1764,7 @@ export function registerTimetableRoutes(app: Express): void {
       ok: true,
       teacherAssignments: input.teacherAssignments,
       readiness: validateTimetableReadiness(input),
+      streamAllocations: resolveEffectiveStreamAllocations(input),
     });
   });
 

@@ -13,6 +13,7 @@ import {
 import type { User } from '../../types';
 import {
   ttApiFetch,
+  type AllocationProcessingMode,
   type ScheduleConfig,
   type TimetableBootstrapResponse,
   type TimetableCategoryId,
@@ -120,6 +121,17 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const handleChangeAllocationMode = useCallback(
+    async (catId: TimetableCategoryId, mode: AllocationProcessingMode) => {
+      await ttApiFetch(`/api/timetable/allocation-mode/${catId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ allocationMode: mode }),
+      });
+      await loadData();
+    },
+    [loadData]
+  );
 
   useEffect(() => {
     if (!roPrinting) return;
@@ -429,9 +441,14 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           scheduleConfigs={bootstrap.scheduleConfigs}
           subjects={bootstrap.subjects}
           facilities={bootstrap.facilities}
+          streams={bootstrap.streams}
+          teachers={bootstrap.teachers}
           teacherAssignments={bootstrap.teacherAssignments}
           remedialConfigs={bootstrap.remedialConfigs}
+          streamAllocations={bootstrap.audit.streamAllocations}
+          categoryTotals={bootstrap.audit.categoryTotals}
           canManage={bootstrap.canManage}
+          onChangeAllocationMode={handleChangeAllocationMode}
           onRefresh={() => loadData()}
           onJumpToTeachers={(catId, subId) => {
             setPreselectCategory(catId);
@@ -450,14 +467,18 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         <TeacherAssignmentsPanel
           categories={bootstrap.categories}
           weekdays={bootstrap.weekdays}
+          scheduleConfigs={bootstrap.scheduleConfigs}
           subjects={bootstrap.subjects}
           facilities={bootstrap.facilities}
           streams={bootstrap.streams}
           teachers={bootstrap.teachers}
           teacherAssignments={bootstrap.teacherAssignments}
+          streamAllocations={bootstrap.audit.streamAllocations}
+          categoryTotals={bootstrap.audit.categoryTotals}
           canManage={bootstrap.canManage}
           preselectCategory={preselectCategory}
           preselectSubjectId={preselectSubjectId}
+          onChangeAllocationMode={handleChangeAllocationMode}
           onRefresh={() => loadData()}
         />
       )}

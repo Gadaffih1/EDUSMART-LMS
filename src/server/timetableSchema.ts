@@ -18,6 +18,10 @@ export type TeacherAssignmentRole = 'subject_teacher' | 'supervisor' | 'remedial
 
 export type StudentGroupMode = 'whole_stream' | 'selected_learners';
 
+export type AllocationProcessingMode = 'individual_teacher' | 'category_redistribution';
+
+export type AssignmentAllocationSource = 'individual' | 'category_redistribution';
+
 export interface TimetableCategoryMeta {
   id: TimetableCategoryId;
   label: string;
@@ -234,6 +238,7 @@ export function initTimetableSchema(db: DatabaseSync): void {
       periods_per_day INTEGER NOT NULL DEFAULT 8,
       period_duration_mins INTEGER NOT NULL DEFAULT 35,
       periods_json TEXT NOT NULL,
+      allocation_mode TEXT NOT NULL DEFAULT 'category_redistribution',
       updated_at TEXT NOT NULL,
       PRIMARY KEY (school_id, category_id)
     );
@@ -286,6 +291,8 @@ export function initTimetableSchema(db: DatabaseSync): void {
       subject_id TEXT NOT NULL,
       grade INTEGER,
       stream TEXT,
+      lessons_per_week INTEGER,
+      allocation_source TEXT NOT NULL DEFAULT 'individual',
       role_type TEXT NOT NULL DEFAULT 'subject_teacher',
       max_weekly_periods INTEGER NOT NULL DEFAULT 28,
       facility_id TEXT,
@@ -297,6 +304,7 @@ export function initTimetableSchema(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_tt_teacher_assign_school ON tt_teacher_assignments(school_id, category_id, subject_id);
     CREATE INDEX IF NOT EXISTS idx_tt_teacher_assign_teacher ON tt_teacher_assignments(school_id, teacher_id);
+    CREATE INDEX IF NOT EXISTS idx_tt_teacher_assign_stream ON tt_teacher_assignments(school_id, category_id, grade, stream, subject_id);
 
     CREATE TABLE IF NOT EXISTS tt_remedial_configs (
       id TEXT PRIMARY KEY,
@@ -368,6 +376,25 @@ export function initTimetableSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_tt_entries_teacher ON tt_entries(version_id, teacher_id, day_of_week, period_number);
     CREATE INDEX IF NOT EXISTS idx_tt_entries_facility ON tt_entries(version_id, facility_id, day_of_week, period_number);
   `);
+
+  const ensureColumn = (tableName: string, columnName: string, alterSql: string) => {
+    const cols = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === columnName)) {
+      db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${alterSql};`);
+    }
+  };
+
+  ensureColumn(
+    'tt_schedule_config',
+    'allocation_mode',
+    `allocation_mode TEXT NOT NULL DEFAULT 'category_redistribution'`
+  );
+  ensureColumn('tt_teacher_assignments', 'lessons_per_week', 'lessons_per_week INTEGER');
+  ensureColumn(
+    'tt_teacher_assignments',
+    'allocation_source',
+    `allocation_source TEXT NOT NULL DEFAULT 'individual'`
+  );
 }
 
 /**

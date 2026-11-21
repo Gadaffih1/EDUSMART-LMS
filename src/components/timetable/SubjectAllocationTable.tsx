@@ -3,6 +3,9 @@ import {
   AlertTriangle,
   Building2,
   Check,
+  CheckCircle2,
+  GitBranch,
+  Link2,
   Minus,
   Plus,
   RotateCcw,
@@ -13,11 +16,16 @@ import {
 import {
   FACILITY_TYPE_LABELS,
   ttApiFetch,
+  type AllocationProcessingMode,
+  type CategoryAllocationSummary,
+  type DirectoryTeacher,
+  type ResolvedStreamAllocation,
   type ScheduleConfig,
   type TimetableCategoryId,
   type TimetableCategoryMeta,
   type TimetableFacility,
   type TimetableRemedialConfig,
+  type TimetableStream,
   type TimetableSubject,
   type TimetableTeacherAssignment,
 } from './timetableTypes';
@@ -28,12 +36,23 @@ interface Props {
   scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
   subjects: TimetableSubject[];
   facilities: TimetableFacility[];
+  streams: TimetableStream[];
+  teachers: DirectoryTeacher[];
   teacherAssignments: TimetableTeacherAssignment[];
   remedialConfigs: TimetableRemedialConfig[];
+  streamAllocations: ResolvedStreamAllocation[];
+  categoryTotals: CategoryAllocationSummary[];
   canManage: boolean;
+  onChangeAllocationMode: (
+    categoryId: TimetableCategoryId,
+    mode: AllocationProcessingMode
+  ) => Promise<void>;
   onRefresh: () => Promise<void>;
   onJumpToTeachers: (categoryId: TimetableCategoryId, subjectId: string) => void;
-  onJumpToRemedials: (categoryId: TimetableCategoryId, remedialType: 'remedial_1' | 'remedial_2') => void;
+  onJumpToRemedials: (
+    categoryId: TimetableCategoryId,
+    remedialType: 'remedial_1' | 'remedial_2'
+  ) => void;
 }
 
 interface EditableSubjectRow {
@@ -52,9 +71,14 @@ export const SubjectAllocationTable: React.FC<Props> = ({
   scheduleConfigs,
   subjects,
   facilities,
+  streams,
+  teachers,
   teacherAssignments,
   remedialConfigs,
+  streamAllocations,
+  categoryTotals,
   canManage,
+  onChangeAllocationMode,
   onRefresh,
   onJumpToTeachers,
   onJumpToRemedials,
@@ -64,9 +88,16 @@ export const SubjectAllocationTable: React.FC<Props> = ({
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [switchingMode, setSwitchingMode] = useState(false);
+  const [redistributing, setRedistributing] = useState(false);
+  const [selectedMatrixStream, setSelectedMatrixStream] = useState<string>('all');
+  const [inlineTeacherPick, setInlineTeacherPick] = useState<Record<string, string>>({});
+  const [linkingKey, setLinkingKey] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const currentConfig = scheduleConfigs[activeCategory];
+  const activeMode: AllocationProcessingMode =
+    currentConfig?.allocationMode ?? 'category_redistribution';
   const [periodsPerDay, setPeriodsPerDay] = useState<number>(currentConfig?.periodsPerDay ?? 8);
   const [periodDurationMins, setPeriodDurationMins] = useState<number>(
     currentConfig?.periodDurationMins ?? 35
@@ -80,6 +111,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
       setPeriodDurationMins(cfg.periodDurationMins);
       setSelectedDays(cfg.days);
     }
+    setSelectedMatrixStream('all');
   }, [activeCategory, scheduleConfigs]);
 
   const categorySubjects = useMemo(
@@ -89,6 +121,17 @@ export const SubjectAllocationTable: React.FC<Props> = ({
         .sort((a, b) => a.sortOrder - b.sortOrder),
     [subjects, activeCategory]
   );
+
+  const categoryStreams = useMemo(
+    () => streams.filter((st) => st.categoryId === activeCategory),
+    [streams, activeCategory]
+  );
+
+  const categoryResolvedAllocations = useMemo(() => {
+    const list = streamAllocations.filter((ra) => ra.categoryId === activeCategory);
+    if (selectedMatrixStream === 'all') return list;
+    return list.filter((ra) => `${ra.grade}::${ra.stream}` === selectedMatrixStream);
+  }, [streamAllocations, activeCategory, selectedMatrixStream]);
 
   // Sync server subjects into local draft map for the active category
   useEffect(() => {
@@ -150,6 +193,11 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     return { coreTotal, commonTotal, remedialTotal, regularAllocated, remainingRegular };
   }, [categorySubjects, drafts, availableRegularPeriods]);
 
+  const activeCategorySummary = useMemo(
+    () => categoryTotals.find((ct) => ct.categoryId === activeCategory) || null,
+    [categoryTotals, activeCategory]
+  );
+
   const updateRow = (id: string, patch: Partial<EditableSubjectRow>) => {
     setDrafts((prev) => ({
       ...prev,
@@ -198,6 +246,26 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     setFeedback(null);
   };
 
+  const persistAllocationsOnly = async () => {
+    const payload = categorySubjects.map((s) => {
+      const d = drafts[s.id];
+      return {
+        id: s.id,
+        lessonsPerWeek: d ? d.lessonsPerWeek : s.lessonsPerWeek,
+        defaultFacilityId: d?.defaultFacilityId || null,
+        equipmentNotes: d?.equipmentNotes || '',
+        allowedDays: d?.allowedDays || [],
+        allowedPeriods: d?.allowedPeriods || [],
+        isActive: d ? d.isActive : s.isActive,
+      };
+    });
+
+    await ttApiFetch(`/api/timetable/allocations/${activeCategory}`, {
+      method: 'PUT',
+      body: JSON.stringify({ allocations: payload }),
+    });
+  };
+
   const handleSaveSchedule = async () => {
     if (!canManage) return;
     setSavingSchedule(true);
@@ -209,6 +277,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
           days: selectedDays,
           periodsPerDay,
           periodDurationMins,
+          allocationMode: activeMode,
         }),
       });
       await onRefresh();
@@ -225,32 +294,128 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     setSaving(true);
     setFeedback(null);
     try {
-      const payload = categorySubjects.map((s) => {
-        const d = drafts[s.id];
-        return {
-          id: s.id,
-          lessonsPerWeek: d ? d.lessonsPerWeek : s.lessonsPerWeek,
-          defaultFacilityId: d?.defaultFacilityId || null,
-          equipmentNotes: d?.equipmentNotes || '',
-          allowedDays: d?.allowedDays || [],
-          allowedPeriods: d?.allowedPeriods || [],
-          isActive: d ? d.isActive : s.isActive,
-        };
-      });
-
-      await ttApiFetch(`/api/timetable/allocations/${activeCategory}`, {
-        method: 'PUT',
-        body: JSON.stringify({ allocations: payload }),
-      });
+      await persistAllocationsOnly();
       await onRefresh();
       setFeedback({
         type: 'ok',
-        text: `Weekly lesson allocations saved for ${categories.find((c) => c.id === activeCategory)?.label}.`,
+        text: `Weekly lesson allocations saved for ${
+          categories.find((c) => c.id === activeCategory)?.label
+        }.`,
       });
     } catch (err: any) {
       setFeedback({ type: 'err', text: err.message || 'Failed to save allocations.' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleModeChange = async (mode: AllocationProcessingMode) => {
+    if (!canManage || mode === activeMode) return;
+    setSwitchingMode(true);
+    setFeedback(null);
+    try {
+      await onChangeAllocationMode(activeCategory, mode);
+      setFeedback({
+        type: 'ok',
+        text:
+          mode === 'category_redistribution'
+            ? 'Switched to Option 2: Category allocations redistribute to all active streams and link strictly to assigned teachers.'
+            : 'Switched to Option 1: Timetable processing now reads individual teacher-grade-stream weekly lesson assignments directly.',
+      });
+    } catch (err: any) {
+      setFeedback({ type: 'err', text: err.message || 'Failed to switch processing mode.' });
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
+
+  const handleRedistributeToStreams = async () => {
+    if (!canManage) return;
+    setRedistributing(true);
+    setFeedback(null);
+    try {
+      if (hasDirtyChanges) {
+        await persistAllocationsOnly();
+      }
+      const res = await ttApiFetch(`/api/timetable/redistribute-category/${activeCategory}`, {
+        method: 'POST',
+      });
+      await onRefresh();
+
+      const parts: string[] = [
+        `Redistributed across ${categoryStreams.length} active stream(s): ${
+          (res.syncedCount || 0) + (res.createdCount || 0)
+        } stream-subject slot(s) synced`,
+      ];
+      if (res.unlinkedSlots?.length > 0) {
+        parts.push(`${res.unlinkedSlots.length} awaiting teacher link`);
+      }
+      if (res.conflictSlots?.length > 0) {
+        parts.push(`${res.conflictSlots.length} duplicate conflict(s)`);
+      }
+      if (res.overloadedSlots?.length > 0) {
+        parts.push(`${res.overloadedSlots.length} blocked by teacher physical slot limit`);
+      }
+
+      setFeedback({
+        type:
+          (res.conflictSlots?.length || 0) > 0 || (res.overloadedSlots?.length || 0) > 0
+            ? 'err'
+            : 'ok',
+        text: `${parts.join(' · ')}.`,
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: 'err',
+        text: err.message || 'Failed to redistribute category allocations to streams.',
+      });
+    } finally {
+      setRedistributing(false);
+    }
+  };
+
+  const handleInlineLinkTeacher = async (ra: ResolvedStreamAllocation) => {
+    if (!canManage) return;
+    const rowKey = `${ra.grade}::${ra.stream}::${ra.subjectId}`;
+    const pickedTeacherId = inlineTeacherPick[rowKey];
+    const teacher = teachers.find((t) => t.id === pickedTeacherId);
+    if (!teacher) {
+      setFeedback({ type: 'err', text: 'Select an authorized teacher before linking.' });
+      return;
+    }
+
+    const sub = subjects.find((s) => s.id === ra.subjectId);
+    setLinkingKey(rowKey);
+    setFeedback(null);
+    try {
+      await ttApiFetch('/api/timetable/teacher-assignments', {
+        method: 'POST',
+        body: JSON.stringify({
+          teacherId: teacher.id,
+          teacherName: teacher.name,
+          teacherEmail: teacher.email,
+          categoryId: ra.categoryId,
+          subjectId: ra.subjectId,
+          grade: ra.grade,
+          stream: ra.stream,
+          lessonsPerWeek: ra.lessonsPerWeek,
+          allocationSource:
+            activeMode === 'individual_teacher' ? 'individual' : 'category_redistribution',
+          replaceExisting: true,
+          roleType:
+            sub?.code === 'clubs' || sub?.code === 'maktaba' ? 'supervisor' : 'subject_teacher',
+          facilityId: sub?.defaultFacilityId || null,
+        }),
+      });
+      await onRefresh();
+      setFeedback({
+        type: 'ok',
+        text: `Strictly linked ${teacher.name} to Grade ${ra.grade} ${ra.stream} · ${ra.subjectName} (${ra.lessonsPerWeek}/wk) with zero duplicates.`,
+      });
+    } catch (err: any) {
+      setFeedback({ type: 'err', text: err.message || 'Failed to link teacher.' });
+    } finally {
+      setLinkingKey(null);
     }
   };
 
@@ -263,10 +428,13 @@ export const SubjectAllocationTable: React.FC<Props> = ({
         <div className="flex flex-wrap items-center gap-2">
           {categories.map((cat) => {
             const isSelected = cat.id === activeCategory;
+            const catSummary = categoryTotals.find((c) => c.categoryId === cat.id);
             const catSubs = subjects.filter((s) => s.categoryId === cat.id);
-            const catAllocated = catSubs
-              .filter((s) => s.subjectKind !== 'remedial')
-              .reduce((acc, s) => acc + s.lessonsPerWeek, 0);
+            const catAllocated =
+              catSummary?.totalAllocatedRegularLessons ??
+              catSubs
+                .filter((s) => s.subjectKind !== 'remedial')
+                .reduce((acc, s) => acc + s.lessonsPerWeek, 0);
             const cfg = scheduleConfigs[cat.id];
             const catAvailable = cfg ? cfg.days.length * cfg.periodsPerDay : 0;
 
@@ -326,6 +494,66 @@ export const SubjectAllocationTable: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* Dual-Mode Processing Control Bar */}
+      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <GitBranch className="w-4 h-4 text-indigo-600" />
+            <span>Timetable Allocation & Linking Mode</span>
+          </div>
+          <p className="text-xs text-slate-600">
+            {activeMode === 'category_redistribution'
+              ? 'Option 2 Active: Weekly lessons defined in this category table redistribute across all active streams in this category and link strictly to their authorized teachers.'
+              : 'Option 1 Active: Timetable processing reads individual teacher-subject-grade-stream weekly lesson assignments directly from the Teachers & Supervisors tab.'}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
+            <button
+              type="button"
+              disabled={!canManage || switchingMode}
+              onClick={() => handleModeChange('category_redistribution')}
+              className={`px-3 py-1.5 rounded font-medium transition-colors whitespace-nowrap shrink-0 ${
+                activeMode === 'category_redistribution'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Option 2: Category → Streams
+            </button>
+            <button
+              type="button"
+              disabled={!canManage || switchingMode}
+              onClick={() => handleModeChange('individual_teacher')}
+              className={`px-3 py-1.5 rounded font-medium transition-colors whitespace-nowrap shrink-0 ${
+                activeMode === 'individual_teacher'
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Option 1: Individual Teacher
+            </button>
+          </div>
+
+          {canManage && activeMode === 'category_redistribution' && (
+            <button
+              type="button"
+              disabled={redistributing || totals.remainingRegular < 0}
+              onClick={handleRedistributeToStreams}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-medium rounded-md hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap shrink-0"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              {redistributing
+                ? 'Redistributing...'
+                : `Redistribute to ${categoryStreams.length} Stream${
+                    categoryStreams.length === 1 ? '' : 's'
+                  } & Sync`}
+            </button>
+          )}
+        </div>
+      </div>
+
       {feedback && (
         <div
           className={`px-4 py-2.5 rounded-md border text-sm flex items-center justify-between ${
@@ -338,7 +566,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => setFeedback(null)}
-            className="text-xs font-medium underline ml-4"
+            className="text-xs font-medium underline ml-4 whitespace-nowrap shrink-0"
           >
             Dismiss
           </button>
@@ -391,6 +619,32 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                 </span>
               </div>
             </div>
+            {activeCategorySummary && (
+              <>
+                <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+                <div>
+                  <div className="text-xs font-medium text-slate-500">Stream-Teacher Sync</div>
+                  <div className="text-xl font-semibold text-slate-900 font-mono tabular-nums mt-0.5">
+                    {activeCategorySummary.linkedStreamSlots}
+                    <span className="text-xs font-sans font-normal text-slate-500 ml-1.5">
+                      linked
+                      {activeCategorySummary.unlinkedStreamSlots > 0 && (
+                        <span className="text-amber-700 font-medium">
+                          {' '}
+                          · {activeCategorySummary.unlinkedStreamSlots} unlinked
+                        </span>
+                      )}
+                      {activeCategorySummary.duplicateConflicts > 0 && (
+                        <span className="text-red-600 font-medium">
+                          {' '}
+                          · {activeCategorySummary.duplicateConflicts} conflict(s)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Inline Periods/Day & Duration Config */}
@@ -480,7 +734,8 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                 const remConfigsForSub =
                   sub.subjectKind === 'remedial'
                     ? remedialConfigs.filter(
-                        (rc) => rc.isActive && rc.categoryId === activeCategory && rc.subjectId === sub.id
+                        (rc) =>
+                          rc.isActive && rc.categoryId === activeCategory && rc.subjectId === sub.id
                       )
                     : [];
 
@@ -650,9 +905,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                         ) : (
                           <span
                             className={
-                              needsTeacherWarning
-                                ? 'text-amber-700 font-medium'
-                                : 'text-slate-400'
+                              needsTeacherWarning ? 'text-amber-700 font-medium' : 'text-slate-400'
                             }
                           >
                             {needsTeacherWarning
@@ -667,9 +920,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                         <div className="inline-flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() =>
-                              setExpandedRowId(isExpanded ? null : sub.id)
-                            }
+                            onClick={() => setExpandedRowId(isExpanded ? null : sub.id)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 whitespace-nowrap shrink-0"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -832,6 +1083,148 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                 </td>
               </tr>
             </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Live Stream Redistribution & Strictly Linked Teacher Matrix */}
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Link2 className="w-4 h-4 text-slate-600" />
+              <span>
+                Stream Redistribution & Linked Teacher Matrix (
+                {categories.find((c) => c.id === activeCategory)?.shortLabel})
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Every active stream-subject demand feeding the timetable generator. Strictly enforces
+              one linked teacher per stream-subject with zero duplicate ownership or overload
+              collisions.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <label className="text-slate-600 font-medium">Filter Stream:</label>
+            <select
+              value={selectedMatrixStream}
+              onChange={(e) => setSelectedMatrixStream(e.target.value)}
+              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900"
+            >
+              <option value="all">All Streams ({categoryStreams.length})</option>
+              {categoryStreams.map((st) => (
+                <option key={`${st.grade}::${st.stream}`} value={`${st.grade}::${st.stream}`}>
+                  Grade {st.grade} · {st.stream}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600 uppercase tracking-wider">
+                <th className="py-2.5 px-4">Grade & Stream</th>
+                <th className="py-2.5 px-4">Subject / Activity</th>
+                <th className="py-2.5 px-4 text-center">Lessons / Wk</th>
+                <th className="py-2.5 px-4">Linked Teacher</th>
+                <th className="py-2.5 px-4">Status</th>
+                {canManage && <th className="py-2.5 px-4 text-right">Strict Link / Reassign</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {categoryResolvedAllocations.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={canManage ? 6 : 5}
+                    className="py-8 px-4 text-center text-slate-500"
+                  >
+                    {activeMode === 'category_redistribution'
+                      ? 'Allocate lessons per week above and click Save Allocations or Redistribute to Streams to populate stream demands.'
+                      : 'No individual teacher stream assignments found for this category yet. Use the Teachers & Supervisors tab to assign teachers individually.'}
+                  </td>
+                </tr>
+              ) : (
+                categoryResolvedAllocations.map((ra) => {
+                  const rowKey = `${ra.grade}::${ra.stream}::${ra.subjectId}`;
+                  const selectedT = inlineTeacherPick[rowKey] ?? ra.teacherId ?? '';
+                  return (
+                    <tr key={rowKey} className="hover:bg-slate-50/70">
+                      <td className="py-2.5 px-4 font-medium text-slate-900">
+                        Grade {ra.grade} · {ra.stream}
+                      </td>
+                      <td className="py-2.5 px-4 font-medium text-slate-800">{ra.subjectName}</td>
+                      <td className="py-2.5 px-4 text-center font-mono font-semibold text-slate-900 tabular-nums">
+                        {ra.lessonsPerWeek}
+                      </td>
+                      <td className="py-2.5 px-4">
+                        {ra.status === 'linked' ? (
+                          <span className="font-medium text-slate-900">{ra.teacherName}</span>
+                        ) : ra.status === 'duplicate_conflict' ? (
+                          <span className="text-red-700 font-semibold">
+                            Conflict: {ra.conflictTeachers.join(' vs ')}
+                          </span>
+                        ) : (
+                          <span className="text-amber-700 font-medium">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-4">
+                        {ra.status === 'linked' ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Linked
+                          </span>
+                        ) : ra.status === 'duplicate_conflict' ? (
+                          <span className="inline-flex items-center gap-1 text-red-700 font-semibold">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            Duplicate Conflict
+                          </span>
+                        ) : (
+                          <span className="text-amber-700 font-medium">Needs Teacher</span>
+                        )}
+                      </td>
+                      {canManage && (
+                        <td className="py-2.5 px-4 text-right">
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <select
+                              value={selectedT}
+                              onChange={(e) =>
+                                setInlineTeacherPick((prev) => ({
+                                  ...prev,
+                                  [rowKey]: e.target.value,
+                                }))
+                              }
+                              className="px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-900 max-w-[180px]"
+                            >
+                              <option value="">Select teacher...</option>
+                              {teachers.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={!selectedT || linkingKey === rowKey}
+                              onClick={() => handleInlineLinkTeacher(ra)}
+                              className="px-2.5 py-1 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 disabled:opacity-40 whitespace-nowrap shrink-0"
+                            >
+                              {linkingKey === rowKey
+                                ? 'Linking...'
+                                : ra.status === 'linked'
+                                  ? 'Update'
+                                  : 'Link'}
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
           </table>
         </div>
       </div>

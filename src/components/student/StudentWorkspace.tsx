@@ -15,7 +15,6 @@ import {
   QuizAttempt,
   VirtualClassRoom,
   ReportCard,
-  TimetableSlot,
   Assignment,
   ChatMessage
 } from '../../types';
@@ -32,7 +31,6 @@ import { LearnerBadgesAndStreaks } from './LearnerBadgesAndStreaks';
 import { ExternalToolsHub } from './ExternalToolsHub';
 import { SafeBrowser } from './SafeBrowser';
 import { ReportingHub } from '../reports/ReportingHub';
-import { TimetablePortal } from '../timetable/TimetablePortal';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { useTenant } from '../../context/TenantContext';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
@@ -85,6 +83,7 @@ import {
 import { PrintReportModal } from '../common/PrintReportModal';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
 import { SubjectTeacherChatModal } from '../chat/SubjectTeacherChatModal';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { TeacherLessonFile } from '../../types';
 
 interface StudentWorkspaceProps {
@@ -98,11 +97,11 @@ type WorkspaceTab =
   | 'quiz_results' 
   | 'virtual_class' 
   | 'grade_chats'
-  | 'timetable'
   | 'assignments'
   | 'portfolio'
   | 'badges'
   | 'integrations'
+  | 'timetable'
   | 'browser';
 
 export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser }) => {
@@ -124,7 +123,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['resources', 'browser', 'timetable', 'assignments', 'reports', 'badges', 'portfolio', 'virtual_class'].includes(tab)) {
+        if (['resources', 'browser', 'assignments', 'reports', 'badges', 'portfolio', 'virtual_class'].includes(tab)) {
           setActiveTab(tab as WorkspaceTab);
         } else if (tab === 'results' || tab === 'gradebook' || tab === 'grades' || tab === 'marks') {
           setActiveTab('reports');
@@ -239,7 +238,6 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
   const studentAttempts = Storage.getQuizAttempts(currentUser.id);
   const gradeVirtualClasses = Storage.getVirtualClasses(studentGrade);
   const studentReportCards = Storage.getReportCards(currentUser.id);
-  const streamTimetable = Storage.getTimetable(studentGrade, studentStream);
   // Strictly stream-filtered assignments
   const gradeAssignments = Storage.getAssignments(studentGrade, studentStream);
   const chatMessages = Storage.getChatMessages(studentGrade, studentStream);
@@ -1793,6 +1791,10 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
           ======================================================== */}
       {activeTab === 'virtual_class' && <StudentVirtualClassroomPanel />}
 
+      {activeTab === 'timetable' && (
+        <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
+      )}
+
       {/* ========================================================
           TAB 6: GRADE CHATS & DIRECT TEACHER CHAT
           ======================================================== */}
@@ -1925,18 +1927,6 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
             </form>
           </div>
         </section>
-      )}
-
-      {/* ========================================================
-          ADDITIONAL TAB: CLASS TIMETABLE & BELL CADENCE
-          ======================================================== */}
-      {activeTab === 'timetable' && (
-        <TimetablePortal 
-          currentUser={currentUser} 
-          initialGrade={studentGrade} 
-          initialStream={studentStream} 
-          readOnly={true} 
-        />
       )}
 
       {/* ========================================================

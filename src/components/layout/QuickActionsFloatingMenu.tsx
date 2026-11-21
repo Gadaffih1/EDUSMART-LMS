@@ -38,7 +38,6 @@ import {
   LogOut,
   Library
 } from 'lucide-react';
-import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { useMobileLayout } from '../../context/MobileLayoutContext';
 import {
   canAccessStudentStreamAllocation,
@@ -60,7 +59,6 @@ export interface QuickActionItem {
   targetRole?: UserRole | null;
   actionType?:
     | 'nav_tab'
-    | 'absence_modal'
     | 'storage_modal'
     | 'switch_user'
     | 'toggle_notif'
@@ -101,7 +99,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
-  const [showAbsenceModal, setShowAbsenceModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -193,31 +190,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             badge: 'Clock In',
             badgeColor: 'bg-blue-600 text-white',
             tabTarget: 'work_entry',
-            actionType: 'nav_tab'
-          },
-          {
-            id: 'report-absence',
-            title: 'Report Absence to Leadership',
-            subtitle: 'Notify Head Teacher, Deputy, Dean & Senior Teacher for relief cover',
-            icon: ShieldAlert,
-            iconBg: 'bg-amber-100',
-            iconColor: 'text-amber-700',
-            category: 'primary',
-            badge: 'Leadership Notice',
-            badgeColor: 'bg-amber-600 text-white',
-            actionType: 'absence_modal'
-          },
-          {
-            id: 'view-timetable',
-            title: 'View Teaching Timetable (Day/Week Capture)',
-            subtitle: 'Inspect daily class visits, whole week panoramic matrix & clean print capture',
-            icon: Calendar,
-            iconBg: 'bg-purple-100',
-            iconColor: 'text-purple-700',
-            category: 'academic',
-            badge: 'Schedule',
-            badgeColor: 'bg-purple-600 text-white',
-            tabTarget: 'timetable',
             actionType: 'nav_tab'
           },
           {
@@ -321,19 +293,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             actionType: 'nav_tab'
           },
           {
-            id: 'relief-desk',
-            title: 'Faculty Relief & Absence Desk',
-            subtitle: 'Examine reported teacher absences and check relief substitute assignments',
-            icon: UserCheck,
-            iconBg: 'bg-purple-100',
-            iconColor: 'text-purple-700',
-            category: 'academic',
-            badge: 'Staff Relief',
-            badgeColor: 'bg-purple-600 text-white',
-            tabTarget: 'timetable',
-            actionType: 'nav_tab'
-          },
-          {
             id: 'broadcast-announcement',
             title: 'Broadcast School Announcement',
             subtitle: 'Send urgent message to all teachers, parents and learners',
@@ -399,19 +358,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             actionType: 'nav_tab'
           },
           {
-            id: 'book-relief',
-            title: 'Book Relief Teachers (Colleague Absent)',
-            subtitle: 'Assign substitute teachers for absent colleagues across affected lesson slots',
-            icon: UserCheck,
-            iconBg: 'bg-amber-100',
-            iconColor: 'text-amber-700',
-            category: 'primary',
-            badge: 'Urgent Relief',
-            badgeColor: 'bg-amber-600 text-white',
-            tabTarget: 'timetable',
-            actionType: 'nav_tab'
-          },
-          {
             id: 'log-discipline',
             title: 'Log Student Disciplinary Incident',
             subtitle: 'Record behavioral infractions, parent summons and restorative counseling',
@@ -474,32 +420,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             badge: 'Roll Call',
             badgeColor: 'bg-emerald-600 text-white',
             tabTarget: 'analytics',
-            actionType: 'nav_tab'
-          },
-          {
-            id: 'book-relief',
-            title: 'Book Relief Teachers (Colleague Absent)',
-            subtitle: 'Assign available teachers with free periods to cover absent colleague classes',
-            icon: UserCheck,
-            iconBg: 'bg-amber-100',
-            iconColor: 'text-amber-700',
-            category: 'academic',
-            badge: 'Relief Desk',
-            badgeColor: 'bg-amber-600 text-white',
-            tabTarget: 'timetable',
-            actionType: 'nav_tab'
-          },
-          {
-            id: 'auto-generate-timetable',
-            title: 'Master Timetable & Autonomous Generator',
-            subtitle: 'Generate conflict-free weekly schedules and teacher stream allocations',
-            icon: Calendar,
-            iconBg: 'bg-teal-100',
-            iconColor: 'text-teal-700',
-            category: 'academic',
-            badge: 'Generator',
-            badgeColor: 'bg-teal-600 text-white',
-            tabTarget: 'timetable',
             actionType: 'nav_tab'
           },
           {
@@ -789,19 +709,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             actionType: 'nav_tab'
           },
           {
-            id: 'view-timetable',
-            title: 'View Class Timetable & Today Lessons',
-            subtitle: 'Inspect today routine, period timings, classrooms and subject teachers',
-            icon: Calendar,
-            iconBg: 'bg-purple-100',
-            iconColor: 'text-purple-700',
-            category: 'primary',
-            badge: 'Today Route',
-            badgeColor: 'bg-purple-600 text-white',
-            tabTarget: 'timetable',
-            actionType: 'nav_tab'
-          },
-          {
             id: 'explore-resources',
             title: 'Explore Curriculum Notes & Videos',
             subtitle: 'Access digital lesson notes, video tutorials, audio podcasts & diagrams',
@@ -873,17 +780,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             iconColor: 'text-blue-700',
             category: 'primary',
             tabTarget: 'assignments',
-            actionType: 'nav_tab'
-          },
-          {
-            id: 'view-timetable',
-            title: 'View Class Timetable',
-            subtitle: 'Inspect weekly routine schedules, bell timings and subject venues',
-            icon: Calendar,
-            iconBg: 'bg-purple-100',
-            iconColor: 'text-purple-700',
-            category: 'academic',
-            tabTarget: 'timetable',
             actionType: 'nav_tab'
           },
           {
@@ -1089,17 +985,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
             actionType: 'nav_tab'
           },
           {
-            id: 'view-timetable',
-            title: 'Master Timetable Infrastructure',
-            subtitle: 'Configure class streams, bell schedules and faculty allocations',
-            icon: Calendar,
-            iconBg: 'bg-emerald-100',
-            iconColor: 'text-emerald-700',
-            category: 'academic',
-            tabTarget: 'timetable',
-            actionType: 'nav_tab'
-          },
-          {
             id: 'submit-report',
             title: 'System Audit Logs & Security Reports',
             subtitle: 'Inspect verified digital access logs, role changes and security audits',
@@ -1283,11 +1168,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
   // Execute an action
   const handleExecuteAction = (action: QuickActionItem) => {
     setIsOpen(false);
-
-    if (action.actionType === 'absence_modal') {
-      setShowAbsenceModal(true);
-      return;
-    }
 
     if (action.actionType === 'storage_modal') {
       window.dispatchEvent(new CustomEvent('open-storage-settings'));
@@ -1544,7 +1424,7 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
               <div className="p-8 text-center text-slate-500 space-y-2">
                 <Search className="w-8 h-8 text-slate-300 mx-auto" />
                 <div className="text-xs font-bold text-slate-700">No matching quick action found</div>
-                <div className="text-[11px] text-slate-400">Try searching for "attendance", "gradebook", "report", or "timetable"</div>
+                <div className="text-[11px] text-slate-400">Try searching for "attendance", "gradebook", "report", or "assignments"</div>
               </div>
             ) : (
               <>
@@ -1812,17 +1692,6 @@ export const QuickActionsFloatingMenu: React.FC<QuickActionsFloatingMenuProps> =
           <span>{toastMessage}</span>
         </div>
       )}
-
-      {/* Teacher Absence Reporting Modal */}
-      <TeacherAbsenceReportModal
-        currentUser={currentUser}
-        isOpen={showAbsenceModal}
-        onClose={() => setShowAbsenceModal(false)}
-        onReportSubmitted={() => {
-          setToastMessage('Absence notification dispatched to leadership');
-          setTimeout(() => setToastMessage(null), 4000);
-        }}
-      />
     </>
   );
 };

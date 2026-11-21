@@ -877,33 +877,6 @@ function validateScheduleAndConflicts(
         warnings.push(`Teacher double-booking warning: ${msg}`);
       }
     }
-
-    // 3. Check existing Timetable Teacher Availability & Profiles
-    const profile = db
-      .prepare(
-        `SELECT teacher_name, availability_json, active_in_timetable
-         FROM tt_teacher_profiles
-         WHERE tenant_id = ? AND user_id = ? LIMIT 1`
-      )
-      .get(params.schoolId, cfg.teacherId) as
-      | { teacher_name: string; availability_json: string; active_in_timetable: number }
-      | undefined;
-
-    if (profile && profile.availability_json) {
-      const avail = safeParseJson<Record<string, any>>(profile.availability_json, {});
-      const weekday = startObj.toLocaleDateString('en-US', {
-        weekday: 'long',
-        timeZone: 'Africa/Nairobi',
-      });
-      if (avail[weekday] === false || (Array.isArray(avail.unavailableDays) && avail.unavailableDays.includes(weekday))) {
-        const msg = `${profile.teacher_name} is marked unavailable on ${weekday} in the school timetable.`;
-        if (policy.teacherConflictPolicy === 'block') {
-          blockingErrors.push(msg);
-        } else {
-          warnings.push(`Timetable availability notice: ${msg}`);
-        }
-      }
-    }
   }
 
   return { policy, warnings, blockingErrors };
@@ -1416,10 +1389,6 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       )
       .all(schoolId) as any[];
 
-    const ttSubjects = db
-      .prepare(`SELECT name, code, department FROM tt_subjects WHERE tenant_id = ? AND is_active = 1 ORDER BY name ASC`)
-      .all(schoolId) as Array<{ name: string; code: string; department: string }>;
-
     const defaultSubjects = [
       'Mathematics',
       'English',
@@ -1433,7 +1402,7 @@ export function registerVirtualClassroomRoutes(app: Express): void {
       'Computer Science',
     ];
     const subjectNames = Array.from(
-      new Set([...ttSubjects.map((s) => s.name), ...gradeAssignments.map((a) => a.subject_name), ...defaultSubjects].filter(Boolean))
+      new Set([...gradeAssignments.map((a) => a.subject_name), ...defaultSubjects].filter(Boolean))
     );
 
     const nairobiNow = getNairobiDateTimeParts();

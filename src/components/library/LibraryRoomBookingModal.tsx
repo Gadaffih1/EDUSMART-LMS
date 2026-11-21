@@ -5,7 +5,6 @@ import {
   LibraryRoom, 
   LibraryRoomBooking, 
   LibraryTimetableSlot,
-  TimetableSlot,
   GradeLevel,
   StreamName,
   SubjectName,
@@ -15,7 +14,6 @@ import {
 } from '../../types';
 import { Storage } from '../../utils/storage';
 import { listSubjects } from '../../utils/catalogStore';
-import { ttApiFetch } from '../timetable/timetableTypes';
 import { 
   Calendar, 
   Clock, 
@@ -134,13 +132,9 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   );
   const [activeTab, setActiveTab] = useState<'book' | 'matrix' | 'my_bookings' | 'manage_rooms'>('book');
 
-  // Bookings & timetable state
+  // Bookings & library schedule state
   const [allBookings, setAllBookings] = useState<LibraryRoomBooking[]>(() => Storage.getLibraryRoomBookings());
   const [timetableSlots, setTimetableSlots] = useState<LibraryTimetableSlot[]>(() => Storage.getLibraryTimetable());
-  const [masterTimetableSlots, setMasterTimetableSlots] = useState<TimetableSlot[]>(() => Storage.getAllTimetableSlots());
-  const [publishedMasterLibLessons, setPublishedMasterLibLessons] = useState<
-    Array<LibraryTimetableSlot & { source: 'master_timetable'; periodNumber?: number }>
-  >([]);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [confirmDeleteBookingId, setConfirmDeleteBookingId] = useState<string | null>(null);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
@@ -196,7 +190,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
   // Filter for my bookings
   const [bookingsFilter, setBookingsFilter] = useState<'all' | 'mine'>('all');
 
-  // Sync with storage events & published Master Timetable Library Lessons
+  // Sync with library storage events
   useEffect(() => {
     const handleRoomsUpdate = () => {
       const loaded = Storage.getLibraryRooms();
@@ -204,148 +198,46 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     };
     const handleBookingsUpdate = () => setAllBookings(Storage.getLibraryRoomBookings());
     const handleTimetableUpdate = () => setTimetableSlots(Storage.getLibraryTimetable());
-    const handleMasterTimetableUpdate = () => setMasterTimetableSlots(Storage.getAllTimetableSlots());
 
     window.addEventListener('library-rooms-updated', handleRoomsUpdate);
     window.addEventListener('library-room-bookings-updated', handleBookingsUpdate);
     window.addEventListener('library-timetable-updated', handleTimetableUpdate);
-    window.addEventListener('timetable-updated', handleMasterTimetableUpdate);
     window.addEventListener('edusmart:data-changed', handleRoomsUpdate);
     window.addEventListener('edusmart:data-changed', handleBookingsUpdate);
     window.addEventListener('edusmart:data-changed', handleTimetableUpdate);
-    window.addEventListener('edusmart:data-changed', handleMasterTimetableUpdate);
     return () => {
       window.removeEventListener('library-rooms-updated', handleRoomsUpdate);
       window.removeEventListener('library-room-bookings-updated', handleBookingsUpdate);
       window.removeEventListener('library-timetable-updated', handleTimetableUpdate);
-      window.removeEventListener('timetable-updated', handleMasterTimetableUpdate);
       window.removeEventListener('edusmart:data-changed', handleRoomsUpdate);
       window.removeEventListener('edusmart:data-changed', handleBookingsUpdate);
       window.removeEventListener('edusmart:data-changed', handleTimetableUpdate);
-      window.removeEventListener('edusmart:data-changed', handleMasterTimetableUpdate);
     };
   }, []);
 
-  // Fetch published Master Timetable Library Lesson entries whenever the modal opens
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const pub = await ttApiFetch<{
-          published?: boolean;
-          periods?: Array<{ periodNumber: number; kind: string; startTime: string; endTime: string }>;
-          entries?: Array<{
-            id: string;
-            dayOfWeek: string;
-            periodNumber: number;
-            grade: number;
-            stream: string;
-            subjectName: string;
-            teacherNames?: string[];
-            roomName?: string;
-          }>;
-        }>('/api/timetable/published');
-        if (cancelled || !pub?.published || !Array.isArray(pub.entries)) return;
-        const periodMap = new Map<number, { startTime: string; endTime: string }>();
-        for (const p of pub.periods || []) {
-          if (p.kind === 'lesson' && p.periodNumber > 0) {
-            periodMap.set(p.periodNumber, { startTime: p.startTime, endTime: p.endTime });
-          }
-        }
-        const mapped = pub.entries
-          .filter((e) => String(e.subjectName || '').toLowerCase().includes('library'))
-          .map((e) => {
-            const tm = periodMap.get(e.periodNumber) || BOOKING_PERIODS.find((bp) => bp.periodNum === e.periodNumber);
-            const day = DAYS_OF_WEEK.includes(e.dayOfWeek as any)
-              ? (e.dayOfWeek as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday')
-              : 'Monday';
-            return {
-              id: `mt-pub-${e.id}`,
-              dayOfWeek: day,
-              startTime: tm?.startTime || '08:00',
-              endTime: tm?.endTime || '08:40',
-              grade: Number(e.grade || 4) as GradeLevel,
-              stream: `Grade ${e.grade} ${e.stream}`.trim(),
-              teacherInCharge: (e.teacherNames || []).join(', ') || 'Subject Teacher',
-              sessionType: 'Library Reading Period' as const,
-              venue:
-                e.roomName && e.roomName.toLowerCase().includes('library')
-                  ? e.roomName
-                  : 'Main Library Reading Hall',
-              source: 'master_timetable' as const,
-              periodNumber: e.periodNumber,
-            };
-          });
-        setPublishedMasterLibLessons(mapped);
-      } catch {
-        // Gracefully rely on local Storage master timetable & library timetable
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen]);
-
-  // Unified list of scheduled Library Lessons (Master Timetable Library Lesson slots + Library Timetable)
+  // Scheduled Library reading sessions
   const linkedLibraryLessons = useMemo(() => {
     type LinkedLesson = LibraryTimetableSlot & {
-      source: 'master_timetable' | 'library_timetable';
+      source: 'library_timetable';
       periodNumber?: number;
     };
     const byKey = new Map<string, LinkedLesson>();
     const makeKey = (day: string, startTime: string, grade: number, stream: string) =>
       `${day.toLowerCase()}::${parseTimeToMinutes(startTime)}::${grade}::${stream.toLowerCase().replace(/^grade\s*\d+\s*/i, '').trim()}`;
 
-    // 1. Published Master Timetable Library Lesson entries (authoritative backend)
-    for (const item of publishedMasterLibLessons) {
-      byKey.set(makeKey(item.dayOfWeek, item.startTime, Number(item.grade), item.stream), item);
-    }
-
-    // 2. Local Master Timetable Library Lesson slots (Storage.getAllTimetableSlots)
-    for (const slot of Array.isArray(masterTimetableSlots) ? masterTimetableSlots : []) {
-      if (!slot || !String(slot.subject || '').toLowerCase().includes('library')) continue;
-      const day = DAYS_OF_WEEK.includes(slot.dayOfWeek as any)
-        ? (slot.dayOfWeek as 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday')
-        : 'Monday';
-      const streamLabel = String(slot.stream || '').toLowerCase().startsWith('grade')
-        ? String(slot.stream)
-        : `Grade ${slot.grade} ${slot.stream}`;
-      const k = makeKey(day, slot.startTime, Number(slot.grade), streamLabel);
-      if (!byKey.has(k)) {
-        byKey.set(k, {
-          id: `mt-local-${slot.id}`,
-          dayOfWeek: day,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          grade: slot.grade,
-          stream: streamLabel,
-          teacherInCharge: slot.teacherName || 'Subject Teacher',
-          sessionType: 'Library Reading Period',
-          venue:
-            slot.roomName && slot.roomName.toLowerCase().includes('library')
-              ? slot.roomName
-              : 'Main Library Reading Hall',
-          source: 'master_timetable',
-          periodNumber: slot.period,
-        });
-      }
-    }
-
-    // 3. Dedicated Library Timetable slots (including mt-lib-* synced entries)
     for (const slot of Array.isArray(timetableSlots) ? timetableSlots : []) {
       if (!slot) continue;
       const k = makeKey(slot.dayOfWeek, slot.startTime, Number(slot.grade), slot.stream || '');
       if (!byKey.has(k)) {
         byKey.set(k, {
           ...slot,
-          source: String(slot.id || '').startsWith('mt-lib-') ? 'master_timetable' : 'library_timetable',
+          source: 'library_timetable',
         });
       }
     }
 
     return Array.from(byKey.values());
-  }, [publishedMasterLibLessons, masterTimetableSlots, timetableSlots]);
+  }, [timetableSlots]);
 
   // All assignable school subjects (includes Library Lesson, Arts, Music, Nutrition & Master Timetable custom subjects)
   const assignableSubjects = useMemo(() => {
@@ -375,7 +267,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
 
   const selectedPeriod = BOOKING_PERIODS.find(p => p.periodNum === selectedPeriodNum) || BOOKING_PERIODS[2];
 
-  // Helper function to check if a specific slot has a conflict with a Library Lesson (Master Timetable or Library Schedule) or existing Booking
+  // Helper function to check if a specific slot has a conflict with a Library Lesson or existing Booking
   const checkSlotStatus = (
     roomId: string, 
     roomName: string, 
@@ -384,7 +276,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     period: BookingPeriod
   ): {
     status: 'lesson_conflict' | 'already_booked' | 'available';
-    lesson?: LibraryTimetableSlot & { source?: 'master_timetable' | 'library_timetable'; periodNumber?: number };
+    lesson?: LibraryTimetableSlot & { source?: 'library_timetable'; periodNumber?: number };
     booking?: LibraryRoomBooking;
     reason?: string;
   } => {
@@ -394,7 +286,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
       safeRoomName.includes('reading') ||
       roomId === rooms[0]?.id;
 
-    // 1. Check Library Lessons (linked from Master Timetable + Library Timetable)
+    // 1. Check scheduled Library Reading Sessions
     const conflictingLesson = linkedLibraryLessons.find(slot => {
       if (!slot || slot.dayOfWeek !== day) return false;
       const safeVenue = (slot.venue || '').toLowerCase().trim();
@@ -419,10 +311,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
     });
 
     if (conflictingLesson) {
-      const originLabel =
-        conflictingLesson.source === 'master_timetable'
-          ? 'Master Timetable Library Lesson'
-          : 'Scheduled Library Lesson';
+      const originLabel = 'Scheduled Library Lesson';
       const classLabel = conflictingLesson.stream?.toLowerCase().includes('grade')
         ? conflictingLesson.stream
         : `Grade ${conflictingLesson.grade} ${conflictingLesson.stream}`;
@@ -1046,7 +935,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                       {/* Period Selector */}
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          Timetable Period / Bell Slot
+                          Session Period / Time Slot
                         </label>
                         <select
                           value={selectedPeriodNum}
@@ -1057,9 +946,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                             const statusCheck = checkSlotStatus(selectedRoom.id, selectedRoom.name, selectedDayOfWeek, bookingDate, p);
                             let tag = ' [✅ FREE]';
                             if (statusCheck.status === 'lesson_conflict') {
-                              tag = statusCheck.lesson?.source === 'master_timetable'
-                                ? ' [🚫 Master TT Library Lesson]'
-                                : ' [🚫 Library Lesson]';
+                              tag = ' [🚫 Library Lesson]';
                             }
                             if (statusCheck.status === 'already_booked') tag = ' [⚠️ Already Booked]';
                             return (
@@ -1075,7 +962,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                       </div>
                     </div>
 
-                    {/* FREE SLOTS FINDER (LINKED TO MASTER TIMETABLE LIBRARY LESSONS) */}
+                    {/* FREE SLOTS FINDER */}
                     <div className="bg-white border border-purple-200 rounded-2xl p-3.5 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-900">
@@ -1095,7 +982,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                         </div>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        Automatically synced with Master Timetable <strong>Library Lesson</strong> schedules. Click any green <strong className="text-emerald-700">FREE</strong> period below to reserve for another teacher:
+                        Automatically synced with scheduled <strong>Library Reading Sessions</strong>. Click any green <strong className="text-emerald-700">FREE</strong> period below to reserve for another teacher:
                       </p>
                       <div className="flex flex-wrap gap-1.5">
                         {daySlotBreakdown.items.map(({ period, check }) => {
@@ -1365,10 +1252,10 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <div>
                   <h4 className="font-black text-sm text-slate-900">
-                    Weekly Library Timetable &amp; Free Slot Availability Grid
+                    Weekly Library Schedule &amp; Free Slot Availability Grid
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Linked directly to Master Timetable <strong>Library Lesson</strong> schedules so free slots for other teachers stand out clearly.
+                    Linked directly to scheduled <strong>Library Reading Sessions</strong> so free slots for other teachers stand out clearly.
                   </p>
                 </div>
 
@@ -1447,7 +1334,7 @@ export const LibraryRoomBookingModal: React.FC<LibraryRoomBookingModalProps> = (
                                 {isLesson ? (
                                   <div>
                                     <span className="px-1.5 py-0.5 rounded bg-rose-200 text-rose-800 font-bold text-[9px]">
-                                      {status.lesson?.source === 'master_timetable' ? 'MASTER TT LESSON' : 'LIBRARY LESSON'}
+                                      LIBRARY LESSON
                                     </span>
                                     <div className="font-bold text-[10px] mt-1 text-rose-900 truncate">
                                       {status.lesson?.stream}

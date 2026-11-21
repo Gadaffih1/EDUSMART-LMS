@@ -1,440 +1,523 @@
+import crypto from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
-/**
- * Additive, Multi-Tenant Normalized Schema for the
- * EduSmart Intelligent Automatic Timetable Management System.
- *
- * Strictly preserves all existing LMS tables (users, students, tenants,
- * school_grades, school_streams, etc.) without renaming, altering, or dropping.
- */
+export type TimetableCategoryId = 'cat_1_3' | 'cat_4_6' | 'cat_7_9';
+
+export type TimetableSubjectKind = 'core' | 'common_activity' | 'remedial';
+
+export type FacilityType =
+  | 'computer_lab'
+  | 'ict_robotics_lab'
+  | 'library'
+  | 'swimming_pool'
+  | 'maktaba_room'
+  | 'clubs_venue'
+  | 'general_room';
+
+export type TeacherAssignmentRole = 'subject_teacher' | 'supervisor' | 'remedial_teacher';
+
+export type StudentGroupMode = 'whole_stream' | 'selected_learners';
+
+export interface TimetableCategoryMeta {
+  id: TimetableCategoryId;
+  label: string;
+  shortLabel: string;
+  grades: number[];
+  defaultPeriodsPerDay: number;
+  defaultPeriodDurationMins: number;
+}
+
+export interface PeriodSlotDefinition {
+  periodNumber: number;
+  label: string;
+  startTime: string;
+  endTime: string;
+  durationMins: number;
+  slotType: 'regular' | 'remedial';
+}
+
+export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
+export type WeekdayName = (typeof WEEKDAYS)[number];
+
+export const TIMETABLE_CATEGORIES: TimetableCategoryMeta[] = [
+  {
+    id: 'cat_1_3',
+    label: 'Category 1: Grades 1–3',
+    shortLabel: 'Grades 1–3',
+    grades: [1, 2, 3],
+    defaultPeriodsPerDay: 7,
+    defaultPeriodDurationMins: 35,
+  },
+  {
+    id: 'cat_4_6',
+    label: 'Category 2: Grades 4–6',
+    shortLabel: 'Grades 4–6',
+    grades: [4, 5, 6],
+    defaultPeriodsPerDay: 8,
+    defaultPeriodDurationMins: 35,
+  },
+  {
+    id: 'cat_7_9',
+    label: 'Category 3: Grades 7–9',
+    shortLabel: 'Grades 7–9',
+    grades: [7, 8, 9],
+    defaultPeriodsPerDay: 8,
+    defaultPeriodDurationMins: 40,
+  },
+];
+
+export interface SubjectTemplate {
+  code: string;
+  name: string;
+  shortCode: string;
+  kind: TimetableSubjectKind;
+  isAdditionalCommon: boolean;
+  requiresFacilityType: FacilityType | null;
+}
+
+// Definitive Core Learning Areas per Category
+export const CATEGORY_CORE_SUBJECTS: Record<TimetableCategoryId, SubjectTemplate[]> = {
+  cat_1_3: [
+    { code: 'literacy', name: 'Literacy', shortCode: 'LIT', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'english_activities', name: 'English Activities', shortCode: 'ENG', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'kiswahili_ksl', name: 'Kiswahili/KSL', shortCode: 'KIS', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'indigenous_language_braille', name: 'Indigenous Language/Braille', shortCode: 'IND', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'mathematical_activities', name: 'Mathematical Activities', shortCode: 'MAT', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'environmental_activities', name: 'Environmental Activities', shortCode: 'ENV', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'hygiene_nutrition_activities', name: 'Hygiene & Nutrition Activities', shortCode: 'HYG', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'religious_education', name: 'Religious Education', shortCode: 'CRE', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'movement_creative_activities', name: 'Movement & Creative Activities', shortCode: 'MOV', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+  ],
+  cat_4_6: [
+    { code: 'mathematics', name: 'Mathematics', shortCode: 'MAT', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'english', name: 'English', shortCode: 'ENG', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'kiswahili', name: 'Kiswahili', shortCode: 'KIS', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'integrated_science', name: 'Integrated Science', shortCode: 'SCI', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'agriculture', name: 'Agriculture', shortCode: 'AGR', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'nutrition', name: 'Nutrition', shortCode: 'NUT', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'social_studies', name: 'Social Studies', shortCode: 'SST', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'religious_education', name: 'Religious Education', shortCode: 'CRE', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'creative_arts', name: 'Creative Arts', shortCode: 'CAR', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'phe_sports', name: 'PHE/Sports', shortCode: 'PHE', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'music', name: 'Music', shortCode: 'MUS', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+  ],
+  cat_7_9: [
+    { code: 'mathematics', name: 'Mathematics', shortCode: 'MAT', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'english', name: 'English', shortCode: 'ENG', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'kiswahili', name: 'Kiswahili', shortCode: 'KIS', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'integrated_science', name: 'Integrated Science', shortCode: 'SCI', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'agriculture', name: 'Agriculture', shortCode: 'AGR', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'nutrition', name: 'Nutrition', shortCode: 'NUT', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'social_studies', name: 'Social Studies', shortCode: 'SST', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'religious_education', name: 'Religious Education', shortCode: 'CRE', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'virtual_arts', name: 'Virtual Arts', shortCode: 'VAR', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'phe_sports', name: 'PHE/Sports', shortCode: 'PHE', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'performing_arts', name: 'Performing Arts', shortCode: 'PAR', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'pretechnical_studies', name: 'Pretechnical Studies', shortCode: 'PRE', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+    { code: 'computer_studies', name: 'Computer Studies', shortCode: 'CMP', kind: 'core', isAdditionalCommon: false, requiresFacilityType: 'computer_lab' },
+    { code: 'business_studies', name: 'Business Studies', shortCode: 'BUS', kind: 'core', isAdditionalCommon: false, requiresFacilityType: null },
+  ],
+};
+
+// Definitive 7 Additional Common Subjects & Activities (independently available in ALL 3 categories)
+export const ADDITIONAL_COMMON_ACTIVITIES: SubjectTemplate[] = [
+  { code: 'ict_robotics', name: 'ICT/Robotics', shortCode: 'ICT', kind: 'common_activity', isAdditionalCommon: true, requiresFacilityType: 'ict_robotics_lab' },
+  { code: 'library_lessons', name: 'Library Lessons', shortCode: 'LIB', kind: 'common_activity', isAdditionalCommon: true, requiresFacilityType: 'library' },
+  { code: 'maktaba', name: 'Maktaba', shortCode: 'MKT', kind: 'common_activity', isAdditionalCommon: true, requiresFacilityType: null },
+  { code: 'swimming', name: 'Swimming', shortCode: 'SWM', kind: 'common_activity', isAdditionalCommon: true, requiresFacilityType: 'swimming_pool' },
+  { code: 'clubs', name: 'Clubs', shortCode: 'CLB', kind: 'common_activity', isAdditionalCommon: true, requiresFacilityType: null },
+  { code: 'remedial_1', name: 'Remedial 1', shortCode: 'RM1', kind: 'remedial', isAdditionalCommon: true, requiresFacilityType: null },
+  { code: 'remedial_2', name: 'Remedial 2', shortCode: 'RM2', kind: 'remedial', isAdditionalCommon: true, requiresFacilityType: null },
+];
+
+export function getCategoryForGrade(grade: number): TimetableCategoryId {
+  if (grade <= 3) return 'cat_1_3';
+  if (grade <= 6) return 'cat_4_6';
+  return 'cat_7_9';
+}
+
+export function buildDefaultPeriodSlots(periodsPerDay: number, durationMins: number): PeriodSlotDefinition[] {
+  const slots: PeriodSlotDefinition[] = [];
+  let cursorMins = 8 * 60; // 08:00 start
+
+  const formatTime = (totalMins: number): string => {
+    const h = Math.floor(totalMins / 60) % 24;
+    const m = totalMins % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  for (let p = 1; p <= periodsPerDay; p++) {
+    // Short break after Period 2 (15m), Tea break after Period 4 (25m), Lunch break after Period 6 (45m)
+    if (p === 3) cursorMins += 15;
+    if (p === 5) cursorMins += 25;
+    if (p === 7) cursorMins += 45;
+
+    const start = formatTime(cursorMins);
+    cursorMins += durationMins;
+    const end = formatTime(cursorMins);
+
+    slots.push({
+      periodNumber: p,
+      label: `Period ${p}`,
+      startTime: start,
+      endTime: end,
+      durationMins,
+      slotType: 'regular',
+    });
+  }
+
+  // Dedicated post-class remedial slot (Remedial Slot)
+  cursorMins += 10;
+  const remStart = formatTime(cursorMins);
+  cursorMins += 40;
+  const remEnd = formatTime(cursorMins);
+  slots.push({
+    periodNumber: periodsPerDay + 1,
+    label: `Remedial Slot (P${periodsPerDay + 1})`,
+    startTime: remStart,
+    endTime: remEnd,
+    durationMins: 40,
+    slotType: 'remedial',
+  });
+
+  return slots;
+}
+
 export function initTimetableSchema(db: DatabaseSync): void {
+  // One-time cleanup if obsolete pre-removal timetable tables (using tenant_id instead of school_id)
+  // still exist in the persistent SQLite file.
+  const requiredTables = [
+    'tt_schedule_config',
+    'tt_facilities',
+    'tt_subjects',
+    'tt_teacher_assignments',
+    'tt_remedial_configs',
+    'tt_versions',
+    'tt_entries',
+  ];
+
+  let hasLegacyIncompatibleTable = false;
+  for (const tbl of requiredTables) {
+    const exists = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(tbl) as { name?: string } | undefined;
+    if (!exists?.name) continue;
+    const cols = db.prepare(`PRAGMA table_info(${tbl})`).all() as Array<{ name: string }>;
+    const hasSchoolId = cols.some((c) => c.name === 'school_id');
+    if (!hasSchoolId) {
+      hasLegacyIncompatibleTable = true;
+      break;
+    }
+  }
+
+  if (hasLegacyIncompatibleTable) {
+    const legacyTtTables = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'tt_%'`)
+      .all() as Array<{ name: string }>;
+    db.exec('PRAGMA foreign_keys = OFF;');
+    try {
+      for (const row of legacyTtTables) {
+        if (/^tt_[a-z0-9_]+$/i.test(row.name)) {
+          db.exec(`DROP TABLE IF EXISTS "${row.name}";`);
+        }
+      }
+    } finally {
+      db.exec('PRAGMA foreign_keys = ON;');
+    }
+  }
+
   db.exec(`
-    CREATE TABLE IF NOT EXISTS tt_configs (
+    CREATE TABLE IF NOT EXISTS tt_schedule_config (
+      school_id TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      days_json TEXT NOT NULL,
+      periods_per_day INTEGER NOT NULL DEFAULT 8,
+      period_duration_mins INTEGER NOT NULL DEFAULT 35,
+      periods_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (school_id, category_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS tt_facilities (
       id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      academic_year TEXT NOT NULL DEFAULT '2026',
-      term TEXT NOT NULL DEFAULT 'Term 1',
-      cycle_days INTEGER NOT NULL DEFAULT 5,
-      working_days_json TEXT NOT NULL DEFAULT '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
-      default_periods_per_day INTEGER NOT NULL DEFAULT 8,
-      cycle_label TEXT NOT NULL DEFAULT 'Weekly (Mon-Fri)',
-      active_version_id TEXT,
-      updated_by TEXT,
-      created_at TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      facility_type TEXT NOT NULL,
+      capacity_streams INTEGER NOT NULL DEFAULT 1,
+      seat_capacity INTEGER NOT NULL DEFAULT 40,
+      equipment_json TEXT NOT NULL DEFAULT '[]',
+      available_days_json TEXT NOT NULL,
+      available_periods_json TEXT NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_configs_tenant_term
-      ON tt_configs(tenant_id, academic_year, term);
-
-    CREATE TABLE IF NOT EXISTS tt_grade_schedules (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
-      grade INTEGER NOT NULL,
-      periods_per_day INTEGER NOT NULL DEFAULT 8,
-      working_days_json TEXT NOT NULL,
-      assembly_day TEXT DEFAULT 'Monday',
-      assembly_period INTEGER DEFAULT 0,
-      custom_notes TEXT,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_grade_sched_unique
-      ON tt_grade_schedules(config_id, grade);
-
-    CREATE TABLE IF NOT EXISTS tt_periods (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
-      grade_band TEXT NOT NULL DEFAULT 'all',
-      period_number INTEGER NOT NULL,
-      label TEXT NOT NULL,
-      kind TEXT NOT NULL DEFAULT 'lesson',
-      start_time TEXT NOT NULL,
-      end_time TEXT NOT NULL,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_periods_cfg
-      ON tt_periods(config_id, grade_band, sort_order);
+    CREATE INDEX IF NOT EXISTS idx_tt_facilities_school ON tt_facilities(school_id, is_active);
 
     CREATE TABLE IF NOT EXISTS tt_subjects (
       id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      name TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      category_id TEXT NOT NULL,
       code TEXT NOT NULL,
-      department TEXT NOT NULL DEFAULT 'General',
-      is_practical INTEGER NOT NULL DEFAULT 0,
-      requires_room_type TEXT DEFAULT 'general',
-      color_token TEXT DEFAULT 'slate',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_subjects_tenant_name
-      ON tt_subjects(tenant_id, lower(name));
-
-    CREATE TABLE IF NOT EXISTS tt_departments (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      code TEXT NOT NULL DEFAULT '',
-      hod_user_id TEXT DEFAULT '',
-      head_name TEXT DEFAULT '',
-      description TEXT DEFAULT '',
+      short_code TEXT NOT NULL,
+      subject_kind TEXT NOT NULL,
+      is_additional_common INTEGER NOT NULL DEFAULT 0,
+      lessons_per_week INTEGER NOT NULL DEFAULT 0,
+      requires_facility_type TEXT,
+      default_facility_id TEXT,
+      equipment_notes TEXT NOT NULL DEFAULT '',
+      allowed_days_json TEXT NOT NULL DEFAULT '[]',
+      allowed_periods_json TEXT NOT NULL DEFAULT '[]',
       is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      UNIQUE(school_id, category_id, code)
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_departments_tenant_name
-      ON tt_departments(tenant_id, lower(name));
+    CREATE INDEX IF NOT EXISTS idx_tt_subjects_school_cat ON tt_subjects(school_id, category_id, sort_order);
 
-    CREATE TABLE IF NOT EXISTS tt_classrooms (
+    CREATE TABLE IF NOT EXISTS tt_teacher_assignments (
       id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      room_code TEXT NOT NULL,
-      room_type TEXT NOT NULL DEFAULT 'general',
-      capacity INTEGER NOT NULL DEFAULT 45,
-      location TEXT DEFAULT 'Main Block',
-      assigned_grade INTEGER,
-      assigned_stream TEXT,
-      availability_json TEXT NOT NULL DEFAULT '{}',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_classrooms_tenant
-      ON tt_classrooms(tenant_id, room_type, is_active);
-
-    CREATE TABLE IF NOT EXISTS tt_student_groups (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      grade INTEGER NOT NULL,
-      stream TEXT NOT NULL,
-      group_name TEXT NOT NULL,
-      group_code TEXT NOT NULL,
-      student_count INTEGER NOT NULL DEFAULT 35,
-      is_whole_class INTEGER NOT NULL DEFAULT 1,
-      parent_class_key TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_groups_tenant_class
-      ON tt_student_groups(tenant_id, grade, stream);
-
-    CREATE TABLE IF NOT EXISTS tt_teacher_profiles (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
       teacher_name TEXT NOT NULL,
-      teacher_email TEXT NOT NULL,
-      tsc_number TEXT,
-      department TEXT DEFAULT 'Academic',
-      qualified_subjects_json TEXT NOT NULL DEFAULT '[]',
-      availability_json TEXT NOT NULL DEFAULT '{}',
-      max_daily_periods INTEGER NOT NULL DEFAULT 6,
+      teacher_email TEXT NOT NULL DEFAULT '',
+      category_id TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      grade INTEGER,
+      stream TEXT,
+      role_type TEXT NOT NULL DEFAULT 'subject_teacher',
       max_weekly_periods INTEGER NOT NULL DEFAULT 28,
-      max_consecutive_lessons INTEGER NOT NULL DEFAULT 3,
-      preferred_free_periods_json TEXT NOT NULL DEFAULT '[]',
-      active_in_timetable INTEGER NOT NULL DEFAULT 1,
-      archived_at TEXT,
+      facility_id TEXT,
+      equipment_notes TEXT NOT NULL DEFAULT '',
+      allowed_days_json TEXT NOT NULL DEFAULT '[]',
+      allowed_periods_json TEXT NOT NULL DEFAULT '[]',
+      is_active INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_teacher_tenant_user
-      ON tt_teacher_profiles(tenant_id, user_id);
-    CREATE INDEX IF NOT EXISTS idx_tt_teacher_email
-      ON tt_teacher_profiles(tenant_id, lower(teacher_email));
+    CREATE INDEX IF NOT EXISTS idx_tt_teacher_assign_school ON tt_teacher_assignments(school_id, category_id, subject_id);
+    CREATE INDEX IF NOT EXISTS idx_tt_teacher_assign_teacher ON tt_teacher_assignments(school_id, teacher_id);
 
-    CREATE TABLE IF NOT EXISTS tt_grade_subject_allocations (
+    CREATE TABLE IF NOT EXISTS tt_remedial_configs (
       id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
-      grade INTEGER NOT NULL,
-      subject_name TEXT NOT NULL,
-      required_weekly_periods INTEGER NOT NULL DEFAULT 4,
-      single_lessons INTEGER NOT NULL DEFAULT 4,
-      double_lessons INTEGER NOT NULL DEFAULT 0,
-      triple_lessons INTEGER NOT NULL DEFAULT 0,
-      pattern_preference TEXT NOT NULL DEFAULT 'spread',
-      max_per_day INTEGER NOT NULL DEFAULT 1,
-      min_spacing_days INTEGER NOT NULL DEFAULT 0,
-      preferred_days_json TEXT NOT NULL DEFAULT '[]',
-      preferred_periods_json TEXT NOT NULL DEFAULT '[]',
-      required_room_type TEXT DEFAULT 'general',
-      default_room_id TEXT,
-      teacher_ids_json TEXT NOT NULL DEFAULT '[]',
-      student_group_label TEXT DEFAULT 'Whole Class',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_grade_alloc_unique
-      ON tt_grade_subject_allocations(config_id, grade, lower(subject_name));
-
-    CREATE TABLE IF NOT EXISTS tt_stream_subject_allocations (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
+      school_id TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      remedial_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
       grade INTEGER NOT NULL,
       stream TEXT NOT NULL,
-      group_id TEXT,
-      subject_name TEXT NOT NULL,
-      inherited_from_id TEXT,
-      is_overridden INTEGER NOT NULL DEFAULT 0,
-      required_weekly_periods INTEGER NOT NULL DEFAULT 4,
-      single_lessons INTEGER NOT NULL DEFAULT 4,
-      double_lessons INTEGER NOT NULL DEFAULT 0,
-      triple_lessons INTEGER NOT NULL DEFAULT 0,
-      pattern_preference TEXT NOT NULL DEFAULT 'spread',
-      max_per_day INTEGER NOT NULL DEFAULT 1,
-      min_spacing_days INTEGER NOT NULL DEFAULT 0,
-      preferred_days_json TEXT NOT NULL DEFAULT '[]',
-      preferred_periods_json TEXT NOT NULL DEFAULT '[]',
-      required_room_type TEXT DEFAULT 'general',
-      room_id TEXT,
-      teacher_ids_json TEXT NOT NULL DEFAULT '[]',
+      weekly_frequency INTEGER NOT NULL DEFAULT 1,
+      teacher_id TEXT NOT NULL,
+      teacher_name TEXT NOT NULL,
+      student_group_mode TEXT NOT NULL DEFAULT 'selected_learners',
+      student_group_name TEXT NOT NULL DEFAULT '',
+      student_ids_json TEXT NOT NULL DEFAULT '[]',
+      duration_mins INTEGER NOT NULL DEFAULT 40,
+      available_days_json TEXT NOT NULL DEFAULT '[]',
+      available_periods_json TEXT NOT NULL DEFAULT '[]',
+      facility_id TEXT,
+      notes TEXT NOT NULL DEFAULT '',
       is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
+      updated_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_tt_stream_alloc_lookup
-      ON tt_stream_subject_allocations(config_id, grade, stream);
-
-    CREATE TABLE IF NOT EXISTS tt_joint_lessons (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      subject_name TEXT NOT NULL,
-      participating_classes_json TEXT NOT NULL DEFAULT '[]',
-      teacher_ids_json TEXT NOT NULL DEFAULT '[]',
-      weekly_periods INTEGER NOT NULL DEFAULT 1,
-      lesson_length INTEGER NOT NULL DEFAULT 1,
-      room_id TEXT,
-      required_room_type TEXT DEFAULT 'hall',
-      combined_students INTEGER NOT NULL DEFAULT 0,
-      preferred_days_json TEXT NOT NULL DEFAULT '[]',
-      preferred_periods_json TEXT NOT NULL DEFAULT '[]',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_joint_cfg
-      ON tt_joint_lessons(config_id, tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_tt_remedial_school ON tt_remedial_configs(school_id, category_id, grade, stream);
 
     CREATE TABLE IF NOT EXISTS tt_versions (
       id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
-      version_number INTEGER NOT NULL DEFAULT 1,
+      school_id TEXT NOT NULL,
       name TEXT NOT NULL,
+      term_label TEXT NOT NULL DEFAULT 'Term 1',
+      academic_year TEXT NOT NULL DEFAULT '2026',
       status TEXT NOT NULL DEFAULT 'draft',
-      metrics_json TEXT NOT NULL DEFAULT '{}',
-      review_comments TEXT,
-      created_by TEXT NOT NULL,
-      created_by_name TEXT,
-      approved_by TEXT,
-      approved_at TEXT,
-      published_by TEXT,
-      published_at TEXT,
-      withdrawn_at TEXT,
-      parent_version_id TEXT,
+      validation_summary_json TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
+      published_at TEXT
     );
-    CREATE INDEX IF NOT EXISTS idx_tt_versions_tenant_status
-      ON tt_versions(tenant_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_tt_versions_school ON tt_versions(school_id, status, created_at);
 
     CREATE TABLE IF NOT EXISTS tt_entries (
       id TEXT PRIMARY KEY,
+      school_id TEXT NOT NULL,
       version_id TEXT NOT NULL,
-      tenant_id TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      grade INTEGER NOT NULL,
+      stream TEXT NOT NULL,
       day_of_week TEXT NOT NULL,
       period_number INTEGER NOT NULL,
-      grade INTEGER NOT NULL,
-      stream TEXT NOT NULL,
-      stream_label TEXT NOT NULL,
-      group_id TEXT,
-      group_name TEXT DEFAULT 'Whole Class',
-      joint_lesson_id TEXT,
-      allocation_id TEXT,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      duration_mins INTEGER NOT NULL DEFAULT 35,
+      subject_id TEXT NOT NULL,
       subject_name TEXT NOT NULL,
-      teacher_ids_json TEXT NOT NULL DEFAULT '[]',
-      teacher_names_json TEXT NOT NULL DEFAULT '[]',
-      room_id TEXT,
-      room_name TEXT,
-      session_block_id TEXT NOT NULL,
-      block_length INTEGER NOT NULL DEFAULT 1,
-      block_index INTEGER NOT NULL DEFAULT 0,
+      subject_kind TEXT NOT NULL,
+      teacher_id TEXT NOT NULL,
+      teacher_name TEXT NOT NULL,
+      facility_id TEXT,
+      facility_name TEXT,
+      remedial_config_id TEXT,
+      student_group_mode TEXT NOT NULL DEFAULT 'whole_stream',
+      student_group_name TEXT NOT NULL DEFAULT '',
+      student_ids_json TEXT NOT NULL DEFAULT '[]',
       is_locked INTEGER NOT NULL DEFAULT 0,
-      locked_by TEXT,
-      notes TEXT,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_entries_version
-      ON tt_entries(version_id, day_of_week, period_number);
-    CREATE INDEX IF NOT EXISTS idx_tt_entries_class
-      ON tt_entries(version_id, grade, stream);
-
-    CREATE TABLE IF NOT EXISTS tt_unscheduled_sessions (
-      id TEXT PRIMARY KEY,
-      version_id TEXT NOT NULL,
-      tenant_id TEXT NOT NULL,
-      session_key TEXT NOT NULL,
-      allocation_id TEXT,
-      joint_lesson_id TEXT,
-      grade INTEGER NOT NULL,
-      stream TEXT NOT NULL,
-      group_id TEXT,
-      group_name TEXT DEFAULT 'Whole Class',
-      subject_name TEXT NOT NULL,
-      teacher_ids_json TEXT NOT NULL DEFAULT '[]',
-      teacher_names_json TEXT NOT NULL DEFAULT '[]',
-      block_length INTEGER NOT NULL DEFAULT 1,
-      required_room_type TEXT DEFAULT 'general',
-      reason TEXT NOT NULL,
-      diagnostics_json TEXT NOT NULL DEFAULT '{}',
-      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_unsched_version
-      ON tt_unscheduled_sessions(version_id);
-
-    CREATE TABLE IF NOT EXISTS tt_validation_conflicts (
-      id TEXT PRIMARY KEY,
-      version_id TEXT NOT NULL,
-      tenant_id TEXT NOT NULL,
-      severity TEXT NOT NULL,
-      conflict_type TEXT NOT NULL,
-      day_of_week TEXT,
-      period_number INTEGER,
-      message TEXT NOT NULL,
-      details_json TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_conflicts_version
-      ON tt_validation_conflicts(version_id, severity);
-
-    CREATE TABLE IF NOT EXISTS tt_generation_jobs (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      version_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'queued',
-      progress_pct INTEGER NOT NULL DEFAULT 0,
-      stage_message TEXT NOT NULL DEFAULT 'Queued for constraint solver',
-      preserve_locked INTEGER NOT NULL DEFAULT 1,
-      retries INTEGER NOT NULL DEFAULT 0,
-      cancel_requested INTEGER NOT NULL DEFAULT 0,
-      diagnostics_json TEXT NOT NULL DEFAULT '{}',
-      error_message TEXT,
-      created_by TEXT NOT NULL,
-      started_at TEXT,
-      completed_at TEXT,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_jobs_tenant_version
-      ON tt_generation_jobs(tenant_id, version_id, created_at);
-
-    CREATE TABLE IF NOT EXISTS tt_categories (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      code TEXT NOT NULL,
-      name TEXT NOT NULL,
-      label TEXT NOT NULL,
-      min_grade INTEGER NOT NULL,
-      max_grade INTEGER NOT NULL,
-      sort_order INTEGER NOT NULL DEFAULT 1,
-      is_active INTEGER NOT NULL DEFAULT 1,
+      notes TEXT NOT NULL DEFAULT '',
       updated_at TEXT NOT NULL
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_categories_tenant_code
-      ON tt_categories(tenant_id, code);
+    CREATE INDEX IF NOT EXISTS idx_tt_entries_version ON tt_entries(school_id, version_id);
+    CREATE INDEX IF NOT EXISTS idx_tt_entries_stream ON tt_entries(version_id, grade, stream, day_of_week, period_number);
+    CREATE INDEX IF NOT EXISTS idx_tt_entries_teacher ON tt_entries(version_id, teacher_id, day_of_week, period_number);
+    CREATE INDEX IF NOT EXISTS idx_tt_entries_facility ON tt_entries(version_id, facility_id, day_of_week, period_number);
+  `);
+}
 
-    CREATE TABLE IF NOT EXISTS tt_category_subject_allocations (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      config_id TEXT NOT NULL,
-      category_code TEXT NOT NULL,
-      subject_name TEXT NOT NULL,
-      required_weekly_periods INTEGER NOT NULL DEFAULT 3,
-      single_lessons INTEGER NOT NULL DEFAULT 3,
-      double_lessons INTEGER NOT NULL DEFAULT 0,
-      triple_lessons INTEGER NOT NULL DEFAULT 0,
-      pattern_preference TEXT NOT NULL DEFAULT 'spread',
-      max_per_day INTEGER NOT NULL DEFAULT 1,
-      min_spacing_days INTEGER NOT NULL DEFAULT 0,
-      required_room_type TEXT DEFAULT 'general',
-      default_room_id TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (config_id) REFERENCES tt_configs(id) ON DELETE CASCADE
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_cat_alloc_unique
-      ON tt_category_subject_allocations(config_id, category_code, lower(subject_name));
+/**
+ * Idempotently seeds schedule configs, definitive subject/activity catalog (with lessons_per_week = 0
+ * — zero frequency assumptions), and baseline shared facilities if the school has none yet.
+ * NEVER auto-assigns teachers (strict Requirement F).
+ */
+export function ensureTimetableSeedForSchool(db: DatabaseSync, schoolId: string): void {
+  const now = new Date().toISOString();
 
-    CREATE TABLE IF NOT EXISTS tt_teacher_bookings (
-      version_id TEXT NOT NULL,
-      tenant_id TEXT NOT NULL,
-      teacher_id TEXT NOT NULL,
-      day_of_week TEXT NOT NULL,
-      period_number INTEGER NOT NULL,
-      session_block_id TEXT NOT NULL,
-      subject_name TEXT NOT NULL DEFAULT '',
-      grade INTEGER NOT NULL DEFAULT 0,
-      stream TEXT NOT NULL DEFAULT '',
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (version_id, teacher_id, day_of_week, period_number),
-      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_teacher_bookings_block
-      ON tt_teacher_bookings(version_id, session_block_id);
-
-    CREATE TABLE IF NOT EXISTS tt_stream_bookings (
-      version_id TEXT NOT NULL,
-      tenant_id TEXT NOT NULL,
-      grade INTEGER NOT NULL,
-      stream TEXT NOT NULL,
-      group_key TEXT NOT NULL DEFAULT 'WHOLE',
-      day_of_week TEXT NOT NULL,
-      period_number INTEGER NOT NULL,
-      session_block_id TEXT NOT NULL,
-      subject_name TEXT NOT NULL DEFAULT '',
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (version_id, grade, stream, group_key, day_of_week, period_number),
-      FOREIGN KEY (version_id) REFERENCES tt_versions(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_stream_bookings_block
-      ON tt_stream_bookings(version_id, session_block_id);
-
-    CREATE TABLE IF NOT EXISTS tt_audit_logs (
-      id TEXT PRIMARY KEY,
-      tenant_id TEXT NOT NULL,
-      version_id TEXT,
-      action TEXT NOT NULL,
-      actor_id TEXT NOT NULL,
-      actor_name TEXT,
-      actor_role TEXT,
-      details_json TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_tt_audit_tenant
-      ON tt_audit_logs(tenant_id, created_at);
+  // 1. Seed schedule configs for all 3 categories
+  const insertConfig = db.prepare(`
+    INSERT OR IGNORE INTO tt_schedule_config (
+      school_id, category_id, days_json, periods_per_day, period_duration_mins, periods_json, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  // Safe additive migrations for existing databases (zero data loss)
-  const ensureColumn = (table: string, column: string, definition: string) => {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    if (!cols.some((c) => c.name === column)) {
-      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-    }
-  };
+  for (const cat of TIMETABLE_CATEGORIES) {
+    const periods = buildDefaultPeriodSlots(cat.defaultPeriodsPerDay, cat.defaultPeriodDurationMins);
+    insertConfig.run(
+      schoolId,
+      cat.id,
+      JSON.stringify([...WEEKDAYS]),
+      cat.defaultPeriodsPerDay,
+      cat.defaultPeriodDurationMins,
+      JSON.stringify(periods),
+      now
+    );
+  }
 
-  ensureColumn('tt_departments', 'hod_user_id', `TEXT DEFAULT ''`);
-  ensureColumn('tt_teacher_profiles', 'off_duty_slots_json', `TEXT NOT NULL DEFAULT '[]'`);
-  ensureColumn('tt_classrooms', 'max_concurrent_classes', `INTEGER NOT NULL DEFAULT 1`);
-  ensureColumn('tt_classrooms', 'responsible_staff', `TEXT DEFAULT ''`);
-  ensureColumn('tt_generation_jobs', 'scope_json', `TEXT NOT NULL DEFAULT '{}'`);
-  ensureColumn('tt_grade_subject_allocations', 'category_code', `TEXT DEFAULT ''`);
-  ensureColumn('tt_grade_subject_allocations', 'category_allocation_id', `TEXT`);
-  ensureColumn('tt_grade_subject_allocations', 'is_category_override', `INTEGER NOT NULL DEFAULT 0`);
+  // 2. Seed baseline shared facilities ONLY if school has 0 facilities
+  const facilityCountRow = db
+    .prepare('SELECT COUNT(*) as cnt FROM tt_facilities WHERE school_id = ?')
+    .get(schoolId) as { cnt: number };
+
+  const defaultFacilityIdsByType: Partial<Record<FacilityType, string>> = {};
+
+  if (!facilityCountRow || facilityCountRow.cnt === 0) {
+    const defaultFacilities: Array<{
+      name: string;
+      facilityType: FacilityType;
+      capacityStreams: number;
+      seatCapacity: number;
+      equipment: string[];
+      notes: string;
+    }> = [
+      {
+        name: 'Computer Laboratory 1',
+        facilityType: 'computer_lab',
+        capacityStreams: 1,
+        seatCapacity: 40,
+        equipment: ['40 Desktop Workstations', 'Projector', 'LAN Switch', 'Structured Cabling'],
+        notes: 'Dedicated laboratory for Computer Studies (Grades 7–9).',
+      },
+      {
+        name: 'ICT & Robotics Innovation Lab',
+        facilityType: 'ict_robotics_lab',
+        capacityStreams: 1,
+        seatCapacity: 36,
+        equipment: ['36 Laptops/Tablets', 'Robotics Kits', 'Microcontrollers', 'Interactive Smartboard'],
+        notes: 'Shared laboratory for ICT/Robotics across Categories 1–3.',
+      },
+      {
+        name: 'Main School Library',
+        facilityType: 'library',
+        capacityStreams: 2,
+        seatCapacity: 80,
+        equipment: ['Reading Tables', 'Catalogue Terminals', 'Storybook & Reference Shelves'],
+        notes: 'Shared library facility for Library Lessons across Categories 1–3.',
+      },
+      {
+        name: 'School Swimming Pool',
+        facilityType: 'swimming_pool',
+        capacityStreams: 1,
+        seatCapacity: 35,
+        equipment: ['25m 6-Lane Pool', 'Kickboards', 'Lifeguard Rescue Kit', 'Changing Rooms'],
+        notes: 'Shared aquatics facility for Swimming across Categories 1–3.',
+      },
+    ];
+
+    const insertFac = db.prepare(`
+      INSERT INTO tt_facilities (
+        id, school_id, name, facility_type, capacity_streams, seat_capacity,
+        equipment_json, available_days_json, available_periods_json, notes, is_active, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `);
+
+    const defaultPeriods = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    for (const f of defaultFacilities) {
+      const id = `fac_${crypto.randomBytes(6).toString('hex')}`;
+      defaultFacilityIdsByType[f.facilityType] = id;
+      insertFac.run(
+        id,
+        schoolId,
+        f.name,
+        f.facilityType,
+        f.capacityStreams,
+        f.seatCapacity,
+        JSON.stringify(f.equipment),
+        JSON.stringify([...WEEKDAYS]),
+        JSON.stringify(defaultPeriods),
+        f.notes,
+        now
+      );
+    }
+  } else {
+    const existingFacs = db
+      .prepare('SELECT id, facility_type FROM tt_facilities WHERE school_id = ? AND is_active = 1')
+      .all(schoolId) as Array<{ id: string; facility_type: FacilityType }>;
+    for (const f of existingFacs) {
+      if (!defaultFacilityIdsByType[f.facility_type]) {
+        defaultFacilityIdsByType[f.facility_type] = f.id;
+      }
+    }
+  }
+
+  // 3. Seed definitive subjects & 7 additional common activities independently per category
+  //    lessons_per_week ALWAYS starts at 0 (Requirement F: No automatic assumptions).
+  const insertSub = db.prepare(`
+    INSERT OR IGNORE INTO tt_subjects (
+      id, school_id, category_id, code, name, short_code, subject_kind,
+      is_additional_common, lessons_per_week, requires_facility_type, default_facility_id,
+      equipment_notes, allowed_days_json, allowed_periods_json, is_active, sort_order, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, '', '[]', '[]', 1, ?, ?)
+  `);
+
+  for (const cat of TIMETABLE_CATEGORIES) {
+    const combined: SubjectTemplate[] = [
+      ...CATEGORY_CORE_SUBJECTS[cat.id],
+      ...ADDITIONAL_COMMON_ACTIVITIES,
+    ];
+    combined.forEach((tmpl, idx) => {
+      const id = `sub_${cat.id}_${tmpl.code}_${schoolId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10)}`;
+      const defaultFacId = tmpl.requiresFacilityType
+        ? defaultFacilityIdsByType[tmpl.requiresFacilityType] ?? null
+        : null;
+      insertSub.run(
+        id,
+        schoolId,
+        cat.id,
+        tmpl.code,
+        tmpl.name,
+        tmpl.shortCode,
+        tmpl.kind,
+        tmpl.isAdditionalCommon ? 1 : 0,
+        tmpl.requiresFacilityType,
+        defaultFacId,
+        idx + 1,
+        now
+      );
+    });
+  }
 }

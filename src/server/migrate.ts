@@ -26,8 +26,6 @@ export const SQL_TABLE_TO_COLLECTION: Record<string, string> = {
   work_entry_logs: 'edusmart_work_entry_logs_v1',
   gate_exit_passes: 'edusmart_gate_passes_v1',
   attendance: 'edusmart_attendance_v1',
-  timetable: 'edusmart_timetable_v1',
-  bell_schedule: 'edusmart_bell_schedule_v1',
   fixed_lesson_conditions: 'edusmart_fixed_lessons_v1',
   shared_facilities: 'edusmart_shared_resources_v1',
   lunch_records: 'edusmart_learner_lunch_records_v1',

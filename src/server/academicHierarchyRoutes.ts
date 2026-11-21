@@ -1974,113 +1974,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
       assignedSubjects: uniqueSubjects,
       assignedStreams: uniqueStreams,
     });
-
-    try {
-      db.prepare(
-        `UPDATE tt_teacher_profiles
-         SET qualified_subjects_json = ?, updated_at = ?
-         WHERE tenant_id = ? AND user_id = ?`
-      ).run(JSON.stringify(uniqueSubjects), nowIso(), schoolId, teacherId);
-    } catch {
-      // ignore if tt_teacher_profiles has not been initialized yet
-    }
-  };
-
-  const syncStreamSubjectToTimetable = (
-    db: DatabaseSync,
-    schoolId: string,
-    gradeNumber: number | null,
-    streamName: string,
-    subjectName: string,
-    userId: string | null,
-    expectedOldUserId?: string | null,
-    periodsPerWeek?: number
-  ) => {
-    if (!gradeNumber || !streamName || !subjectName) return;
-    const cfg = db
-      .prepare(`SELECT id FROM tt_configs WHERE tenant_id = ? ORDER BY updated_at DESC LIMIT 1`)
-      .get(schoolId) as { id: string } | undefined;
-    if (!cfg) return;
-
-    let targetTtTeacherId: string | null = null;
-    if (userId) {
-      const ttT = db
-        .prepare(`SELECT id FROM tt_teacher_profiles WHERE tenant_id = ? AND user_id = ? LIMIT 1`)
-        .get(schoolId, userId) as { id: string } | undefined;
-      targetTtTeacherId = ttT?.id || null;
-    }
-
-    const now = nowIso();
-    const existingAlloc = db
-      .prepare(
-        `SELECT id, required_weekly_periods, single_lessons, double_lessons, triple_lessons
-         FROM tt_stream_subject_allocations
-         WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?)
-         LIMIT 1`
-      )
-      .get(cfg.id, schoolId, gradeNumber, streamName, subjectName) as
-      | { id: string; required_weekly_periods: number; single_lessons: number; double_lessons: number; triple_lessons: number }
-      | undefined;
-
-    if (userId && targetTtTeacherId) {
-      if (existingAlloc) {
-        const nextReq =
-          typeof periodsPerWeek === 'number' && Number.isFinite(periodsPerWeek) && periodsPerWeek >= 1
-            ? Math.floor(periodsPerWeek)
-            : Number(existingAlloc.required_weekly_periods || 4);
-        let triples = Number(existingAlloc.triple_lessons || 0);
-        let doubles = Number(existingAlloc.double_lessons || 0);
-        let singles = Number(existingAlloc.single_lessons || 0);
-        if (singles + doubles * 2 + triples * 3 !== nextReq) {
-          let rem = nextReq;
-          triples = Math.min(triples, Math.floor(rem / 3));
-          rem -= triples * 3;
-          doubles = Math.min(doubles, Math.floor(rem / 2));
-          rem -= doubles * 2;
-          singles = rem;
-        }
-        db.prepare(
-          `UPDATE tt_stream_subject_allocations
-           SET teacher_ids_json = ?, required_weekly_periods = ?, single_lessons = ?, double_lessons = ?, triple_lessons = ?,
-               is_overridden = 1, is_active = 1, updated_at = ?
-           WHERE id = ?`
-        ).run(JSON.stringify([targetTtTeacherId]), nextReq, singles, doubles, triples, now, existingAlloc.id);
-      } else {
-        // Only insert into tt_stream_subject_allocations if the grade & stream exist in timetable setup
-        const gradeOk = db
-          .prepare(`SELECT grade FROM tt_grade_schedules WHERE config_id = ? AND grade = ? LIMIT 1`)
-          .get(cfg.id, gradeNumber);
-        const grp = db
-          .prepare(
-            `SELECT id FROM tt_student_groups WHERE tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND is_whole_class = 1 LIMIT 1`
-          )
-          .get(schoolId, gradeNumber, streamName) as { id: string } | undefined;
-        if (gradeOk && grp) {
-          const nextReq =
-            typeof periodsPerWeek === 'number' && Number.isFinite(periodsPerWeek) && periodsPerWeek >= 1
-              ? Math.floor(periodsPerWeek)
-              : 4;
-          const newId = `ttsa-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-          db.prepare(
-            `INSERT INTO tt_stream_subject_allocations
-               (id, tenant_id, config_id, grade, stream, group_id, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?, 0, 0, 'spread', 2, 0, '[]', '[]', 'general', NULL, ?, 1, ?)`
-          ).run(newId, schoolId, cfg.id, gradeNumber, streamName, grp.id, subjectName, nextReq, nextReq, JSON.stringify([targetTtTeacherId]), now);
-        }
-      }
-    } else if (!userId && expectedOldUserId) {
-      const oldTt = db
-        .prepare(`SELECT id FROM tt_teacher_profiles WHERE tenant_id = ? AND user_id = ? LIMIT 1`)
-        .get(schoolId, expectedOldUserId) as { id: string } | undefined;
-      if (oldTt) {
-        db.prepare(
-          `UPDATE tt_stream_subject_allocations
-           SET teacher_ids_json = '[]', updated_at = ?
-           WHERE config_id = ? AND tenant_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?)
-             AND teacher_ids_json = ?`
-        ).run(now, cfg.id, schoolId, gradeNumber, streamName, subjectName, JSON.stringify([oldTt.id]));
-      }
-    }
   };
 
   // Subject Teacher Assignments per Grade + Specific Stream (Strict 1 Teacher per Subject per Stream)
@@ -2227,8 +2120,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
           ).run(assignmentId, schoolId, gradeId, streamId, teacher.id, teacher.name, subjectName, periodsPerWeek, now, now, now);
         }
 
-        const gradeNum = gradeRow.grade_number ?? parseGradeNumber(gradeRow.name);
-        syncStreamSubjectToTimetable(db, schoolId, gradeNum, streamRow.name, subjectName, teacher.id);
         syncTeacherPayloadFromAssignments(db, schoolId, teacher.id);
         if (displacedTeacherId) {
           syncTeacherPayloadFromAssignments(db, schoolId, displacedTeacherId);
@@ -2250,7 +2141,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         throw txErr;
       }
 
-      notifyMySqlTablesChanged(['grade_teacher_assignments', 'users', 'collections_store', 'tt_stream_subject_allocations', 'academic_audit_logs']);
+      notifyMySqlTablesChanged(['grade_teacher_assignments', 'users', 'collections_store', 'academic_audit_logs']);
       broadcastChange({
         type: 'record:updated',
         collection: 'academic_hierarchy',
@@ -2464,10 +2355,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
             db.prepare(
               `UPDATE grade_teacher_assignments SET is_active = 0, unassigned_at = ?, updated_at = ? WHERE id = ?`
             ).run(now, now, cur.id);
-            const gNum = cur.grade_number ?? parseGradeNumber(cur.grade_name);
-            if (cur.stream_name) {
-              syncStreamSubjectToTimetable(db, schoolId, gNum, cur.stream_name, cur.subject_name, null, teacher.id);
-            }
           }
         }
 
@@ -2515,16 +2402,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
               now
             );
           }
-          syncStreamSubjectToTimetable(
-            db,
-            schoolId,
-            target.gradeNumber,
-            target.streamName,
-            target.subjectName,
-            teacher.id,
-            null,
-            target.periodsPerWeek
-          );
         }
 
         syncTeacherPayloadFromAssignments(
@@ -2562,7 +2439,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         'school_streams',
         'users',
         'collections_store',
-        'tt_stream_subject_allocations',
         'academic_audit_logs',
       ]);
       broadcastChange({
@@ -2628,10 +2504,6 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
            WHERE id = ? AND school_id = ?`
         ).run(now, now, id, schoolId);
 
-        const gNum = existing.grade_number ?? parseGradeNumber(existing.grade_name);
-        if (existing.stream_name) {
-          syncStreamSubjectToTimetable(db, schoolId, gNum, existing.stream_name, existing.subject_name, null, existing.teacher_id);
-        }
         syncTeacherPayloadFromAssignments(db, schoolId, existing.teacher_id);
         db.exec('COMMIT');
       } catch (txErr) {
@@ -2639,7 +2511,7 @@ export function registerAcademicHierarchyRoutes(app: Express): void {
         throw txErr;
       }
 
-      notifyMySqlTablesChanged(['grade_teacher_assignments', 'users', 'collections_store', 'tt_stream_subject_allocations']);
+      notifyMySqlTablesChanged(['grade_teacher_assignments', 'users', 'collections_store']);
       broadcastChange({
         type: 'record:updated',
         collection: 'academic_hierarchy',

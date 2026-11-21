@@ -278,7 +278,7 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
           "Full CBC Assessment & Auto Report Cards",
           "M-Pesa Paybill Automated Reconciliation",
           "Digital Library Integration & E-Resources",
-          "Timetable Scheduling & Teacher Workload"
+          "Academic Hierarchy & Faculty Allocation"
         ],
         "popular": false,
         "buttonLabel": "Select Standard Plan"
@@ -413,7 +413,7 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       "id": "student",
       "name": "Student Workspace (Learner Portal)",
       "shortName": "Learner Portal",
-      "description": "Learners access their assignments, term grades, virtual labs, timetable, and study resources.",
+      "description": "Learners access their assignments, term grades, virtual labs, and study resources.",
       "category": "Learner",
       "icon": "GraduationCap",
       "enabled": true,
@@ -639,7 +639,7 @@ export const DEFAULT_PLATFORM_CUSTOMIZATION: PlatformCustomizationState = {
       "id": "admin",
       "name": "School Principal & Campus Administrator",
       "shortName": "School Administrator",
-      "description": "Full management of this specific school campus: staff management, fee structures, classes, timetables and student profiles.",
+      "description": "Full management of this specific school campus: staff management, fee structures, classes, departments and student profiles.",
       "category": "Administration",
       "icon": "School",
       "enabled": true,

@@ -1,519 +1,840 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  CheckCircle2,
-  Edit3,
+  AlertTriangle,
+  Building2,
+  Check,
   Minus,
   Plus,
-  Power,
   RotateCcw,
   Save,
-  Undo2,
+  SlidersHorizontal,
+  UserPlus,
 } from 'lucide-react';
-import { ROOM_TYPE_LABELS } from './timetableTypes';
+import {
+  FACILITY_TYPE_LABELS,
+  ttApiFetch,
+  type ScheduleConfig,
+  type TimetableCategoryId,
+  type TimetableCategoryMeta,
+  type TimetableFacility,
+  type TimetableRemedialConfig,
+  type TimetableSubject,
+  type TimetableTeacherAssignment,
+} from './timetableTypes';
 
-export interface LessonsPerWeekStepperProps {
-  value: number;
-  min?: number;
-  max?: number;
-  disabled?: boolean;
-  isDirty?: boolean;
-  subjectLabel: string;
-  onChange: (nextValue: number) => void;
+interface Props {
+  categories: TimetableCategoryMeta[];
+  weekdays: string[];
+  scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
+  subjects: TimetableSubject[];
+  facilities: TimetableFacility[];
+  teacherAssignments: TimetableTeacherAssignment[];
+  remedialConfigs: TimetableRemedialConfig[];
+  canManage: boolean;
+  onRefresh: () => Promise<void>;
+  onJumpToTeachers: (categoryId: TimetableCategoryId, subjectId: string) => void;
+  onJumpToRemedials: (categoryId: TimetableCategoryId, remedialType: 'remedial_1' | 'remedial_2') => void;
 }
 
-export const LessonsPerWeekStepper: React.FC<LessonsPerWeekStepperProps> = ({
-  value,
-  min = 0,
-  max = 20,
-  disabled = false,
-  isDirty = false,
-  subjectLabel,
-  onChange,
-}) => {
-  const [rawInput, setRawInput] = useState<string | null>(null);
+interface EditableSubjectRow {
+  id: string;
+  lessonsPerWeek: number;
+  defaultFacilityId: string;
+  equipmentNotes: string;
+  allowedDays: string[];
+  allowedPeriods: number[];
+  isActive: boolean;
+}
 
-  const commit = (rawVal: number) => {
-    const clamped = Math.max(min, Math.min(max, Math.floor(Number.isFinite(rawVal) ? rawVal : min)));
-    setRawInput(null);
-    onChange(clamped);
+export const SubjectAllocationTable: React.FC<Props> = ({
+  categories,
+  weekdays,
+  scheduleConfigs,
+  subjects,
+  facilities,
+  teacherAssignments,
+  remedialConfigs,
+  canManage,
+  onRefresh,
+  onJumpToTeachers,
+  onJumpToRemedials,
+}) => {
+  const [activeCategory, setActiveCategory] = useState<TimetableCategoryId>('cat_1_3');
+  const [drafts, setDrafts] = useState<Record<string, EditableSubjectRow>>({});
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  const currentConfig = scheduleConfigs[activeCategory];
+  const [periodsPerDay, setPeriodsPerDay] = useState<number>(currentConfig?.periodsPerDay ?? 8);
+  const [periodDurationMins, setPeriodDurationMins] = useState<number>(
+    currentConfig?.periodDurationMins ?? 35
+  );
+  const [selectedDays, setSelectedDays] = useState<string[]>(currentConfig?.days ?? weekdays);
+
+  useEffect(() => {
+    const cfg = scheduleConfigs[activeCategory];
+    if (cfg) {
+      setPeriodsPerDay(cfg.periodsPerDay);
+      setPeriodDurationMins(cfg.periodDurationMins);
+      setSelectedDays(cfg.days);
+    }
+  }, [activeCategory, scheduleConfigs]);
+
+  const categorySubjects = useMemo(
+    () =>
+      subjects
+        .filter((s) => s.categoryId === activeCategory)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    [subjects, activeCategory]
+  );
+
+  // Sync server subjects into local draft map for the active category
+  useEffect(() => {
+    const next: Record<string, EditableSubjectRow> = {};
+    for (const s of categorySubjects) {
+      next[s.id] = {
+        id: s.id,
+        lessonsPerWeek: s.lessonsPerWeek,
+        defaultFacilityId: s.defaultFacilityId || '',
+        equipmentNotes: s.equipmentNotes || '',
+        allowedDays: s.allowedDays || [],
+        allowedPeriods: s.allowedPeriods || [],
+        isActive: s.isActive,
+      };
+    }
+    setDrafts(next);
+    setExpandedRowId(null);
+  }, [categorySubjects]);
+
+  const hasDirtyChanges = useMemo(() => {
+    return categorySubjects.some((s) => {
+      const d = drafts[s.id];
+      if (!d) return false;
+      return (
+        d.lessonsPerWeek !== s.lessonsPerWeek ||
+        (d.defaultFacilityId || '') !== (s.defaultFacilityId || '') ||
+        d.equipmentNotes !== (s.equipmentNotes || '') ||
+        JSON.stringify(d.allowedDays) !== JSON.stringify(s.allowedDays || []) ||
+        JSON.stringify(d.allowedPeriods) !== JSON.stringify(s.allowedPeriods || [])
+      );
+    });
+  }, [categorySubjects, drafts]);
+
+  const hasDirtySchedule = useMemo(() => {
+    if (!currentConfig) return false;
+    return (
+      periodsPerDay !== currentConfig.periodsPerDay ||
+      periodDurationMins !== currentConfig.periodDurationMins ||
+      JSON.stringify(selectedDays) !== JSON.stringify(currentConfig.days)
+    );
+  }, [currentConfig, periodsPerDay, periodDurationMins, selectedDays]);
+
+  const availableRegularPeriods = selectedDays.length * periodsPerDay;
+
+  const totals = useMemo(() => {
+    let coreTotal = 0;
+    let commonTotal = 0;
+    let remedialTotal = 0;
+
+    for (const s of categorySubjects) {
+      const count = drafts[s.id]?.lessonsPerWeek ?? s.lessonsPerWeek;
+      if (s.subjectKind === 'core') coreTotal += count;
+      else if (s.subjectKind === 'common_activity') commonTotal += count;
+      else remedialTotal += count;
+    }
+
+    const regularAllocated = coreTotal + commonTotal;
+    const remainingRegular = availableRegularPeriods - regularAllocated;
+    return { coreTotal, commonTotal, remedialTotal, regularAllocated, remainingRegular };
+  }, [categorySubjects, drafts, availableRegularPeriods]);
+
+  const updateRow = (id: string, patch: Partial<EditableSubjectRow>) => {
+    setDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        ...patch,
+      },
+    }));
+    setFeedback(null);
   };
 
+  const adjustLessons = (id: string, delta: number) => {
+    const current = drafts[id]?.lessonsPerWeek ?? 0;
+    const next = Math.max(0, Math.min(30, current + delta));
+    updateRow(id, { lessonsPerWeek: next });
+  };
+
+  const toggleDayOnSubject = (id: string, day: string) => {
+    const current = drafts[id]?.allowedDays ?? [];
+    const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
+    updateRow(id, { allowedDays: next });
+  };
+
+  const togglePeriodOnSubject = (id: string, periodNum: number) => {
+    const current = drafts[id]?.allowedPeriods ?? [];
+    const next = current.includes(periodNum)
+      ? current.filter((p) => p !== periodNum)
+      : [...current, periodNum].sort((a, b) => a - b);
+    updateRow(id, { allowedPeriods: next });
+  };
+
+  const resetDrafts = () => {
+    const reset: Record<string, EditableSubjectRow> = {};
+    for (const s of categorySubjects) {
+      reset[s.id] = {
+        id: s.id,
+        lessonsPerWeek: s.lessonsPerWeek,
+        defaultFacilityId: s.defaultFacilityId || '',
+        equipmentNotes: s.equipmentNotes || '',
+        allowedDays: s.allowedDays || [],
+        allowedPeriods: s.allowedPeriods || [],
+        isActive: s.isActive,
+      };
+    }
+    setDrafts(reset);
+    setFeedback(null);
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!canManage) return;
+    setSavingSchedule(true);
+    setFeedback(null);
+    try {
+      await ttApiFetch(`/api/timetable/schedule-config/${activeCategory}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          days: selectedDays,
+          periodsPerDay,
+          periodDurationMins,
+        }),
+      });
+      await onRefresh();
+      setFeedback({ type: 'ok', text: 'Category schedule limits saved to database.' });
+    } catch (err: any) {
+      setFeedback({ type: 'err', text: err.message || 'Failed to save schedule settings.' });
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleSaveAllocations = async () => {
+    if (!canManage) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const payload = categorySubjects.map((s) => {
+        const d = drafts[s.id];
+        return {
+          id: s.id,
+          lessonsPerWeek: d ? d.lessonsPerWeek : s.lessonsPerWeek,
+          defaultFacilityId: d?.defaultFacilityId || null,
+          equipmentNotes: d?.equipmentNotes || '',
+          allowedDays: d?.allowedDays || [],
+          allowedPeriods: d?.allowedPeriods || [],
+          isActive: d ? d.isActive : s.isActive,
+        };
+      });
+
+      await ttApiFetch(`/api/timetable/allocations/${activeCategory}`, {
+        method: 'PUT',
+        body: JSON.stringify({ allocations: payload }),
+      });
+      await onRefresh();
+      setFeedback({
+        type: 'ok',
+        text: `Weekly lesson allocations saved for ${categories.find((c) => c.id === activeCategory)?.label}.`,
+      });
+    } catch (err: any) {
+      setFeedback({ type: 'err', text: err.message || 'Failed to save allocations.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const regularPeriodNumbers = Array.from({ length: periodsPerDay }, (_, idx) => idx + 1);
+
   return (
-    <div
-      className={`inline-flex items-center border rounded-lg bg-white overflow-hidden transition-colors ${
-        isDirty
-          ? 'border-amber-400 ring-1 ring-amber-200'
-          : 'border-slate-300 focus-within:border-slate-600'
-      }`}
-    >
-      <button
-        type="button"
-        disabled={disabled || value <= min}
-        onClick={() => commit(value - 1)}
-        aria-label={`Decrease weekly lessons for ${subjectLabel}`}
-        title={`Decrease lessons for ${subjectLabel}`}
-        className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-      >
-        <Minus className="w-3.5 h-3.5" />
-      </button>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={min}
-        max={max}
-        step={1}
-        disabled={disabled}
-        value={rawInput !== null ? rawInput : value}
-        onFocus={(e) => {
-          setRawInput(String(value));
-          e.currentTarget.select();
-        }}
-        onChange={(e) => {
-          const text = e.target.value;
-          setRawInput(text);
-          if (text.trim() !== '') {
-            const parsed = Number(text);
-            if (Number.isFinite(parsed)) {
-              const clamped = Math.max(min, Math.min(max, Math.floor(parsed)));
-              onChange(clamped);
-            }
-          }
-        }}
-        onBlur={() => {
-          if (rawInput !== null) {
-            if (rawInput.trim() === '') {
-              setRawInput(null);
-            } else {
-              commit(Number(rawInput));
-            }
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            commit(value + 1);
-          } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            commit(value - 1);
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            setRawInput(null);
-            e.currentTarget.blur();
-          }
-        }}
-        aria-label={`Lessons per week for ${subjectLabel}`}
-        className="w-12 py-1.5 text-center text-sm font-bold font-mono tabular-nums text-slate-900 border-x border-slate-200 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <button
-        type="button"
-        disabled={disabled || value >= max}
-        onClick={() => commit(value + 1)}
-        aria-label={`Increase weekly lessons for ${subjectLabel}`}
-        title={`Increase lessons for ${subjectLabel}`}
-        className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 active:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
-    </div>
-  );
-};
+    <div className="space-y-5">
+      {/* Category Selector Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {categories.map((cat) => {
+            const isSelected = cat.id === activeCategory;
+            const catSubs = subjects.filter((s) => s.categoryId === cat.id);
+            const catAllocated = catSubs
+              .filter((s) => s.subjectKind !== 'remedial')
+              .reduce((acc, s) => acc + s.lessonsPerWeek, 0);
+            const cfg = scheduleConfigs[cat.id];
+            const catAvailable = cfg ? cfg.days.length * cfg.periodsPerDay : 0;
 
-export interface SubjectAllocationTableRow {
-  draftKey: string;
-  subjectName: string;
-  requiredWeeklyPeriods: number;
-  singleLessons: number;
-  doubleLessons: number;
-  tripleLessons: number;
-  requiredRoomType: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  isActive: boolean;
-  isCategoryOverride: boolean;
-  categoryDefaultPeriods?: number;
-  dirty: boolean;
-  baselineWeeklyPeriods: number;
-}
-
-interface SubjectAllocationTableProps {
-  tabId: string;
-  categoryLabel: string;
-  activeScope: 'category' | number;
-  activeScopeTitle: string;
-  rows: SubjectAllocationTableRow[];
-  totalRowsInScope: number;
-  editingRowKey: string | null;
-  busyKey: string | null;
-  activeTotalLessons: number;
-  displayedTotalLessons: number;
-  currentAvailableSlots: number;
-  remainingSlots: number;
-  utilizationPct: number;
-  activeDepartmentFilter?: string;
-  dirtyCountInScope: number;
-  onAdjustLessons: (draftKey: string, nextWeekly: number) => void;
-  onUpdateRowField: (
-    draftKey: string,
-    patch: Partial<{
-      requiredRoomType: string;
-      doubleLessons: number;
-      singleLessons: number;
-      maxPerDay: number;
-    }>
-  ) => void;
-  onRevertRow: (draftKey: string) => void;
-  onSaveRow: (row: SubjectAllocationTableRow) => void;
-  onToggleEditRow: (draftKey: string) => void;
-  onToggleDisableRow: (row: SubjectAllocationTableRow) => void;
-  onResetRowDefault: (row: SubjectAllocationTableRow) => void;
-  onDiscardScope: () => void;
-  onSaveScope: () => void;
-}
-
-export const SubjectAllocationTable: React.FC<SubjectAllocationTableProps> = ({
-  tabId,
-  categoryLabel,
-  activeScope,
-  activeScopeTitle,
-  rows,
-  totalRowsInScope,
-  editingRowKey,
-  busyKey,
-  activeTotalLessons,
-  displayedTotalLessons,
-  currentAvailableSlots,
-  remainingSlots,
-  utilizationPct,
-  activeDepartmentFilter = '',
-  dirtyCountInScope,
-  onAdjustLessons,
-  onUpdateRowField,
-  onRevertRow,
-  onSaveRow,
-  onToggleEditRow,
-  onToggleDisableRow,
-  onResetRowDefault,
-  onDiscardScope,
-  onSaveScope,
-}) => {
-  return (
-    <div
-      role="tabpanel"
-      id={`allocation-tabpanel-${tabId}`}
-      aria-labelledby={`allocation-tab-${tabId}`}
-      className="overflow-x-auto"
-    >
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50/70 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <th className="py-3 px-5">Subject / Activity Name</th>
-            <th className="py-3 px-4 w-64">Lessons Per Week</th>
-            <th className="py-3 px-5 text-right w-72">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 text-sm">
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={3} className="py-10 px-5 text-center text-xs text-slate-500">
-                {totalRowsInScope === 0
-                  ? `No subjects or activities configured for ${categoryLabel} yet. Click “Add Subject / Activity” above to add curriculum lessons.`
-                  : 'No subjects match the current search or filter.'}
-              </td>
-            </tr>
-          ) : (
-            rows.map((row) => {
-              const isEditing = editingRowKey === row.draftKey;
-              const facilityLabel = ROOM_TYPE_LABELS[row.requiredRoomType] || 'Standard Classroom';
-              const delta = row.requiredWeeklyPeriods - row.baselineWeeklyPeriods;
-
-              return (
-                <tr
-                  key={row.draftKey}
-                  className={`transition-colors ${
-                    !row.isActive
-                      ? 'bg-slate-50/70 text-slate-400'
-                      : row.dirty
-                      ? 'bg-amber-50/40'
-                      : 'hover:bg-slate-50/60'
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  setFeedback(null);
+                }}
+                className={`px-3.5 py-2 rounded-md text-sm font-medium border transition-colors whitespace-nowrap shrink-0 ${
+                  isSelected
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>{cat.label}</span>
+                <span
+                  className={`ml-2 font-mono text-xs tabular-nums ${
+                    isSelected ? 'text-slate-300' : 'text-slate-500'
                   }`}
                 >
-                  {/* COLUMN 1: Subject / Activity Name */}
-                  <td className="py-3 px-5 align-middle">
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-semibold text-sm ${
-                            row.isActive ? 'text-slate-900' : 'line-through text-slate-400'
-                          }`}
+                  {catAllocated}/{catAvailable}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {hasDirtyChanges && (
+            <button
+              type="button"
+              onClick={resetDrafts}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 whitespace-nowrap shrink-0"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Discard Changes
+            </button>
+          )}
+          {canManage && (
+            <button
+              type="button"
+              onClick={handleSaveAllocations}
+              disabled={saving || !hasDirtyChanges}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                hasDirtyChanges
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving...' : 'Save Allocations'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {feedback && (
+        <div
+          className={`px-4 py-2.5 rounded-md border text-sm flex items-center justify-between ${
+            feedback.type === 'ok'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <span>{feedback.text}</span>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="text-xs font-medium underline ml-4"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Compact Schedule Capacity & Live Allocation Summary Strip */}
+      <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-6">
+            <div>
+              <div className="text-xs font-medium text-slate-500">Available Weekly Periods</div>
+              <div className="text-xl font-semibold text-slate-900 font-mono tabular-nums mt-0.5">
+                {availableRegularPeriods}
+                <span className="text-xs font-sans font-normal text-slate-500 ml-1.5">
+                  ({selectedDays.length}d × {periodsPerDay}p)
+                </span>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+            <div>
+              <div className="text-xs font-medium text-slate-500">Total Weekly Lessons</div>
+              <div className="text-xl font-semibold text-slate-900 font-mono tabular-nums mt-0.5">
+                {totals.regularAllocated}
+                <span className="text-xs font-sans font-normal text-slate-500 ml-1.5">
+                  Core {totals.coreTotal} · Common {totals.commonTotal}
+                  {totals.remedialTotal > 0 ? ` · Remedial ${totals.remedialTotal}` : ''}
+                </span>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+            <div>
+              <div className="text-xs font-medium text-slate-500">Remaining Available Periods</div>
+              <div
+                className={`text-xl font-semibold font-mono tabular-nums mt-0.5 ${
+                  totals.remainingRegular < 0
+                    ? 'text-red-600'
+                    : totals.remainingRegular === 0
+                      ? 'text-emerald-700'
+                      : 'text-amber-700'
+                }`}
+              >
+                {totals.remainingRegular}
+                <span className="text-xs font-sans font-normal ml-1.5">
+                  {totals.remainingRegular < 0
+                    ? 'Over capacity'
+                    : totals.remainingRegular === 0
+                      ? 'Balanced'
+                      : 'Unallocated'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Inline Periods/Day & Duration Config */}
+          {canManage && (
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <label className="flex items-center gap-1.5 text-slate-600">
+                <span>Periods/Day</span>
+                <input
+                  type="number"
+                  min={4}
+                  max={12}
+                  value={periodsPerDay}
+                  onChange={(e) =>
+                    setPeriodsPerDay(Math.max(4, Math.min(12, Number(e.target.value) || 4)))
+                  }
+                  className="w-16 px-2 py-1 border border-slate-300 rounded text-slate-900 font-mono tabular-nums text-center"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-slate-600">
+                <span>Minutes/Period</span>
+                <input
+                  type="number"
+                  min={20}
+                  max={90}
+                  value={periodDurationMins}
+                  onChange={(e) =>
+                    setPeriodDurationMins(Math.max(20, Math.min(90, Number(e.target.value) || 35)))
+                  }
+                  className="w-16 px-2 py-1 border border-slate-300 rounded text-slate-900 font-mono tabular-nums text-center"
+                />
+              </label>
+              {hasDirtySchedule && (
+                <button
+                  type="button"
+                  onClick={handleSaveSchedule}
+                  disabled={savingSchedule}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 text-white rounded text-xs font-medium hover:bg-slate-800 whitespace-nowrap shrink-0"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  {savingSchedule ? 'Updating...' : 'Apply Limits'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {totals.remainingRegular < 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs text-red-700">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>
+              Regular weekly allocations exceed available periods by{' '}
+              <strong className="font-mono">{Math.abs(totals.remainingRegular)}</strong>. Reduce
+              lesson counts or increase Periods/Day before generating.
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Unified Weekly Subject & Activity Allocation Table */}
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                <th className="py-3 px-4">Subject / Activity Name</th>
+                <th className="py-3 px-4">Category & Facility</th>
+                <th className="py-3 px-4 text-center">Lessons Per Week</th>
+                <th className="py-3 px-4">Authorized Teachers / Config</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 text-sm">
+              {categorySubjects.map((sub, idx) => {
+                const draft = drafts[sub.id] ?? {
+                  id: sub.id,
+                  lessonsPerWeek: sub.lessonsPerWeek,
+                  defaultFacilityId: sub.defaultFacilityId || '',
+                  equipmentNotes: sub.equipmentNotes || '',
+                  allowedDays: sub.allowedDays || [],
+                  allowedPeriods: sub.allowedPeriods || [],
+                  isActive: sub.isActive,
+                };
+
+                const assigned = teacherAssignments.filter(
+                  (ta) => ta.isActive && ta.categoryId === activeCategory && ta.subjectId === sub.id
+                );
+                const remConfigsForSub =
+                  sub.subjectKind === 'remedial'
+                    ? remedialConfigs.filter(
+                        (rc) => rc.isActive && rc.categoryId === activeCategory && rc.subjectId === sub.id
+                      )
+                    : [];
+
+                const linkedFacility = draft.defaultFacilityId
+                  ? facilities.find((f) => f.id === draft.defaultFacilityId)
+                  : null;
+
+                const isFirstAdditional =
+                  sub.isAdditionalCommon &&
+                  (idx === 0 || !categorySubjects[idx - 1].isAdditionalCommon);
+
+                const isExpanded = expandedRowId === sub.id;
+                const isModified =
+                  draft.lessonsPerWeek !== sub.lessonsPerWeek ||
+                  draft.defaultFacilityId !== (sub.defaultFacilityId || '') ||
+                  draft.equipmentNotes !== (sub.equipmentNotes || '') ||
+                  JSON.stringify(draft.allowedDays) !== JSON.stringify(sub.allowedDays || []) ||
+                  JSON.stringify(draft.allowedPeriods) !== JSON.stringify(sub.allowedPeriods || []);
+
+                const needsTeacherWarning =
+                  draft.lessonsPerWeek > 0 &&
+                  (sub.subjectKind === 'remedial'
+                    ? remConfigsForSub.length === 0
+                    : assigned.length === 0);
+
+                return (
+                  <React.Fragment key={sub.id}>
+                    {isFirstAdditional && (
+                      <tr className="bg-slate-50/80 border-t border-slate-200">
+                        <td
+                          colSpan={5}
+                          className="py-2 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider"
                         >
-                          {row.subjectName}
-                        </span>
-                        {row.dirty && (
-                          <span className="text-[11px] font-semibold text-amber-700">· Unsaved</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2">
-                        <span>{facilityLabel}</span>
-                        {row.doubleLessons > 0 && (
-                          <span className="font-mono tabular-nums">· {row.doubleLessons} double</span>
-                        )}
-                        {typeof activeScope === 'number' ? (
-                          row.isCategoryOverride ? (
-                            <span className="text-amber-700 font-medium">
-                              · Overridden for Grade {activeScope}
-                              {row.categoryDefaultPeriods !== undefined
-                                ? ` (Category default: ${row.categoryDefaultPeriods})`
-                                : ''}
-                            </span>
-                          ) : (
-                            <span className="text-slate-500">· Inherited from {categoryLabel}</span>
-                          )
-                        ) : (
-                          <span className="text-slate-500">· Default for {categoryLabel}</span>
-                        )}
-                        {!row.isActive && <span className="text-rose-600 font-medium">· Disabled</span>}
-                      </div>
-
-                      {isEditing && (
-                        <div className="mt-2.5 pt-2.5 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-lg">
-                          <div>
-                            <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-0.5">
-                              Facility Type
-                            </label>
-                            <select
-                              value={row.requiredRoomType}
-                              onChange={(e) =>
-                                onUpdateRowField(row.draftKey, { requiredRoomType: e.target.value })
-                              }
-                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-800"
-                            >
-                              {Object.entries(ROOM_TYPE_LABELS).map(([k, lbl]) => (
-                                <option key={k} value={k}>
-                                  {lbl}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-0.5">
-                              Double Lessons
-                            </label>
-                            <input
-                              type="number"
-                              min={0}
-                              max={Math.floor(row.requiredWeeklyPeriods / 2)}
-                              value={row.doubleLessons}
-                              onChange={(e) => {
-                                const dbl = Math.max(
-                                  0,
-                                  Math.min(
-                                    Math.floor(row.requiredWeeklyPeriods / 2),
-                                    Number(e.target.value || 0)
-                                  )
-                                );
-                                const sng = Math.max(
-                                  0,
-                                  row.requiredWeeklyPeriods - dbl * 2 - row.tripleLessons * 3
-                                );
-                                onUpdateRowField(row.draftKey, {
-                                  doubleLessons: dbl,
-                                  singleLessons: sng,
-                                  maxPerDay: dbl > 0 ? Math.max(2, row.maxPerDay) : row.maxPerDay,
-                                });
-                              }}
-                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono tabular-nums text-slate-800"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-semibold uppercase text-slate-500 mb-0.5">
-                              Max Per Day
-                            </label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={4}
-                              value={row.maxPerDay}
-                              onChange={(e) =>
-                                onUpdateRowField(row.draftKey, {
-                                  maxPerDay: Math.max(1, Math.min(4, Number(e.target.value || 1))),
-                                })
-                              }
-                              className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs font-mono tabular-nums text-slate-800"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-
-                  {/* COLUMN 2: Lessons Per Week */}
-                  <td className="py-3 px-4 align-middle">
-                    <div className="flex items-center gap-2.5">
-                      <LessonsPerWeekStepper
-                        value={row.requiredWeeklyPeriods}
-                        min={0}
-                        max={20}
-                        disabled={!row.isActive}
-                        isDirty={row.dirty}
-                        subjectLabel={row.subjectName}
-                        onChange={(nextVal) => onAdjustLessons(row.draftKey, nextVal)}
-                      />
-
-                      {row.dirty && (
-                        <div className="flex items-center gap-1.5">
-                          {delta !== 0 && (
-                            <span
-                              className={`text-[11px] font-mono tabular-nums font-semibold ${
-                                delta > 0 ? 'text-emerald-700' : 'text-amber-700'
-                              }`}
-                              title={`Saved value in database: ${row.baselineWeeklyPeriods}`}
-                            >
-                              {delta > 0 ? `+${delta}` : delta} (was {row.baselineWeeklyPeriods})
+                          Additional Common Subjects & Activities (Independent Allocation for{' '}
+                          {categories.find((c) => c.id === activeCategory)?.shortLabel})
+                        </td>
+                      </tr>
+                    )}
+                    <tr
+                      className={`hover:bg-slate-50/70 transition-colors ${
+                        isModified ? 'bg-indigo-50/30' : ''
+                      }`}
+                    >
+                      {/* Column 1: Subject / Activity Name */}
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-slate-900 flex items-center gap-2">
+                          <span>{sub.name}</span>
+                          {isModified && (
+                            <span className="text-[11px] font-medium text-indigo-700">
+                              · Unsaved
                             </span>
                           )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          <span className="font-mono">{sub.shortCode}</span>
+                          {' · '}
+                          {sub.subjectKind === 'core'
+                            ? 'Core Learning Area'
+                            : sub.subjectKind === 'remedial'
+                              ? 'Schedulable Remedial Type'
+                              : 'Common Subject / Activity'}
+                          {draft.allowedDays.length > 0 &&
+                            ` · Days: ${draft.allowedDays.map((d) => d.slice(0, 3)).join(', ')}`}
+                          {draft.allowedPeriods.length > 0 &&
+                            ` · Periods: P${draft.allowedPeriods.join(', P')}`}
+                        </div>
+                      </td>
+
+                      {/* Column 2: Shared Facility / Requirements */}
+                      <td className="py-3 px-4 text-xs text-slate-600">
+                        {linkedFacility ? (
+                          <div className="flex items-center gap-1.5 text-slate-800 font-medium">
+                            <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            <span>{linkedFacility.name}</span>
+                          </div>
+                        ) : sub.requiresFacilityType ? (
+                          <span className="text-amber-700 font-medium">
+                            Requires {FACILITY_TYPE_LABELS[sub.requiresFacilityType]}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Classroom / Flexible</span>
+                        )}
+                        {draft.equipmentNotes && (
+                          <div className="text-slate-500 mt-0.5 truncate max-w-[220px]">
+                            {draft.equipmentNotes}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Column 3: Lessons Per Week (- / numeric input / +) */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => onRevertRow(row.draftKey)}
-                            title={`Revert ${row.subjectName} back to saved database value`}
-                            aria-label={`Revert unsaved changes for ${row.subjectName}`}
-                            className="p-1 text-slate-400 hover:text-slate-800 rounded cursor-pointer"
+                            disabled={!canManage || draft.lessonsPerWeek <= 0}
+                            onClick={() => adjustLessons(sub.id, -1)}
+                            aria-label={`Decrease lessons per week for ${sub.name}`}
+                            className="w-8 h-8 inline-flex items-center justify-center rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            <Undo2 className="w-3.5 h-3.5" />
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <input
+                            type="number"
+                            min={0}
+                            max={30}
+                            disabled={!canManage}
+                            aria-label={`Lessons per week for ${sub.name}`}
+                            value={draft.lessonsPerWeek}
+                            onChange={(e) => {
+                              const parsed = Math.max(
+                                0,
+                                Math.min(30, Math.trunc(Number(e.target.value) || 0))
+                              );
+                              updateRow(sub.id, { lessonsPerWeek: parsed });
+                            }}
+                            className="w-16 h-8 text-center border border-slate-300 rounded font-mono text-sm font-semibold text-slate-900 tabular-nums focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50"
+                          />
+                          <button
+                            type="button"
+                            disabled={!canManage || draft.lessonsPerWeek >= 30}
+                            onClick={() => adjustLessons(sub.id, 1)}
+                            aria-label={`Increase lessons per week for ${sub.name}`}
+                            className="w-8 h-8 inline-flex items-center justify-center rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      )}
-                    </div>
-                  </td>
+                      </td>
 
-                  {/* COLUMN 3: Actions */}
-                  <td className="py-3 px-5 align-middle text-right">
-                    <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        disabled={busyKey !== null || !row.dirty}
-                        onClick={() => onSaveRow(row)}
-                        className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        <Save className="w-3 h-3" />
-                        <span>Save</span>
-                      </button>
+                      {/* Column 4: Authorized Teachers / Remedial Config */}
+                      <td className="py-3 px-4 text-xs">
+                        {sub.subjectKind === 'remedial' ? (
+                          remConfigsForSub.length > 0 ? (
+                            <div className="text-slate-700">
+                              <span className="font-mono font-semibold text-slate-900">
+                                {remConfigsForSub.length}
+                              </span>{' '}
+                              remedial group(s) configured
+                            </div>
+                          ) : (
+                            <span
+                              className={
+                                needsTeacherWarning
+                                  ? 'text-amber-700 font-medium'
+                                  : 'text-slate-400'
+                              }
+                            >
+                              {needsTeacherWarning
+                                ? 'Configure remedial groups & teacher'
+                                : 'No remedial groups yet'}
+                            </span>
+                          )
+                        ) : assigned.length > 0 ? (
+                          <div className="text-slate-700">
+                            <span className="font-mono font-semibold text-slate-900">
+                              {assigned.length}
+                            </span>{' '}
+                            assigned ·{' '}
+                            <span className="text-slate-500">
+                              {assigned
+                                .slice(0, 2)
+                                .map((a) => a.teacherName)
+                                .join(', ')}
+                              {assigned.length > 2 ? ` +${assigned.length - 2}` : ''}
+                            </span>
+                          </div>
+                        ) : (
+                          <span
+                            className={
+                              needsTeacherWarning
+                                ? 'text-amber-700 font-medium'
+                                : 'text-slate-400'
+                            }
+                          >
+                            {needsTeacherWarning
+                              ? 'Teacher assignment required'
+                              : 'Not assigned (manual setup)'}
+                          </span>
+                        )}
+                      </td>
 
-                      <button
-                        type="button"
-                        onClick={() => onToggleEditRow(row.draftKey)}
-                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
-                          isEditing
-                            ? 'bg-slate-100 border-slate-400 text-slate-900'
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Edit3 className="w-3 h-3" />
-                        <span>{isEditing ? 'Done' : 'Edit'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={busyKey !== null}
-                        onClick={() => onToggleDisableRow(row)}
-                        className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${
-                          row.isActive
-                            ? 'bg-white border-slate-200 text-slate-700 hover:border-rose-300 hover:text-rose-700'
-                            : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
-                        }`}
-                      >
-                        {row.isActive ? <Power className="w-3 h-3" /> : <RotateCcw className="w-3 h-3" />}
-                        <span>{row.isActive ? 'Disable' : 'Restore'}</span>
-                      </button>
-
-                      {typeof activeScope === 'number' &&
-                        row.isCategoryOverride &&
-                        row.categoryDefaultPeriods !== undefined && (
+                      {/* Column 5: Actions */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="inline-flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            disabled={busyKey !== null}
-                            onClick={() => onResetRowDefault(row)}
-                            title={`Restore ${row.subjectName} on Grade ${activeScope} to ${categoryLabel} default (${row.categoryDefaultPeriods} lessons)`}
-                            className="px-2.5 py-1.5 bg-white border border-amber-300 text-amber-800 hover:bg-amber-50 rounded-lg text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
+                            onClick={() =>
+                              setExpandedRowId(isExpanded ? null : sub.id)
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 whitespace-nowrap shrink-0"
                           >
-                            <Undo2 className="w-3 h-3" />
-                            <span>Reset Default</span>
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                            {isExpanded ? 'Hide Rules' : 'Facility & Slots'}
                           </button>
-                        )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
+                          {sub.subjectKind === 'remedial' ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onJumpToRemedials(
+                                  activeCategory,
+                                  sub.code === 'remedial_2' ? 'remedial_2' : 'remedial_1'
+                                )
+                              }
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 whitespace-nowrap shrink-0"
+                            >
+                              Configure Groups
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onJumpToTeachers(activeCategory, sub.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 whitespace-nowrap shrink-0"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              Assign Teacher
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
 
-        {/* Live Automatic Weekly Total & Remaining Available Periods Footer */}
-        <tfoot>
-          <tr className="border-t-2 border-slate-200 bg-slate-50 text-xs">
-            <td className="py-3.5 px-5 align-middle">
-              <div className="font-bold text-slate-900">
-                Weekly Allocation Summary — {activeScopeTitle}
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                {utilizationPct}% of {currentAvailableSlots} available weekly periods allocated
-                {activeDepartmentFilter && displayedTotalLessons !== activeTotalLessons
-                  ? ` (${displayedTotalLessons} in ${activeDepartmentFilter})`
-                  : ''}
-              </div>
-            </td>
-            <td className="py-3.5 px-4 align-middle">
-              <div className="flex flex-col">
-                <div className="text-sm font-bold font-mono tabular-nums text-slate-900">
-                  {activeTotalLessons} / {currentAvailableSlots} lessons
-                </div>
-                <div
-                  className={`text-xs font-mono tabular-nums font-semibold mt-0.5 ${
-                    remainingSlots < 0
-                      ? 'text-rose-700'
-                      : remainingSlots === 0
-                      ? 'text-emerald-700'
-                      : 'text-slate-600'
-                  }`}
-                >
-                  {remainingSlots > 0
-                    ? `${remainingSlots} remaining period${remainingSlots === 1 ? '' : 's'}`
-                    : remainingSlots === 0
-                    ? '0 remaining (exact fit)'
-                    : `${Math.abs(remainingSlots)} period${Math.abs(remainingSlots) === 1 ? '' : 's'} over limit`}
-                </div>
-              </div>
-            </td>
-            <td className="py-3.5 px-5 align-middle text-right">
-              {dirtyCountInScope > 0 ? (
-                <div className="inline-flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    disabled={busyKey !== null}
-                    onClick={onDiscardScope}
-                    className="px-2.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer"
+                    {/* Expandable Inline Facility, Equipment & Allowed Days/Periods Editor */}
+                    {isExpanded && (
+                      <tr className="bg-slate-50">
+                        <td colSpan={5} className="p-4 border-t border-slate-200">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                            <div>
+                              <label className="block font-semibold text-slate-700 mb-1">
+                                Shared Facility / Laboratory
+                              </label>
+                              <select
+                                disabled={!canManage}
+                                value={draft.defaultFacilityId}
+                                onChange={(e) =>
+                                  updateRow(sub.id, { defaultFacilityId: e.target.value })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900"
+                              >
+                                <option value="">None (Standard Classroom)</option>
+                                {facilities
+                                  .filter((f) => f.isActive)
+                                  .map((f) => (
+                                    <option key={f.id} value={f.id}>
+                                      {f.name} ({FACILITY_TYPE_LABELS[f.facilityType]} · Cap:{' '}
+                                      {f.capacityStreams} stream{f.capacityStreams > 1 ? 's' : ''})
+                                    </option>
+                                  ))}
+                              </select>
+                              <label className="block font-semibold text-slate-700 mt-2.5 mb-1">
+                                Equipment / Lab Requirements
+                              </label>
+                              <input
+                                type="text"
+                                disabled={!canManage}
+                                placeholder="e.g., Robotics kits, 40 PCs, Projector..."
+                                value={draft.equipmentNotes}
+                                onChange={(e) =>
+                                  updateRow(sub.id, { equipmentNotes: e.target.value })
+                                }
+                                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="font-semibold text-slate-700 mb-1">
+                                Allocated Days (leave empty for any day)
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {weekdays.map((day) => {
+                                  const active = draft.allowedDays.includes(day);
+                                  return (
+                                    <button
+                                      key={day}
+                                      type="button"
+                                      disabled={!canManage}
+                                      onClick={() => toggleDayOnSubject(sub.id, day)}
+                                      className={`px-2.5 py-1 rounded border text-xs font-medium ${
+                                        active
+                                          ? 'bg-slate-900 text-white border-slate-900'
+                                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      {day.slice(0, 3)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="font-semibold text-slate-700 mb-1">
+                                Allocated Periods (leave empty for any period)
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {regularPeriodNumbers.map((p) => {
+                                  const active = draft.allowedPeriods.includes(p);
+                                  return (
+                                    <button
+                                      key={p}
+                                      type="button"
+                                      disabled={!canManage}
+                                      onClick={() => togglePeriodOnSubject(sub.id, p)}
+                                      className={`w-8 h-7 rounded border font-mono text-xs font-medium ${
+                                        active
+                                          ? 'bg-slate-900 text-white border-slate-900'
+                                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                      }`}
+                                    >
+                                      P{p}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-slate-50 border-t-2 border-slate-200 font-semibold text-slate-900 text-sm">
+                <td className="py-3 px-4" colSpan={2}>
+                  Weekly Allocation Total ({categories.find((c) => c.id === activeCategory)?.label})
+                </td>
+                <td className="py-3 px-4 text-center font-mono tabular-nums">
+                  {totals.regularAllocated} / {availableRegularPeriods} regular
+                  {totals.remedialTotal > 0 && (
+                    <span className="text-xs font-normal text-slate-500 block">
+                      +{totals.remedialTotal} remedial
+                    </span>
+                  )}
+                </td>
+                <td className="py-3 px-4 font-mono tabular-nums text-xs" colSpan={2}>
+                  Remaining Available Periods:{' '}
+                  <span
+                    className={
+                      totals.remainingRegular < 0
+                        ? 'text-red-600'
+                        : totals.remainingRegular === 0
+                          ? 'text-emerald-700'
+                          : 'text-amber-700'
+                    }
                   >
-                    Revert ({dirtyCountInScope})
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busyKey !== null}
-                    onClick={onSaveScope}
-                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-45 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Tab Changes</span>
-                  </button>
-                </div>
-              ) : (
-                <span className="text-xs font-medium text-emerald-700 inline-flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>All changes saved to database</span>
-                </span>
-              )}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+                    {totals.remainingRegular}
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };

@@ -15,8 +15,8 @@ import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { StudentGateExit } from './StudentGateExit';
 import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
-import { TimetablePortal } from '../timetable/TimetablePortal';
 import { OwnStaffAppraisal } from '../admin/TeacherAppraisalPages';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import {
   ahApiFetch,
@@ -70,6 +70,7 @@ import {
   RefreshCw,
   Video,
   Library,
+  CalendarDays,
 } from 'lucide-react';
 
 export type ClassTeacherTab =
@@ -86,10 +87,10 @@ export type ClassTeacherTab =
   | 'notifications'
   | 'lunch_register'
   | 'gate_exit'
-  | 'timetable'
   | 'virtual_classrooms'
   | 'library_contents'
   | 'work_entry'
+  | 'timetable'
   | 'staff_appraisal';
 
 interface ClassTeacherWorkspaceProps {
@@ -230,7 +231,6 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
         'notifications',
         'lunch_register',
         'gate_exit',
-        'timetable',
         'virtual_classrooms',
         'library_contents',
         'work_entry',
@@ -594,8 +594,8 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
         { id: 'library_contents', label: 'School Library & Booking', icon: Library, badge: 'Library', badgeColor: 'bg-purple-700' },
         { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
         { id: 'gate_exit', label: 'Student Gate Exit', icon: DoorOpen },
-        { id: 'timetable', label: 'Class Timetable', icon: Calendar },
         { id: 'virtual_classrooms', label: 'Virtual Classrooms', icon: Video },
+        { id: 'timetable', label: 'Class & Teaching Timetable', icon: CalendarDays },
         { id: 'work_entry', label: 'Daily Work Entry', icon: Briefcase },
         { id: 'staff_appraisal', label: 'TPAD Appraisal', icon: TrendingUp },
       ],
@@ -1572,8 +1572,6 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
 
           {activeTab === 'gate_exit' && <StudentGateExit currentUser={currentUser} />}
 
-          {activeTab === 'timetable' && <TimetablePortal currentUser={currentUser} />}
-
           {activeTab === 'virtual_classrooms' && <SubjectTeacherVirtualLessonsPanel />}
 
           {activeTab === 'library_contents' && <TeacherLibraryPortal currentUser={currentUser} />}
@@ -1581,6 +1579,10 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
           {activeTab === 'work_entry' && <TeacherWorkEntryForm currentUser={currentUser} />}
 
           {activeTab === 'staff_appraisal' && <OwnStaffAppraisal currentUser={currentUser} />}
+
+          {activeTab === 'timetable' && (
+            <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
+          )}
         </main>
       </div>
     </div>

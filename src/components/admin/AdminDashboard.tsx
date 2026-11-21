@@ -24,7 +24,6 @@ import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
-import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { ReportingHub } from '../reports/ReportingHub';
 import { HeadTeacherReportsManager } from '../leadership/HeadTeacherReportsManager';
@@ -94,6 +93,7 @@ import { GradeClassPages } from './GradeClassPages';
 import { DepartmentPages } from './DepartmentPages';
 import { RoleDirectory } from './RoleDirectory';
 import { SchoolSettingsPanel } from './SchoolSettingsPanel';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import {
   CollapsibleFilterBar,
   MobileOverflowMenu,
@@ -151,7 +151,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['overview', 'school_settings', 'grade_management', 'stream_management', 'senior_assignments', 'class_assignments', 'grade_performance', 'consolidated_reports', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'timetable', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
+        if (['overview', 'school_settings', 'grade_management', 'stream_management', 'senior_assignments', 'class_assignments', 'grade_performance', 'consolidated_reports', 'timetable', 'grades', 'students', 'departments', 'teachers', 'analytics', 'users', 'create_user', 'bulk_import', 'extra_roles', 'cms_hub', 'doc_requests', 'staff_appraisal', 'permissions', 'passwords', 'virtual_rooms', 'work_entry_audit', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'oversight', 'reports', 'pwa_analytics', 'operations'].includes(tab)) {
           openTab(tab as AdminActionTab);
         } else if (tab === 'logs' || tab === 'audit') {
           setActiveTab('oversight');
@@ -741,6 +741,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           domain={findSchoolAccountBySchoolId(currentTenant.id)?.domain || currentTenant.domain}
           currentUser={currentUser}
         />
+      )}
+
+      {activeTab === 'timetable' && (
+        <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
       )}
 
       {/* ========================================================
@@ -1709,15 +1713,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       )}
 
       {/* ========================================================
-          TAB: MASTER TIMETABLE & BELL SCHEDULE
-          ======================================================== */}
-      {activeTab === 'timetable' && (
-        <TimetablePortal 
-          currentUser={currentUser} 
-        />
-      )}
-
-      {/* ========================================================
           TAB: SYSTEM SANATORIUM & CLINIC LOGS
           ======================================================== */}
       {activeTab === 'sanatorium' && (
@@ -1986,7 +1981,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   <th className="py-3 px-2 text-center" title="Edit Narrative & Comment Write-Ups">✏️ Edit Comments</th>
                   <th className="py-3 px-2 text-center" title="Republish Official Student Reports">📢 Republish</th>
                   <th className="py-3 px-2 text-center" title="Manage Users & Assign Roles">👑 Role Admin</th>
-                  <th className="py-3 px-2 text-center" title="Curriculum Timetable & Bell Schedule">📅 Timetable</th>
                   <th className="py-3 px-2 text-center" title="Gate Exit Security Passes">🚪 Gate Pass</th>
                   <th className="py-3 px-2 text-center" title="Library Management Portal">📚 Library</th>
                   <th className="py-3 px-2 text-center" title="School Transport Fleet">🚌 Transport</th>
@@ -2069,17 +2063,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                           checked={perms.canManageUsersAndRoles}
                           onChange={() => handleToggleGlobalRolePermission(role, 'canManageUsersAndRoles')}
                           className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-30"
-                        />
-                      </td>
-
-                      {/* Timetable */}
-                      <td className="py-2.5 px-2 text-center">
-                        <input
-                          type="checkbox"
-                          disabled={isNurse}
-                          checked={perms.canAccessTimetable}
-                          onChange={() => handleToggleGlobalRolePermission(role, 'canAccessTimetable')}
-                          className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer disabled:opacity-30"
                         />
                       </td>
 
@@ -2479,7 +2462,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                     { key: 'canManageUsersAndRoles', label: 'User & Role Administration', icon: '👑' },
                     { key: 'canAccessAdminSettings', label: 'System Admin Governance', icon: '⚙️' },
                     { key: 'canAccessFinancials', label: 'Financials & Event Ticketing', icon: '💳' },
-                    { key: 'canAccessTimetable', label: 'Curriculum Timetable & Bell', icon: '📅' },
                     { key: 'canAccessGatePasses', label: 'Gate Exit Security Passes', icon: '🚪' },
                     { key: 'canAccessLibrary', label: 'Library Management System', icon: '📚' },
                     { key: 'canAccessTransport', label: 'School Transport & Fleet', icon: '🚌' },

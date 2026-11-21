@@ -16,7 +16,6 @@ import {
   QuizQuestion,
   VirtualClassRoom,
   Announcement,
-  TimetableSlot,
   getStreamsForGrade, 
   getSubjectsForGrade,
   PRIMARY_STREAMS
@@ -27,7 +26,6 @@ import { ClassTeacherModule } from './ClassTeacherModule';
 import { StudentGateExit } from './StudentGateExit';
 import { TeacherWorkEntryForm } from './TeacherWorkEntryForm';
 import { ReportingHub } from '../reports/ReportingHub';
-import { TimetablePortal } from '../timetable/TimetablePortal';
 import { EduSmartGadsaLogo } from '../common/EduSmartGadsaLogo';
 import { ELinksDirectory } from '../resources/ELinksDirectory';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
@@ -37,7 +35,6 @@ import { LibraryRoomBookingButton } from '../library/LibraryRoomBookingButton';
 import { VirtualLabWorkspace } from '../virtuallab/VirtualLabWorkspace';
 import { ComputerLabModule } from './ComputerLabModule';
 import { OwnStaffAppraisal } from '../admin/TeacherAppraisalPages';
-import { TeacherAbsenceReportModal } from '../timetable/TeacherAbsenceReportModal';
 import { StudentStreamManager } from './StudentStreamManager';
 import { TeacherLessonFileManager } from './TeacherLessonFileManager';
 import { TeacherSubjectChatInbox } from './TeacherSubjectChatInbox';
@@ -90,6 +87,7 @@ import {
   Lock
 } from 'lucide-react';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import {
   canAccessStudentStreamAllocation,
   getAdministrativeRoleShortName,
@@ -125,10 +123,10 @@ type TeacherTab =
   | 'subject_chats'
   | 'quizzes'
   | 'virtual_class'
-  | 'timetable'
   | 'library_contents'
   | 'library_booking'
   | 'reminders'
+  | 'timetable'
   | 'reporting_hub';
 
 export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
@@ -144,7 +142,6 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     isClassTeacher ? 'class_register' : 'work_entry'
   );
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [showAbsenceModal, setShowAbsenceModal] = useState(false);
   const [allocationRevision, setAllocationRevision] = useState(0);
 
   React.useEffect(() => {
@@ -190,7 +187,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'timetable', 'library_contents', 'library_booking', 'reminders', 'reporting_hub', 'lunch_register'].includes(tab)) {
+        if (['cbc_results', 'work_entry', 'gate_exit', 'class_register', 'assignments', 'resources', 'quizzes', 'virtual_class', 'library_contents', 'library_booking', 'reminders', 'timetable', 'reporting_hub', 'lunch_register'].includes(tab)) {
           setActiveTab(tab as TeacherTab);
         } else if (tab === 'library') {
           setActiveTab('library_contents');
@@ -902,7 +899,8 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           ? [{ id: 'stream_management' as TeacherTab, label: '3. Student Stream Allocations', icon: Users, badge: 'CBC Streams', badgeColor: 'bg-blue-600' }]
           : []),
         ...(isClassTeacher ? [{ id: 'lunch_register' as TeacherTab, label: '4. Learner Lunch Register', icon: Utensils, badge: 'Class Teacher' }] : []),
-        { id: 'cbc_results', label: '5. CBC Assessment Results', icon: Award, badge: 'Marks / Entry', badgeColor: 'bg-emerald-600' }
+        { id: 'cbc_results', label: '5. CBC Assessment Results', icon: Award, badge: 'Marks / Entry', badgeColor: 'bg-emerald-600' },
+        { id: 'timetable', label: '5b. My Teaching Timetable', icon: Calendar }
       ]
     },
     {
@@ -924,11 +922,10 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       ]
     },
     {
-      title: 'TIMETABLE & GOVERNANCE',
+      title: 'GOVERNANCE & OPERATIONS',
       items: [
         { id: 'staff_appraisal', label: '11. My Appraisal (TSC TPAD)', icon: Award, badge: 'TPAD' },
-        { id: 'timetable', label: '12. Teaching Timetable', icon: Calendar },
-        { id: 'library_booking', label: '12b. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
+        { id: 'library_booking', label: '12. Library Room Booking', icon: DoorOpen, badge: 'Vacant Spots', badgeColor: 'bg-purple-600' },
         { id: 'gate_exit', label: '13. Student Gate Exit Passes', icon: LogOut },
         { id: 'reporting_hub', label: '14. Academic Reporting Hub', icon: FileSpreadsheet },
         { id: 'reminders', label: '15. Lesson Reminders', icon: Bell }
@@ -1010,16 +1007,6 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             <Award className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">CBC Assessment Results</span>
             <span className="sm:hidden">CBC Marks</span>
-          </button>
-
-          {/* Report Absence to Leadership */}
-          <button
-            onClick={() => setShowAbsenceModal(true)}
-            className="px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Report your absence directly to Head Teacher, Deputy Head, Dean of Studies, and Senior Teacher"
-          >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Report Absence</span>
           </button>
 
           <button
@@ -2835,73 +2822,6 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       {activeTab === 'virtual_class' && <SubjectTeacherVirtualLessonsPanel />}
 
       {/* ========================================================
-          AUX TAB: POST & MANAGE CLASS TIMETABLE
-          ======================================================== */}
-      {activeTab === 'timetable' && (
-        <div className="space-y-4">
-          {/* Library Room Booking Callout */}
-          <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
-                <DoorOpen className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="font-black text-purple-950 text-sm">Need a Special Learning Venue? Book a Library Space</span>
-                <p className="text-[11px] text-purple-800 mt-0.5">
-                  Reserve the Main Reading Hall, AV Suite, or CBC Seminar Rooms for your class. Available exclusively on spots without scheduled library lessons.
-                </p>
-              </div>
-            </div>
-            <LibraryRoomBookingButton 
-              currentUser={currentUser} 
-              variant="hero" 
-              label="Book Library Room Spot" 
-            />
-          </div>
-
-          {/* Staff Absence Reporting to Leadership Banner */}
-          <div className="bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 rounded-2xl p-4 sm:p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-white/20 text-white flex items-center justify-center font-bold shrink-0">
-                <ShieldAlert className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-white/25 text-white">
-                    Official Staff Absence Protocol
-                  </span>
-                  <span className="text-xs text-amber-100 font-bold">
-                    TSC & School Governance
-                  </span>
-                </div>
-                <h4 className="text-base font-black tracking-tight mt-0.5">
-                  Report Absence Status to School Leadership
-                </h4>
-                <p className="text-xs text-amber-100/90 max-w-xl">
-                  Notify Head Teacher, Deputy Head, Dean of Studies, and Senior Teacher immediately for medical, emergency, or official duties so relief coverage can be booked for your classes.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowAbsenceModal(true)}
-              className="px-4 py-2.5 bg-white hover:bg-amber-50 text-amber-900 rounded-xl text-xs font-black shadow-md flex items-center gap-2 transition-all shrink-0 cursor-pointer"
-            >
-              <ShieldAlert className="w-4 h-4 text-amber-600" />
-              <span>Report Absence to Leadership</span>
-            </button>
-          </div>
-
-          <TimetablePortal
-            currentUser={currentUser}
-            initialGrade={defaultGrade}
-            initialStream={defaultStream}
-            initialPerspective="teacher"
-          />
-        </div>
-      )}
-
-      {/* ========================================================
           AUX TAB: SCHOOL LIBRARY CONTENTS (BOOKS, DIGITAL & E-LINKS)
           ======================================================== */}
       {activeTab === 'library_contents' && (
@@ -3077,15 +2997,12 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
       {activeTab === 'reporting_hub' && (
         <ReportingHub currentUser={currentUser} />
       )}
+
+      {activeTab === 'timetable' && (
+        <TimetablePortal user={currentUser} />
+      )}
         </main>
       </div>
-
-      {/* Teacher Absence Reporting Modal */}
-      <TeacherAbsenceReportModal
-        currentUser={currentUser}
-        isOpen={showAbsenceModal}
-        onClose={() => setShowAbsenceModal(false)}
-      />
 
       {/* CBC Science Explorer & 3D Molecular Simulation Modal */}
       <ScienceViewerModal

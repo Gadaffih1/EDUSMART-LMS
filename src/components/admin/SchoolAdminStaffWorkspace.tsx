@@ -10,7 +10,6 @@ import {
   SchoolCalendarEvent,
   ParentCommunication,
   ExamTimetableEntry,
-  TimetableSlot,
   PRIMARY_STREAMS,
   JUNIOR_STREAMS
 } from '../../types';
@@ -111,7 +110,6 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
   const [calendarEvents, setCalendarEvents] = useState<SchoolCalendarEvent[]>(() => Storage.getCalendarEvents());
   const [communications, setCommunications] = useState<ParentCommunication[]>(() => Storage.getParentCommunications());
   const [examTimetables, setExamTimetables] = useState<ExamTimetableEntry[]>(() => Storage.getExamTimetables());
-  const [timetableSlots] = useState<TimetableSlot[]>(() => Storage.getAllTimetableSlots());
 
   // Search & Filter states
   const [workSearch, setWorkSearch] = useState('');
@@ -131,7 +129,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
   const [showNewCalendarModal, setShowNewCalendarModal] = useState(false);
   const [editingCalendarEvent, setEditingCalendarEvent] = useState<SchoolCalendarEvent | null>(null);
   const [showNewCommModal, setShowNewCommModal] = useState(false);
-  const [printModalType, setPrintModalType] = useState<'timetable' | 'exam' | 'report' | 'calendar' | 'gate' | 'work_ledger' | 'register' | null>(null);
+  const [printModalType, setPrintModalType] = useState<'exam' | 'report' | 'calendar' | 'gate' | 'work_ledger' | 'register' | null>(null);
   const [printableGrade, setPrintableGrade] = useState<GradeLevel>(4);
   const [printableStream, setPrintableStream] = useState<StreamName>('Dove');
 
@@ -337,11 +335,6 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
     });
   }, [reportCards, perfSearch, perfGradeFilter]);
 
-  // Timetable for selected printable grade & stream
-  const activeTimetableSlots = useMemo(() => {
-    return timetableSlots.filter(s => s.grade === printableGrade && s.stream === printableStream);
-  }, [timetableSlots, printableGrade, printableStream]);
-
   // Exam schedule for selected printable grade
   const activeExamSchedule = useMemo(() => {
     return examTimetables.filter(e => e.grade === printableGrade);
@@ -416,16 +409,6 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               >
                 <UserPlus className="w-3.5 h-3.5 text-emerald-300" />
                 <span>Bulk Onboarding</span>
-              </button>
-
-              <button 
-                onClick={() => {
-                  setPrintModalType('timetable');
-                }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print Timetables</span>
               </button>
 
               <button 
@@ -1287,7 +1270,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                   Official School Printables & Certification Dispatch
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Generate authorized, high-resolution printable timetables, exam rosters, and progress cards.
+                  Generate authorized, high-resolution printable exam schedules, rosters, and progress cards.
                 </p>
               </div>
 
@@ -1315,36 +1298,10 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
               </div>
             </div>
 
-            {/* Three Main Printable Sections */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              
-              {/* 1. Class Routine Timetable */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
-                <div>
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold mb-3">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <h4 className="font-extrabold text-base text-slate-900">Weekly Class Timetable</h4>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Official 8-period teaching schedule for Grade {printableGrade} {printableStream} with break allocations.
-                  </p>
-                  <div className="mt-4 p-3 bg-slate-50 rounded-lg text-xs space-y-1 text-slate-500">
-                    <div>Periods: <strong>8 Daily Sessions</strong></div>
-                    <div>Curriculum: <strong>Kenyan CBC Model</strong></div>
-                    <div>Allocated Slots: <strong>{activeTimetableSlots.length} Subject Periods</strong></div>
-                  </div>
-                </div>
+            {/* Main Printable Sections */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                <button
-                  onClick={() => setPrintModalType('timetable')}
-                  className="mt-5 w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors shadow-xs"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Class Timetable</span>
-                </button>
-              </div>
-
-              {/* 2. Exam Timetable */}
+              {/* 1. Exam Schedule */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
                 <div>
                   <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold mb-3">
@@ -1871,8 +1828,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
                 <TenantSchoolLogo variant="horizontal" size="sm" />
                 <div>
                   <h3 className="font-black text-slate-900 text-base">
-                    {printModalType === 'timetable' && `Official Class Routine Timetable (Grade ${printableGrade} ${printableStream})`}
-                    {printModalType === 'exam' && `CBC Assessment & Examination Timetable (Grade ${printableGrade})`}
+                    {printModalType === 'exam' && `CBC Assessment & Examination Schedule (Grade ${printableGrade})`}
                     {printModalType === 'report' && `CBC Summative & Formative Progress Dossiers (Grade ${printableGrade})`}
                     {printModalType === 'calendar' && `Official Academic Term Calendar 2026`}
                     {printModalType === 'work_ledger' && `Teachers Work Entry & Syllabus Delivery Ledger`}
@@ -1895,64 +1851,7 @@ export const SchoolAdminStaffWorkspace: React.FC<SchoolAdminStaffWorkspaceProps>
             {/* PREVIEW CONTAINER */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl mb-4" id="printable-area">
               
-              {/* TIMETABLE PRINTABLE PREVIEW */}
-              {printModalType === 'timetable' && (
-                <div className="space-y-4">
-                  <div className="text-center pb-3 border-b border-slate-300">
-                    <h2 className="text-base font-black text-slate-900 uppercase">
-                      Class Weekly Routine Schedule · Academic Year 2026
-                    </h2>
-                    <p className="text-xs text-slate-600 font-semibold mt-0.5">
-                      Class: Grade {printableGrade} {printableStream} · Kenyan Competency-Based Curriculum
-                    </p>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border border-slate-300">
-                      <thead className="bg-slate-200 text-slate-800 uppercase text-[10px] font-bold">
-                        <tr>
-                          <th className="p-2 border border-slate-300">Day</th>
-                          <th className="p-2 border border-slate-300">Period 1<br/>08:00 - 08:45</th>
-                          <th className="p-2 border border-slate-300">Period 2<br/>08:45 - 09:30</th>
-                          <th className="p-2 border border-slate-300 bg-amber-100/60">Break<br/>09:30 - 09:50</th>
-                          <th className="p-2 border border-slate-300">Period 3<br/>09:50 - 10:35</th>
-                          <th className="p-2 border border-slate-300">Period 4<br/>10:35 - 11:20</th>
-                          <th className="p-2 border border-slate-300 bg-amber-100/60">Lunch<br/>12:40 - 01:40</th>
-                          <th className="p-2 border border-slate-300">Period 5<br/>01:40 - 02:25</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
-                          <tr key={day} className="hover:bg-slate-100/50">
-                            <td className="p-2 font-bold border border-slate-300 bg-slate-100">{day}</td>
-                            <td className="p-2 border border-slate-300 font-semibold text-emerald-900">Mathematics</td>
-                            <td className="p-2 border border-slate-300 font-semibold text-blue-900">English</td>
-                            <td className="p-2 border border-slate-300 text-center font-bold text-slate-500 bg-amber-50">Tea Break</td>
-                            <td className="p-2 border border-slate-300 font-semibold text-purple-900">Integrated Science</td>
-                            <td className="p-2 border border-slate-300 font-semibold text-amber-900">Kiswahili</td>
-                            <td className="p-2 border border-slate-300 text-center font-bold text-slate-500 bg-amber-50">Lunch Recess</td>
-                            <td className="p-2 border border-slate-300 font-semibold text-rose-900">Creative Arts</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex justify-between items-end pt-4 border-t border-slate-200 text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800">Approved by:</div>
-                      <div className="text-slate-600 mt-1">Mrs. Sarah Cherono · Academic Registrar</div>
-                      <div className="text-[10px] text-slate-400 font-mono">Edu-Smart Security Hash: TIMETABLE-G{printableGrade}-2026</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="h-10 border-b border-slate-400 w-40 mb-1"></div>
-                      <div className="text-slate-500 text-[11px]">Official School Stamp</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* EXAM TIMETABLE PREVIEW */}
+              {/* EXAM SCHEDULE PREVIEW */}
               {printModalType === 'exam' && (
                 <div className="space-y-4">
                   <div className="text-center pb-3 border-b border-slate-300">

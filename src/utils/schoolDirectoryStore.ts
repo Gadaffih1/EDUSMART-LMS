@@ -13,7 +13,6 @@ export const STUDENT_RIGHTS: RoleAccessRights = {
   canAccessProcurement: false,
   canAccessStores: false,
   canAccessHRPayroll: false,
-  canAccessTimetable: true,
   canAccessGatePasses: false,
   canAccessLibrary: true,
   canAccessTransport: false,
@@ -30,7 +29,6 @@ export const STUDENT_RIGHTS: RoleAccessRights = {
 
 export const STUDENT_RIGHT_LABELS: { key: keyof RoleAccessRights; label: string }[] = [
   { key: 'canAccessAcademicReports', label: 'Academic reports' },
-  { key: 'canAccessTimetable', label: 'Timetable' },
   { key: 'canAccessLibrary', label: 'Library' },
   { key: 'canAccessVirtualRooms', label: 'Virtual rooms' },
   { key: 'canAccessCoCurricular', label: 'Co-curricular' },

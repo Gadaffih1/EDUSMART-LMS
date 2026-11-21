@@ -12,11 +12,11 @@ import { attachAuthSession, registerAuthRoutes } from './src/server/authRoutes.t
 import { registerWebAuthnRoutes } from './src/server/webauthnRoutes.ts';
 import { registerDataRoutes } from './src/server/dataRoutes.ts';
 import { registerOperationsRoutes } from './src/server/operationsRoutes.ts';
-import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
 import { registerAcademicHierarchyRoutes } from './src/server/academicHierarchyRoutes.ts';
 import { registerVirtualClassroomRoutes, startVirtualLessonScheduler } from './src/server/virtualClassroomRoutes.ts';
 import { registerUserManagementRoutes } from './src/server/userManagementRoutes.ts';
 import { registerExecutiveReportsRoutes } from './src/server/executiveReportsRoutes.ts';
+import { registerTimetableRoutes } from './src/server/timetableRoutes.ts';
 import { flushMySqlSync, getMySqlStatus, initMySqlBridge } from './src/server/mysqlAdapter.ts';
 
 dotenv.config();
@@ -105,16 +105,16 @@ async function startServer() {
   app.get('/livez', healthHandler);
   app.get('/readyz', healthHandler);
 
-  // Register Authentication, WebAuthn Biometrics, Central Data/Sync/File/Realtime & Timetable routes
+  // Register Authentication, WebAuthn Biometrics, Central Data/Sync/File/Realtime routes
   registerAuthRoutes(app);
   registerWebAuthnRoutes(app);
   registerDataRoutes(app);
   registerOperationsRoutes(app);
-  registerTimetableRoutes(app);
   registerAcademicHierarchyRoutes(app);
   registerVirtualClassroomRoutes(app);
   registerUserManagementRoutes(app);
   registerExecutiveReportsRoutes(app);
+  registerTimetableRoutes(app);
   startVirtualLessonScheduler();
 
   // AI-Powered Quiz Explanation Endpoint using Gemini API

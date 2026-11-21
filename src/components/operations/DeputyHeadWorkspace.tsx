@@ -53,14 +53,13 @@ import { WorkEntryAuditViewer } from '../common/WorkEntryAuditViewer';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
 import { TransportWorkspace } from '../transport/TransportWorkspace';
 import { CoCurricularWorkspace } from '../cocurricular/CoCurricularWorkspace';
-import { TimetablePortal } from '../timetable/TimetablePortal';
-import { TeacherLoadDashboard } from '../timetable/TeacherLoadDashboard';
-import { ExamScheduleManager } from '../timetable/ExamScheduleManager';
+import { ExamScheduleManager } from '../academic/ExamScheduleManager';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { ResultUploadManager } from '../academic/ResultUploadManager';
 import { WorkspaceSidebar, WorkspaceSidebarGroup } from '../layout/WorkspaceSidebar';
 import { SchoolStaffAppraisal } from '../admin/TeacherAppraisalPages';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { 
   Bus,
   Trophy,
@@ -100,19 +99,17 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
     | 'discipline' 
     | 'online_discipline' 
     | 'staff_duty' 
-    | 'teacher_load'
     | 'exam_schedules'
-    | 'timetable' 
     | 'work_ledger' 
     | 'sanatorium' 
     | 'lunch_register' 
     | 'transport' 
     | 'cocurricular' 
     | 'reporting_hub' 
+    | 'timetable'
     | 'events';
   const [activeTab, setActiveTab] = useState<DeputyTab>('analytics');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [timetablePerspective, setTimetablePerspective] = useState<'grid' | 'today' | 'teacher' | 'rooms' | 'exams' | 'relief'>('grid');
 
   // Report Cards & Moderation states
   const [reportCards, setReportCards] = useState<ReportCard[]>(() => Storage.getReportCards());
@@ -131,7 +128,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['analytics', 'results_upload', 'reports_moderation', 'operations', 'discipline', 'online_discipline', 'staff_duty', 'staff_appraisal', 'teacher_load', 'exam_schedules', 'timetable', 'work_ledger', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
+        if (['analytics', 'results_upload', 'reports_moderation', 'operations', 'discipline', 'online_discipline', 'staff_duty', 'staff_appraisal', 'exam_schedules', 'timetable', 'work_ledger', 'sanatorium', 'lunch_register', 'transport', 'cocurricular', 'reporting_hub', 'events'].includes(tab)) {
           setActiveTab(tab as DeputyTab);
         } else if (tab === 'exams' || tab === 'invigilation' || tab === 'exam_schedule') {
           setActiveTab('exam_schedules');
@@ -448,9 +445,8 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
         { id: 'reports_moderation', label: 'Reports & Write-Ups Moderation', icon: FileCheck2, badge: 'Republish', badgeColor: 'bg-blue-600' },
         { id: 'results_upload', label: 'CBC Assessment Results Hub', icon: Upload, badge: 'Upload / Assign', badgeColor: 'bg-emerald-600' },
         { id: 'work_ledger', label: 'Staff Work Entry Audit', icon: FileCheck2, badge: workLogs.length },
-        { id: 'teacher_load', label: 'Teacher Load Dashboard', icon: BarChart3 },
         { id: 'exam_schedules', label: 'Exam Schedules & Invigilation', icon: ClipboardCheck, badge: 'Schedule', badgeColor: 'bg-indigo-600' },
-        { id: 'timetable', label: 'Curriculum Master Timetable', icon: CalendarDays },
+        { id: 'timetable', label: 'Master Timetable', icon: CalendarDays },
         { id: 'reporting_hub', label: 'Institutional Reporting Hub', icon: BarChart3 }
       ]
     },
@@ -1662,67 +1658,10 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
       )}
 
       {/* ========================================================
-          TAB: TEACHER LOAD DASHBOARD (DEPUTY HEAD WORKLOAD BALANCE)
-          ======================================================== */}
-      {activeTab === 'teacher_load' && (
-        <TeacherLoadDashboard
-          currentUser={currentUser}
-          onOpenTimetableEditor={() => setActiveTab('timetable')}
-        />
-      )}
-
-      {/* ========================================================
           TAB: EXAM SCHEDULES & STREAM INVIGILATION
           ======================================================== */}
       {activeTab === 'exam_schedules' && (
         <ExamScheduleManager currentUser={currentUser} />
-      )}
-
-      {/* ========================================================
-          TAB: MASTER TIMETABLE & BELL SCHEDULE
-          ======================================================== */}
-      {activeTab === 'timetable' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wider mb-0.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Deputy Head Operations & Curriculum Continuity</span>
-              </div>
-              <h3 className="text-base font-black text-slate-900">
-                Master Institutional Timetable & Faculty Relief Desk
-              </h3>
-              <p className="text-xs text-slate-500">
-                Oversee school schedules, monitor curriculum contact hours, and book relief teachers for absent colleagues.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTimetablePerspective('relief')}
-                className={`px-4 py-2 text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
-                  timetablePerspective === 'relief'
-                    ? 'bg-amber-600 text-white shadow-md'
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
-                }`}
-                title="Book available teachers for relief when colleagues are absent"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Book Relief Teachers (Colleague Absent)</span>
-                {Storage.getTeacherAbsenceReports().length > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
-                    {Storage.getTeacherAbsenceReports().length} Absent
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          <TimetablePortal 
-            currentUser={currentUser} 
-            initialPerspective={timetablePerspective}
-          />
-        </div>
       )}
 
       {/* ========================================================
@@ -1787,6 +1726,10 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           ======================================================== */}
       {activeTab === 'events' && (
         <SchoolEventsManager currentUser={currentUser} />
+      )}
+
+      {activeTab === 'timetable' && (
+        <TimetablePortal user={currentUser} />
       )}
         </main>
       </div>

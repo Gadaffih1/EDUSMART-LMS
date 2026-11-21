@@ -1,4315 +1,1419 @@
 import crypto from 'node:crypto';
-import type { DatabaseSync } from 'node:sqlite';
-import { getDb, notifyMySqlTablesChanged } from './db.ts';
-import { upsertCollectionRecord } from './migrate.ts';
-import { broadcastChange } from './realtimeBus.ts';
+import type {
+  FacilityType,
+  PeriodSlotDefinition,
+  StudentGroupMode,
+  TeacherAssignmentRole,
+  TimetableCategoryId,
+  TimetableSubjectKind,
+} from './timetableSchema.ts';
+import { TIMETABLE_CATEGORIES, WEEKDAYS, getCategoryForGrade } from './timetableSchema.ts';
 
-export interface TTPeriod {
+export interface EngineScheduleConfig {
+  categoryId: TimetableCategoryId;
+  days: string[];
+  periodsPerDay: number;
+  periodDurationMins: number;
+  periods: PeriodSlotDefinition[];
+}
+
+export interface EngineSubject {
   id: string;
-  tenantId: string;
-  configId: string;
-  gradeBand: string;
-  periodNumber: number;
-  label: string;
-  kind: 'lesson' | 'break' | 'lunch' | 'assembly';
-  startTime: string;
-  endTime: string;
+  categoryId: TimetableCategoryId;
+  code: string;
+  name: string;
+  shortCode: string;
+  subjectKind: TimetableSubjectKind;
+  isAdditionalCommon: boolean;
+  lessonsPerWeek: number;
+  requiresFacilityType: FacilityType | null;
+  defaultFacilityId: string | null;
+  equipmentNotes: string;
+  allowedDays: string[];
+  allowedPeriods: number[];
+  isActive: boolean;
   sortOrder: number;
 }
 
-export interface TTClassroom {
+export interface EngineFacility {
   id: string;
-  tenantId: string;
   name: string;
-  roomCode: string;
-  roomType: string;
-  capacity: number;
-  location: string;
-  assignedGrade: number | null;
-  assignedStream: string | null;
-  availability: Record<string, Record<string, boolean>>;
+  facilityType: FacilityType;
+  capacityStreams: number;
+  seatCapacity: number;
+  equipment: string[];
+  availableDays: string[];
+  availablePeriods: number[];
+  notes: string;
   isActive: boolean;
 }
 
-export interface TTTeacherProfile {
+export interface EngineTeacherAssignment {
   id: string;
-  tenantId: string;
-  userId: string;
+  teacherId: string;
   teacherName: string;
   teacherEmail: string;
-  tscNumber?: string;
-  department: string;
-  qualifiedSubjects: string[];
-  availability: Record<string, Record<string, boolean>>;
-  maxDailyPeriods: number;
+  categoryId: TimetableCategoryId;
+  subjectId: string;
+  grade: number | null;
+  stream: string | null;
+  roleType: TeacherAssignmentRole;
   maxWeeklyPeriods: number;
-  maxConsecutiveLessons: number;
-  preferredFreePeriods: Array<{ day: string; period: number }>;
-  activeInTimetable: boolean;
-  archivedAt?: string | null;
+  facilityId: string | null;
+  equipmentNotes: string;
+  allowedDays: string[];
+  allowedPeriods: number[];
+  isActive: boolean;
 }
 
-export interface TTStudentGroup {
+export interface EngineRemedialConfig {
   id: string;
-  tenantId: string;
+  categoryId: TimetableCategoryId;
+  remedialType: 'remedial_1' | 'remedial_2';
+  subjectId: string;
   grade: number;
   stream: string;
-  groupName: string;
-  groupCode: string;
-  studentCount: number;
-  isWholeClass: boolean;
-  parentClassKey: string;
-}
-
-export interface TTSessionUnit {
-  sessionKey: string;
-  allocationId?: string;
-  jointLessonId?: string;
-  title: string;
-  subjectName: string;
-  grade: number;
-  stream: string;
-  classTargets: Array<{ grade: number; stream: string; classKey: string }>;
-  groupId?: string;
-  groupName: string;
-  isWholeClass: boolean;
-  teacherIds: string[];
-  teacherNames: string[];
-  blockLength: 1 | 2 | 3;
-  requiredRoomType: string;
-  preferredRoomId?: string | null;
-  preferredDays: string[];
-  preferredPeriods: number[];
-  maxPerDay: number;
-  minSpacingDays: number;
-  patternPreference: string;
-  studentCount: number;
-  scopeViolationReason?: string;
-}
-
-export const ALL_WORKING_DAYS = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-] as const;
-
-export type TTCategoryCode = 'lower_primary' | 'upper_primary' | 'junior_school';
-
-export const DEFAULT_TT_CATEGORIES: Array<{
-  code: TTCategoryCode;
-  name: string;
-  label: string;
-  minGrade: number;
-  maxGrade: number;
-  sortOrder: number;
-}> = [
-  { code: 'lower_primary', name: 'Lower Primary', label: 'Grades 1–3', minGrade: 1, maxGrade: 3, sortOrder: 1 },
-  { code: 'upper_primary', name: 'Upper Primary', label: 'Grades 4–6', minGrade: 4, maxGrade: 6, sortOrder: 2 },
-  { code: 'junior_school', name: 'Junior School', label: 'Grades 7–9', minGrade: 7, maxGrade: 9, sortOrder: 3 },
-];
-
-export function categoryCodeForGrade(grade: number): TTCategoryCode {
-  if (grade <= 3) return 'lower_primary';
-  if (grade <= 6) return 'upper_primary';
-  return 'junior_school';
-}
-
-export function gradesForCategoryCode(code: TTCategoryCode): number[] {
-  if (code === 'lower_primary') return [1, 2, 3];
-  if (code === 'upper_primary') return [4, 5, 6];
-  return [7, 8, 9];
-}
-
-export function defaultPresetsForCategory(code: TTCategoryCode) {
-  if (code === 'lower_primary') return LOWER_PRIMARY_SUBJECT_PRESETS;
-  if (code === 'upper_primary') return UPPER_PRIMARY_SUBJECT_PRESETS;
-  return JUNIOR_SUBJECT_PRESETS;
-}
-
-const LOWER_PRIMARY_SUBJECT_PRESETS: Array<{
-  subject: string;
-  weekly: number;
-  single: number;
-  double: number;
-  triple: number;
-  roomType: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  isPractical: number;
-}> = [
-  { subject: 'Mathematics', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'English', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Kiswahili', weekly: 4, single: 4, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Integrated Science', weekly: 4, single: 4, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Religious Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 0 },
-  { subject: 'Creative Arts', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'art_room', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Music', weekly: 2, single: 2, double: 0, triple: 0, roomType: 'art_room', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Physical and Health Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'field', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Library Lesson', weekly: 1, single: 1, double: 0, triple: 0, roomType: 'library', maxPerDay: 1, minSpacingDays: 2, isPractical: 0 },
-];
-
-const UPPER_PRIMARY_SUBJECT_PRESETS: Array<{
-  subject: string;
-  weekly: number;
-  single: number;
-  double: number;
-  triple: number;
-  roomType: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  isPractical: number;
-}> = [
-  { subject: 'Mathematics', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'English', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Kiswahili', weekly: 4, single: 4, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Integrated Science', weekly: 4, single: 2, double: 1, triple: 0, roomType: 'science_lab', maxPerDay: 2, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Social Studies', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 0 },
-  { subject: 'Religious Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 0 },
-  { subject: 'Agriculture and Nutrition', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Computer Studies', weekly: 2, single: 0, double: 1, triple: 0, roomType: 'computer_lab', maxPerDay: 2, minSpacingDays: 2, isPractical: 1 },
-  { subject: 'Creative Arts', weekly: 3, single: 1, double: 1, triple: 0, roomType: 'art_room', maxPerDay: 2, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Physical and Health Education', weekly: 2, single: 2, double: 0, triple: 0, roomType: 'field', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Library Lesson', weekly: 1, single: 1, double: 0, triple: 0, roomType: 'library', maxPerDay: 1, minSpacingDays: 2, isPractical: 0 },
-];
-
-const JUNIOR_SUBJECT_PRESETS: Array<{
-  subject: string;
-  weekly: number;
-  single: number;
-  double: number;
-  triple: number;
-  roomType: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  isPractical: number;
-}> = [
-  { subject: 'Mathematics', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'English', weekly: 5, single: 5, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Kiswahili', weekly: 4, single: 4, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 0, isPractical: 0 },
-  { subject: 'Integrated Science', weekly: 5, single: 1, double: 2, triple: 0, roomType: 'science_lab', maxPerDay: 2, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Pre-Technical Studies', weekly: 4, single: 2, double: 1, triple: 0, roomType: 'workshop', maxPerDay: 2, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Social Studies', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 0 },
-  { subject: 'Religious Education', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 0 },
-  { subject: 'Agriculture and Nutrition', weekly: 3, single: 3, double: 0, triple: 0, roomType: 'general', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Computer Studies', weekly: 2, single: 0, double: 1, triple: 0, roomType: 'computer_lab', maxPerDay: 2, minSpacingDays: 2, isPractical: 1 },
-  { subject: 'Creative Arts', weekly: 3, single: 1, double: 1, triple: 0, roomType: 'art_room', maxPerDay: 2, minSpacingDays: 1, isPractical: 1 },
-  { subject: 'Physical and Health Education', weekly: 2, single: 2, double: 0, triple: 0, roomType: 'field', maxPerDay: 1, minSpacingDays: 1, isPractical: 1 },
-];
-
-const DEFAULT_BELL_PERIODS = [
-  { periodNumber: 1, label: 'Lesson 1', kind: 'lesson', startTime: '08:20', endTime: '09:00', sortOrder: 1 },
-  { periodNumber: 2, label: 'Lesson 2', kind: 'lesson', startTime: '09:00', endTime: '09:40', sortOrder: 2 },
-  { periodNumber: 3, label: 'Lesson 3', kind: 'lesson', startTime: '09:40', endTime: '10:20', sortOrder: 3 },
-  { periodNumber: 0, label: 'Break', kind: 'break', startTime: '10:20', endTime: '11:00', sortOrder: 4 },
-  { periodNumber: 4, label: 'Lesson 5', kind: 'lesson', startTime: '11:00', endTime: '11:40', sortOrder: 5 },
-  { periodNumber: 5, label: 'Lesson 6', kind: 'lesson', startTime: '11:40', endTime: '12:20', sortOrder: 6 },
-  { periodNumber: 6, label: 'Lesson 7', kind: 'lesson', startTime: '12:20', endTime: '13:00', sortOrder: 7 },
-  { periodNumber: 0, label: 'Lunch', kind: 'lunch', startTime: '13:00', endTime: '13:40', sortOrder: 8 },
-  { periodNumber: 7, label: 'Lesson 9', kind: 'lesson', startTime: '13:40', endTime: '14:20', sortOrder: 9 },
-  { periodNumber: 8, label: 'Lesson 10', kind: 'lesson', startTime: '14:20', endTime: '15:00', sortOrder: 10 },
-  { periodNumber: 9, label: 'Lesson 11', kind: 'lesson', startTime: '15:00', endTime: '15:40', sortOrder: 11 },
-];
-
-export function safeJsonParse<T>(raw: any, fallback: T): T {
-  if (raw === null || raw === undefined) return fallback;
-  if (typeof raw !== 'string') return raw as T;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-export function classKeyOf(grade: number, stream: string): string {
-  return `G${grade}-${stream.trim()}`;
-}
-
-export function uid(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID().slice(0, 10)}`;
-}
-
-export interface TeacherStrictScope {
-  teacherProfileId: string;
-  userId: string;
+  weeklyFrequency: number;
+  teacherId: string;
   teacherName: string;
-  activeInTimetable: boolean;
-  qualifiedSubjectsLower: Set<string>;
-  assignedSubjectsLower: Set<string>;
-  hasStrictSubjectScope: boolean;
-  assignedTuples: Set<string>; // `${grade}::${streamLower}::${subjectLower}`
-  assignedGradeWide: Set<string>; // `${grade}::${subjectLower}` when stream_id IS NULL
-  hasStrictTupleScope: boolean;
+  studentGroupMode: StudentGroupMode;
+  studentGroupName: string;
+  studentIds: string[];
+  durationMins: number;
+  availableDays: string[];
+  availablePeriods: number[];
+  facilityId: string | null;
+  notes: string;
+  isActive: boolean;
 }
 
-export interface TenantTeacherScopes {
-  byProfileId: Map<string, TeacherStrictScope>;
-  byUserId: Map<string, TeacherStrictScope>;
+export interface EngineStream {
+  grade: number;
+  stream: string;
+  categoryId: TimetableCategoryId;
+  studentIds: string[];
 }
 
-/**
- * Resolve every teacher's authoritative subject qualifications and exact
- * (grade, stream, subject) assignments across tt_teacher_profiles, users,
- * provisioned_accounts, and grade_teacher_assignments.
- */
-export function loadTenantTeacherScopes(db: DatabaseSync, tenantId: string): TenantTeacherScopes {
-  const byProfileId = new Map<string, TeacherStrictScope>();
-  const byUserId = new Map<string, TeacherStrictScope>();
-
-  const profileRows = db
-    .prepare(
-      `SELECT id, user_id, teacher_name, qualified_subjects_json, active_in_timetable
-       FROM tt_teacher_profiles WHERE tenant_id = ?`
-    )
-    .all(tenantId) as any[];
-
-  for (const tp of profileRows) {
-    const quals = safeJsonParse<string[]>(tp.qualified_subjects_json, [])
-      .map((s) => String(s || '').trim().toLowerCase())
-      .filter(Boolean);
-    const scope: TeacherStrictScope = {
-      teacherProfileId: String(tp.id),
-      userId: String(tp.user_id || ''),
-      teacherName: String(tp.teacher_name || 'Teacher'),
-      activeInTimetable: Number(tp.active_in_timetable) !== 0,
-      qualifiedSubjectsLower: new Set(quals),
-      assignedSubjectsLower: new Set(),
-      hasStrictSubjectScope: quals.length > 0,
-      assignedTuples: new Set(),
-      assignedGradeWide: new Set(),
-      hasStrictTupleScope: false,
-    };
-    byProfileId.set(scope.teacherProfileId, scope);
-    if (scope.userId) byUserId.set(scope.userId, scope);
-  }
-
-  const mergeUserPayload = (userId: string, rawPayload: any) => {
-    const scope = byUserId.get(userId);
-    if (!scope) return;
-    const payload = safeJsonParse<Record<string, any>>(rawPayload, {});
-    if (!payload || typeof payload !== 'object') return;
-
-    if (Array.isArray(payload.subjects)) {
-      for (const s of payload.subjects) {
-        const clean = String(s || '').trim().toLowerCase();
-        if (clean) scope.qualifiedSubjectsLower.add(clean);
-      }
-    }
-    if (typeof payload.subject === 'string' && payload.subject.trim()) {
-      scope.qualifiedSubjectsLower.add(payload.subject.trim().toLowerCase());
-    }
-    if (Array.isArray(payload.assignedSubjects)) {
-      for (const s of payload.assignedSubjects) {
-        const clean = String(s || '').trim().toLowerCase();
-        if (clean) {
-          scope.qualifiedSubjectsLower.add(clean);
-          scope.assignedSubjectsLower.add(clean);
-        }
-      }
-    }
-    if (Array.isArray(payload.assignedSubjectAllocations)) {
-      scope.hasStrictTupleScope = true;
-      for (const alloc of payload.assignedSubjectAllocations) {
-        if (!alloc || typeof alloc !== 'object') continue;
-        const gNum = Number(alloc.grade);
-        if (!Number.isFinite(gNum) || gNum <= 0) continue;
-        const streamsList: string[] = Array.isArray(alloc.streams)
-          ? alloc.streams.map((x: any) => String(x || '').trim()).filter(Boolean)
-          : alloc.stream
-          ? [String(alloc.stream).trim()]
-          : [];
-        const subjectsList: string[] = Array.isArray(alloc.subjects)
-          ? alloc.subjects.map((x: any) => String(x || '').trim()).filter(Boolean)
-          : alloc.subject
-          ? [String(alloc.subject).trim()]
-          : [];
-        for (const sub of subjectsList) {
-          const subLower = sub.toLowerCase();
-          scope.qualifiedSubjectsLower.add(subLower);
-          scope.assignedSubjectsLower.add(subLower);
-          if (streamsList.length > 0) {
-            for (const st of streamsList) {
-              scope.assignedTuples.add(`${gNum}::${st.toLowerCase()}::${subLower}`);
-            }
-          } else {
-            scope.assignedGradeWide.add(`${gNum}::${subLower}`);
-          }
-        }
-      }
-    }
-  };
-
-  try {
-    const userRows = db
-      .prepare(`SELECT id, payload_json FROM users WHERE school_id = ?`)
-      .all(tenantId) as Array<{ id: string; payload_json: string }>;
-    for (const u of userRows) mergeUserPayload(String(u.id), u.payload_json);
-  } catch {
-    // ignore if users table is unavailable
-  }
-
-  try {
-    const provRows = db
-      .prepare(`SELECT id, payload_json FROM provisioned_accounts WHERE school_id = ?`)
-      .all(tenantId) as Array<{ id: string; payload_json: string }>;
-    for (const p of provRows) mergeUserPayload(String(p.id), p.payload_json);
-  } catch {
-    // ignore if provisioned_accounts table is unavailable
-  }
-
-  try {
-    const gtaRows = db
-      .prepare(
-        `SELECT gta.teacher_id, gta.subject_name, gta.stream_id, g.grade_number, g.name as grade_name, s.name as stream_name
-         FROM grade_teacher_assignments gta
-         JOIN grades g ON g.id = gta.grade_id
-         LEFT JOIN streams s ON s.id = gta.stream_id
-         WHERE gta.school_id = ? AND gta.is_active = 1`
-      )
-      .all(tenantId) as any[];
-    for (const r of gtaRows) {
-      const scope = byUserId.get(String(r.teacher_id || ''));
-      if (!scope) continue;
-      scope.hasStrictTupleScope = true;
-      const gNum = Number(r.grade_number || String(r.grade_name || '').match(/\d+/)?.[0] || 0);
-      const subLower = String(r.subject_name || '').trim().toLowerCase();
-      if (!subLower) continue;
-      scope.qualifiedSubjectsLower.add(subLower);
-      scope.assignedSubjectsLower.add(subLower);
-      if (gNum > 0 && r.stream_name) {
-        scope.assignedTuples.add(`${gNum}::${String(r.stream_name).trim().toLowerCase()}::${subLower}`);
-      } else if (gNum > 0 && !r.stream_id) {
-        scope.assignedGradeWide.add(`${gNum}::${subLower}`);
-      }
-    }
-  } catch {
-    // ignore if academic hierarchy tables are not present in minimal test schemas
-  }
-
-  for (const scope of byProfileId.values()) {
-    scope.hasStrictSubjectScope = scope.qualifiedSubjectsLower.size > 0 || scope.hasStrictTupleScope;
-  }
-
-  return { byProfileId, byUserId };
+export interface EngineTimetableEntry {
+  id: string;
+  categoryId: TimetableCategoryId;
+  grade: number;
+  stream: string;
+  dayOfWeek: string;
+  periodNumber: number;
+  startTime: string;
+  endTime: string;
+  durationMins: number;
+  subjectId: string;
+  subjectName: string;
+  subjectKind: TimetableSubjectKind;
+  teacherId: string;
+  teacherName: string;
+  facilityId: string | null;
+  facilityName: string | null;
+  remedialConfigId: string | null;
+  studentGroupMode: StudentGroupMode;
+  studentGroupName: string;
+  studentIds: string[];
+  isLocked: boolean;
+  notes: string;
 }
 
-/**
- * Strictly verify that a teacher is authorized for a given (grade, stream, subject).
- * No teacher may appear on the timetable for a subject, grade, or stream not assigned to them.
- */
-export function checkTeacherAssignmentScope(
-  scopes: TenantTeacherScopes,
-  teacherProfileId: string,
-  grade: number,
-  stream: string,
-  subjectName: string,
-  options: { checkSubjectOnly?: boolean } = {}
-): { ok: boolean; code?: 'TEACHER_SUBJECT_NOT_ASSIGNED' | 'TEACHER_SCOPE_VIOLATION'; reason?: string } {
-  const scope = scopes.byProfileId.get(String(teacherProfileId));
-  if (!scope) {
-    return {
-      ok: false,
-      code: 'TEACHER_SCOPE_VIOLATION',
-      reason: `Assigned teacher (${teacherProfileId}) is not in this school's active timetable roster.`,
-    };
-  }
-
-  const subj = String(subjectName || '').trim();
-  const subjLower = subj.toLowerCase();
-  const streamTrim = String(stream || '').trim();
-  const streamLower = streamTrim.toLowerCase();
-  const gradeNum = Number(grade);
-
-  // 1. Strict Subject Check: never allow a teacher to teach an unassigned/unqualified subject
-  if (scope.hasStrictSubjectScope && !scope.qualifiedSubjectsLower.has(subjLower)) {
-    return {
-      ok: false,
-      code: 'TEACHER_SUBJECT_NOT_ASSIGNED',
-      reason: `${scope.teacherName} is not assigned to teach ${subj}. No teacher may teach a subject not strictly assigned to them.`,
-    };
-  }
-
-  // 2. Strict Grade + Stream + Subject Tuple Check
-  if (!options.checkSubjectOnly && scope.hasStrictTupleScope) {
-    const exactKey = `${gradeNum}::${streamLower}::${subjLower}`;
-    const gradeWideKey = `${gradeNum}::${subjLower}`;
-    if (!scope.assignedTuples.has(exactKey) && !scope.assignedGradeWide.has(gradeWideKey)) {
-      if (!scope.assignedSubjectsLower.has(subjLower)) {
-        return {
-          ok: false,
-          code: 'TEACHER_SUBJECT_NOT_ASSIGNED',
-          reason: `${scope.teacherName} is not assigned to teach ${subj}. No teacher may teach an unassigned subject.`,
-        };
-      }
-      return {
-        ok: false,
-        code: 'TEACHER_SCOPE_VIOLATION',
-        reason: `${scope.teacherName} is not assigned to Grade ${gradeNum} ${streamTrim} for ${subj}. Teachers can only appear on the timetable for their exact assigned subject, grade, and stream(s).`,
-      };
-    }
-  }
-
-  return { ok: true };
+export interface EngineInput {
+  scheduleConfigs: Record<TimetableCategoryId, EngineScheduleConfig>;
+  subjects: EngineSubject[];
+  facilities: EngineFacility[];
+  teacherAssignments: EngineTeacherAssignment[];
+  remedialConfigs: EngineRemedialConfig[];
+  streams: EngineStream[];
 }
 
-/**
- * Safely inspect existing multi-tenant LMS records (grades, streams, teachers,
- * subjects, bell schedules, shared facilities) and initialize missing additive
- * timetable module rows for this school without altering any core LMS tables.
- */
-export function ensureTenantTimetableSeeded(
-  db: DatabaseSync,
-  tenantId: string,
-  actorId = 'system'
-): { configId: string } {
-  const now = new Date().toISOString();
-  const changedTables: string[] = [];
-
-  // 1. Ensure Config exists
-  let cfgRow = db
-    .prepare(`SELECT * FROM tt_configs WHERE tenant_id = ? ORDER BY updated_at DESC LIMIT 1`)
-    .get(tenantId) as any;
-
-  if (!cfgRow) {
-    const configId = uid('ttcfg');
-    db.prepare(
-      `INSERT INTO tt_configs
-         (id, tenant_id, academic_year, term, cycle_days, working_days_json, default_periods_per_day, cycle_label, updated_by, created_at, updated_at)
-       VALUES (?, ?, '2026', 'Term 1', 5, ?, 8, 'Weekly (Mon-Fri)', ?, ?, ?)`
-    ).run(
-      configId,
-      tenantId,
-      JSON.stringify(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']),
-      actorId,
-      now,
-      now
-    );
-    cfgRow = db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(configId) as any;
-    changedTables.push('tt_configs');
-  }
-
-  const configId = String(cfgRow.id);
-
-  // 2. Ensure Periods exist (seeded from existing bell_schedule collection if available)
-  const existingPeriodCount = (
-    db.prepare(`SELECT COUNT(*) as c FROM tt_periods WHERE config_id = ?`).get(configId) as any
-  ).c;
-
-  if (existingPeriodCount === 0) {
-    const colBellRows = db
-      .prepare(
-        `SELECT payload_json FROM collections_store
-         WHERE collection_key = 'edusmart_bell_schedule_v1' AND (tenant_id = ? OR tenant_id = 'global') AND deleted_at IS NULL`
-      )
-      .all(tenantId) as any[];
-
-    const parsedBell: any[] = [];
-    for (const r of colBellRows) {
-      const p = safeJsonParse<any>(r.payload_json, null);
-      if (p && p.startTime && p.endTime) parsedBell.push(p);
-    }
-    parsedBell.sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
-
-    const sourcePeriods =
-      parsedBell.length >= 6
-        ? parsedBell.map((b, idx) => ({
-            periodNumber: b.isBreak ? 0 : Number(b.period || idx + 1),
-            label: String(b.label || `Lesson ${idx + 1}`),
-            kind: b.isBreak
-              ? String(b.label || '').toLowerCase().includes('lunch')
-                ? 'lunch'
-                : 'break'
-              : 'lesson',
-            startTime: String(b.startTime),
-            endTime: String(b.endTime),
-            sortOrder: idx + 1,
-          }))
-        : DEFAULT_BELL_PERIODS;
-
-    const insPeriod = db.prepare(
-      `INSERT INTO tt_periods (id, tenant_id, config_id, grade_band, period_number, label, kind, start_time, end_time, sort_order)
-       VALUES (?, ?, ?, 'all', ?, ?, ?, ?, ?, ?)`
-    );
-    for (const p of sourcePeriods) {
-      insPeriod.run(uid('ttp'), tenantId, configId, p.periodNumber, p.label, p.kind, p.startTime, p.endTime, p.sortOrder);
-    }
-    changedTables.push('tt_periods');
-  }
-
-  // 3. Discover Grades & Streams from existing LMS tables
-  const existingGradesRows = db
-    .prepare(`SELECT id, name FROM school_grades WHERE school_id = ?`)
-    .all(tenantId) as any[];
-  const existingStreamsRows = db
-    .prepare(`SELECT id, grade_id, name, display_name FROM school_streams WHERE school_id = ?`)
-    .all(tenantId) as any[];
-
-  const gradeList: number[] = [];
-  for (const g of existingGradesRows) {
-    const m = String(g.name || g.id).match(/\d+/);
-    if (m) {
-      const num = parseInt(m[0], 10);
-      if (num >= 1 && num <= 12 && !gradeList.includes(num)) gradeList.push(num);
-    }
-  }
-  if (gradeList.length === 0) {
-    for (let g = 1; g <= 9; g++) gradeList.push(g);
-  }
-  gradeList.sort((a, b) => a - b);
-
-  // Map grade -> stream names
-  const gradeStreamsMap = new Map<number, string[]>();
-  const gradeIdToNum = new Map<string, number>();
-  for (const g of existingGradesRows) {
-    const m = String(g.name || g.id).match(/\d+/);
-    if (m) gradeIdToNum.set(g.id, parseInt(m[0], 10));
-  }
-
-  for (const s of existingStreamsRows) {
-    let gNum = gradeIdToNum.get(s.grade_id);
-    if (!gNum) {
-      const m = String(s.grade_id || s.display_name || '').match(/\d+/);
-      if (m) gNum = parseInt(m[0], 10);
-    }
-    if (gNum) {
-      const arr = gradeStreamsMap.get(gNum) || [];
-      const streamClean = String(s.name || 'North').trim();
-      if (!arr.includes(streamClean)) arr.push(streamClean);
-      gradeStreamsMap.set(gNum, arr);
-    }
-  }
-
-  // Fallback check on students table if streams table was empty
-  if (gradeStreamsMap.size === 0) {
-    const studentGradeStreams = db
-      .prepare(`SELECT DISTINCT grade_label, stream_label FROM students WHERE school_id = ?`)
-      .all(tenantId) as any[];
-    for (const st of studentGradeStreams) {
-      const m = String(st.grade_label || '').match(/\d+/);
-      const gNum = m ? parseInt(m[0], 10) : 0;
-      const streamClean = String(st.stream_label || '').trim();
-      if (gNum && streamClean) {
-        const arr = gradeStreamsMap.get(gNum) || [];
-        if (!arr.includes(streamClean)) arr.push(streamClean);
-        gradeStreamsMap.set(gNum, arr);
-      }
-    }
-  }
-
-  for (const g of gradeList) {
-    if (!gradeStreamsMap.has(g) || (gradeStreamsMap.get(g) || []).length === 0) {
-      gradeStreamsMap.set(g, g <= 6 ? ['Dove', 'Eagle', 'Falcon'] : ['Athi', 'Mara', 'Tana']);
-    }
-  }
-
-  // 4. Ensure tt_grade_schedules
-  const workingDaysDefault = cfgRow.working_days_json || JSON.stringify(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-  const insGradeSched = db.prepare(
-    `INSERT OR IGNORE INTO tt_grade_schedules (id, tenant_id, config_id, grade, periods_per_day, working_days_json, assembly_day, assembly_period, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'Monday', 0, ?)`
-  );
-  for (const g of gradeList) {
-    const defaultPeriodsForGrade = g <= 3 ? Math.min(7, Number(cfgRow.default_periods_per_day || 8)) : Number(cfgRow.default_periods_per_day || 8);
-    insGradeSched.run(uid('ttgs'), tenantId, configId, g, defaultPeriodsForGrade, workingDaysDefault, now);
-  }
-
-  // 5. Ensure tt_subjects (including Library Lesson, Arts, Music, Nutrition)
-  const insSub = db.prepare(
-    `INSERT OR IGNORE INTO tt_subjects (id, tenant_id, name, code, department, is_practical, requires_room_type, color_token, is_active, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
-  );
-  const combinedPresets = [...LOWER_PRIMARY_SUBJECT_PRESETS, ...UPPER_PRIMARY_SUBJECT_PRESETS, ...JUNIOR_SUBJECT_PRESETS];
-  const colorMap: Record<string, string> = {
-    Mathematics: 'blue',
-    English: 'emerald',
-    Kiswahili: 'amber',
-    'Integrated Science': 'indigo',
-    'Computer Studies': 'cyan',
-    'Social Studies': 'orange',
-    'Religious Education': 'violet',
-    'Agriculture and Nutrition': 'lime',
-    Nutrition: 'lime',
-    'Pre-Technical Studies': 'slate',
-    'Creative Arts': 'rose',
-    Arts: 'rose',
-    Music: 'pink',
-    'Library Lesson': 'purple',
-    French: 'sky',
-    Swimming: 'cyan',
-    'Physical and Health Education': 'teal',
-  };
-  for (const p of combinedPresets) {
-    const code = p.subject
-      .split(/\s+/)
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 4);
-    const dept =
-      p.roomType === 'science_lab'
-        ? 'Sciences'
-        : p.roomType === 'computer_lab'
-        ? 'ICT & Computing'
-        : p.roomType === 'art_room' || p.roomType === 'field'
-        ? 'Creative Arts & Sports'
-        : 'Core Academic';
-    insSub.run(uid('ttsub'), tenantId, p.subject, code, dept, p.isPractical, p.roomType, colorMap[p.subject] || 'slate', now);
-  }
-
-  // Ensure all standard curriculum subjects and schedulable school activities are available in tt_subjects
-  const additionalSubjects: Array<[string, string, string, number, string, string]> = [
-    ['Science and Technology', 'SCIT', 'Sciences', 1, 'science_lab', 'indigo'],
-    ['Agriculture', 'AGR', 'Agriculture & Nutrition', 1, 'general', 'lime'],
-    ['Physical Education', 'PE', 'Creative Arts & Sports', 1, 'field', 'teal'],
-    ['Health Education', 'HE', 'Creative Arts & Sports', 0, 'general', 'teal'],
-    ['Life Skills', 'LIFE', 'Core Academic', 0, 'general', 'amber'],
-    ['Business Studies', 'BST', 'Technical & Applied Sciences', 0, 'general', 'slate'],
-    ['Computer Studies / ICT', 'ICT', 'ICT & Computing', 1, 'computer_lab', 'cyan'],
-    ['Library Lesson', 'LIB', 'Library & Information Services', 0, 'library', 'purple'],
-    ['Library', 'LIBR', 'Library & Information Services', 0, 'library', 'purple'],
-    ['Maktaba', 'MAKT', 'Library & Information Services', 0, 'maktaba', 'purple'],
-    ['Clubs', 'CLUB', 'Creative Arts & Sports', 1, 'clubs', 'orange'],
-    ['Sports', 'SPRT', 'Creative Arts & Sports', 1, 'field', 'teal'],
-    ['Performing Arts', 'PERF', 'Creative Arts & Music', 1, 'art_room', 'rose'],
-    ['Arts', 'ART', 'Creative Arts & Music', 1, 'art_room', 'rose'],
-    ['Music', 'MUS', 'Creative Arts & Music', 1, 'art_room', 'pink'],
-    ['Nutrition', 'NUT', 'Agriculture & Nutrition', 1, 'general', 'lime'],
-    ['French', 'FRE', 'Languages & Literature', 0, 'general', 'sky'],
-    ['Swimming', 'SWM', 'Creative Arts & Sports', 1, 'swimming_pool', 'cyan'],
-  ];
-  for (const [subName, subCode, subDept, isPrac, rType, cTok] of additionalSubjects) {
-    insSub.run(uid('ttsub'), tenantId, subName, subCode, subDept, isPrac, rType, cTok, now);
-  }
-
-  // 5b. Ensure tt_departments
-  const insDept = db.prepare(
-    `INSERT OR IGNORE INTO tt_departments (id, tenant_id, name, code, head_name, description, is_active, updated_at)
-     VALUES (?, ?, ?, ?, '', ?, 1, ?)`
-  );
-  const defaultDepartments: Array<[string, string, string]> = [
-    ['Core Academic', 'CORE', 'Core foundational curriculum learning areas'],
-    ['Mathematics & Computational Sciences', 'MATH', 'Mathematics and computational logic'],
-    ['Sciences', 'SCI', 'Integrated and pure sciences'],
-    ['Languages & Literature', 'LANG', 'English, Kiswahili, and literacy studies'],
-    ['Humanities & Social Sciences', 'HUM', 'Social studies, history, geography, and religious education'],
-    ['ICT & Computing', 'ICT', 'Computer studies and digital literacy'],
-    ['Creative Arts & Music', 'ARTS', 'Visual Arts, Creative Arts, and Music education'],
-    ['Creative Arts & Sports', 'CAS', 'Creative arts, physical education, and athletics'],
-    ['Agriculture & Nutrition', 'AGRN', 'Agriculture, food science, and nutrition'],
-    ['Technical & Applied Sciences', 'TECH', 'Pre-technical studies and business education'],
-    ['Library & Information Services', 'LIB', 'Library lessons, reading culture, and research literacy'],
-  ];
-  for (const [dName, dCode, dDesc] of defaultDepartments) {
-    insDept.run(uid('ttdept'), tenantId, dName, dCode, dDesc, now);
-  }
-  const existingSubDepts = db
-    .prepare(`SELECT DISTINCT department FROM tt_subjects WHERE tenant_id = ? AND department IS NOT NULL AND trim(department) != ''`)
-    .all(tenantId) as any[];
-  for (const row of existingSubDepts) {
-    const dn = String(row.department).trim();
-    const dc = dn.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 4);
-    insDept.run(uid('ttdept'), tenantId, dn, dc, 'Academic department', now);
-  }
-
-  // 6. Sync tt_student_groups (whole class group per active grade+stream)
-  const existingGroupKeys = new Set<string>(
-    (
-      db
-        .prepare(`SELECT parent_class_key FROM tt_student_groups WHERE tenant_id = ? AND is_whole_class = 1`)
-        .all(tenantId) as any[]
-    ).map((r) => String(r.parent_class_key))
-  );
-  const studentCounts = db
-    .prepare(
-      `SELECT grade_label, stream_label, COUNT(*) as cnt FROM students WHERE school_id = ? AND is_active = 1 GROUP BY grade_label, stream_label`
-    )
-    .all(tenantId) as any[];
-  const countMap = new Map<string, number>();
-  for (const row of studentCounts) {
-    const gm = String(row.grade_label || '').match(/\d+/);
-    if (gm && row.stream_label) {
-      countMap.set(classKeyOf(parseInt(gm[0], 10), row.stream_label), Number(row.cnt || 35));
-    }
-  }
-
-  const insGroup = db.prepare(
-    `INSERT INTO tt_student_groups (id, tenant_id, grade, stream, group_name, group_code, student_count, is_whole_class, parent_class_key, updated_at)
-     VALUES (?, ?, ?, ?, 'Whole Class', ?, ?, 1, ?, ?)`
-  );
-  for (const [grade, streams] of gradeStreamsMap.entries()) {
-    for (const stream of streams) {
-      const ck = classKeyOf(grade, stream);
-      if (!existingGroupKeys.has(ck)) {
-        const cnt = countMap.get(ck) || 38;
-        insGroup.run(uid('ttgrp'), tenantId, grade, stream, `${ck}-ALL`, cnt, ck, now);
-        changedTables.push('tt_student_groups');
-      }
-    }
-  }
-
-  // 7. Ensure Classrooms & Specialized Facilities
-  const roomCount = (db.prepare(`SELECT COUNT(*) as c FROM tt_classrooms WHERE tenant_id = ?`).get(tenantId) as any).c;
-  if (roomCount === 0) {
-    const insRoom = db.prepare(
-      `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', 1, ?)`
-    );
-    // Specialized rooms
-    const specialized: Array<[string, string, string, number, string]> = [
-      ['Science Laboratory 1', 'LAB-SCI-01', 'science_lab', 48, 'STEM Block'],
-      ['Science Laboratory 2', 'LAB-SCI-02', 'science_lab', 48, 'STEM Block'],
-      ['Computer & ICT Lab', 'LAB-ICT-01', 'computer_lab', 45, 'Digital Wing'],
-      ['Pre-Tech & Design Workshop', 'WRK-PRE-01', 'workshop', 45, 'Technical Wing'],
-      ['Creative Arts & Music Studio', 'ART-STU-01', 'art_room', 50, 'Arts Pavilion'],
-      ['Main Sports Field', 'FLD-SPT-01', 'field', 140, 'Sports Complex'],
-      ['Main Assembly & Multi-Purpose Hall', 'HALL-MAIN-01', 'hall', 320, 'Administration Block'],
-      ['Main Library Reading Hall', 'LIB-MAIN-01', 'library', 60, 'Ground Floor · Central Wing'],
-      ['Maktaba Reading Room', 'MAKT-01', 'maktaba', 50, 'Language & Literacy Wing'],
-      ['Clubs Activity Room', 'CLUB-01', 'clubs', 60, 'Student Activities Block'],
-      ['School Swimming Pool', 'POOL-SWM-01', 'swimming_pool', 45, 'Aquatics Complex'],
-    ];
-    for (const [name, code, rtype, cap, loc] of specialized) {
-      insRoom.run(uid('ttrm'), tenantId, name, code, rtype, cap, loc, null, null, now);
-    }
-
-    // Homeroom per grade/stream
-    for (const [grade, streams] of gradeStreamsMap.entries()) {
-      for (const stream of streams) {
-        const rmName = `Grade ${grade} ${stream} Room`;
-        const rmCode = `RM-G${grade}-${stream.slice(0, 3).toUpperCase()}`;
-        insRoom.run(uid('ttrm'), tenantId, rmName, rmCode, 'general', 45, grade <= 6 ? 'Primary Wing' : 'Junior Secondary Wing', grade, stream, now);
-      }
-    }
-    changedTables.push('tt_classrooms');
-  } else {
-    // Ensure dedicated shared facilities exist for Library, Swimming Pool, Maktaba, and Clubs
-    const ensureSpecialFacility = (roomType: string, name: string, code: string, capacity: number, loc: string) => {
-      const cnt = (
-        db.prepare(`SELECT COUNT(*) as c FROM tt_classrooms WHERE tenant_id = ? AND room_type = ?`).get(tenantId, roomType) as any
-      ).c;
-      if (cnt === 0) {
-        db.prepare(
-          `INSERT INTO tt_classrooms (id, tenant_id, name, room_code, room_type, capacity, location, assigned_grade, assigned_stream, availability_json, is_active, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, '{}', 1, ?)`
-        ).run(uid('ttrm'), tenantId, name, code, roomType, capacity, loc, now);
-        changedTables.push('tt_classrooms');
-      }
-    };
-    ensureSpecialFacility('library', 'Main Library Reading Hall', 'LIB-MAIN-01', 60, 'Ground Floor · Central Wing');
-    ensureSpecialFacility('swimming_pool', 'School Swimming Pool', 'POOL-SWM-01', 45, 'Aquatics Complex');
-    ensureSpecialFacility('maktaba', 'Maktaba Reading Room', 'MAKT-01', 50, 'Language & Literacy Wing');
-    ensureSpecialFacility('clubs', 'Clubs Activity Room', 'CLUB-01', 60, 'Student Activities Block');
-  }
-
-  // 8. Sync Teachers from existing LMS `users` & `provisioned_accounts` (zero duplicate user accounts)
-  const teachingRoles = new Set([
-    'teacher',
-    'class_teacher',
-    'hod',
-    'senior_teacher',
-    'dean_of_studies',
-    'curriculum_coordinator',
-    'deputy_head',
-    'head_teacher',
-  ]);
-  const userRows = db
-    .prepare(`SELECT id, email, name, role, tsc_number, is_active, payload_json FROM users WHERE school_id = ?`)
-    .all(tenantId) as any[];
-  const provRows = db
-    .prepare(`SELECT id, email, name, role, is_active, payload_json FROM provisioned_accounts WHERE school_id = ?`)
-    .all(tenantId) as any[];
-
-  const seenEmails = new Set<string>();
-  const staffCandidates: any[] = [];
-  for (const row of [...userRows, ...provRows]) {
-    const role = String(row.role || '').toLowerCase();
-    const em = String(row.email || '').toLowerCase();
-    if (!teachingRoles.has(role) || !em || seenEmails.has(em)) continue;
-    seenEmails.add(em);
-    staffCandidates.push(row);
-  }
-
-  const insTeacher = db.prepare(
-    `INSERT OR IGNORE INTO tt_teacher_profiles
-       (id, tenant_id, user_id, teacher_name, teacher_email, tsc_number, department, qualified_subjects_json, availability_json, max_daily_periods, max_weekly_periods, max_consecutive_lessons, preferred_free_periods_json, active_in_timetable, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, '{}', 6, 28, 3, '[]', ?, ?)`
-  );
-
-  const gtaSubjectsByUserId = new Map<string, Set<string>>();
-  try {
-    const gtaSubRows = db
-      .prepare(
-        `SELECT teacher_id, subject_name FROM grade_teacher_assignments
-         WHERE school_id = ? AND is_active = 1`
-      )
-      .all(tenantId) as Array<{ teacher_id: string; subject_name: string }>;
-    for (const r of gtaSubRows) {
-      const uidKey = String(r.teacher_id || '');
-      const sub = String(r.subject_name || '').trim();
-      if (!uidKey || !sub) continue;
-      if (!gtaSubjectsByUserId.has(uidKey)) gtaSubjectsByUserId.set(uidKey, new Set());
-      gtaSubjectsByUserId.get(uidKey)!.add(sub);
-    }
-  } catch {
-    // ignore if academic hierarchy table is not yet initialized
-  }
-
-  for (const staff of staffCandidates) {
-    const payload = safeJsonParse<any>(staff.payload_json, {});
-    const subjectsRaw: string[] = [];
-    if (Array.isArray(payload?.subjects)) subjectsRaw.push(...payload.subjects.map((s: any) => String(s || '').trim()).filter(Boolean));
-    if (typeof payload?.subject === 'string' && payload.subject.trim()) subjectsRaw.push(payload.subject.trim());
-    if (Array.isArray(payload?.assignedSubjects)) {
-      subjectsRaw.push(...payload.assignedSubjects.map((s: any) => String(s || '').trim()).filter(Boolean));
-    }
-    if (Array.isArray(payload?.assignedSubjectAllocations)) {
-      for (const a of payload.assignedSubjectAllocations) {
-        if (Array.isArray(a?.subjects)) {
-          subjectsRaw.push(...a.subjects.map((s: any) => String(s || '').trim()).filter(Boolean));
-        } else if (typeof a?.subject === 'string' && a.subject.trim()) {
-          subjectsRaw.push(a.subject.trim());
-        }
-      }
-    }
-    const fromGta = gtaSubjectsByUserId.get(String(staff.id));
-    if (fromGta) subjectsRaw.push(...fromGta);
-
-    // Strictly retain only explicitly configured/assigned subjects — never fabricate default subjects
-    const qualUnique = Array.from(new Set(subjectsRaw));
-    const activeFlag = staff.is_active === 0 ? 0 : 1;
-    insTeacher.run(
-      uid('ttch'),
-      tenantId,
-      String(staff.id),
-      String(staff.name),
-      String(staff.email).toLowerCase(),
-      staff.tsc_number ? String(staff.tsc_number) : null,
-      String(payload?.department || 'Academic Faculty'),
-      JSON.stringify(qualUnique),
-      activeFlag,
-      now
-    );
-  }
-
-  // 8b. Seed 3 Independent Subject Allocation Categories (Grades 1–3, Grades 4–6, Grades 7–9)
-  const insCat = db.prepare(
-    `INSERT OR IGNORE INTO tt_categories (id, tenant_id, code, name, label, min_grade, max_grade, sort_order, is_active, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`
-  );
-  for (const cat of DEFAULT_TT_CATEGORIES) {
-    insCat.run(uid('ttcat'), tenantId, cat.code, cat.name, cat.label, cat.minGrade, cat.maxGrade, cat.sortOrder, now);
-  }
-
-  const rooms = db
-    .prepare(`SELECT id, room_type, assigned_grade, assigned_stream FROM tt_classrooms WHERE tenant_id = ? AND is_active = 1`)
-    .all(tenantId) as any[];
-
-  const insCatAlloc = db.prepare(
-    `INSERT OR IGNORE INTO tt_category_subject_allocations
-       (id, tenant_id, config_id, category_code, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, required_room_type, default_room_id, is_active, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'spread', ?, ?, ?, ?, 1, ?)`
-  );
-
-  for (const cat of DEFAULT_TT_CATEGORIES) {
-    const existingCatAllocCount = (
-      db
-        .prepare(`SELECT COUNT(*) as c FROM tt_category_subject_allocations WHERE config_id = ? AND category_code = ?`)
-        .get(configId, cat.code) as any
-    ).c;
-    if (existingCatAllocCount === 0) {
-      const presets = defaultPresetsForCategory(cat.code);
-      for (const p of presets) {
-        const specialRoom = rooms.find((r) => r.room_type === p.roomType && !r.assigned_grade);
-        insCatAlloc.run(
-          uid('ttca'),
-          tenantId,
-          configId,
-          cat.code,
-          p.subject,
-          p.weekly,
-          p.single,
-          p.double,
-          p.triple,
-          p.maxPerDay,
-          p.minSpacingDays,
-          p.roomType,
-          specialRoom ? String(specialRoom.id) : null,
-          now
-        );
-      }
-      changedTables.push('tt_categories', 'tt_category_subject_allocations');
-    }
-  }
-
-  // Build lookup of category allocation IDs by `${categoryCode}::${subjectLower}`
-  const catAllocIdMap = new Map<string, string>();
-  const existingCatAllocRows = db
-    .prepare(`SELECT id, category_code, subject_name FROM tt_category_subject_allocations WHERE config_id = ?`)
-    .all(configId) as Array<{ id: string; category_code: string; subject_name: string }>;
-  for (const ca of existingCatAllocRows) {
-    catAllocIdMap.set(`${ca.category_code}::${String(ca.subject_name).trim().toLowerCase()}`, String(ca.id));
-  }
-
-  // 9. Seed initial Grade-Level Templates + Propagated Stream Allocations if empty
-  const existingGradeAllocCount = (
-    db.prepare(`SELECT COUNT(*) as c FROM tt_grade_subject_allocations WHERE config_id = ?`).get(configId) as any
-  ).c;
-
-  if (existingGradeAllocCount === 0) {
-    const insGradeAlloc = db.prepare(
-      `INSERT INTO tt_grade_subject_allocations
-         (id, tenant_id, config_id, grade, subject_name, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, default_room_id, teacher_ids_json, student_group_label, category_code, category_allocation_id, is_category_override, is_active, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'spread', ?, ?, '[]', '[]', ?, ?, ?, 'Whole Class', ?, ?, 0, 1, ?)`
-    );
-    const insStreamAlloc = db.prepare(
-      `INSERT INTO tt_stream_subject_allocations
-         (id, tenant_id, config_id, grade, stream, group_id, subject_name, inherited_from_id, is_overridden, required_weekly_periods, single_lessons, double_lessons, triple_lessons, pattern_preference, max_per_day, min_spacing_days, preferred_days_json, preferred_periods_json, required_room_type, room_id, teacher_ids_json, is_active, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'spread', ?, ?, '[]', '[]', ?, ?, ?, 1, ?)`
-    );
-
-    const ttTeacherByUserId = new Map<string, string>();
-    const tpUsers = db
-      .prepare(`SELECT id, user_id FROM tt_teacher_profiles WHERE tenant_id = ?`)
-      .all(tenantId) as Array<{ id: string; user_id: string }>;
-    for (const tp of tpUsers) ttTeacherByUserId.set(String(tp.user_id), String(tp.id));
-
-    const explicitStreamTeacherMap = new Map<string, string>();
-    try {
-      const gtaRows = db
-        .prepare(
-          `SELECT gta.teacher_id, gta.subject_name, g.grade_number, g.name as grade_name, s.name as stream_name
-           FROM grade_teacher_assignments gta
-           JOIN grades g ON g.id = gta.grade_id
-           JOIN streams s ON s.id = gta.stream_id
-           WHERE gta.school_id = ? AND gta.is_active = 1 AND gta.stream_id IS NOT NULL`
-        )
-        .all(tenantId) as any[];
-      for (const r of gtaRows) {
-        const gNum = Number(r.grade_number || String(r.grade_name || '').match(/\d+/)?.[0] || 0);
-        const ttTid = ttTeacherByUserId.get(String(r.teacher_id));
-        if (gNum > 0 && r.stream_name && ttTid) {
-          explicitStreamTeacherMap.set(
-            `${gNum}::${String(r.stream_name).toLowerCase()}::${String(r.subject_name).toLowerCase()}`,
-            ttTid
-          );
-        }
-      }
-    } catch {
-      // ignore if hierarchy tables not yet initialized
-    }
-
-    // Also include explicit stream-subject assignments from users.payload_json.assignedSubjectAllocations
-    for (const staff of staffCandidates) {
-      const ttTid = ttTeacherByUserId.get(String(staff.id));
-      if (!ttTid) continue;
-      const payload = safeJsonParse<any>(staff.payload_json, {});
-      if (!Array.isArray(payload?.assignedSubjectAllocations)) continue;
-      for (const alloc of payload.assignedSubjectAllocations) {
-        const gNum = Number(alloc?.grade || 0);
-        if (gNum <= 0) continue;
-        const streamsList: string[] = Array.isArray(alloc?.streams)
-          ? alloc.streams.map((x: any) => String(x || '').trim()).filter(Boolean)
-          : alloc?.stream
-          ? [String(alloc.stream).trim()]
-          : [];
-        const subjectsList: string[] = Array.isArray(alloc?.subjects)
-          ? alloc.subjects.map((x: any) => String(x || '').trim()).filter(Boolean)
-          : alloc?.subject
-          ? [String(alloc.subject).trim()]
-          : [];
-        for (const st of streamsList) {
-          for (const sub of subjectsList) {
-            const key = `${gNum}::${st.toLowerCase()}::${sub.toLowerCase()}`;
-            if (!explicitStreamTeacherMap.has(key)) {
-              explicitStreamTeacherMap.set(key, ttTid);
-            }
-          }
-        }
-      }
-    }
-
-    const wholeGroups = db
-      .prepare(`SELECT id, grade, stream FROM tt_student_groups WHERE tenant_id = ? AND is_whole_class = 1`)
-      .all(tenantId) as any[];
-    const groupLookup = new Map<string, string>();
-    for (const g of wholeGroups) {
-      groupLookup.set(classKeyOf(Number(g.grade), String(g.stream)), String(g.id));
-    }
-
-    for (const grade of gradeList) {
-      const catCode = categoryCodeForGrade(grade);
-      const presets = defaultPresetsForCategory(catCode);
-      const streams = gradeStreamsMap.get(grade) || [];
-
-      presets.forEach((p) => {
-        const gaId = uid('ttga');
-        // Never invent or round-robin default teachers onto grade templates or unassigned streams
-        const defaultTeacherIds: string[] = [];
-        const catAllocId = catAllocIdMap.get(`${catCode}::${p.subject.toLowerCase()}`) || null;
-
-        const specialRoom = rooms.find((r) => r.room_type === p.roomType && !r.assigned_grade);
-        insGradeAlloc.run(
-          gaId,
-          tenantId,
-          configId,
-          grade,
-          p.subject,
-          p.weekly,
-          p.single,
-          p.double,
-          p.triple,
-          p.maxPerDay,
-          p.minSpacingDays,
-          p.roomType,
-          specialRoom ? String(specialRoom.id) : null,
-          JSON.stringify(defaultTeacherIds),
-          catCode,
-          catAllocId,
-          now
-        );
-
-        streams.forEach((stream) => {
-          const linkedTeacherId = explicitStreamTeacherMap.get(
-            `${grade}::${stream.toLowerCase()}::${p.subject.toLowerCase()}`
-          );
-          const streamTeacherIds = linkedTeacherId ? [linkedTeacherId] : [];
-          const homeRoom = rooms.find(
-            (r) => Number(r.assigned_grade) === grade && String(r.assigned_stream || '').toLowerCase() === stream.toLowerCase()
-          );
-          const roomIdToUse =
-            p.roomType !== 'general' && specialRoom
-              ? String(specialRoom.id)
-              : homeRoom
-              ? String(homeRoom.id)
-              : null;
-          const grpId = groupLookup.get(classKeyOf(grade, stream)) || null;
-          insStreamAlloc.run(
-            uid('ttsa'),
-            tenantId,
-            configId,
-            grade,
-            stream,
-            grpId,
-            p.subject,
-            gaId,
-            p.weekly,
-            p.single,
-            p.double,
-            p.triple,
-            p.maxPerDay,
-            p.minSpacingDays,
-            p.roomType,
-            roomIdToUse,
-            JSON.stringify(streamTeacherIds),
-            now
-          );
-        });
-      });
-    }
-    changedTables.push('tt_grade_subject_allocations', 'tt_stream_subject_allocations');
-  } else {
-    // Safely backfill category_code and category_allocation_id on pre-existing grade rows without overwriting overrides
-    const unlinkedRows = db
-      .prepare(
-        `SELECT id, grade, subject_name FROM tt_grade_subject_allocations
-         WHERE config_id = ? AND (category_code IS NULL OR category_code = '')`
-      )
-      .all(configId) as Array<{ id: string; grade: number; subject_name: string }>;
-    if (unlinkedRows.length > 0) {
-      const upd = db.prepare(
-        `UPDATE tt_grade_subject_allocations SET category_code = ?, category_allocation_id = ? WHERE id = ?`
-      );
-      for (const r of unlinkedRows) {
-        const catCode = categoryCodeForGrade(Number(r.grade));
-        const catAllocId = catAllocIdMap.get(`${catCode}::${String(r.subject_name).trim().toLowerCase()}`) || null;
-        upd.run(catCode, catAllocId, r.id);
-      }
-    }
-  }
-
-  // 10. Ensure at least one Version exists
-  const existingVersionsCount = (
-    db.prepare(`SELECT COUNT(*) as c FROM tt_versions WHERE config_id = ?`).get(configId) as any
-  ).c;
-  if (existingVersionsCount === 0) {
-    const versionId = uid('ttver');
-    db.prepare(
-      `INSERT INTO tt_versions (id, tenant_id, config_id, version_number, name, status, metrics_json, created_by, created_by_name, created_at, updated_at)
-       VALUES (?, ?, ?, 1, 'Term 1 Master Draft v1', 'draft', '{}', ?, 'School Administration', ?, ?)`
-    ).run(versionId, tenantId, configId, actorId, now, now);
-    db.prepare(`UPDATE tt_configs SET active_version_id = ? WHERE id = ?`).run(versionId, configId);
-    changedTables.push('tt_versions');
-  }
-
-  if (changedTables.length > 0) {
-    notifyMySqlTablesChanged(Array.from(new Set(changedTables)));
-  }
-
-  return { configId };
+export interface ValidationIssue {
+  code: string;
+  severity: 'error' | 'warning';
+  categoryId?: TimetableCategoryId;
+  grade?: number;
+  stream?: string;
+  message: string;
 }
 
-/**
- * Expand weekly allocations + joint lessons into discrete lesson sessions to place.
- */
-export function expandRequirementUnits(
-  db: DatabaseSync,
-  tenantId: string,
-  configId: string
-): {
-  units: TTSessionUnit[];
-  allocationIssues: Array<{
-    grade: number;
-    stream: string;
-    subject: string;
-    message: string;
-  }>;
-  streamLoadSummary: Array<{
-    grade: number;
-    stream: string;
-    requiredPeriods: number;
-    availablePeriods: number;
-    deficitOrExcess: number;
-  }>;
-} {
-  const cfg = db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(configId) as any;
-  const workingDays: string[] = safeJsonParse<string[]>(cfg?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-
-  const gradeSchedRows = db
-    .prepare(`SELECT * FROM tt_grade_schedules WHERE config_id = ?`)
-    .all(configId) as any[];
-  const gradeSchedMap = new Map<number, { periodsPerDay: number; days: string[]; assemblyDay?: string; assemblyPeriod?: number }>();
-  for (const gs of gradeSchedRows) {
-    const days = safeJsonParse<string[]>(gs.working_days_json, workingDays);
-    gradeSchedMap.set(Number(gs.grade), {
-      periodsPerDay: Number(gs.periods_per_day || cfg?.default_periods_per_day || 8),
-      days,
-      assemblyDay: gs.assembly_day,
-      assemblyPeriod: Number(gs.assembly_period || 0),
-    });
-  }
-
-  const teachers = db
-    .prepare(`SELECT id, teacher_name FROM tt_teacher_profiles WHERE tenant_id = ?`)
-    .all(tenantId) as any[];
-  const teacherNameMap = new Map<string, string>();
-  for (const t of teachers) teacherNameMap.set(String(t.id), String(t.teacher_name));
-  const teacherScopes = loadTenantTeacherScopes(db, tenantId);
-
-  const groups = db
-    .prepare(`SELECT * FROM tt_student_groups WHERE tenant_id = ?`)
-    .all(tenantId) as any[];
-  const groupById = new Map<string, any>();
-  const wholeGroupByClass = new Map<string, any>();
-  for (const g of groups) {
-    groupById.set(String(g.id), g);
-    if (Number(g.is_whole_class) === 1) {
-      wholeGroupByClass.set(classKeyOf(Number(g.grade), String(g.stream)), g);
-    }
-  }
-
-  const activeSubjectsRaw = db
-    .prepare(`SELECT name FROM tt_subjects WHERE tenant_id = ? AND is_active = 1`)
-    .all(tenantId) as Array<{ name: string }>;
-  const activeSubjectNames = new Set(activeSubjectsRaw.map((s) => String(s.name).trim().toLowerCase()));
-
-  const streamAllocs = db
-    .prepare(`SELECT * FROM tt_stream_subject_allocations WHERE config_id = ? AND is_active = 1 ORDER BY grade, stream, subject_name`)
-    .all(configId) as any[];
-
-  const jointLessons = db
-    .prepare(`SELECT * FROM tt_joint_lessons WHERE config_id = ? AND is_active = 1`)
-    .all(configId) as any[];
-
-  const units: TTSessionUnit[] = [];
-  const allocationIssues: Array<{ grade: number; stream: string; subject: string; message: string }> = [];
-  const classRequiredTotals = new Map<string, number>();
-
-  // 1. Joint Multi-Stream Lessons first
-  for (const jl of jointLessons) {
-    const classTargetsRaw = safeJsonParse<Array<{ grade: number; stream: string }>>(jl.participating_classes_json, []);
-    const subjName = String(jl.subject_name || '').trim();
-    if (classTargetsRaw.length < 2) {
-      allocationIssues.push({
-        grade: classTargetsRaw[0]?.grade || 0,
-        stream: classTargetsRaw[0]?.stream || 'Joint',
-        subject: subjName,
-        message: `Joint lesson "${jl.title}" must include at least 2 participating classes/streams.`,
-      });
-      continue;
-    }
-
-    if (activeSubjectNames.size > 0 && !activeSubjectNames.has(subjName.toLowerCase())) {
-      allocationIssues.push({
-        grade: Number(classTargetsRaw[0]?.grade || 0),
-        stream: String(classTargetsRaw[0]?.stream || 'Joint'),
-        subject: subjName,
-        message: `Joint lesson subject "${subjName}" is not an active configured curriculum subject.`,
-      });
-      continue;
-    }
-
-    const classTargets = classTargetsRaw.map((c) => ({
-      grade: Number(c.grade),
-      stream: String(c.stream),
-      classKey: classKeyOf(Number(c.grade), String(c.stream)),
-    }));
-
-    let hasInvalidTarget = false;
-    for (const ct of classTargets) {
-      if (gradeSchedMap.size > 0 && !gradeSchedMap.has(ct.grade)) {
-        allocationIssues.push({
-          grade: ct.grade,
-          stream: ct.stream,
-          subject: subjName,
-          message: `Joint lesson "${jl.title}" references Grade ${ct.grade}, which is not an active configured grade.`,
-        });
-        hasInvalidTarget = true;
-      } else if (wholeGroupByClass.size > 0 && !wholeGroupByClass.has(ct.classKey)) {
-        allocationIssues.push({
-          grade: ct.grade,
-          stream: ct.stream,
-          subject: subjName,
-          message: `Joint lesson "${jl.title}" references Grade ${ct.grade} ${ct.stream}, which is not an allocated stream.`,
-        });
-        hasInvalidTarget = true;
-      }
-    }
-    if (hasInvalidTarget) continue;
-
-    const teacherIds = safeJsonParse<string[]>(jl.teacher_ids_json, []).filter((id) => teacherNameMap.has(id));
-    const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Assigned Teacher');
-
-    let jointScopeViolation: string | undefined;
-    if (teacherIds.length === 0) {
-      allocationIssues.push({
-        grade: classTargets[0].grade,
-        stream: classTargets.map((c) => c.stream).join('+'),
-        subject: subjName,
-        message: `No subject teacher assigned to joint lesson "${jl.title}" (${subjName}).`,
-      });
-    } else {
-      for (const tid of teacherIds) {
-        for (const ct of classTargets) {
-          const check = checkTeacherAssignmentScope(teacherScopes, tid, ct.grade, ct.stream, subjName);
-          if (!check.ok) {
-            jointScopeViolation = check.reason;
-            allocationIssues.push({
-              grade: ct.grade,
-              stream: ct.stream,
-              subject: subjName,
-              message: check.reason || `Teacher is not strictly assigned to Grade ${ct.grade} ${ct.stream} · ${subjName}.`,
-            });
-            break;
-          }
-        }
-        if (jointScopeViolation) break;
-      }
-    }
-
-    const len = Math.min(3, Math.max(1, Number(jl.lesson_length || 1))) as 1 | 2 | 3;
-    const weeklyPeriods = Number(jl.weekly_periods || len);
-    if (weeklyPeriods < 1 || weeklyPeriods % len !== 0) {
-      allocationIssues.push({
-        grade: classTargets[0].grade,
-        stream: classTargets.map((c) => c.stream).join('+'),
-        subject: subjName,
-        message: `Joint lesson "${jl.title}" weekly periods (${weeklyPeriods}) must be a positive multiple of lesson length (${len}).`,
-      });
-      continue;
-    }
-    const sessionsCount = Math.floor(weeklyPeriods / len);
-    const combinedCount =
-      Number(jl.combined_students || 0) ||
-      classTargets.reduce((sum, c) => sum + Number(wholeGroupByClass.get(c.classKey)?.student_count || 38), 0);
-
-    for (const c of classTargets) {
-      classRequiredTotals.set(c.classKey, (classRequiredTotals.get(c.classKey) || 0) + weeklyPeriods);
-    }
-
-    for (let i = 0; i < sessionsCount; i++) {
-      units.push({
-        sessionKey: `jl:${jl.id}:${i + 1}`,
-        jointLessonId: String(jl.id),
-        title: String(jl.title),
-        subjectName: subjName,
-        grade: classTargets[0].grade,
-        stream: classTargets.map((c) => c.stream).join('+'),
-        classTargets,
-        groupName: 'Joint Cohort',
-        isWholeClass: true,
-        teacherIds,
-        teacherNames,
-        blockLength: len,
-        requiredRoomType: String(jl.required_room_type || 'hall'),
-        preferredRoomId: jl.room_id ? String(jl.room_id) : null,
-        preferredDays: safeJsonParse<string[]>(jl.preferred_days_json, []),
-        preferredPeriods: safeJsonParse<number[]>(jl.preferred_periods_json, []),
-        maxPerDay: len,
-        minSpacingDays: 1,
-        patternPreference: 'spread',
-        studentCount: combinedCount,
-        scopeViolationReason: jointScopeViolation,
-      });
-    }
-  }
-
-  // 2. Individual Stream / Student-Group Subject Allocations (Strictly restricted to configured grades, streams, subjects & exact weekly lessons)
-  for (const sa of streamAllocs) {
-    const grade = Number(sa.grade);
-    const stream = String(sa.stream || '').trim();
-    const subjectName = String(sa.subject_name || '').trim();
-    const ck = classKeyOf(grade, stream);
-    const reqWeekly = Math.floor(Number(sa.required_weekly_periods || 0));
-
-    // Strict Grade check
-    if (gradeSchedMap.size > 0 && !gradeSchedMap.has(grade)) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `Grade ${grade} is not an active configured grade in timetable setup; lessons cannot be assigned.`,
-      });
-      continue;
-    }
-
-    // Strict Stream check
-    if (wholeGroupByClass.size > 0 && !wholeGroupByClass.has(ck)) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `Stream "${stream}" is not an allocated stream for Grade ${grade}; lessons cannot be assigned.`,
-      });
-      continue;
-    }
-
-    // Strict Subject check
-    if (activeSubjectNames.size > 0 && !activeSubjectNames.has(subjectName.toLowerCase())) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `Subject "${subjectName}" is not an active subject in the school's curriculum catalog.`,
-      });
-      continue;
-    }
-
-    // Strict Weekly Lesson Count check
-    if (reqWeekly < 1) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `Required weekly lessons must be at least 1 period per week (currently ${reqWeekly}).`,
-      });
-      continue;
-    }
-
-    let singles = Math.max(0, Math.floor(Number(sa.single_lessons || 0)));
-    let doubles = Math.max(0, Math.floor(Number(sa.double_lessons || 0)));
-    let triples = Math.max(0, Math.floor(Number(sa.triple_lessons || 0)));
-    const sessionSum = singles + doubles * 2 + triples * 3;
-
-    if (sessionSum !== reqWeekly) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `Session breakdown (${singles}×1 + ${doubles}×2 + ${triples}×3 = ${sessionSum}) does not equal required weekly periods (${reqWeekly}).`,
-      });
-      // Reconcile emitted units strictly to reqWeekly so the solver NEVER schedules more or fewer lessons than reqWeekly
-      let rem = reqWeekly;
-      const safeTriples = Math.min(triples, Math.floor(rem / 3));
-      rem -= safeTriples * 3;
-      const safeDoubles = Math.min(doubles, Math.floor(rem / 2));
-      rem -= safeDoubles * 2;
-      triples = safeTriples;
-      doubles = safeDoubles;
-      singles = rem;
-    }
-
-    const grp = sa.group_id ? groupById.get(String(sa.group_id)) : wholeGroupByClass.get(ck);
-    const isWholeClass = grp ? Number(grp.is_whole_class) === 1 : true;
-    const groupName = grp ? String(grp.group_name) : 'Whole Class';
-    const studentCount = grp ? Number(grp.student_count || 38) : 38;
-
-    // Only count Whole Class toward total available class periods (or max per split)
-    if (isWholeClass) {
-      classRequiredTotals.set(ck, (classRequiredTotals.get(ck) || 0) + reqWeekly);
-    }
-
-    const rawTeacherIds = safeJsonParse<string[]>(sa.teacher_ids_json, []);
-    const uniqueTeacherIds = Array.from(new Set(rawTeacherIds.filter((id) => Boolean(id) && teacherNameMap.has(String(id)))));
-    if (uniqueTeacherIds.length > 1) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `Multiple teachers assigned to Grade ${grade} ${stream} · ${subjectName}. No subject in any stream can have more than one teacher.`,
-      });
-    }
-    const teacherIds = uniqueTeacherIds.slice(0, 1);
-    const teacherNames = teacherIds.map((id) => teacherNameMap.get(id) || 'Unassigned Teacher');
-    let scopeViolationReason: string | undefined;
-    if (teacherIds.length === 0) {
-      allocationIssues.push({
-        grade,
-        stream,
-        subject: subjectName,
-        message: `No subject teacher assigned to Grade ${grade} ${stream} · ${subjectName}.`,
-      });
-    } else {
-      const scopeCheck = checkTeacherAssignmentScope(teacherScopes, teacherIds[0], grade, stream, subjectName);
-      if (!scopeCheck.ok) {
-        scopeViolationReason = scopeCheck.reason;
-        allocationIssues.push({
-          grade,
-          stream,
-          subject: subjectName,
-          message: scopeCheck.reason || `Teacher is not strictly assigned to Grade ${grade} ${stream} · ${subjectName}.`,
-        });
-      }
-    }
-
-    const prefDays = safeJsonParse<string[]>(sa.preferred_days_json, []);
-    const prefPeriods = safeJsonParse<number[]>(sa.preferred_periods_json, []);
-
-    const makeUnit = (blockLen: 1 | 2 | 3, idx: number): TTSessionUnit => ({
-      sessionKey: `sa:${sa.id}:${blockLen}:${idx}`,
-      allocationId: String(sa.id),
-      title: subjectName,
-      subjectName,
-      grade,
-      stream,
-      classTargets: [{ grade, stream, classKey: ck }],
-      groupId: grp ? String(grp.id) : undefined,
-      groupName,
-      isWholeClass,
-      teacherIds,
-      teacherNames,
-      blockLength: blockLen,
-      requiredRoomType: String(sa.required_room_type || 'general'),
-      preferredRoomId: sa.room_id ? String(sa.room_id) : null,
-      preferredDays: prefDays,
-      preferredPeriods: prefPeriods,
-      maxPerDay: Math.max(blockLen, Number(sa.max_per_day || 1)),
-      minSpacingDays: Number(sa.min_spacing_days || 0),
-      patternPreference: String(sa.pattern_preference || 'spread'),
-      studentCount,
-      scopeViolationReason,
-    });
-
-    for (let i = 1; i <= triples; i++) units.push(makeUnit(3, i));
-    for (let i = 1; i <= doubles; i++) units.push(makeUnit(2, i));
-    for (let i = 1; i <= singles; i++) units.push(makeUnit(1, i));
-  }
-
-  // Build load summary per stream
-  const streamLoadSummary: Array<{
-    grade: number;
-    stream: string;
-    requiredPeriods: number;
-    availablePeriods: number;
-    deficitOrExcess: number;
-  }> = [];
-
-  for (const [ck, req] of classRequiredTotals.entries()) {
-    const [gPart, ...sParts] = ck.replace(/^G/, '').split('-');
-    const grade = parseInt(gPart, 10);
-    const stream = sParts.join('-');
-    const gs = gradeSchedMap.get(grade);
-    const daysCount = (gs?.days || workingDays).length;
-    const perDay = gs?.periodsPerDay || Number(cfg?.default_periods_per_day || 8);
-    const assemblyDeduct = gs?.assemblyPeriod && gs.assemblyPeriod > 0 ? 1 : 0;
-    const available = Math.max(0, daysCount * perDay - assemblyDeduct);
-    streamLoadSummary.push({
-      grade,
-      stream,
-      requiredPeriods: req,
-      availablePeriods: available,
-      deficitOrExcess: available - req,
-    });
-  }
-  streamLoadSummary.sort((a, b) => (a.grade !== b.grade ? a.grade - b.grade : a.stream.localeCompare(b.stream)));
-
-  return { units, allocationIssues, streamLoadSummary };
+export interface CategoryAllocationSummary {
+  categoryId: TimetableCategoryId;
+  label: string;
+  availableRegularPeriods: number;
+  allocatedCoreLessons: number;
+  allocatedCommonLessons: number;
+  allocatedRemedialLessons: number;
+  totalAllocatedRegularLessons: number;
+  remainingRegularPeriods: number;
+  activeStreamCount: number;
 }
 
-/**
- * Compute valid contiguous teaching-period windows for a given block length.
- * Breaks/Lunch sit between teaching periods, so if `sort_order` between lesson P and P+1
- * contains a break/lunch/assembly, a multi-lesson block CANNOT span across that break!
- */
-export function getContiguousLessonStarts(
-  periods: TTPeriod[],
-  maxLessonPeriodForGrade: number,
-  blockLength: 1 | 2 | 3
-): number[][] {
-  const lessonPeriods = periods
-    .filter((p) => p.kind === 'lesson' && p.periodNumber >= 1 && p.periodNumber <= maxLessonPeriodForGrade)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  const validWindows: number[][] = [];
-  for (let i = 0; i <= lessonPeriods.length - blockLength; i++) {
-    const slice = lessonPeriods.slice(i, i + blockLength);
-    let contiguous = true;
-    for (let k = 1; k < slice.length; k++) {
-      // Must be consecutive periodNumber AND no break/lunch in between (sortOrder diff === 1)
-      if (
-        slice[k].periodNumber !== slice[k - 1].periodNumber + 1 ||
-        slice[k].sortOrder !== slice[k - 1].sortOrder + 1
-      ) {
-        contiguous = false;
-        break;
-      }
-    }
-    if (contiguous) {
-      validWindows.push(slice.map((s) => s.periodNumber));
-    }
-  }
-  return validWindows;
+export interface TeacherWorkloadReport {
+  teacherId: string;
+  teacherName: string;
+  maxWeeklyPeriods: number;
+  scheduledTotal: number;
+  corePeriods: number;
+  commonActivityPeriods: number;
+  remedialPeriods: number;
+  clubsAndMaktabaPeriods: number;
+  utilizationPct: number;
+  isOverloaded: boolean;
+  categoriesTaught: TimetableCategoryId[];
 }
 
-/**
- * Independent full validation engine before, during, and after generation.
- * Separates mandatory hard errors ('error') from optimization warnings ('warning').
- */
-export function validateTimetableVersion(
-  db: DatabaseSync,
-  versionId: string
-): {
-  hardErrors: number;
-  warnings: number;
-  conflicts: Array<{
-    id: string;
-    severity: 'error' | 'warning';
-    conflictType: string;
-    dayOfWeek?: string;
-    periodNumber?: number;
-    message: string;
-    details: any;
-  }>;
-  canApprove: boolean;
-} {
-  const version = db.prepare(`SELECT * FROM tt_versions WHERE id = ?`).get(versionId) as any;
-  if (!version) throw new Error('Timetable version not found.');
-
-  const tenantId = String(version.tenant_id);
-  const configId = String(version.config_id);
-  const cfg = db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(configId) as any;
-  const workingDays = safeJsonParse<string[]>(cfg?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-
-  const periodsRaw = db
-    .prepare(`SELECT * FROM tt_periods WHERE config_id = ? ORDER BY sort_order ASC`)
-    .all(configId) as any[];
-  const periods: TTPeriod[] = periodsRaw.map((p) => ({
-    id: String(p.id),
-    tenantId,
-    configId,
-    gradeBand: String(p.grade_band),
-    periodNumber: Number(p.period_number),
-    label: String(p.label),
-    kind: p.kind,
-    startTime: String(p.start_time),
-    endTime: String(p.end_time),
-    sortOrder: Number(p.sort_order),
-  }));
-
-  const entries = db
-    .prepare(`SELECT * FROM tt_entries WHERE version_id = ? ORDER BY day_of_week, period_number, grade, stream`)
-    .all(versionId) as any[];
-
-  const unscheduled = db
-    .prepare(`SELECT * FROM tt_unscheduled_sessions WHERE version_id = ?`)
-    .all(versionId) as any[];
-
-  const teacherMap = new Map<string, any>();
-  for (const t of db.prepare(`SELECT * FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]) {
-    teacherMap.set(String(t.id), {
-      ...t,
-      availability: safeJsonParse<Record<string, Record<string, boolean>>>(t.availability_json, {}),
-      preferredFree: safeJsonParse<Array<{ day: string; period: number }>>(t.preferred_free_periods_json, []),
-      offDutySlots: safeJsonParse<Array<{ day: string; period: number }>>(t.off_duty_slots_json, []),
-    });
-  }
-  const teacherScopes = loadTenantTeacherScopes(db, tenantId);
-
-  const roomMap = new Map<string, any>();
-  for (const r of db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ?`).all(tenantId) as any[]) {
-    roomMap.set(String(r.id), {
-      ...r,
-      maxConcurrentClasses: Math.max(1, Number(r.max_concurrent_classes || 1)),
-      availability: safeJsonParse<Record<string, Record<string, boolean>>>(r.availability_json, {}),
-    });
-  }
-
-  const groupMap = new Map<string, any>();
-  for (const g of db.prepare(`SELECT * FROM tt_student_groups WHERE tenant_id = ?`).all(tenantId) as any[]) {
-    groupMap.set(String(g.id), g);
-  }
-
-  const { allocationIssues, streamLoadSummary, units } = expandRequirementUnits(db, tenantId, configId);
-  const allocMap = new Map<string, any>();
-  for (const a of db.prepare(`SELECT * FROM tt_stream_subject_allocations WHERE config_id = ?`).all(configId) as any[]) {
-    allocMap.set(String(a.id), a);
-  }
-
-  const conflicts: Array<{
-    id: string;
-    severity: 'error' | 'warning';
-    conflictType: string;
-    dayOfWeek?: string;
-    periodNumber?: number;
-    message: string;
-    details: any;
-  }> = [];
-
-  const pushConflict = (
-    severity: 'error' | 'warning',
-    conflictType: string,
-    message: string,
-    dayOfWeek?: string,
-    periodNumber?: number,
-    details: any = {}
-  ) => {
-    conflicts.push({
-      id: uid('ttc'),
-      severity,
-      conflictType,
-      dayOfWeek,
-      periodNumber,
-      message,
-      details,
-    });
-  };
-
-  // A. Allocation consistency & capacity checks
-  for (const issue of allocationIssues) {
-    pushConflict('error', 'ALLOCATION_INCONSISTENT', `Grade ${issue.grade} ${issue.stream} · ${issue.subject}: ${issue.message}`, undefined, undefined, issue);
-  }
-
-  for (const summary of streamLoadSummary) {
-    if (summary.deficitOrExcess < 0) {
-      pushConflict(
-        'error',
-        'INSUFFICIENT_WEEKLY_PERIODS',
-        `Grade ${summary.grade} ${summary.stream} requires ${summary.requiredPeriods} periods/week but only ${summary.availablePeriods} teaching slots exist (shortfall of ${Math.abs(summary.deficitOrExcess)} periods).`,
-        undefined,
-        undefined,
-        summary
-      );
-    }
-  }
-
-  // B. Unscheduled sessions block approval
-  for (const u of unscheduled) {
-    pushConflict(
-      'error',
-      'MISSING_WEEKLY_LESSONS',
-      `Unscheduled ${Number(u.block_length) > 1 ? `${u.block_length}-period ` : ''}lesson: Grade ${u.grade} ${u.stream} · ${u.subject_name} (${u.reason})`,
-      undefined,
-      undefined,
-      { sessionKey: u.session_key, grade: u.grade, stream: u.stream, subject: u.subject_name }
-    );
-  }
-
-  // Deduplicate joint lesson rows into logical events by session_block_id + period for teacher & room clash detection
-  const teacherSlotEvents = new Map<string, Map<string, any>>(); // `${teacherId}|${day}|${period}` -> Map<blockKey, entry>
-  const roomSlotEvents = new Map<string, Map<string, any>>(); // `${roomId}|${day}|${period}` -> Map<blockKey, entry>
-  const classSlotEntries = new Map<string, any[]>(); // `${grade}|${stream}|${day}|${period}` -> entries[]
-  const blockSegments = new Map<string, any[]>(); // `${sessionBlockId}|${grade}|${stream}` -> entries[]
-
-  // Teacher daily/weekly workload tracking
-  const teacherDayPeriods = new Map<string, Set<number>>(); // `${teacherId}|${day}` -> Set<periodNumber>
-  const teacherWeekCount = new Map<string, number>();
-
-  // Subject distribution tracking
-  const classSubjectDayCount = new Map<string, Map<string, number>>(); // `${grade}|${stream}|${subject}|${day}` -> unique block count
-
-  const validLessonPeriodSet = new Set(
-    periods.filter((p) => p.kind === 'lesson' && p.periodNumber > 0).map((p) => p.periodNumber)
-  );
-  const roomIdByNameLower = new Map<string, string>();
-  for (const r of roomMap.values()) {
-    roomIdByNameLower.set(String(r.name || '').trim().toLowerCase(), String(r.id));
-  }
-
-  for (const e of entries) {
-    const day = String(e.day_of_week);
-    const period = Number(e.period_number);
-    const grade = Number(e.grade);
-    const stream = String(e.stream);
-    const blockEventKey = e.joint_lesson_id ? `jl:${e.joint_lesson_id}` : String(e.session_block_id);
-    const teacherIds = safeJsonParse<string[]>(e.teacher_ids_json, []);
-
-    if (validLessonPeriodSet.size > 0 && !validLessonPeriodSet.has(period)) {
-      pushConflict(
-        'error',
-        'LESSON_ON_NON_TEACHING_SLOT',
-        `Break/Lunch/Non-teaching slot violation: Grade ${grade} ${stream} · ${e.subject_name} is placed on ${day} Period ${period}, which is not an active teaching lesson period.`,
-        day,
-        period,
-        { grade, stream, subject: e.subject_name, isLocked: Number(e.is_locked) === 1 }
-      );
-    }
-
-    const cKey = `${grade}|${stream}|${day}|${period}`;
-    const cList = classSlotEntries.get(cKey) || [];
-    cList.push(e);
-    classSlotEntries.set(cKey, cList);
-
-    const bsKey = `${e.session_block_id}|${grade}|${stream}`;
-    const bsList = blockSegments.get(bsKey) || [];
-    bsList.push(e);
-    blockSegments.set(bsKey, bsList);
-
-    // Subject daily count (count block starts only, or distinct blockEventKey)
-    const sdKey = `${grade}|${stream}|${e.subject_name}`;
-    const dayCounts = classSubjectDayCount.get(sdKey) || new Map<string, number>();
-    if (Number(e.block_index || 0) === 0) {
-      dayCounts.set(day, (dayCounts.get(day) || 0) + Number(e.block_length || 1));
-    }
-    classSubjectDayCount.set(sdKey, dayCounts);
-
-    // Strict Teacher Assignment Presence & Scope Check (every entry must have a strictly assigned teacher for this exact grade, stream & subject)
-    if (teacherIds.length === 0) {
-      pushConflict(
-        'error',
-        'NO_ASSIGNED_TEACHER',
-        `Unassigned lesson on ${day} Period ${period}: Grade ${grade} ${stream} · ${e.subject_name} has no assigned subject teacher.`,
-        day,
-        period,
-        { grade, stream, subject: e.subject_name, entryId: e.id }
-      );
-    }
-
-    // Teacher slot, availability & strict (subject, grade, stream) scope verification
-    for (const tid of teacherIds) {
-      const scopeCheck = checkTeacherAssignmentScope(teacherScopes, tid, grade, stream, String(e.subject_name || ''));
-      if (!scopeCheck.ok) {
-        pushConflict(
-          'error',
-          scopeCheck.code || 'TEACHER_SCOPE_VIOLATION',
-          `${day} Period ${period}: ${scopeCheck.reason}`,
-          day,
-          period,
-          { teacherId: tid, grade, stream, subject: e.subject_name, entryId: e.id }
-        );
-      }
-
-      const tsKey = `${tid}|${day}|${period}`;
-      if (!teacherSlotEvents.has(tsKey)) teacherSlotEvents.set(tsKey, new Map());
-      teacherSlotEvents.get(tsKey)!.set(blockEventKey, e);
-
-      const tdKey = `${tid}|${day}`;
-      if (!teacherDayPeriods.has(tdKey)) teacherDayPeriods.set(tdKey, new Set());
-      const prevSize = teacherDayPeriods.get(tdKey)!.size;
-      teacherDayPeriods.get(tdKey)!.add(period);
-      if (teacherDayPeriods.get(tdKey)!.size > prevSize) {
-        teacherWeekCount.set(tid, (teacherWeekCount.get(tid) || 0) + 1);
-      }
-
-      const tProf = teacherMap.get(tid);
-      if (tProf) {
-        if (tProf.availability?.[day]?.[String(period)] === false) {
-          pushConflict(
-            'error',
-            'TEACHER_UNAVAILABLE',
-            `${tProf.teacher_name} is marked unavailable on ${day} Period ${period} (${e.subject_name} for Grade ${grade} ${stream}).`,
-            day,
-            period,
-            { teacherId: tid, entryId: e.id }
-          );
-        }
-        if (Array.isArray(tProf.offDutySlots) && tProf.offDutySlots.some((od: any) => od.day === day && Number(od.period) === period)) {
-          pushConflict(
-            'error',
-            'TEACHER_OFF_DUTY',
-            `${tProf.teacher_name} is scheduled OFF DUTY on ${day} Period ${period} (${e.subject_name} for Grade ${grade} ${stream}).`,
-            day,
-            period,
-            { teacherId: tid, entryId: e.id }
-          );
-        }
-        if (Number(tProf.active_in_timetable) === 0 && ['draft', 'generated', 'review'].includes(String(version.status))) {
-          pushConflict(
-            'warning',
-            'TEACHER_INACTIVE',
-            `Assigned teacher ${tProf.teacher_name} is currently inactive in timetable roster.`,
-            day,
-            period,
-            { teacherId: tid, entryId: e.id }
-          );
-        }
-        if (Array.isArray(tProf.preferredFree) && tProf.preferredFree.some((pf: any) => pf.day === day && Number(pf.period) === period)) {
-          pushConflict(
-            'warning',
-            'PREFERRED_FREE_USED',
-            `${tProf.teacher_name} prefers Period ${period} on ${day} as a free preparation slot.`,
-            day,
-            period,
-            { teacherId: tid }
-          );
-        }
-      }
-    }
-
-    // Room slot & availability (resolve by room_id OR case-insensitive room_name so shared facilities never double-book)
-    const resolvedRoomId = e.room_id
-      ? String(e.room_id)
-      : e.room_name
-      ? roomIdByNameLower.get(String(e.room_name).trim().toLowerCase()) || null
-      : null;
-    if (resolvedRoomId) {
-      const rid = resolvedRoomId;
-      const rsKey = `${rid}|${day}|${period}`;
-      if (!roomSlotEvents.has(rsKey)) roomSlotEvents.set(rsKey, new Map());
-      roomSlotEvents.get(rsKey)!.set(blockEventKey, e);
-
-      const rObj = roomMap.get(rid);
-      if (rObj) {
-        if (rObj.availability?.[day]?.[String(period)] === false) {
-          pushConflict(
-            'error',
-            'ROOM_UNAVAILABLE',
-            `Classroom "${rObj.name}" is marked unavailable on ${day} Period ${period}.`,
-            day,
-            period,
-            { roomId: rid, entryId: e.id }
-          );
-        }
-        // Capacity check
-        let neededSeats = 38;
-        if (e.group_id && groupMap.has(String(e.group_id))) {
-          neededSeats = Number(groupMap.get(String(e.group_id)).student_count || 38);
-        }
-        if (!e.joint_lesson_id && neededSeats > Number(rObj.capacity || 45)) {
-          pushConflict(
-            'error',
-            'ROOM_CAPACITY_EXCEEDED',
-            `"${rObj.name}" (capacity ${rObj.capacity}) is too small for Grade ${grade} ${stream} (${neededSeats} learners).`,
-            day,
-            period,
-            { roomId: rid, neededSeats, capacity: rObj.capacity }
-          );
-        }
-      }
-    }
-  }
-
-  // Check Joint Lesson Combined Capacities
-  const jointEventsChecked = new Set<string>();
-  for (const e of entries) {
-    if (!e.joint_lesson_id || !e.room_id || jointEventsChecked.has(`${e.joint_lesson_id}|${e.day_of_week}|${e.period_number}`)) continue;
-    jointEventsChecked.add(`${e.joint_lesson_id}|${e.day_of_week}|${e.period_number}`);
-    const jl = db.prepare(`SELECT * FROM tt_joint_lessons WHERE id = ?`).get(String(e.joint_lesson_id)) as any;
-    const rObj = roomMap.get(String(e.room_id));
-    if (jl && rObj && Number(jl.combined_students || 0) > Number(rObj.capacity || 0)) {
-      pushConflict(
-        'error',
-        'ROOM_CAPACITY_EXCEEDED',
-        `Joint lesson "${jl.title}" has ${jl.combined_students} combined students exceeding "${rObj.name}" capacity (${rObj.capacity}).`,
-        String(e.day_of_week),
-        Number(e.period_number),
-        { jointLessonId: jl.id, roomId: rObj.id }
-      );
-    }
-  }
-
-  // C. Teacher Double-Bookings
-  for (const [key, eventMap] of teacherSlotEvents.entries()) {
-    if (eventMap.size > 1) {
-      const [tid, day, periodStr] = key.split('|');
-      const tName = teacherMap.get(tid)?.teacher_name || tid;
-      const evs = Array.from(eventMap.values()).map((x) => `Grade ${x.grade} ${x.stream} (${x.subject_name})`);
-      pushConflict(
-        'error',
-        'TEACHER_CLASH',
-        `Teacher double-booking: ${tName} is scheduled simultaneously for ${evs.join(' AND ')} on ${day} Period ${periodStr}.`,
-        day,
-        Number(periodStr),
-        { teacherId: tid, events: evs }
-      );
-    }
-  }
-
-  // D. Classroom & Shared Facility Capacity / Double-Bookings
-  for (const [key, eventMap] of roomSlotEvents.entries()) {
-    const [rid, day, periodStr] = key.split('|');
-    const rObj = roomMap.get(rid);
-    const maxConcurrent = Math.max(1, Number(rObj?.maxConcurrentClasses || 1));
-    if (eventMap.size > maxConcurrent) {
-      const rName = rObj?.name || rid;
-      const evs = Array.from(eventMap.values()).map((x) => `Grade ${x.grade} ${x.stream} (${x.subject_name})`);
-      pushConflict(
-        'error',
-        'CLASSROOM_CLASH',
-        `Facility capacity exceeded: "${rName}" allows ${maxConcurrent} class(es) at once but is booked for ${evs.join(' AND ')} on ${day} Period ${periodStr}.`,
-        day,
-        Number(periodStr),
-        { roomId: rid, maxConcurrent, events: evs }
-      );
-    }
-  }
-
-  // E. Class & Split Student-Group Clashes
-  for (const [key, list] of classSlotEntries.entries()) {
-    if (list.length <= 1) continue;
-    const [gStr, stream, day, pStr] = key.split('|');
-    // Multiple entries in same class/stream are ONLY valid if NONE is Whole Class AND each has a distinct group_id
-    const hasWhole = list.some((x) => !x.group_id || (groupMap.get(String(x.group_id))?.is_whole_class ?? 1) === 1);
-    const groupIds = list.map((x) => String(x.group_id || 'whole'));
-    const hasDupGroup = new Set(groupIds).size !== groupIds.length;
-    if (hasWhole) {
-      pushConflict(
-        'error',
-        'CLASS_CLASH',
-        `Class overlap: Grade ${gStr} ${stream} has ${list.map((x) => x.subject_name).join(' & ')} scheduled simultaneously on ${day} Period ${pStr}.`,
-        day,
-        Number(pStr),
-        { grade: Number(gStr), stream, subjects: list.map((x) => x.subject_name) }
-      );
-    } else if (hasDupGroup) {
-      pushConflict(
-        'error',
-        'STUDENT_GROUP_CLASH',
-        `Student group clash in Grade ${gStr} ${stream} on ${day} Period ${pStr}.`,
-        day,
-        Number(pStr),
-        { grade: Number(gStr), stream }
-      );
-    }
-  }
-
-  // F. Double & Triple Block Continuity Checks
-  for (const [_key, segs] of blockSegments.entries()) {
-    const blockLen = Number(segs[0].block_length || 1);
-    if (blockLen <= 1) continue;
-    if (segs.length !== blockLen) {
-      pushConflict(
-        'error',
-        'INVALID_DOUBLE_LESSON',
-        `Incomplete ${blockLen}-period block for Grade ${segs[0].grade} ${segs[0].stream} · ${segs[0].subject_name} on ${segs[0].day_of_week}.`,
-        String(segs[0].day_of_week),
-        Number(segs[0].period_number),
-        { sessionBlockId: segs[0].session_block_id }
-      );
-      continue;
-    }
-    const sorted = [...segs].sort((a, b) => Number(a.period_number) - Number(b.period_number));
-    const pNums = sorted.map((s) => Number(s.period_number));
-    const validStarts = getContiguousLessonStarts(periods, 12, blockLen as 1 | 2 | 3);
-    const isWindowValid = validStarts.some((w) => w.length === pNums.length && w.every((val, idx) => val === pNums[idx]));
-    if (!isWindowValid) {
-      pushConflict(
-        'error',
-        'INVALID_DOUBLE_LESSON',
-        `Broken multi-period block: Grade ${segs[0].grade} ${segs[0].stream} · ${segs[0].subject_name} on ${segs[0].day_of_week} (Periods ${pNums.join(', ')}) spans a break or non-adjacent slots.`,
-        String(segs[0].day_of_week),
-        pNums[0],
-        { sessionBlockId: segs[0].session_block_id, periods: pNums }
-      );
-    }
-  }
-
-  // G. Strict Weekly Lesson Quota & Allocated Grade/Stream/Subject Compliance Checks
-  const expectedCountByKey = new Map<string, number>();
-  for (const u of units) {
-    for (const ct of u.classTargets) {
-      const k = `${ct.grade}|${ct.stream}|${u.subjectName}|${u.groupName}`;
-      expectedCountByKey.set(k, (expectedCountByKey.get(k) || 0) + u.blockLength);
-    }
-  }
-  const actualCountByKey = new Map<string, number>();
-  for (const e of entries) {
-    const k = `${e.grade}|${e.stream}|${e.subject_name}|${e.group_name || 'Whole Class'}`;
-    actualCountByKey.set(k, (actualCountByKey.get(k) || 0) + 1);
-  }
-  const unscheduledCountByKey = new Map<string, number>();
-  for (const u of unscheduled) {
-    const k = `${u.grade}|${u.stream}|${u.subject_name}|${u.group_name || 'Whole Class'}`;
-    unscheduledCountByKey.set(k, (unscheduledCountByKey.get(k) || 0) + Number(u.block_length || 1));
-  }
-
-  // 1) Check missing AND excess weekly periods for every allocated (grade, stream, subject, group)
-  for (const [k, exp] of expectedCountByKey.entries()) {
-    const act = actualCountByKey.get(k) || 0;
-    const unschedPts = unscheduledCountByKey.get(k) || 0;
-    const [gStr, st, subj, grp] = k.split('|');
-
-    if (entries.length > 0 && act + unschedPts < exp) {
-      pushConflict(
-        'error',
-        'MISSING_WEEKLY_LESSONS',
-        `Missing weekly lessons for Grade ${gStr} ${st} (${grp}) · ${subj}: ${act}/${exp} periods scheduled.`,
-        undefined,
-        undefined,
-        { grade: Number(gStr), stream: st, subject: subj, scheduled: act, required: exp }
-      );
-    } else if (act > exp) {
-      pushConflict(
-        'error',
-        'EXCESS_WEEKLY_LESSONS',
-        `Weekly lesson quota exceeded for Grade ${gStr} ${st} (${grp}) · ${subj}: ${act} periods scheduled, strictly allowed ${exp} per week.`,
-        undefined,
-        undefined,
-        { grade: Number(gStr), stream: st, subject: subj, scheduled: act, required: exp }
-      );
-    }
-  }
-
-  // 2) Detect any scheduled entry whose (grade, stream, subject, group) is NOT in active allocations
-  for (const [k, act] of actualCountByKey.entries()) {
-    if (!expectedCountByKey.has(k)) {
-      const [gStr, st, subj, grp] = k.split('|');
-      pushConflict(
-        'error',
-        'UNALLOCATED_LESSON_ENTRY',
-        `Unallocated lesson entry: Grade ${gStr} ${st} (${grp}) · ${subj} has ${act} scheduled period(s) but is not allocated in active stream curriculum allocations.`,
-        undefined,
-        undefined,
-        { grade: Number(gStr), stream: st, subject: subj, scheduled: act }
-      );
-    }
-  }
-
-  // 3) Verify scheduled lessons strictly match their stream/joint allocation's assigned teacher
-  const checkedBlockTeacherMismatch = new Set<string>();
-  const jointMap = new Map<string, any>();
-  for (const jl of db.prepare(`SELECT * FROM tt_joint_lessons WHERE config_id = ?`).all(configId) as any[]) {
-    jointMap.set(String(jl.id), jl);
-  }
-
-  for (const e of entries) {
-    if (Number(e.block_index || 0) !== 0) continue;
-    const entryTeachers = safeJsonParse<string[]>(e.teacher_ids_json, []).filter(Boolean);
-    if (e.joint_lesson_id) {
-      const jl = jointMap.get(String(e.joint_lesson_id));
-      if (!jl || Number(jl.is_active) !== 1) continue;
-      const expectedTeachers = safeJsonParse<string[]>(jl.teacher_ids_json, []).filter(Boolean);
-      const matchesTeacher =
-        entryTeachers.length === expectedTeachers.length &&
-        expectedTeachers.every((tid) => entryTeachers.includes(tid));
-      if (!matchesTeacher) {
-        const mKey = `jl|${e.joint_lesson_id}|${e.session_block_id}`;
-        if (!checkedBlockTeacherMismatch.has(mKey)) {
-          checkedBlockTeacherMismatch.add(mKey);
-          const expectedNames = expectedTeachers.map((id) => teacherMap.get(id)?.teacher_name || id).join(', ') || 'Unassigned';
-          const actualNames = safeJsonParse<string[]>(e.teacher_names_json, []).join(', ') || 'Unassigned';
-          pushConflict(
-            'error',
-            'TEACHER_ALLOCATION_MISMATCH',
-            `Teacher allocation mismatch on ${e.day_of_week} P${e.period_number}: Joint lesson ${e.subject_name} is assigned to ${actualNames}, but allocation restricts it to ${expectedNames}.`,
-            String(e.day_of_week),
-            Number(e.period_number),
-            { jointLessonId: e.joint_lesson_id, subject: String(e.subject_name), expectedTeachers, entryTeachers }
-          );
-        }
-      }
-      continue;
-    }
-    const alloc = e.allocation_id ? allocMap.get(String(e.allocation_id)) : null;
-    if (!alloc || Number(alloc.is_active) !== 1) continue;
-    const expectedTeachers = safeJsonParse<string[]>(alloc.teacher_ids_json, []).filter(Boolean);
-    const matchesTeacher =
-      entryTeachers.length === expectedTeachers.length &&
-      expectedTeachers.every((tid) => entryTeachers.includes(tid));
-    if (!matchesTeacher) {
-      const mKey = `${e.grade}|${e.stream}|${e.subject_name}|${e.session_block_id}`;
-      if (!checkedBlockTeacherMismatch.has(mKey)) {
-        checkedBlockTeacherMismatch.add(mKey);
-        const expectedNames = expectedTeachers.map((id) => teacherMap.get(id)?.teacher_name || id).join(', ') || 'Unassigned';
-        const actualNames = safeJsonParse<string[]>(e.teacher_names_json, []).join(', ') || 'Unassigned';
-        pushConflict(
-          'error',
-          'TEACHER_ALLOCATION_MISMATCH',
-          `Teacher allocation mismatch on ${e.day_of_week} P${e.period_number}: Grade ${e.grade} ${e.stream} · ${e.subject_name} is assigned to ${actualNames}, but stream allocation restricts it to ${expectedNames}.`,
-          String(e.day_of_week),
-          Number(e.period_number),
-          { grade: Number(e.grade), stream: String(e.stream), subject: String(e.subject_name), expectedTeachers, entryTeachers }
-        );
-      }
-    }
-  }
-
-  // H. Teacher Workload & Consecutive Lesson Warnings
-  for (const [tdKey, periodSet] of teacherDayPeriods.entries()) {
-    const [tid, day] = tdKey.split('|');
-    const tProf = teacherMap.get(tid);
-    if (!tProf) continue;
-    const maxDaily = Number(tProf.max_daily_periods || 6);
-    if (periodSet.size > maxDaily) {
-      pushConflict(
-        'warning',
-        'TEACHER_DAILY_OVERLOAD',
-        `${tProf.teacher_name} has ${periodSet.size} lessons on ${day} (daily limit: ${maxDaily}).`,
-        day,
-        undefined,
-        { teacherId: tid, count: periodSet.size, limit: maxDaily }
-      );
-    }
-
-    const sortedP = Array.from(periodSet).sort((a, b) => a - b);
-    let streak = 1;
-    let maxStreak = 1;
-    for (let i = 1; i < sortedP.length; i++) {
-      if (sortedP[i] === sortedP[i - 1] + 1) {
-        streak++;
-        if (streak > maxStreak) maxStreak = streak;
-      } else {
-        streak = 1;
-      }
-    }
-    const maxConsec = Number(tProf.max_consecutive_lessons || 3);
-    if (maxStreak > maxConsec) {
-      pushConflict(
-        'warning',
-        'TEACHER_CONSECUTIVE_LIMIT',
-        `${tProf.teacher_name} has ${maxStreak} consecutive lessons on ${day} (recommended max: ${maxConsec}).`,
-        day,
-        undefined,
-        { teacherId: tid, maxStreak, limit: maxConsec }
-      );
-    }
-  }
-
-  for (const [tid, weekTotal] of teacherWeekCount.entries()) {
-    const tProf = teacherMap.get(tid);
-    if (tProf && weekTotal > Number(tProf.max_weekly_periods || 28)) {
-      pushConflict(
-        'warning',
-        'TEACHER_WEEKLY_OVERLOAD',
-        `${tProf.teacher_name} is assigned ${weekTotal} weekly periods (weekly target limit: ${tProf.max_weekly_periods}).`,
-        undefined,
-        undefined,
-        { teacherId: tid, count: weekTotal, limit: tProf.max_weekly_periods }
-      );
-    }
-  }
-
-  // I. Subject Daily Concentration & Minimum Day Spacing Warnings
-  const dayIndexMap = new Map<string, number>();
-  workingDays.forEach((d, idx) => dayIndexMap.set(d, idx));
-
-  for (const e of entries) {
-    if (!e.allocation_id || Number(e.block_index || 0) !== 0) continue;
-    const alloc = allocMap.get(String(e.allocation_id));
-    if (!alloc) continue;
-    const maxPerDay = Number(alloc.max_per_day || 1);
-    const sdKey = `${e.grade}|${e.stream}|${e.subject_name}`;
-    const dCount = classSubjectDayCount.get(sdKey)?.get(String(e.day_of_week)) || 0;
-    if (dCount > Math.max(maxPerDay, Number(e.block_length || 1))) {
-      // Avoid repeating identical warning for same class/subject/day
-      const alreadyLogged = conflicts.some(
-        (c) =>
-          c.conflictType === 'EXCESS_DAILY_SUBJECT' &&
-          c.details?.grade === Number(e.grade) &&
-          c.details?.stream === String(e.stream) &&
-          c.details?.subject === String(e.subject_name) &&
-          c.dayOfWeek === String(e.day_of_week)
-      );
-      if (!alreadyLogged) {
-        pushConflict(
-          'warning',
-          'EXCESS_DAILY_SUBJECT',
-          `Excessive daily allocation: Grade ${e.grade} ${e.stream} has ${dCount} periods of ${e.subject_name} on ${e.day_of_week} (limit: ${maxPerDay}).`,
-          String(e.day_of_week),
-          Number(e.period_number),
-          { grade: Number(e.grade), stream: String(e.stream), subject: String(e.subject_name), count: dCount, limit: maxPerDay }
-        );
-      }
-    }
-  }
-
-  // Persist into tt_validation_conflicts
-  const now = new Date().toISOString();
-  db.prepare(`DELETE FROM tt_validation_conflicts WHERE version_id = ?`).run(versionId);
-  const insConf = db.prepare(
-    `INSERT INTO tt_validation_conflicts (id, version_id, tenant_id, severity, conflict_type, day_of_week, period_number, message, details_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  for (const c of conflicts) {
-    insConf.run(
-      c.id,
-      versionId,
-      tenantId,
-      c.severity,
-      c.conflictType,
-      c.dayOfWeek || null,
-      c.periodNumber ?? null,
-      c.message,
-      JSON.stringify(c.details),
-      now
-    );
-  }
-
-  const hardErrors = conflicts.filter((c) => c.severity === 'error').length;
-  const warnings = conflicts.filter((c) => c.severity === 'warning').length;
-
-  return {
-    hardErrors,
-    warnings,
-    conflicts,
-    canApprove: hardErrors === 0 && entries.length > 0 && unscheduled.length === 0,
-  };
+export interface FacilityUtilizationReport {
+  facilityId: string;
+  facilityName: string;
+  facilityType: FacilityType;
+  capacityStreams: number;
+  totalBookedSlots: number;
+  peakConcurrentStreams: number;
+  overflowSlots: number;
+  bookingsByCategory: Record<TimetableCategoryId, number>;
 }
 
-/**
- * Atomic move check for Manual Drag-and-Drop Editor BEFORE committing to DB.
- * Checks teacher clash, class/split-group clash, classroom clash, break continuity, and availability.
- */
-export function validateSingleMoveCandidate(
-  db: DatabaseSync,
-  versionId: string,
-  sessionBlockId: string,
-  targetDay: string,
-  targetStartPeriod: number,
-  targetRoomId?: string | null
-): {
-  valid: boolean;
-  hardConflicts: string[];
-  warnings: string[];
-  targetPeriods: number[];
-} {
-  const version = db.prepare(`SELECT * FROM tt_versions WHERE id = ?`).get(versionId) as any;
-  if (!version) return { valid: false, hardConflicts: ['Timetable version not found.'], warnings: [], targetPeriods: [] };
-
-  const blockEntries = db
-    .prepare(`SELECT * FROM tt_entries WHERE version_id = ? AND session_block_id = ? ORDER BY block_index ASC`)
-    .all(versionId, sessionBlockId) as any[];
-
-  if (blockEntries.length === 0) {
-    return { valid: false, hardConflicts: ['Lesson session block not found in this timetable version.'], warnings: [], targetPeriods: [] };
-  }
-
-  const tenantId = String(version.tenant_id);
-  const configId = String(version.config_id);
-  const blockLen = Number(blockEntries[0].block_length || 1) as 1 | 2 | 3;
-
-  const periodsRaw = db
-    .prepare(`SELECT * FROM tt_periods WHERE config_id = ? ORDER BY sort_order ASC`)
-    .all(configId) as any[];
-  const periods: TTPeriod[] = periodsRaw.map((p) => ({
-    id: String(p.id),
-    tenantId,
-    configId,
-    gradeBand: String(p.grade_band),
-    periodNumber: Number(p.period_number),
-    label: String(p.label),
-    kind: p.kind,
-    startTime: String(p.start_time),
-    endTime: String(p.end_time),
-    sortOrder: Number(p.sort_order),
-  }));
-
-  const validWindows = getContiguousLessonStarts(periods, 12, blockLen);
-  const matchingWindow = validWindows.find((w) => w[0] === targetStartPeriod);
-  const hardConflicts: string[] = [];
-  const warnings: string[] = [];
-
-  if (!matchingWindow) {
-    hardConflicts.push(
-      `Cannot place ${blockLen}-period block at Period ${targetStartPeriod}: slot is either invalid or crosses a break/lunch period.`
-    );
-    return { valid: false, hardConflicts, warnings, targetPeriods: [] };
-  }
-
-  // Distinct class targets (multiple if joint lesson)
-  const uniqueClasses = Array.from(
-    new Map(blockEntries.map((e) => [`${e.grade}|${e.stream}`, e])).values()
-  );
-
-  // Strict allocation & grade schedule verification
-  const firstEntry = blockEntries[0];
-  if (!firstEntry.joint_lesson_id) {
-    const activeAlloc = firstEntry.allocation_id
-      ? (db
-          .prepare(
-            `SELECT id, grade, stream, subject_name, required_weekly_periods, is_active
-             FROM tt_stream_subject_allocations
-             WHERE id = ? AND config_id = ? AND is_active = 1`
-          )
-          .get(String(firstEntry.allocation_id), configId) as any)
-      : (db
-          .prepare(
-            `SELECT id, grade, stream, subject_name, required_weekly_periods, is_active
-             FROM tt_stream_subject_allocations
-             WHERE config_id = ? AND grade = ? AND lower(stream) = lower(?) AND lower(subject_name) = lower(?) AND is_active = 1
-             LIMIT 1`
-          )
-          .get(configId, Number(firstEntry.grade), String(firstEntry.stream), String(firstEntry.subject_name)) as any);
-    if (!activeAlloc) {
-      hardConflicts.push(
-        `Grade ${firstEntry.grade} ${firstEntry.stream} · ${firstEntry.subject_name} is no longer an active allocated subject for this stream and cannot be scheduled.`
-      );
-    }
-  }
-
-  // Check Grade schedule limits
-  for (const ce of uniqueClasses) {
-    const gs = db
-      .prepare(`SELECT periods_per_day, working_days_json FROM tt_grade_schedules WHERE config_id = ? AND grade = ?`)
-      .get(configId, Number(ce.grade)) as any;
-    if (!gs) {
-      hardConflicts.push(`Grade ${ce.grade} is not configured in active grade schedules.`);
-      continue;
-    }
-    const allowedDays = safeJsonParse<string[]>(gs?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-    if (!allowedDays.includes(targetDay)) {
-      hardConflicts.push(`${targetDay} is not a configured working day for Grade ${ce.grade}.`);
-    }
-    const maxP = Number(gs?.periods_per_day || 8);
-    if (matchingWindow.some((p) => p > maxP)) {
-      hardConflicts.push(`Period ${Math.max(...matchingWindow)} exceeds Grade ${ce.grade} daily periods (${maxP}).`);
-    }
-  }
-
-  // Load other entries on targetDay within targetPeriods (excluding this sessionBlockId)
-  const placeholders = matchingWindow.map(() => '?').join(',');
-  const otherEntries = db
-    .prepare(
-      `SELECT * FROM tt_entries
-       WHERE version_id = ? AND day_of_week = ? AND period_number IN (${placeholders}) AND session_block_id != ?`
-    )
-    .all(versionId, targetDay, ...matchingWindow, sessionBlockId) as any[];
-
-  const teacherIds = safeJsonParse<string[]>(blockEntries[0].teacher_ids_json, []).filter(Boolean);
-  const roomId = targetRoomId !== undefined ? targetRoomId : (blockEntries[0].room_id ? String(blockEntries[0].room_id) : null);
-
-  // Strict Teacher Assignment Presence & Scope Check on manual moves/placements
-  const teacherScopes = loadTenantTeacherScopes(db, tenantId);
-  if (teacherIds.length === 0) {
-    hardConflicts.push(
-      `No assigned subject teacher for Grade ${firstEntry.grade} ${firstEntry.stream} · ${firstEntry.subject_name}. Assign an authorized teacher before placing on the timetable.`
-    );
-  }
-  for (const tid of teacherIds) {
-    for (const ce of uniqueClasses) {
-      const scopeCheck = checkTeacherAssignmentScope(
-        teacherScopes,
-        tid,
-        Number(ce.grade),
-        String(ce.stream),
-        String(ce.subject_name || firstEntry.subject_name || '')
-      );
-      if (!scopeCheck.ok) {
-        hardConflicts.push(
-          scopeCheck.reason ||
-            `Teacher is not strictly assigned to Grade ${ce.grade} ${ce.stream} · ${ce.subject_name}.`
-        );
-      }
-    }
-  }
-
-  // Teacher clashes, availability & off-duty enforcement
-  for (const tid of teacherIds) {
-    const tProf = db
-      .prepare(`SELECT teacher_name, availability_json, off_duty_slots_json FROM tt_teacher_profiles WHERE id = ?`)
-      .get(tid) as any;
-    const avail = safeJsonParse<Record<string, Record<string, boolean>>>(tProf?.availability_json, {});
-    const offDuty = safeJsonParse<Array<{ day: string; period: number }>>(tProf?.off_duty_slots_json, []);
-    for (const p of matchingWindow) {
-      if (avail?.[targetDay]?.[String(p)] === false) {
-        hardConflicts.push(`${tProf?.teacher_name || 'Teacher'} is unavailable on ${targetDay} Period ${p}.`);
-      }
-      if (offDuty.some((od) => od.day === targetDay && Number(od.period) === p)) {
-        hardConflicts.push(`${tProf?.teacher_name || 'Teacher'} is OFF DUTY on ${targetDay} Period ${p}.`);
-      }
-      const clash = otherEntries.find((oe) => {
-        if (Number(oe.period_number) !== p) return false;
-        const oTeachers = safeJsonParse<string[]>(oe.teacher_ids_json, []);
-        return oTeachers.includes(tid);
-      });
-      if (clash) {
-        hardConflicts.push(
-          `Teacher clash: ${tProf?.teacher_name || 'Teacher'} is already teaching Grade ${clash.grade} ${clash.stream} (${clash.subject_name}) on ${targetDay} Period ${p}.`
-        );
-      }
-    }
-  }
-
-  // Class & student group clashes
-  const groupInfoMap = new Map<string, any>();
-  for (const g of db.prepare(`SELECT * FROM tt_student_groups WHERE tenant_id = ?`).all(tenantId) as any[]) {
-    groupInfoMap.set(String(g.id), g);
-  }
-
-  for (const ce of uniqueClasses) {
-    const movingGroupId = ce.group_id ? String(ce.group_id) : null;
-    const movingWhole = !movingGroupId || Number(groupInfoMap.get(movingGroupId)?.is_whole_class ?? 1) === 1;
-
-    for (const p of matchingWindow) {
-      const sameClassAtP = otherEntries.filter(
-        (oe) => Number(oe.grade) === Number(ce.grade) && String(oe.stream) === String(ce.stream) && Number(oe.period_number) === p
-      );
-      for (const clash of sameClassAtP) {
-        const clashWhole = !clash.group_id || Number(groupInfoMap.get(String(clash.group_id))?.is_whole_class ?? 1) === 1;
-        if (movingWhole || clashWhole || String(clash.group_id || '') === String(movingGroupId || '')) {
-          hardConflicts.push(
-            `Class clash: Grade ${ce.grade} ${ce.stream} already has ${clash.subject_name} (${clash.group_name || 'Whole Class'}) on ${targetDay} Period ${p}.`
-          );
-        }
-      }
-    }
-  }
-
-  // Room clashes, availability & concurrent capacity
-  if (roomId) {
-    const rObj = db.prepare(`SELECT * FROM tt_classrooms WHERE id = ?`).get(roomId) as any;
-    const avail = safeJsonParse<Record<string, Record<string, boolean>>>(rObj?.availability_json, {});
-    const maxConcurrent = Math.max(1, Number(rObj?.max_concurrent_classes || 1));
-    for (const p of matchingWindow) {
-      if (avail?.[targetDay]?.[String(p)] === false) {
-        hardConflicts.push(`Room "${rObj?.name || roomId}" is marked unavailable on ${targetDay} Period ${p}.`);
-      }
-      const overlappingBlocks = new Set(
-        otherEntries
-          .filter((oe) => Number(oe.period_number) === p && String(oe.room_id || '') === roomId)
-          .map((oe) => String(oe.session_block_id || oe.id))
-      );
-      if (overlappingBlocks.size >= maxConcurrent) {
-        const rClash = otherEntries.find((oe) => Number(oe.period_number) === p && String(oe.room_id || '') === roomId);
-        hardConflicts.push(
-          `Facility clash: "${rObj?.name || roomId}" is at full capacity (${maxConcurrent} class/session) — booked by Grade ${rClash?.grade} ${rClash?.stream} (${rClash?.subject_name}) on ${targetDay} Period ${p}.`
-        );
-      }
-    }
-  }
-
-  return {
-    valid: hardConflicts.length === 0,
-    hardConflicts,
-    warnings,
-    targetPeriods: matchingWindow,
-  };
+export interface StreamCompletenessReport {
+  categoryId: TimetableCategoryId;
+  grade: number;
+  stream: string;
+  expectedRegularPeriods: number;
+  scheduledRegularPeriods: number;
+  unexplainedBlankPeriods: number;
+  remedialSessionsScheduled: number;
+  missingLessons: Array<{ subjectName: string; expected: number; scheduled: number }>;
+  isComplete: boolean;
 }
 
-// =========================================================================
-// GLOBAL TEACHER COLLISION LOCK, ATOMIC BOOKING & INPUT VALIDATION SERVICES
-// =========================================================================
-
-/**
- * Rebuild and verify database-level teacher and stream collision lock tables
- * (`tt_teacher_bookings` and `tt_stream_bookings`) for a timetable version.
- * Because `tt_teacher_bookings` has `PRIMARY KEY (version_id, teacher_id, day_of_week, period_number)`,
- * SQLite physically rejects any double-booking across all grades, streams, and categories.
- * Combined/joint sessions share one `session_block_id` and book the teacher cleanly once.
- */
-export function syncVersionBookingLocks(
-  db: DatabaseSync,
-  versionId: string,
-  options: { useOwnTransaction?: boolean } = {}
-): { teacherBookings: number; streamBookings: number } {
-  const version = db.prepare(`SELECT id, tenant_id FROM tt_versions WHERE id = ?`).get(versionId) as any;
-  if (!version) throw new Error('Timetable version not found.');
-  const tenantId = String(version.tenant_id);
-  const now = new Date().toISOString();
-
-  const run = () => {
-    db.prepare(`DELETE FROM tt_teacher_bookings WHERE version_id = ?`).run(versionId);
-    db.prepare(`DELETE FROM tt_stream_bookings WHERE version_id = ?`).run(versionId);
-
-    const entries = db
-      .prepare(`SELECT * FROM tt_entries WHERE version_id = ? ORDER BY day_of_week, period_number, grade, stream`)
-      .all(versionId) as any[];
-
-    const insTeacherBooking = db.prepare(
-      `INSERT INTO tt_teacher_bookings
-         (version_id, tenant_id, teacher_id, day_of_week, period_number, session_block_id, subject_name, grade, stream, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insStreamBooking = db.prepare(
-      `INSERT INTO tt_stream_bookings
-         (version_id, tenant_id, grade, stream, group_key, day_of_week, period_number, session_block_id, subject_name, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-
-    const seenTeacherSlots = new Map<string, { blockId: string; label: string }>();
-    const seenStreamSlots = new Map<string, { blockId: string; label: string }>();
-    let teacherBookings = 0;
-    let streamBookings = 0;
-
-    for (const e of entries) {
-      const day = String(e.day_of_week);
-      const period = Number(e.period_number);
-      const blockId = String(e.session_block_id || e.id);
-      const grade = Number(e.grade);
-      const stream = String(e.stream);
-      const subject = String(e.subject_name);
-      const label = `Grade ${grade} ${stream} (${subject})`;
-
-      // 1. Enforce DB-level stream booking uniqueness
-      const groupKey = e.group_id && String(e.group_name || 'Whole Class') !== 'Whole Class' ? String(e.group_id) : 'WHOLE';
-      const sKey = `${grade}|${stream}|${groupKey}|${day}|${period}`;
-      const existingStream = seenStreamSlots.get(sKey);
-      if (existingStream && existingStream.blockId !== blockId) {
-        throw new Error(
-          `STREAM_BOOKING_COLLISION: Grade ${grade} ${stream} already has ${existingStream.label} on ${day} Period ${period}; cannot also book ${label}.`
-        );
-      }
-      if (!existingStream) {
-        insStreamBooking.run(versionId, tenantId, grade, stream, groupKey, day, period, blockId, subject, now);
-        seenStreamSlots.set(sKey, { blockId, label });
-        streamBookings++;
-      }
-
-      // 2. Enforce DB-level global teacher booking uniqueness (joint lessons share the same session_block_id)
-      const teacherIds = safeJsonParse<string[]>(e.teacher_ids_json, []).filter(Boolean);
-      for (const tid of teacherIds) {
-        const tKey = `${tid}|${day}|${period}`;
-        const existingTeacher = seenTeacherSlots.get(tKey);
-        if (existingTeacher) {
-          if (existingTeacher.blockId === blockId) {
-            // Same combined-stream joint session block — counted once
-            continue;
-          }
-          throw new Error(
-            `TEACHER_BOOKING_COLLISION: Teacher ${tid} is already booked for ${existingTeacher.label} on ${day} Period ${period}; cannot simultaneously teach ${label}.`
-          );
-        }
-        insTeacherBooking.run(versionId, tenantId, tid, day, period, blockId, subject, grade, stream, now);
-        seenTeacherSlots.set(tKey, { blockId, label });
-        teacherBookings++;
-      }
-    }
-
-    return { teacherBookings, streamBookings };
-  };
-
-  if (options.useOwnTransaction !== false) {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const res = run();
-      db.exec('COMMIT');
-      return res;
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
-  }
-  return run();
-}
-
-/**
- * Global Teacher Availability & Collision Check Service across ALL grades, streams, and categories.
- */
-export function checkGlobalTeacherConflict(
-  db: DatabaseSync,
-  versionId: string,
-  teacherIds: string[],
-  day: string,
-  periods: number[],
-  excludeSessionBlockId?: string
-): { available: boolean; conflicts: string[] } {
-  const conflicts: string[] = [];
-  if (!teacherIds.length || !periods.length) return { available: true, conflicts };
-
-  const placeholders = periods.map(() => '?').join(',');
-  for (const tid of teacherIds) {
-    const tProf = db
-      .prepare(`SELECT teacher_name, availability_json, off_duty_slots_json, active_in_timetable FROM tt_teacher_profiles WHERE id = ?`)
-      .get(tid) as any;
-    const tName = tProf?.teacher_name || tid;
-    const avail = safeJsonParse<Record<string, Record<string, boolean>>>(tProf?.availability_json, {});
-    const offDuty = safeJsonParse<Array<{ day: string; period: number }>>(tProf?.off_duty_slots_json, []);
-
-    for (const p of periods) {
-      if (avail?.[day]?.[String(p)] === false) {
-        conflicts.push(`${tName} is marked unavailable on ${day} Period ${p}.`);
-      }
-      if (offDuty.some((od) => od.day === day && Number(od.period) === p)) {
-        conflicts.push(`${tName} is scheduled OFF DUTY on ${day} Period ${p}.`);
-      }
-    }
-
-    // Check DB-level teacher booking table first
-    const bookingRows = db
-      .prepare(
-        `SELECT * FROM tt_teacher_bookings
-         WHERE version_id = ? AND teacher_id = ? AND day_of_week = ? AND period_number IN (${placeholders})
-           ${excludeSessionBlockId ? 'AND session_block_id != ?' : ''}`
-      )
-      .all(
-        versionId,
-        tid,
-        day,
-        ...periods,
-        ...(excludeSessionBlockId ? [excludeSessionBlockId] : [])
-      ) as any[];
-
-    for (const b of bookingRows) {
-      conflicts.push(
-        `Global teacher collision: ${tName} is already booked for Grade ${b.grade} ${b.stream} (${b.subject_name}) on ${day} Period ${b.period_number}.`
-      );
-    }
-
-    // Also double-check raw tt_entries in case a legacy caller inserted without syncing locks
-    if (bookingRows.length === 0) {
-      const rawEntries = db
-        .prepare(
-          `SELECT * FROM tt_entries
-           WHERE version_id = ? AND day_of_week = ? AND period_number IN (${placeholders})
-             ${excludeSessionBlockId ? 'AND session_block_id != ?' : ''}`
-        )
-        .all(
-          versionId,
-          day,
-          ...periods,
-          ...(excludeSessionBlockId ? [excludeSessionBlockId] : [])
-        ) as any[];
-      for (const e of rawEntries) {
-        const eTeachers = safeJsonParse<string[]>(e.teacher_ids_json, []);
-        if (eTeachers.includes(tid)) {
-          conflicts.push(
-            `Global teacher collision: ${tName} is already teaching Grade ${e.grade} ${e.stream} (${e.subject_name}) on ${day} Period ${e.period_number}.`
-          );
-        }
-      }
-    }
-  }
-
-  return { available: conflicts.length === 0, conflicts };
-}
-
-/**
- * Atomic transactional lesson booking with SQLite `BEGIN IMMEDIATE` + PRIMARY KEY collision lock.
- * Guarantees two concurrent/conflicting administrator updates can NEVER double-book a teacher,
- * stream, or shared facility at the same day & period.
- */
-export function bookEntryAtomically(
-  db: DatabaseSync,
-  params: {
-    versionId: string;
-    tenantId: string;
+export interface TimetableAuditReport {
+  isValid: boolean;
+  readyToGenerate: boolean;
+  readinessIssues: ValidationIssue[];
+  teacherCollisions: Array<{
+    teacherId: string;
+    teacherName: string;
     dayOfWeek: string;
-    periods: number[];
+    periodNumber: number;
+    entries: Array<{ grade: number; stream: string; subjectName: string }>;
+  }>;
+  facilityOverflows: Array<{
+    facilityId: string;
+    facilityName: string;
+    dayOfWeek: string;
+    periodNumber: number;
+    capacityStreams: number;
+    bookedStreams: number;
+    entries: Array<{ grade: number; stream: string; subjectName: string }>;
+  }>;
+  studentGroupConflicts: Array<{
+    grade: number;
+    stream: string;
+    dayOfWeek: string;
+    periodNumber: number;
+    overlappingStudentIds: string[];
+    subjects: string[];
+  }>;
+  unexplainedBlankSessions: Array<{
+    categoryId: TimetableCategoryId;
+    grade: number;
+    stream: string;
+    dayOfWeek: string;
+    periodNumber: number;
+  }>;
+  categoryTotals: CategoryAllocationSummary[];
+  teacherWorkloads: TeacherWorkloadReport[];
+  facilityUtilization: FacilityUtilizationReport[];
+  streamCompleteness: StreamCompletenessReport[];
+}
+
+export interface GenerateScheduleResult {
+  success: boolean;
+  entries: EngineTimetableEntry[];
+  unplacedTasks: Array<{
+    categoryId: TimetableCategoryId;
     grade: number;
     stream: string;
     subjectName: string;
-    teacherIds: string[];
-    teacherNames?: string[];
-    roomId?: string | null;
-    roomName?: string | null;
-    groupId?: string | null;
-    groupName?: string;
-    allocationId?: string | null;
-    jointLessonId?: string | null;
-    sessionBlockId?: string;
-    isLocked?: boolean;
-  }
-): { ok: true; sessionBlockId: string; entryIds: string[] } | { ok: false; code: string; error: string } {
-  const {
-    versionId,
-    tenantId,
-    dayOfWeek,
-    periods,
-    grade,
-    stream,
-    subjectName,
-    teacherIds,
-    roomId = null,
-    roomName = null,
-    groupId = null,
-    groupName = 'Whole Class',
-    allocationId = null,
-    jointLessonId = null,
-    isLocked = false,
-  } = params;
-  const sessionBlockId = params.sessionBlockId || uid('ttblk');
-  const now = new Date().toISOString();
+    reason: string;
+  }>;
+  audit: TimetableAuditReport;
+}
 
-  if (!periods.length) {
-    return { ok: false, code: 'INVALID_SLOT', error: 'At least one teaching period is required.' };
-  }
+function getRegularPeriods(config: EngineScheduleConfig): PeriodSlotDefinition[] {
+  const regular = config.periods.filter((p) => p.slotType === 'regular');
+  if (regular.length > 0) return regular;
+  return config.periods.slice(0, config.periodsPerDay);
+}
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const version = db.prepare(`SELECT * FROM tt_versions WHERE id = ? AND tenant_id = ?`).get(versionId, tenantId) as any;
-    if (!version) {
-      db.exec('ROLLBACK');
-      return { ok: false, code: 'VERSION_NOT_FOUND', error: 'Timetable version not found for this school.' };
-    }
+function getAllPeriods(config: EngineScheduleConfig): PeriodSlotDefinition[] {
+  return config.periods;
+}
 
-    // 1. Validate periods are teaching periods (never break/lunch)
-    const periodRows = db
-      .prepare(`SELECT period_number, kind FROM tt_periods WHERE config_id = ?`)
-      .all(String(version.config_id)) as any[];
-    const teachingPeriods = new Set(
-      periodRows.filter((p) => String(p.kind) === 'lesson' && Number(p.period_number) > 0).map((p) => Number(p.period_number))
-    );
-    for (const p of periods) {
-      if (teachingPeriods.size > 0 && !teachingPeriods.has(p)) {
-        db.exec('ROLLBACK');
-        return {
-          ok: false,
-          code: 'LESSON_ON_NON_TEACHING_SLOT',
-          error: `Period ${p} is not an active teaching slot (break/lunch or outside school hours).`,
-        };
-      }
-    }
+function slotKey(day: string, periodNumber: number): string {
+  return `${day}::${periodNumber}`;
+}
 
-    // 2. Strict Teacher Scope Check
-    const cleanTeacherIds = Array.from(new Set(teacherIds.filter(Boolean)));
-    if (cleanTeacherIds.length === 0) {
-      db.exec('ROLLBACK');
-      return { ok: false, code: 'NO_ASSIGNED_TEACHER', error: 'At least one authorized subject teacher must be assigned.' };
-    }
-    const scopes = loadTenantTeacherScopes(db, tenantId);
-    for (const tid of cleanTeacherIds) {
-      const scopeRes = checkTeacherAssignmentScope(scopes, tid, grade, stream, subjectName);
-      if (!scopeRes.ok) {
-        db.exec('ROLLBACK');
-        return { ok: false, code: scopeRes.code || 'TEACHER_SCOPE_VIOLATION', error: scopeRes.reason || 'Teacher is not strictly assigned to this class and subject.' };
-      }
-    }
+function streamKey(grade: number, stream: string): string {
+  return `G${grade}::${stream}`;
+}
 
-    // 3. Global Teacher Conflict & Availability Check
-    const teacherCheck = checkGlobalTeacherConflict(db, versionId, cleanTeacherIds, dayOfWeek, periods, sessionBlockId);
-    if (!teacherCheck.available) {
-      db.exec('ROLLBACK');
-      return { ok: false, code: 'TEACHER_CLASH', error: teacherCheck.conflicts[0] };
-    }
-
-    // 4. Shared Facility Concurrent Capacity & Availability Check
-    if (roomId) {
-      const rObj = db.prepare(`SELECT * FROM tt_classrooms WHERE id = ? AND tenant_id = ?`).get(roomId, tenantId) as any;
-      if (rObj) {
-        const avail = safeJsonParse<Record<string, Record<string, boolean>>>(rObj.availability_json, {});
-        const maxConcurrent = Math.max(1, Number(rObj.max_concurrent_classes || 1));
-        for (const p of periods) {
-          if (avail?.[dayOfWeek]?.[String(p)] === false) {
-            db.exec('ROLLBACK');
-            return { ok: false, code: 'ROOM_UNAVAILABLE', error: `Facility "${rObj.name}" is unavailable on ${dayOfWeek} Period ${p}.` };
-          }
-          const existingBlocks = db
-            .prepare(
-              `SELECT DISTINCT session_block_id FROM tt_entries
-               WHERE version_id = ? AND room_id = ? AND day_of_week = ? AND period_number = ? AND session_block_id != ?`
-            )
-            .all(versionId, roomId, dayOfWeek, p, sessionBlockId) as any[];
-          if (existingBlocks.length >= maxConcurrent) {
-            db.exec('ROLLBACK');
-            return {
-              ok: false,
-              code: 'CLASSROOM_CLASH',
-              error: `Facility "${rObj.name}" is already booked to maximum concurrent capacity (${maxConcurrent}) on ${dayOfWeek} Period ${p}.`,
-            };
-          }
-        }
-      }
-    }
-
-    // Resolve teacher names
-    const resolvedTeacherNames =
-      params.teacherNames && params.teacherNames.length === cleanTeacherIds.length
-        ? params.teacherNames
-        : cleanTeacherIds.map((tid) => {
-            const row = db.prepare(`SELECT teacher_name FROM tt_teacher_profiles WHERE id = ?`).get(tid) as any;
-            return row?.teacher_name ? String(row.teacher_name) : tid;
-          });
-
-    const resolvedRoomName =
-      roomName ||
-      (roomId ? String((db.prepare(`SELECT name FROM tt_classrooms WHERE id = ?`).get(roomId) as any)?.name || 'Assigned Room') : 'Assigned Room');
-
-    const groupKey = groupId && groupName !== 'Whole Class' ? String(groupId) : 'WHOLE';
-
-    const insEntry = db.prepare(
-      `INSERT INTO tt_entries
-         (id, version_id, tenant_id, day_of_week, period_number, grade, stream, stream_label, group_id, group_name, joint_lesson_id, allocation_id, subject_name, teacher_ids_json, teacher_names_json, room_id, room_name, session_block_id, block_length, block_index, is_locked, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insTeacherBooking = db.prepare(
-      `INSERT INTO tt_teacher_bookings
-         (version_id, tenant_id, teacher_id, day_of_week, period_number, session_block_id, subject_name, grade, stream, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insStreamBooking = db.prepare(
-      `INSERT INTO tt_stream_bookings
-         (version_id, tenant_id, grade, stream, group_key, day_of_week, period_number, session_block_id, subject_name, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-
-    const entryIds: string[] = [];
-    periods.forEach((p, idx) => {
-      // Check whole-class vs split clash before writing lock
-      const existingAtStream = db
-        .prepare(
-          `SELECT group_key, session_block_id, subject_name FROM tt_stream_bookings
-           WHERE version_id = ? AND grade = ? AND stream = ? AND day_of_week = ? AND period_number = ? AND session_block_id != ?`
-        )
-        .all(versionId, grade, stream, dayOfWeek, p, sessionBlockId) as any[];
-      if (existingAtStream.some((r) => groupKey === 'WHOLE' || r.group_key === 'WHOLE' || r.group_key === groupKey)) {
-        throw new Error(
-          `STREAM_BOOKING_COLLISION: Grade ${grade} ${stream} already has ${existingAtStream[0].subject_name} on ${dayOfWeek} Period ${p}.`
-        );
-      }
-
-      // Insert stream lock (PRIMARY KEY enforces concurrency safety)
-      insStreamBooking.run(versionId, tenantId, grade, stream, groupKey, dayOfWeek, p, sessionBlockId, subjectName, now);
-
-      // Insert teacher locks (PRIMARY KEY enforces zero teacher double-booking even under concurrent writes)
-      for (const tid of cleanTeacherIds) {
-        const existingSameBlock = db
-          .prepare(
-            `SELECT session_block_id FROM tt_teacher_bookings
-             WHERE version_id = ? AND teacher_id = ? AND day_of_week = ? AND period_number = ?`
-          )
-          .get(versionId, tid, dayOfWeek, p) as any;
-        if (existingSameBlock && String(existingSameBlock.session_block_id) === sessionBlockId) {
-          continue; // Combined stream block already booked teacher once
-        }
-        insTeacherBooking.run(versionId, tenantId, tid, dayOfWeek, p, sessionBlockId, subjectName, grade, stream, now);
-      }
-
-      const eid = uid('ttent');
-      entryIds.push(eid);
-      insEntry.run(
-        eid,
-        versionId,
-        tenantId,
-        dayOfWeek,
-        p,
-        grade,
-        stream,
-        `Grade ${grade} ${stream}`,
-        groupId,
-        groupName,
-        jointLessonId,
-        allocationId,
-        subjectName,
-        JSON.stringify(cleanTeacherIds),
-        JSON.stringify(resolvedTeacherNames),
-        roomId,
-        resolvedRoomName,
-        sessionBlockId,
-        periods.length,
-        idx,
-        isLocked ? 1 : 0,
-        now
-      );
-    });
-
-    db.exec('COMMIT');
-    return { ok: true, sessionBlockId, entryIds };
-  } catch (err: any) {
-    try {
-      db.exec('ROLLBACK');
-    } catch {
-      // ignore if already rolled back
-    }
-    const msg = String(err?.message || 'Booking conflict');
-    const code = msg.includes('STREAM_BOOKING_COLLISION') || msg.includes('tt_stream_bookings')
-      ? 'CLASS_CLASH'
-      : msg.includes('TEACHER_BOOKING_COLLISION') || msg.includes('tt_teacher_bookings') || msg.includes('UNIQUE constraint')
-      ? 'TEACHER_CLASH'
-      : 'BOOKING_FAILED';
-    return { ok: false, code, error: msg };
-  }
+function arraysOverlap(a: string[], b: string[]): string[] {
+  if (a.length === 0 || b.length === 0) return [];
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
 }
 
 /**
- * Pre-Generation Input Validation Engine (Section 17 `/api/timetable/validate-inputs`).
- * Audits category/grade/stream weekly totals vs available lesson slots, unassigned teachers,
- * strict scope mismatches, teacher capacity feasibility, and specialized facility bottlenecks.
+ * Matches teacher assignments to a specific (category, subject, grade, stream).
+ * Priority: exact grade+stream match > exact grade match > category-wide subject match.
  */
-export function validateTimetableInputs(
-  db: DatabaseSync,
-  tenantId: string,
-  configId: string
-): {
-  valid: boolean;
-  readyToGenerate: boolean;
-  summary: {
-    totalUnits: number;
-    totalRequiredPeriods: number;
-    hardBlockers: number;
-    warnings: number;
-    unassignedStreamsCount: number;
-    overloadedStreamsCount: number;
-    overloadedTeachersCount: number;
-  };
-  categories: Array<{
-    code: TTCategoryCode;
-    name: string;
-    label: string;
-    totalAllocatedLessons: number;
-    availableWeeklySlots: number;
-    remainingSlots: number;
-    overAllocated: boolean;
-  }>;
-  streamLoadSummary: Array<{
-    grade: number;
-    stream: string;
-    requiredPeriods: number;
-    availablePeriods: number;
-    deficitOrExcess: number;
-  }>;
-  issues: Array<{
-    severity: 'error' | 'warning';
-    code: string;
-    grade?: number;
-    stream?: string;
-    subject?: string;
-    message: string;
-  }>;
-} {
-  const cfg = db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(configId) as any;
-  const workingDays = safeJsonParse<string[]>(cfg?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-  const gradeSchedRows = db.prepare(`SELECT * FROM tt_grade_schedules WHERE config_id = ?`).all(configId) as any[];
-  const gradeSchedMap = new Map<number, { periodsPerDay: number; daysCount: number; assemblyDeduct: number }>();
-  for (const gs of gradeSchedRows) {
-    const days = safeJsonParse<string[]>(gs.working_days_json, workingDays);
-    gradeSchedMap.set(Number(gs.grade), {
-      periodsPerDay: Number(gs.periods_per_day || cfg?.default_periods_per_day || 8),
-      daysCount: days.length,
-      assemblyDeduct: Number(gs.assembly_period || 0) > 0 ? 1 : 0,
-    });
-  }
+function findMatchingAssignments(
+  assignments: EngineTeacherAssignment[],
+  categoryId: TimetableCategoryId,
+  subjectId: string,
+  grade: number,
+  stream: string
+): EngineTeacherAssignment[] {
+  const active = assignments.filter(
+    (a) => a.isActive && a.categoryId === categoryId && a.subjectId === subjectId
+  );
+  const exact = active.filter((a) => a.grade === grade && a.stream === stream);
+  if (exact.length > 0) return exact;
+  const byGrade = active.filter((a) => a.grade === grade && (!a.stream || a.stream === ''));
+  if (byGrade.length > 0) return byGrade;
+  return active.filter((a) => a.grade === null && (!a.stream || a.stream === ''));
+}
 
-  const { units, allocationIssues, streamLoadSummary } = expandRequirementUnits(db, tenantId, configId);
-  const issues: Array<{
-    severity: 'error' | 'warning';
-    code: string;
-    grade?: number;
-    stream?: string;
-    subject?: string;
-    message: string;
-  }> = [];
+export function computeCategoryTotals(input: EngineInput): CategoryAllocationSummary[] {
+  return TIMETABLE_CATEGORIES.map((cat) => {
+    const cfg = input.scheduleConfigs[cat.id];
+    const regularSlotsCount = cfg ? cfg.days.length * getRegularPeriods(cfg).length : 0;
+    const catSubjects = input.subjects.filter((s) => s.categoryId === cat.id && s.isActive);
 
-  for (const ai of allocationIssues) {
-    issues.push({
-      severity: 'error',
-      code: ai.message.toLowerCase().includes('no subject teacher')
-        ? 'UNASSIGNED_TEACHER'
-        : ai.message.toLowerCase().includes('not assigned')
-        ? 'TEACHER_SCOPE_VIOLATION'
-        : 'ALLOCATION_ISSUE',
-      grade: ai.grade,
-      stream: ai.stream,
-      subject: ai.subject,
-      message: ai.message,
-    });
-  }
+    let allocatedCoreLessons = 0;
+    let allocatedCommonLessons = 0;
+    let allocatedRemedialLessons = 0;
 
-  let overloadedStreamsCount = 0;
-  for (const sl of streamLoadSummary) {
-    if (sl.deficitOrExcess < 0) {
-      overloadedStreamsCount++;
-      issues.push({
-        severity: 'error',
-        code: 'STREAM_SLOT_OVERFLOW',
-        grade: sl.grade,
-        stream: sl.stream,
-        message: `Grade ${sl.grade} ${sl.stream} requires ${sl.requiredPeriods} weekly lessons, exceeding its ${sl.availablePeriods} available weekly slots by ${Math.abs(sl.deficitOrExcess)}.`,
-      });
+    for (const s of catSubjects) {
+      if (s.subjectKind === 'core') {
+        allocatedCoreLessons += s.lessonsPerWeek;
+      } else if (s.subjectKind === 'common_activity') {
+        allocatedCommonLessons += s.lessonsPerWeek;
+      } else if (s.subjectKind === 'remedial') {
+        allocatedRemedialLessons += s.lessonsPerWeek;
+      }
     }
-  }
 
-  // Teacher weekly demand vs capacity check
-  const teacherDemand = new Map<string, number>();
-  for (const u of units) {
-    for (const tid of u.teacherIds) {
-      teacherDemand.set(tid, (teacherDemand.get(tid) || 0) + u.blockLength);
-    }
-  }
-  const teachers = db.prepare(`SELECT * FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[];
-  const teacherMap = new Map(teachers.map((t) => [String(t.id), t]));
-  const totalWeeklySlotsSchool = workingDays.length * Number(cfg?.default_periods_per_day || 8);
-  let overloadedTeachersCount = 0;
-  for (const [tid, demand] of teacherDemand.entries()) {
-    const t = teacherMap.get(tid);
-    const tName = t?.teacher_name || tid;
-    const maxWeekly = Number(t?.max_weekly_periods || 28);
-    if (demand > totalWeeklySlotsSchool) {
-      overloadedTeachersCount++;
-      issues.push({
-        severity: 'error',
-        code: 'TEACHER_IMPOSSIBLE_LOAD',
-        message: `${tName} is assigned ${demand} weekly periods, which exceeds the school's ${totalWeeklySlotsSchool} total weekly teaching slots.`,
-      });
-    } else if (demand > maxWeekly) {
-      overloadedTeachersCount++;
-      issues.push({
-        severity: 'warning',
-        code: 'TEACHER_WEEKLY_OVERLOAD',
-        message: `${tName} is assigned ${demand} weekly periods (recommended weekly limit: ${maxWeekly}).`,
-      });
-    }
-  }
+    // Core + non-remedial common activities fill the regular stream periods.
+    // Remedial 1 & 2 can be scheduled in regular or post-class remedial slots,
+    // so we report regular total clearly and include remedial separately & in total tracking.
+    const totalAllocatedRegularLessons = allocatedCoreLessons + allocatedCommonLessons;
+    const remainingRegularPeriods = regularSlotsCount - totalAllocatedRegularLessons;
+    const activeStreamCount = input.streams.filter((st) => st.categoryId === cat.id).length;
 
-  // Category-level weekly allocation totals vs available slots
-  const categories = DEFAULT_TT_CATEGORIES.map((cat) => {
-    const catRows = db
-      .prepare(
-        `SELECT required_weekly_periods FROM tt_category_subject_allocations
-         WHERE config_id = ? AND category_code = ? AND is_active = 1`
-      )
-      .all(configId, cat.code) as Array<{ required_weekly_periods: number }>;
-    const totalAllocatedLessons = catRows.reduce((s, r) => s + Number(r.required_weekly_periods || 0), 0);
-    const refGrade = gradesForCategoryCode(cat.code).find((g) => gradeSchedMap.has(g)) || cat.minGrade;
-    const gs = gradeSchedMap.get(refGrade);
-    const availableWeeklySlots = gs
-      ? Math.max(0, gs.daysCount * gs.periodsPerDay - gs.assemblyDeduct)
-      : workingDays.length * (cat.code === 'lower_primary' ? 7 : Number(cfg?.default_periods_per_day || 8));
-    const remainingSlots = availableWeeklySlots - totalAllocatedLessons;
-    const overAllocated = remainingSlots < 0;
-    if (overAllocated) {
-      issues.push({
-        severity: 'warning',
-        code: 'CATEGORY_OVER_ALLOCATED',
-        message: `${cat.label} (${cat.name}) default weekly allocation is ${totalAllocatedLessons} lessons, exceeding ${availableWeeklySlots} available slots by ${Math.abs(remainingSlots)}.`,
-      });
-    }
     return {
-      code: cat.code,
-      name: cat.name,
+      categoryId: cat.id,
       label: cat.label,
-      totalAllocatedLessons,
-      availableWeeklySlots,
-      remainingSlots,
-      overAllocated,
+      availableRegularPeriods: regularSlotsCount,
+      allocatedCoreLessons,
+      allocatedCommonLessons,
+      allocatedRemedialLessons,
+      totalAllocatedRegularLessons,
+      remainingRegularPeriods,
+      activeStreamCount,
     };
   });
+}
 
-  const hardBlockers = issues.filter((i) => i.severity === 'error').length;
-  const warnings = issues.filter((i) => i.severity === 'warning').length;
-  const unassignedStreamsCount = allocationIssues.filter((a) => a.message.toLowerCase().includes('no subject teacher')).length;
-  const totalRequiredPeriods = units.reduce((sum, u) => sum + u.blockLength * u.classTargets.length, 0);
+/**
+ * Strict Requirement F & G readiness validation prior to generation:
+ * - No automatic assumptions about teachers or frequencies.
+ * - Verifies every subject/activity with lessonsPerWeek > 0 has an authorized teacher/supervisor.
+ * - Verifies shared facilities exist and have sufficient weekly slot capacity across ALL 3 categories.
+ * - Verifies Remedial 1 & 2 configs have assigned teachers, valid periods, and valid student groups.
+ */
+export function validateTimetableReadiness(input: EngineInput): {
+  readyToGenerate: boolean;
+  issues: ValidationIssue[];
+  categoryTotals: CategoryAllocationSummary[];
+} {
+  const issues: ValidationIssue[] = [];
+  const categoryTotals = computeCategoryTotals(input);
 
+  if (input.streams.length === 0) {
+    issues.push({
+      code: 'NO_ACTIVE_STREAMS',
+      severity: 'error',
+      message: 'No active grades or streams found. Configure grades and streams in Academic Structure first.',
+    });
+  }
+
+  let totalConfiguredLessonsAcrossSchool = 0;
+
+  for (const summary of categoryTotals) {
+    const catStreams = input.streams.filter((st) => st.categoryId === summary.categoryId);
+    const catSubjects = input.subjects.filter(
+      (s) => s.categoryId === summary.categoryId && s.isActive
+    );
+    const totalCatWithRemedial =
+      summary.totalAllocatedRegularLessons + summary.allocatedRemedialLessons;
+    totalConfiguredLessonsAcrossSchool += totalCatWithRemedial;
+
+    if (catStreams.length === 0) continue;
+
+    if (summary.totalAllocatedRegularLessons > summary.availableRegularPeriods) {
+      issues.push({
+        code: 'OVER_ALLOCATED_CATEGORY',
+        severity: 'error',
+        categoryId: summary.categoryId,
+        message: `${summary.label}: Allocated regular lessons (${summary.totalAllocatedRegularLessons}) exceed available weekly periods (${summary.availableRegularPeriods}). Reduce allocations or increase periods per day.`,
+      });
+    } else if (
+      summary.totalAllocatedRegularLessons > 0 &&
+      summary.remainingRegularPeriods > 0
+    ) {
+      issues.push({
+        code: 'UNEXPLAINED_BLANK_POTENTIAL',
+        severity: 'warning',
+        categoryId: summary.categoryId,
+        message: `${summary.label}: ${summary.remainingRegularPeriods} regular weekly period(s) remain unallocated (${summary.totalAllocatedRegularLessons}/${summary.availableRegularPeriods}). To satisfy the zero-unexplained-blank-session rule, allocate all ${summary.availableRegularPeriods} periods.`,
+      });
+    }
+
+    // Check teacher assignments for every subject/activity with lessonsPerWeek > 0 (non-remedial)
+    for (const sub of catSubjects) {
+      if (sub.lessonsPerWeek <= 0) continue;
+      if (sub.subjectKind === 'remedial') continue; // Checked via remedial configs below
+
+      for (const st of catStreams) {
+        const matches = findMatchingAssignments(
+          input.teacherAssignments,
+          summary.categoryId,
+          sub.id,
+          st.grade,
+          st.stream
+        );
+        if (matches.length === 0) {
+          issues.push({
+            code: 'UNASSIGNED_TEACHER',
+            severity: 'error',
+            categoryId: summary.categoryId,
+            grade: st.grade,
+            stream: st.stream,
+            message: `${summary.label} · Grade ${st.grade} ${st.stream}: "${sub.name}" has ${sub.lessonsPerWeek} lesson(s)/week allocated but no authorized teacher/supervisor assigned.`,
+          });
+        }
+      }
+
+      // Check required shared facility exists
+      if (sub.requiresFacilityType) {
+        const fac = sub.defaultFacilityId
+          ? input.facilities.find((f) => f.id === sub.defaultFacilityId && f.isActive)
+          : input.facilities.find(
+              (f) => f.facilityType === sub.requiresFacilityType && f.isActive
+            );
+        if (!fac) {
+          issues.push({
+            code: 'MISSING_FACILITY',
+            severity: 'error',
+            categoryId: summary.categoryId,
+            message: `${summary.label}: "${sub.name}" requires an active shared facility (${sub.requiresFacilityType.replace(/_/g, ' ')}), but none is configured.`,
+          });
+        }
+      }
+    }
+
+    // Check Remedial 1 and Remedial 2
+    const remedialSubjects = catSubjects.filter((s) => s.subjectKind === 'remedial');
+    for (const remSub of remedialSubjects) {
+      const configsForSub = input.remedialConfigs.filter(
+        (rc) => rc.isActive && rc.categoryId === summary.categoryId && rc.subjectId === remSub.id
+      );
+      if (remSub.lessonsPerWeek > 0 && configsForSub.length === 0) {
+        issues.push({
+          code: 'MISSING_REMEDIAL_CONFIG',
+          severity: 'error',
+          categoryId: summary.categoryId,
+          message: `${summary.label}: "${remSub.name}" has ${remSub.lessonsPerWeek} lesson(s)/week allocated, but no remedial session configuration (teacher, grade/stream, student group, periods) has been created.`,
+        });
+      }
+      for (const rc of configsForSub) {
+        if (!rc.teacherId) {
+          issues.push({
+            code: 'REMEDIAL_NO_TEACHER',
+            severity: 'error',
+            categoryId: summary.categoryId,
+            grade: rc.grade,
+            stream: rc.stream,
+            message: `${summary.label} · Grade ${rc.grade} ${rc.stream}: ${remSub.name} requires an assigned remedial teacher.`,
+          });
+        }
+        if (rc.studentGroupMode === 'selected_learners' && rc.studentIds.length === 0) {
+          issues.push({
+            code: 'REMEDIAL_NO_STUDENTS',
+            severity: 'error',
+            categoryId: summary.categoryId,
+            grade: rc.grade,
+            stream: rc.stream,
+            message: `${summary.label} · Grade ${rc.grade} ${rc.stream}: ${remSub.name} is set to Selected Learners but no students are selected.`,
+          });
+        }
+      }
+    }
+  }
+
+  if (totalConfiguredLessonsAcrossSchool === 0) {
+    issues.push({
+      code: 'ZERO_LESSONS_CONFIGURED',
+      severity: 'error',
+      message: 'No weekly lessons have been allocated yet. Configure weekly lesson counts in Subject Allocations before generating a timetable.',
+    });
+  }
+
+  // Cross-category shared facility total weekly demand vs capacity check
+  const facilityDemand = new Map<string, number>();
+  for (const sub of input.subjects) {
+    if (!sub.isActive || sub.lessonsPerWeek <= 0 || !sub.requiresFacilityType) continue;
+    const fac = sub.defaultFacilityId
+      ? input.facilities.find((f) => f.id === sub.defaultFacilityId && f.isActive)
+      : input.facilities.find((f) => f.facilityType === sub.requiresFacilityType && f.isActive);
+    if (!fac) continue;
+    const streamCount = input.streams.filter((st) => st.categoryId === sub.categoryId).length;
+    facilityDemand.set(fac.id, (facilityDemand.get(fac.id) || 0) + sub.lessonsPerWeek * streamCount);
+  }
+
+  for (const [facId, totalDemand] of facilityDemand.entries()) {
+    const fac = input.facilities.find((f) => f.id === facId);
+    if (!fac) continue;
+    const weeklyCapacity =
+      fac.availableDays.length * fac.availablePeriods.length * Math.max(1, fac.capacityStreams);
+    if (totalDemand > weeklyCapacity) {
+      issues.push({
+        code: 'FACILITY_CAPACITY_EXCEEDED',
+        severity: 'error',
+        message: `Shared facility "${fac.name}" demand across all categories (${totalDemand} stream-periods/week) exceeds its weekly capacity (${weeklyCapacity} = ${fac.availableDays.length} days × ${fac.availablePeriods.length} periods × ${fac.capacityStreams} concurrent stream(s)).`,
+      });
+    }
+  }
+
+  // Teacher aggregate workload pre-check
+  const teacherProjectedDemand = new Map<string, { name: string; demand: number; max: number }>();
+  for (const st of input.streams) {
+    const catSubjects = input.subjects.filter(
+      (s) => s.categoryId === st.categoryId && s.isActive && s.lessonsPerWeek > 0 && s.subjectKind !== 'remedial'
+    );
+    for (const sub of catSubjects) {
+      const matches = findMatchingAssignments(
+        input.teacherAssignments,
+        st.categoryId,
+        sub.id,
+        st.grade,
+        st.stream
+      );
+      if (matches.length === 1) {
+        const a = matches[0];
+        const prev = teacherProjectedDemand.get(a.teacherId) || {
+          name: a.teacherName,
+          demand: 0,
+          max: a.maxWeeklyPeriods,
+        };
+        prev.demand += sub.lessonsPerWeek;
+        prev.max = Math.max(prev.max, a.maxWeeklyPeriods);
+        teacherProjectedDemand.set(a.teacherId, prev);
+      }
+    }
+  }
+  for (const rc of input.remedialConfigs) {
+    if (!rc.isActive || !rc.teacherId || rc.weeklyFrequency <= 0) continue;
+    const prev = teacherProjectedDemand.get(rc.teacherId) || {
+      name: rc.teacherName,
+      demand: 0,
+      max: 35,
+    };
+    prev.demand += rc.weeklyFrequency;
+    teacherProjectedDemand.set(rc.teacherId, prev);
+  }
+
+  for (const [, info] of teacherProjectedDemand.entries()) {
+    if (info.demand > info.max) {
+      issues.push({
+        code: 'TEACHER_MAX_LOAD_EXCEEDED',
+        severity: 'warning',
+        message: `Teacher ${info.name} is projected for ${info.demand} periods/week, exceeding their configured maximum of ${info.max} periods/week.`,
+      });
+    }
+  }
+
+  const hasError = issues.some((i) => i.severity === 'error');
   return {
-    valid: hardBlockers === 0,
-    readyToGenerate: hardBlockers === 0 && units.length > 0,
-    summary: {
-      totalUnits: units.length,
-      totalRequiredPeriods,
-      hardBlockers,
-      warnings,
-      unassignedStreamsCount,
-      overloadedStreamsCount,
-      overloadedTeachersCount,
-    },
-    categories,
-    streamLoadSummary,
+    readyToGenerate: !hasError,
     issues,
+    categoryTotals,
   };
 }
 
-// =========================================================================
-// ASYNC CONSTRAINT-BASED BACKGROUND SCHEDULER
-// =========================================================================
-const activeJobs = new Set<string>();
-
-export interface TTGenerationScope {
-  mode: 'all' | 'grades' | 'stream';
-  grades?: number[];
-  grade?: number;
-  stream?: string;
+interface PlacementTask {
+  taskId: string;
+  categoryId: TimetableCategoryId;
+  grade: number;
+  stream: string;
+  subject: EngineSubject;
+  remedialConfig: EngineRemedialConfig | null;
+  candidateAssignments: EngineTeacherAssignment[];
+  facility: EngineFacility | null;
+  allowedDays: string[];
+  allowedPeriods: number[];
+  studentGroupMode: StudentGroupMode;
+  studentGroupName: string;
+  studentIds: string[];
+  durationMinsOverride: number | null;
+  constraintTightness: number;
 }
 
-export function enqueueTimetableGenerationJob(
-  db: DatabaseSync,
-  tenantId: string,
-  versionId: string,
-  actorId: string,
-  preserveLocked = true,
-  scope: TTGenerationScope = { mode: 'all' }
-): { jobId: string } {
-  const now = new Date().toISOString();
-  const jobId = uid('ttjob');
-  db.prepare(
-    `INSERT INTO tt_generation_jobs
-       (id, tenant_id, version_id, status, progress_pct, stage_message, preserve_locked, retries, cancel_requested, diagnostics_json, scope_json, created_by, created_at)
-     VALUES (?, ?, ?, 'queued', 0, 'Queued for automatic timetable constraint solver', ?, 0, 0, '{}', ?, ?, ?)`
-  ).run(jobId, tenantId, versionId, preserveLocked ? 1 : 0, JSON.stringify(scope || { mode: 'all' }), actorId, now);
+/**
+ * Constraint-aware timetable generator supporting:
+ * - Independent Category 1, 2, 3 subject & activity allocations
+ * - Zero teacher collisions across all categories/streams/remedials/clubs/maktaba
+ * - Shared facility capacity enforcement across all 3 categories
+ * - Remedial 1 & 2 participating student-group overlap verification
+ * - Clubs & Maktaba supervisor, day, and period constraints
+ */
+export function generateTimetableSchedule(input: EngineInput): GenerateScheduleResult {
+  const readiness = validateTimetableReadiness(input);
+  if (!readiness.readyToGenerate) {
+    const audit = validateTimetableEntries(input, []);
+    return {
+      success: false,
+      entries: [],
+      unplacedTasks: [],
+      audit,
+    };
+  }
 
-  notifyMySqlTablesChanged(['tt_generation_jobs']);
-  scheduleJobExecution(jobId);
-  return { jobId };
-}
+  const tasks: PlacementTask[] = [];
+  const facilityById = new Map<string, EngineFacility>();
+  for (const f of input.facilities) {
+    if (f.isActive) facilityById.set(f.id, f);
+  }
 
-export function scheduleJobExecution(jobId: string): void {
-  if (activeJobs.has(jobId)) return;
-  activeJobs.add(jobId);
-  setImmediate(() => {
-    void runTimetableGenerationWorker(jobId).finally(() => {
-      activeJobs.delete(jobId);
-    });
-  });
-}
-
-async function yieldEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-export async function runTimetableGenerationDirect(db: DatabaseSync, jobId: string): Promise<void> {
-  await runTimetableGenerationWorker(jobId, db);
-}
-
-async function runTimetableGenerationWorker(jobId: string, injectedDb?: DatabaseSync): Promise<void> {
-  const db = injectedDb || getDb();
-  const job = db.prepare(`SELECT * FROM tt_generation_jobs WHERE id = ?`).get(jobId) as any;
-  if (!job) return;
-
-  const tenantId = String(job.tenant_id);
-  const versionId = String(job.version_id);
-  const preserveLocked = Number(job.preserve_locked) === 1;
-  const scope = safeJsonParse<TTGenerationScope>(job.scope_json, { mode: 'all' });
-  const isEntryInScope = (grade: number, stream: string): boolean => {
-    if (!scope || scope.mode === 'all') return true;
-    if (scope.mode === 'grades') {
-      const targetGrades = Array.isArray(scope.grades) ? scope.grades.map(Number) : [];
-      return targetGrades.length === 0 || targetGrades.includes(Number(grade));
+  const resolveFacility = (
+    preferredFacilityId: string | null,
+    requiredType: FacilityType | null
+  ): EngineFacility | null => {
+    if (preferredFacilityId && facilityById.has(preferredFacilityId)) {
+      return facilityById.get(preferredFacilityId)!;
     }
-    if (scope.mode === 'stream') {
+    if (requiredType) {
       return (
-        Number(grade) === Number(scope.grade) &&
-        String(stream || '').trim().toLowerCase() === String(scope.stream || '').trim().toLowerCase()
+        input.facilities.find((f) => f.isActive && f.facilityType === requiredType) ?? null
       );
+    }
+    return null;
+  };
+
+  // Build regular + common activity tasks per stream
+  for (const st of input.streams) {
+    const cfg = input.scheduleConfigs[st.categoryId];
+    if (!cfg) continue;
+    const regularPeriods = getRegularPeriods(cfg).map((p) => p.periodNumber);
+    const catSubjects = input.subjects.filter(
+      (s) =>
+        s.categoryId === st.categoryId &&
+        s.isActive &&
+        s.lessonsPerWeek > 0 &&
+        s.subjectKind !== 'remedial'
+    );
+
+    for (const sub of catSubjects) {
+      const matches = findMatchingAssignments(
+        input.teacherAssignments,
+        st.categoryId,
+        sub.id,
+        st.grade,
+        st.stream
+      );
+      if (matches.length === 0) continue;
+
+      const primaryAssignment = matches[0];
+      const fac = resolveFacility(
+        primaryAssignment.facilityId || sub.defaultFacilityId,
+        sub.requiresFacilityType
+      );
+
+      let allowedDays = cfg.days.slice();
+      if (sub.allowedDays.length > 0) {
+        allowedDays = allowedDays.filter((d) => sub.allowedDays.includes(d));
+      }
+      if (fac && fac.availableDays.length > 0) {
+        allowedDays = allowedDays.filter((d) => fac.availableDays.includes(d));
+      }
+
+      let allowedPeriods = regularPeriods.slice();
+      if (sub.allowedPeriods.length > 0) {
+        allowedPeriods = allowedPeriods.filter((p) => sub.allowedPeriods.includes(p));
+      }
+      if (fac && fac.availablePeriods.length > 0) {
+        allowedPeriods = allowedPeriods.filter((p) => fac.availablePeriods.includes(p));
+      }
+
+      // Compute domain size for MRV ordering (tighter constraints placed first)
+      const tightness =
+        (fac ? 0 : 100) +
+        allowedDays.length * allowedPeriods.length +
+        matches.length * 10 +
+        (sub.subjectKind === 'common_activity' ? -20 : 0);
+
+      for (let i = 0; i < sub.lessonsPerWeek; i++) {
+        tasks.push({
+          taskId: `${st.grade}_${st.stream}_${sub.id}_${i}`,
+          categoryId: st.categoryId,
+          grade: st.grade,
+          stream: st.stream,
+          subject: sub,
+          remedialConfig: null,
+          candidateAssignments: matches,
+          facility: fac,
+          allowedDays,
+          allowedPeriods,
+          studentGroupMode: 'whole_stream',
+          studentGroupName: `Grade ${st.grade} ${st.stream}`,
+          studentIds: st.studentIds,
+          durationMinsOverride: null,
+          constraintTightness: tightness,
+        });
+      }
+    }
+  }
+
+  // Build Remedial 1 & Remedial 2 tasks from explicit remedial configurations
+  for (const rc of input.remedialConfigs) {
+    if (!rc.isActive || rc.weeklyFrequency <= 0 || !rc.teacherId) continue;
+    const sub = input.subjects.find((s) => s.id === rc.subjectId && s.isActive);
+    if (!sub) continue;
+    const catId = getCategoryForGrade(rc.grade);
+    const cfg = input.scheduleConfigs[catId];
+    if (!cfg) continue;
+
+    const allPeriods = getAllPeriods(cfg).map((p) => p.periodNumber);
+    const remedialPeriods = cfg.periods
+      .filter((p) => p.slotType === 'remedial')
+      .map((p) => p.periodNumber);
+
+    const allowedDays =
+      rc.availableDays.length > 0
+        ? cfg.days.filter((d) => rc.availableDays.includes(d))
+        : cfg.days.slice();
+
+    const allowedPeriods =
+      rc.availablePeriods.length > 0
+        ? allPeriods.filter((p) => rc.availablePeriods.includes(p))
+        : remedialPeriods.length > 0
+          ? remedialPeriods
+          : allPeriods;
+
+    const fac = resolveFacility(rc.facilityId || sub.defaultFacilityId, sub.requiresFacilityType);
+    const streamObj = input.streams.find((s) => s.grade === rc.grade && s.stream === rc.stream);
+
+    const syntheticAssignment: EngineTeacherAssignment = {
+      id: `rem_assign_${rc.id}`,
+      teacherId: rc.teacherId,
+      teacherName: rc.teacherName,
+      teacherEmail: '',
+      categoryId: catId,
+      subjectId: sub.id,
+      grade: rc.grade,
+      stream: rc.stream,
+      roleType: 'remedial_teacher',
+      maxWeeklyPeriods: 40,
+      facilityId: fac?.id ?? null,
+      equipmentNotes: '',
+      allowedDays,
+      allowedPeriods,
+      isActive: true,
+    };
+
+    const participatingStudentIds =
+      rc.studentGroupMode === 'selected_learners'
+        ? rc.studentIds
+        : streamObj?.studentIds ?? [];
+
+    for (let i = 0; i < rc.weeklyFrequency; i++) {
+      tasks.push({
+        taskId: `rem_${rc.id}_${i}`,
+        categoryId: catId,
+        grade: rc.grade,
+        stream: rc.stream,
+        subject: sub,
+        remedialConfig: rc,
+        candidateAssignments: [syntheticAssignment],
+        facility: fac,
+        allowedDays,
+        allowedPeriods,
+        studentGroupMode: rc.studentGroupMode,
+        studentGroupName:
+          rc.studentGroupName ||
+          (rc.studentGroupMode === 'selected_learners'
+            ? `${sub.name} Group (${participatingStudentIds.length})`
+            : `Grade ${rc.grade} ${rc.stream}`),
+        studentIds: participatingStudentIds,
+        durationMinsOverride: rc.durationMins || null,
+        // Place remedial tasks after regular whole-stream lessons unless restricted to regular periods
+        constraintTightness: 500 + allowedDays.length * allowedPeriods.length,
+      });
+    }
+  }
+
+  // Sort by MRV tightness (tightest tasks first; regular/facility/clubs before remedial)
+  tasks.sort((a, b) => a.constraintTightness - b.constraintTightness);
+
+  // Occupancy maps
+  const entries: EngineTimetableEntry[] = [];
+  const teacherBusy = new Map<string, Set<string>>(); // teacherId -> Set<slotKey>
+  const teacherLoad = new Map<string, number>(); // teacherId -> count
+  const facilityUsage = new Map<string, Map<string, number>>(); // facilityId -> slotKey -> count
+  const streamWholeOccupied = new Map<string, Set<string>>(); // streamKey -> Set<slotKey>
+  const streamEntriesBySlot = new Map<string, EngineTimetableEntry[]>(); // `${streamKey}::${slotKey}` -> entries
+  const subjectPerStreamDayCount = new Map<string, number>(); // `${streamKey}::${subjectId}::${day}` -> count
+
+  const isTeacherFree = (teacherId: string, sk: string): boolean => {
+    return !(teacherBusy.get(teacherId)?.has(sk));
+  };
+
+  const isFacilityAvailable = (fac: EngineFacility | null, day: string, periodNum: number): boolean => {
+    if (!fac) return true;
+    if (fac.availableDays.length > 0 && !fac.availableDays.includes(day)) return false;
+    if (fac.availablePeriods.length > 0 && !fac.availablePeriods.includes(periodNum)) return false;
+    const sk = slotKey(day, periodNum);
+    const used = facilityUsage.get(fac.id)?.get(sk) ?? 0;
+    return used < Math.max(1, fac.capacityStreams);
+  };
+
+  const canPlaceForStreamAndStudents = (task: PlacementTask, sk: string): boolean => {
+    const stKey = streamKey(task.grade, task.stream);
+    const combinedKey = `${stKey}::${sk}`;
+    const existing = streamEntriesBySlot.get(combinedKey) ?? [];
+
+    if (task.studentGroupMode === 'whole_stream') {
+      // Whole-stream regular lesson cannot share a slot with another whole-stream lesson
+      // nor with a remedial session that includes learners from this stream (unless remedial is in a remedial slot)
+      if (streamWholeOccupied.get(stKey)?.has(sk)) return false;
+      if (existing.length > 0) return false;
+      return true;
+    }
+
+    // Selected-learners remedial session:
+    // Cannot collide with a whole-stream regular lesson if those learners would be in class at the same period,
+    // UNLESS it's a dedicated remedial slot or no overlapping participating students are occupied.
+    // Specifically: if a whole-stream lesson occupies this period, participating learners in that stream are in that regular lesson!
+    // However, two separate selected-learner remedial sessions in the SAME period with DISJOINT studentIds CAN run concurrently!
+    for (const ex of existing) {
+      if (ex.studentGroupMode === 'whole_stream') {
+        // Whole stream includes all learners of the stream -> conflicts with selected learners
+        return false;
+      }
+      // Both are selected_learners -> check actual participating student_ids overlap
+      const overlap = arraysOverlap(task.studentIds, ex.studentIds);
+      if (overlap.length > 0) return false;
     }
     return true;
   };
 
-  const updateJob = (fields: {
-    status?: string;
-    progressPct?: number;
-    stageMessage?: string;
-    diagnostics?: any;
-    errorMessage?: string | null;
-    startedAt?: string;
-    completedAt?: string;
-  }) => {
-    const sets: string[] = [];
-    const params: any[] = [];
-    if (fields.status !== undefined) { sets.push('status = ?'); params.push(fields.status); }
-    if (fields.progressPct !== undefined) { sets.push('progress_pct = ?'); params.push(fields.progressPct); }
-    if (fields.stageMessage !== undefined) { sets.push('stage_message = ?'); params.push(fields.stageMessage); }
-    if (fields.diagnostics !== undefined) { sets.push('diagnostics_json = ?'); params.push(JSON.stringify(fields.diagnostics)); }
-    if (fields.errorMessage !== undefined) { sets.push('error_message = ?'); params.push(fields.errorMessage); }
-    if (fields.startedAt !== undefined) { sets.push('started_at = ?'); params.push(fields.startedAt); }
-    if (fields.completedAt !== undefined) { sets.push('completed_at = ?'); params.push(fields.completedAt); }
-    if (sets.length === 0) return;
-    params.push(jobId);
-    db.prepare(`UPDATE tt_generation_jobs SET ${sets.join(', ')} WHERE id = ?`).run(...params);
-    broadcastChange({
-      type: 'collection:updated',
-      collection: 'tt_generation_jobs',
-      tenantId,
-      recordId: jobId,
-      timestamp: new Date().toISOString(),
-    });
+  const placeEntry = (
+    task: PlacementTask,
+    assignment: EngineTeacherAssignment,
+    day: string,
+    periodSlot: PeriodSlotDefinition
+  ): EngineTimetableEntry => {
+    const sk = slotKey(day, periodSlot.periodNumber);
+    const stKey = streamKey(task.grade, task.stream);
+    const combinedKey = `${stKey}::${sk}`;
+    const durationMins = task.durationMinsOverride || periodSlot.durationMins;
+
+    const entry: EngineTimetableEntry = {
+      id: `tte_${crypto.randomBytes(6).toString('hex')}`,
+      categoryId: task.categoryId,
+      grade: task.grade,
+      stream: task.stream,
+      dayOfWeek: day,
+      periodNumber: periodSlot.periodNumber,
+      startTime: periodSlot.startTime,
+      endTime: periodSlot.endTime,
+      durationMins,
+      subjectId: task.subject.id,
+      subjectName: task.subject.name,
+      subjectKind: task.subject.subjectKind,
+      teacherId: assignment.teacherId,
+      teacherName: assignment.teacherName,
+      facilityId: task.facility?.id ?? null,
+      facilityName: task.facility?.name ?? null,
+      remedialConfigId: task.remedialConfig?.id ?? null,
+      studentGroupMode: task.studentGroupMode,
+      studentGroupName: task.studentGroupName,
+      studentIds: task.studentIds,
+      isLocked: false,
+      notes: task.remedialConfig?.notes || task.subject.equipmentNotes || '',
+    };
+
+    entries.push(entry);
+
+    if (!teacherBusy.has(assignment.teacherId)) teacherBusy.set(assignment.teacherId, new Set());
+    teacherBusy.get(assignment.teacherId)!.add(sk);
+    teacherLoad.set(assignment.teacherId, (teacherLoad.get(assignment.teacherId) ?? 0) + 1);
+
+    if (task.facility) {
+      if (!facilityUsage.has(task.facility.id)) facilityUsage.set(task.facility.id, new Map());
+      const fm = facilityUsage.get(task.facility.id)!;
+      fm.set(sk, (fm.get(sk) ?? 0) + 1);
+    }
+
+    if (task.studentGroupMode === 'whole_stream') {
+      if (!streamWholeOccupied.has(stKey)) streamWholeOccupied.set(stKey, new Set());
+      streamWholeOccupied.get(stKey)!.add(sk);
+    }
+
+    if (!streamEntriesBySlot.has(combinedKey)) streamEntriesBySlot.set(combinedKey, []);
+    streamEntriesBySlot.get(combinedKey)!.push(entry);
+
+    const daySubKey = `${stKey}::${task.subject.id}::${day}`;
+    subjectPerStreamDayCount.set(daySubKey, (subjectPerStreamDayCount.get(daySubKey) ?? 0) + 1);
+
+    return entry;
   };
 
-  const isCancelled = () => {
-    const row = db.prepare(`SELECT cancel_requested FROM tt_generation_jobs WHERE id = ?`).get(jobId) as any;
-    return Number(row?.cancel_requested || 0) === 1;
+  const removeEntry = (entry: EngineTimetableEntry): void => {
+    const idx = entries.findIndex((e) => e.id === entry.id);
+    if (idx !== -1) entries.splice(idx, 1);
+
+    const sk = slotKey(entry.dayOfWeek, entry.periodNumber);
+    const stKey = streamKey(entry.grade, entry.stream);
+    const combinedKey = `${stKey}::${sk}`;
+
+    teacherBusy.get(entry.teacherId)?.delete(sk);
+    teacherLoad.set(entry.teacherId, Math.max(0, (teacherLoad.get(entry.teacherId) ?? 1) - 1));
+
+    if (entry.facilityId) {
+      const fm = facilityUsage.get(entry.facilityId);
+      if (fm) fm.set(sk, Math.max(0, (fm.get(sk) ?? 1) - 1));
+    }
+
+    if (entry.studentGroupMode === 'whole_stream') {
+      streamWholeOccupied.get(stKey)?.delete(sk);
+    }
+
+    const list = streamEntriesBySlot.get(combinedKey);
+    if (list) {
+      const next = list.filter((e) => e.id !== entry.id);
+      if (next.length === 0) streamEntriesBySlot.delete(combinedKey);
+      else streamEntriesBySlot.set(combinedKey, next);
+    }
+
+    const daySubKey = `${stKey}::${entry.subjectId}::${entry.dayOfWeek}`;
+    subjectPerStreamDayCount.set(daySubKey, Math.max(0, (subjectPerStreamDayCount.get(daySubKey) ?? 1) - 1));
   };
 
-  try {
-    updateJob({
-      status: 'running',
-      progressPct: 8,
-      stageMessage: 'Loading school timetable constraints, teacher availability, rooms & allocations...',
-      startedAt: new Date().toISOString(),
-    });
-    await yieldEventLoop();
-    if (isCancelled()) {
-      updateJob({ status: 'cancelled', stageMessage: 'Cancelled by administrator.', completedAt: new Date().toISOString() });
-      return;
-    }
+  const findBestCandidate = (
+    task: PlacementTask
+  ): { assignment: EngineTeacherAssignment; day: string; periodSlot: PeriodSlotDefinition; score: number } | null => {
+    const cfg = input.scheduleConfigs[task.categoryId];
+    if (!cfg) return null;
+    const periodMap = new Map(cfg.periods.map((p) => [p.periodNumber, p]));
+    const stKey = streamKey(task.grade, task.stream);
 
-    const version = db.prepare(`SELECT * FROM tt_versions WHERE id = ?`).get(versionId) as any;
-    if (!version) throw new Error('Target timetable version was deleted.');
-
-    const configId = String(version.config_id);
-    const cfg = db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(configId) as any;
-    const workingDays = safeJsonParse<string[]>(cfg?.working_days_json, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
-
-    const periodsRaw = db
-      .prepare(`SELECT * FROM tt_periods WHERE config_id = ? ORDER BY sort_order ASC`)
-      .all(configId) as any[];
-    const periods: TTPeriod[] = periodsRaw.map((p) => ({
-      id: String(p.id),
-      tenantId,
-      configId,
-      gradeBand: String(p.grade_band),
-      periodNumber: Number(p.period_number),
-      label: String(p.label),
-      kind: p.kind,
-      startTime: String(p.start_time),
-      endTime: String(p.end_time),
-      sortOrder: Number(p.sort_order),
-    }));
-
-    const gradeSchedMap = new Map<number, { periodsPerDay: number; days: string[] }>();
-    for (const gs of db.prepare(`SELECT * FROM tt_grade_schedules WHERE config_id = ?`).all(configId) as any[]) {
-      gradeSchedMap.set(Number(gs.grade), {
-        periodsPerDay: Number(gs.periods_per_day || cfg?.default_periods_per_day || 8),
-        days: safeJsonParse<string[]>(gs.working_days_json, workingDays),
-      });
-    }
-
-    const teachersList = (
-      db.prepare(`SELECT * FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]
-    ).map((t) => {
-      const offDutyArr = safeJsonParse<Array<{ day: string; period: number }>>(t.off_duty_slots_json, []);
-      return {
-        id: String(t.id),
-        name: String(t.teacher_name),
-        availability: safeJsonParse<Record<string, Record<string, boolean>>>(t.availability_json, {}),
-        preferredFree: safeJsonParse<Array<{ day: string; period: number }>>(t.preferred_free_periods_json, []),
-        offDutySet: new Set(offDutyArr.map((od) => `${od.day}|${Number(od.period)}`)),
-        maxDaily: Number(t.max_daily_periods || 6),
-        maxWeekly: Number(t.max_weekly_periods || 28),
-        maxConsecutive: Number(t.max_consecutive_lessons || 3),
-        active: Number(t.active_in_timetable) === 1,
-      };
-    });
-    const teacherMap = new Map(teachersList.map((t) => [t.id, t]));
-
-    const roomsList = (
-      db.prepare(`SELECT * FROM tt_classrooms WHERE tenant_id = ? AND is_active = 1`).all(tenantId) as any[]
-    ).map((r) => ({
-      id: String(r.id),
-      name: String(r.name),
-      roomType: String(r.room_type),
-      capacity: Number(r.capacity || 45),
-      maxConcurrentClasses: Math.max(1, Number(r.max_concurrent_classes || 1)),
-      assignedGrade: r.assigned_grade ? Number(r.assigned_grade) : null,
-      assignedStream: r.assigned_stream ? String(r.assigned_stream) : null,
-      availability: safeJsonParse<Record<string, Record<string, boolean>>>(r.availability_json, {}),
-    }));
-    const roomMap = new Map(roomsList.map((r) => [r.id, r]));
-
-    // Preserve locked entries (if preserveLocked=true) AND all entries outside the requested generation scope
-    const existingVersionEntries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
-    const rawLockedEntries = existingVersionEntries.filter((e) => {
-      const outOfScope = !isEntryInScope(Number(e.grade), String(e.stream));
-      if (outOfScope) return true;
-      return preserveLocked && Number(e.is_locked) === 1;
-    });
-    const preservedEntryIds = new Set<string>();
-
-    const { units: allUnits, allocationIssues } = expandRequirementUnits(db, tenantId, configId);
-
-    // Compute strict allowed block count per allocation/joint key from active expanded units
-    const allowedBlockCountByKey = new Map<string, number>();
-    for (const u of allUnits) {
-      const k = u.jointLessonId
-        ? `jl:${u.jointLessonId}:${u.classTargets[0].grade}:${u.classTargets[0].stream}`
-        : `sa:${u.allocationId}:${u.blockLength}`;
-      allowedBlockCountByKey.set(k, (allowedBlockCountByKey.get(k) || 0) + 1);
-    }
-
-    const lockedEntries: any[] = [];
-    const staleLockedBlockIds = new Set<string>();
-    const keptLockedCountByKey = new Map<string, number>();
-
-    // Group rawLockedEntries by session_block_id so we keep/drop whole blocks atomically
-    const lockedByBlock = new Map<string, any[]>();
-    for (const le of rawLockedEntries) {
-      const bId = String(le.session_block_id || le.id);
-      if (!lockedByBlock.has(bId)) lockedByBlock.set(bId, []);
-      lockedByBlock.get(bId)!.push(le);
-    }
-    const teacherScopes = loadTenantTeacherScopes(db, tenantId);
-    for (const [bId, segs] of lockedByBlock.entries()) {
-      const head = segs.find((s) => Number(s.block_index || 0) === 0) || segs[0];
-      const k = head.joint_lesson_id
-        ? `jl:${head.joint_lesson_id}:${head.grade}:${head.stream}`
-        : `sa:${head.allocation_id}:${head.block_length}`;
-      const maxAllowed = allowedBlockCountByKey.get(k) || 0;
-      const alreadyKept = keptLockedCountByKey.get(k) || 0;
-      const headTeachers = safeJsonParse<string[]>(head.teacher_ids_json, []).filter(Boolean);
-      const isTeacherScopeValid =
-        headTeachers.length > 0 &&
-        headTeachers.every(
-          (tid) =>
-            checkTeacherAssignmentScope(
-              teacherScopes,
-              tid,
-              Number(head.grade),
-              String(head.stream),
-              String(head.subject_name || '')
-            ).ok
-        );
-      if (maxAllowed > 0 && alreadyKept < maxAllowed && isTeacherScopeValid) {
-        keptLockedCountByKey.set(k, alreadyKept + 1);
-        lockedEntries.push(...segs);
-      } else {
-        staleLockedBlockIds.add(bId);
-      }
-    }
-
-    if (staleLockedBlockIds.size > 0) {
-      const delStale = db.prepare(`DELETE FROM tt_entries WHERE version_id = ? AND session_block_id = ?`);
-      for (const bId of staleLockedBlockIds) {
-        delStale.run(versionId, bId);
-      }
-    }
-
-    updateJob({
-      progressPct: 20,
-      stageMessage: `Expanded ${allUnits.length} weekly session blocks (${lockedEntries.length} valid locked slots preserved)...`,
-    });
-    await yieldEventLoop();
-    if (isCancelled()) {
-      updateJob({ status: 'cancelled', stageMessage: 'Cancelled by administrator.', completedAt: new Date().toISOString() });
-      return;
-    }
-
-    // Track state occupied by locked & out-of-scope preserved entries
-    for (const le of lockedEntries) {
-      preservedEntryIds.add(String(le.id));
-    }
-
-    interface OccupiedState {
-      teacherBusy: Set<string>; // `${teacherId}|${day}|${period}`
-      roomBusyCount: Map<string, number>; // `${roomId}|${day}|${period}` -> concurrent class count
-      classWholeBusy: Set<string>; // `${grade}|${stream}|${day}|${period}`
-      classGroupBusy: Set<string>; // `${grade}|${stream}|${groupKey}|${day}|${period}`
-      classAnyBusy: Set<string>; // `${grade}|${stream}|${day}|${period}` (to block Whole Class against split)
-      teacherDayPeriods: Map<string, Set<number>>; // `${teacherId}|${day}` -> Set<period>
-      teacherWeekTotal: Map<string, number>;
-      classSubjDays: Map<string, Map<string, number>>; // `${grade}|${stream}|${subject}` -> Map<day, periodCount>
-    }
-
-    const state: OccupiedState = {
-      teacherBusy: new Set(),
-      roomBusyCount: new Map(),
-      classWholeBusy: new Set(),
-      classGroupBusy: new Set(),
-      classAnyBusy: new Set(),
-      teacherDayPeriods: new Map(),
-      teacherWeekTotal: new Map(),
-      classSubjDays: new Map(),
-    };
-
-    const validLessonPeriods = new Set(
-      periods.filter((p) => p.kind === 'lesson' && p.periodNumber > 0).map((p) => p.periodNumber)
-    );
-    const roomByNameLower = new Map<string, string>();
-    for (const r of roomsList) {
-      roomByNameLower.set(r.name.trim().toLowerCase(), r.id);
-    }
-
-    const lockedCountsByAllocOrJoint = new Map<string, number>();
-
-    // Treat every preserved locked lesson as a shared resource reservation BEFORE solver placement:
-    // reserves participating teachers, shared facility/room, and class/stream slot while strictly excluding break/lunch slots.
-    for (const le of lockedEntries) {
-      const day = String(le.day_of_week);
-      const period = Number(le.period_number);
-      if (validLessonPeriods.size > 0 && !validLessonPeriods.has(period)) {
-        continue; // Never honor a corrupted entry sitting on a break/lunch period
-      }
-      const grade = Number(le.grade);
-      const stream = String(le.stream);
-      const tIds = safeJsonParse<string[]>(le.teacher_ids_json, []);
-      for (const tid of tIds) {
-        state.teacherBusy.add(`${tid}|${day}|${period}`);
-        const tdKey = `${tid}|${day}`;
-        if (!state.teacherDayPeriods.has(tdKey)) state.teacherDayPeriods.set(tdKey, new Set());
-        if (!state.teacherDayPeriods.get(tdKey)!.has(period)) {
-          state.teacherDayPeriods.get(tdKey)!.add(period);
-          state.teacherWeekTotal.set(tid, (state.teacherWeekTotal.get(tid) || 0) + 1);
-        }
-      }
-      const lockedRoomId = le.room_id
-        ? String(le.room_id)
-        : le.room_name
-        ? roomByNameLower.get(String(le.room_name).trim().toLowerCase()) || null
-        : null;
-      if (lockedRoomId) {
-        const rk = `${lockedRoomId}|${day}|${period}`;
-        state.roomBusyCount.set(rk, (state.roomBusyCount.get(rk) || 0) + 1);
-      }
-      state.classAnyBusy.add(`${grade}|${stream}|${day}|${period}`);
-      if (!le.group_id || le.group_name === 'Whole Class') {
-        state.classWholeBusy.add(`${grade}|${stream}|${day}|${period}`);
-      } else {
-        state.classGroupBusy.add(`${grade}|${stream}|${le.group_id}|${day}|${period}`);
-      }
-      if (Number(le.block_index || 0) === 0) {
-        const k = le.joint_lesson_id ? `jl:${le.joint_lesson_id}:${grade}:${stream}` : `sa:${le.allocation_id}:${le.block_length}`;
-        lockedCountsByAllocOrJoint.set(k, (lockedCountsByAllocOrJoint.get(k) || 0) + 1);
-        const sdKey = `${grade}|${stream}|${le.subject_name}`;
-        if (!state.classSubjDays.has(sdKey)) state.classSubjDays.set(sdKey, new Map());
-        state.classSubjDays.get(sdKey)!.set(day, (state.classSubjDays.get(sdKey)!.get(day) || 0) + Number(le.block_length || 1));
-      }
-    }
-
-    // Also reserve any tenant-level fixed shared anchor lessons (edusmart_fixed_lessons_v1)
-    // so shared rooms, teachers, and streams never collide with school-wide locked anchors.
-    try {
-      const fixedRows = db
-        .prepare(
-          `SELECT payload_json FROM collections_store
-           WHERE collection_key = 'edusmart_fixed_lessons_v1' AND tenant_id = ? AND deleted_at IS NULL`
-        )
-        .all(tenantId) as Array<{ payload_json: string }>;
-      const teacherIdByUserOrName = new Map<string, string>();
-      for (const tp of db.prepare(`SELECT id, user_id, teacher_name FROM tt_teacher_profiles WHERE tenant_id = ?`).all(tenantId) as any[]) {
-        teacherIdByUserOrName.set(String(tp.id), String(tp.id));
-        if (tp.user_id) teacherIdByUserOrName.set(String(tp.user_id), String(tp.id));
-        if (tp.teacher_name) teacherIdByUserOrName.set(String(tp.teacher_name).trim().toLowerCase(), String(tp.id));
-      }
-      for (const row of fixedRows) {
-        const fl = safeJsonParse<any>(row.payload_json, null);
-        if (!fl || fl.isActive === false) continue;
-        const day = String(fl.day || fl.dayOfWeek || '');
-        const period = Number(fl.period || fl.periodNumber || 0);
-        if (!day || !period || (validLessonPeriods.size > 0 && !validLessonPeriods.has(period))) continue;
-        const tId =
-          teacherIdByUserOrName.get(String(fl.teacherId || '')) ||
-          teacherIdByUserOrName.get(String(fl.teacherName || '').trim().toLowerCase());
-        const fixedSubject = String(fl.subject || fl.subjectName || '').trim();
-        const fixedTeacherAllowed =
-          !tId ||
-          !fixedSubject ||
-          !fl.grade ||
-          !fl.stream ||
-          checkTeacherAssignmentScope(teacherScopes, tId, Number(fl.grade), String(fl.stream), fixedSubject).ok;
-        if (tId && fixedTeacherAllowed) {
-          state.teacherBusy.add(`${tId}|${day}|${period}`);
-          const tdKey = `${tId}|${day}`;
-          if (!state.teacherDayPeriods.has(tdKey)) state.teacherDayPeriods.set(tdKey, new Set());
-          if (!state.teacherDayPeriods.get(tdKey)!.has(period)) {
-            state.teacherDayPeriods.get(tdKey)!.add(period);
-            state.teacherWeekTotal.set(tId, (state.teacherWeekTotal.get(tId) || 0) + 1);
-          }
-        }
-        const fRoomId = fl.roomId
-          ? String(fl.roomId)
-          : fl.roomName || fl.facilityName
-          ? roomByNameLower.get(String(fl.roomName || fl.facilityName).trim().toLowerCase()) || null
-          : null;
-        if (fRoomId) {
-          const rk = `${fRoomId}|${day}|${period}`;
-          state.roomBusyCount.set(rk, (state.roomBusyCount.get(rk) || 0) + 1);
-        }
-        if (fl.grade && fl.stream) {
-          const g = Number(fl.grade);
-          const s = String(fl.stream);
-          state.classAnyBusy.add(`${g}|${s}|${day}|${period}`);
-          state.classWholeBusy.add(`${g}|${s}|${day}|${period}`);
-        }
-      }
-    } catch {
-      // ignore if collections_store has no fixed lessons
-    }
-
-    // Filter out units outside target scope OR already covered by locked/preserved entries
-    const remainingUnits: TTSessionUnit[] = [];
-    const consumedLocked = new Map<string, number>(lockedCountsByAllocOrJoint);
-    for (const u of allUnits) {
-      const unitTouchesScope = u.classTargets.some((ct) => isEntryInScope(ct.grade, ct.stream));
-      if (!unitTouchesScope) continue;
-      const k = u.jointLessonId
-        ? `jl:${u.jointLessonId}:${u.classTargets[0].grade}:${u.classTargets[0].stream}`
-        : `sa:${u.allocationId}:${u.blockLength}`;
-      const rem = consumedLocked.get(k) || 0;
-      if (rem > 0) {
-        consumedLocked.set(k, rem - 1);
-      } else {
-        remainingUnits.push(u);
-      }
-    }
-
-    // Most-Constrained-First heuristic ordering:
-    // 1. Joint Multi-Stream -> 2. Triples -> 3. Doubles -> 4. Specialized Lab/Workshop rooms -> 5. Preferred slots -> 6. Teacher scarcity
-    const teacherFrequency = new Map<string, number>();
-    for (const u of remainingUnits) {
-      for (const tid of u.teacherIds) teacherFrequency.set(tid, (teacherFrequency.get(tid) || 0) + u.blockLength);
-    }
-
-    remainingUnits.sort((a, b) => {
-      const scoreUnit = (u: TTSessionUnit) => {
-        let s = 0;
-        if (u.jointLessonId) s += 10000;
-        s += u.blockLength * 1200;
-        if (u.requiredRoomType !== 'general') s += 600;
-        if (u.preferredDays.length > 0 || u.preferredPeriods.length > 0) s += 300;
-        const maxTLoad = u.teacherIds.reduce((m, tid) => Math.max(m, teacherFrequency.get(tid) || 0), 0);
-        s += maxTLoad * 10;
-        return s;
-      };
-      return scoreUnit(b) - scoreUnit(a);
-    });
-
-    interface PlacedEntry {
-      id: string;
-      sessionBlockId: string;
-      unit: TTSessionUnit;
+    let best: {
+      assignment: EngineTeacherAssignment;
       day: string;
-      period: number;
-      blockIndex: number;
-      roomId: string | null;
-      roomName: string | null;
-    }
+      periodSlot: PeriodSlotDefinition;
+      score: number;
+    } | null = null;
 
-    interface PlacedBlockRecord {
-      sessionBlockId: string;
-      unit: TTSessionUnit;
-      day: string;
-      windowPeriods: number[];
-      room: { id: string | null; name: string | null };
-    }
+    for (const assignment of task.candidateAssignments) {
+      const currentLoad = teacherLoad.get(assignment.teacherId) ?? 0;
 
-    const newlyPlaced: PlacedEntry[] = [];
-    const placedBlocks: PlacedBlockRecord[] = [];
-    const unscheduledOut: Array<{ unit: TTSessionUnit; reason: string; diagnostics: any }> = [];
+      for (const day of task.allowedDays) {
+        if (assignment.allowedDays.length > 0 && !assignment.allowedDays.includes(day)) continue;
 
-    const pickRoom = (unit: TTSessionUnit, day: string, windowPeriods: number[]): { id: string | null; name: string | null } | null => {
-      const checkRoomOk = (r: typeof roomsList[number]) => {
-        if (r.capacity < unit.studentCount) return false;
-        for (const p of windowPeriods) {
-          if (r.availability?.[day]?.[String(p)] === false) return false;
-          if ((state.roomBusyCount.get(`${r.id}|${day}|${p}`) || 0) >= r.maxConcurrentClasses) return false;
-        }
-        return true;
-      };
+        for (const periodNum of task.allowedPeriods) {
+          if (assignment.allowedPeriods.length > 0 && !assignment.allowedPeriods.includes(periodNum)) {
+            continue;
+          }
+          const periodSlot = periodMap.get(periodNum);
+          if (!periodSlot) continue;
 
-      // 1. Preferred room
-      if (unit.preferredRoomId && roomMap.has(unit.preferredRoomId)) {
-        const pr = roomMap.get(unit.preferredRoomId)!;
-        if (checkRoomOk(pr)) return { id: pr.id, name: pr.name };
-      }
+          const sk = slotKey(day, periodNum);
+          if (!isTeacherFree(assignment.teacherId, sk)) continue;
+          if (!isFacilityAvailable(task.facility, day, periodNum)) continue;
+          if (!canPlaceForStreamAndStudents(task, sk)) continue;
 
-      // 2. Specialized matching type
-      if (unit.requiredRoomType !== 'general') {
-        const specialized = roomsList
-          .filter((r) => r.roomType === unit.requiredRoomType && checkRoomOk(r))
-          .sort((a, b) => a.capacity - b.capacity);
-        if (specialized.length > 0) return { id: specialized[0].id, name: specialized[0].name };
-        return null; // Specialized room unavailable
-      }
+          // Score slot: prefer spreading same subject across different days, prefer balanced teacher load,
+          // prefer remedial slot for remedial sessions if available
+          const sameDayCount = subjectPerStreamDayCount.get(`${stKey}::${task.subject.id}::${day}`) ?? 0;
+          const overloadPenalty = currentLoad >= assignment.maxWeeklyPeriods ? 500 : 0;
+          const remedialSlotBonus =
+            task.remedialConfig && periodSlot.slotType === 'remedial' ? -30 : 0;
+          // Mild spread across days based on day index & stream hash to avoid clumping
+          const dayIdx = WEEKDAYS.indexOf(day as (typeof WEEKDAYS)[number]);
+          const score =
+            sameDayCount * 100 +
+            overloadPenalty +
+            currentLoad * 3 +
+            remedialSlotBonus +
+            periodNum * 2 +
+            ((dayIdx + task.grade) % 5);
 
-      // 3. Dedicated homeroom first
-      if (unit.classTargets.length === 1) {
-        const ct = unit.classTargets[0];
-        const home = roomsList.find(
-          (r) =>
-            r.assignedGrade === ct.grade &&
-            String(r.assignedStream || '').toLowerCase() === ct.stream.toLowerCase() &&
-            checkRoomOk(r)
-        );
-        if (home) return { id: home.id, name: home.name };
-      }
-
-      // 4. Any available general classroom or hall fallback matching capacity
-      const anyGeneral = roomsList
-        .filter((r) => (r.roomType === 'general' || r.roomType === 'hall') && checkRoomOk(r))
-        .sort((a, b) => a.capacity - b.capacity);
-      if (anyGeneral.length > 0) return { id: anyGeneral[0].id, name: anyGeneral[0].name };
-
-      // If no rooms configured at all, allow virtual assignment; otherwise reject room shortage
-      return roomsList.length === 0 ? { id: null, name: 'Assigned Classroom' } : null;
-    };
-
-    const scoreCandidate = (unit: TTSessionUnit, day: string, windowPeriods: number[], allowSoftSpreadOverflow: boolean): number | null => {
-      // Check Grade working days & max periods
-      for (const ct of unit.classTargets) {
-        const gs = gradeSchedMap.get(ct.grade);
-        const allowedDays = gs?.days || workingDays;
-        if (!allowedDays.includes(day)) return null;
-        const maxP = gs?.periodsPerDay || Number(cfg?.default_periods_per_day || 8);
-        if (windowPeriods.some((p) => p > maxP)) return null;
-
-        // Class / Student Group Clash (HARD)
-        for (const p of windowPeriods) {
-          if (unit.isWholeClass) {
-            if (state.classAnyBusy.has(`${ct.grade}|${ct.stream}|${day}|${p}`)) return null;
-          } else {
-            if (state.classWholeBusy.has(`${ct.grade}|${ct.stream}|${day}|${p}`)) return null;
-            if (state.classGroupBusy.has(`${ct.grade}|${ct.stream}|${unit.groupId || unit.groupName}|${day}|${p}`)) return null;
+          if (!best || score < best.score) {
+            best = { assignment, day, periodSlot, score };
           }
         }
       }
+    }
 
-      // Check Teacher Clashes, Availability & Off-Duty Periods (HARD — NON-NEGOTIABLE)
-      for (const tid of unit.teacherIds) {
-        const t = teacherMap.get(tid);
-        if (t && !t.active) return null;
-        for (const p of windowPeriods) {
-          if (t?.availability?.[day]?.[String(p)] === false) return null;
-          if (t?.offDutySet?.has(`${day}|${p}`)) return null;
-          if (state.teacherBusy.has(`${tid}|${day}|${p}`)) return null;
-        }
-      }
+    return best;
+  };
 
-      // Check Classroom availability & capacity (HARD)
-      const room = pickRoom(unit, day, windowPeriods);
-      if (!room) return null;
+  const unplacedTasks: GenerateScheduleResult['unplacedTasks'] = [];
 
-      // Soft Score (higher is better)
-      let score = 1000;
+  for (const task of tasks) {
+    const candidate = findBestCandidate(task);
+    if (candidate) {
+      placeEntry(task, candidate.assignment, candidate.day, candidate.periodSlot);
+      continue;
+    }
 
-      // 1. Subject spread, daily cap & avoid consecutive single-period repeats of the same subject
-      const dayIdx = workingDays.indexOf(day);
-      for (const ct of unit.classTargets) {
-        const sdKey = `${ct.grade}|${ct.stream}|${unit.subjectName}`;
-        const existingDaysMap = state.classSubjDays.get(sdKey);
-        const alreadyOnDay = existingDaysMap?.get(day) || 0;
-        const effectiveMaxDay = Math.max(unit.maxPerDay, unit.blockLength);
-        if (alreadyOnDay + unit.blockLength > effectiveMaxDay) {
-          if (!allowSoftSpreadOverflow) return null;
-          score -= 500 * (alreadyOnDay + 1);
-        } else if (alreadyOnDay > 0) {
-          score -= 120;
-        }
+    // Single-step Kempe-style swap repair: try relocating an existing entry in the same stream
+    // so that this task can take its freed slot while preserving zero collisions.
+    let repaired = false;
+    const cfg = input.scheduleConfigs[task.categoryId];
+    if (cfg && task.studentGroupMode === 'whole_stream') {
+      const periodMap = new Map(cfg.periods.map((p) => [p.periodNumber, p]));
+      const streamEntries = entries.filter(
+        (e) =>
+          e.grade === task.grade &&
+          e.stream === task.stream &&
+          e.studentGroupMode === 'whole_stream' &&
+          task.allowedDays.includes(e.dayOfWeek) &&
+          task.allowedPeriods.includes(e.periodNumber)
+      );
 
-        // Penalize putting two single lessons of the same subject back-to-back
-        if (unit.blockLength === 1 && alreadyOnDay > 0) {
-          const hasAdjacentSameSubj = newlyPlaced.some(
-            (pe) =>
-              pe.day === day &&
-              pe.unit.grade === ct.grade &&
-              pe.unit.stream === ct.stream &&
-              pe.unit.subjectName === unit.subjectName &&
-              Math.abs(pe.period - windowPeriods[0]) === 1
+      for (const blocker of streamEntries) {
+        const blockerSk = slotKey(blocker.dayOfWeek, blocker.periodNumber);
+        const blockerPeriod = periodMap.get(blocker.periodNumber);
+        if (!blockerPeriod) continue;
+
+        // Check if our task's teacher & facility could take blocker's slot
+        const eligibleAssignment = task.candidateAssignments.find(
+          (a) =>
+            isTeacherFree(a.teacherId, blockerSk) &&
+            (a.allowedDays.length === 0 || a.allowedDays.includes(blocker.dayOfWeek)) &&
+            (a.allowedPeriods.length === 0 || a.allowedPeriods.includes(blocker.periodNumber))
+        );
+        if (!eligibleAssignment) continue;
+        if (!isFacilityAvailable(task.facility, blocker.dayOfWeek, blocker.periodNumber)) continue;
+
+        // Temporarily remove blocker and see if blocker can move somewhere else cleanly
+        const blockerSub = input.subjects.find((s) => s.id === blocker.subjectId);
+        if (!blockerSub) continue;
+        const blockerFac = blocker.facilityId ? facilityById.get(blocker.facilityId) ?? null : null;
+        const blockerAssigns = findMatchingAssignments(
+          input.teacherAssignments,
+          blocker.categoryId,
+          blocker.subjectId,
+          blocker.grade,
+          blocker.stream
+        );
+
+        removeEntry(blocker);
+        const placedNew = placeEntry(task, eligibleAssignment, blocker.dayOfWeek, blockerPeriod);
+
+        const blockerTask: PlacementTask = {
+          taskId: `repair_${blocker.id}`,
+          categoryId: blocker.categoryId,
+          grade: blocker.grade,
+          stream: blocker.stream,
+          subject: blockerSub,
+          remedialConfig: null,
+          candidateAssignments:
+            blockerAssigns.length > 0
+              ? blockerAssigns
+              : [
+                  {
+                    id: 'fallback',
+                    teacherId: blocker.teacherId,
+                    teacherName: blocker.teacherName,
+                    teacherEmail: '',
+                    categoryId: blocker.categoryId,
+                    subjectId: blocker.subjectId,
+                    grade: blocker.grade,
+                    stream: blocker.stream,
+                    roleType: 'subject_teacher',
+                    maxWeeklyPeriods: 35,
+                    facilityId: blocker.facilityId,
+                    equipmentNotes: '',
+                    allowedDays: [],
+                    allowedPeriods: [],
+                    isActive: true,
+                  },
+                ],
+          facility: blockerFac,
+          allowedDays:
+            blockerSub.allowedDays.length > 0
+              ? cfg.days.filter((d) => blockerSub.allowedDays.includes(d))
+              : cfg.days,
+          allowedPeriods:
+            blockerSub.allowedPeriods.length > 0
+              ? getRegularPeriods(cfg)
+                  .map((p) => p.periodNumber)
+                  .filter((p) => blockerSub.allowedPeriods.includes(p))
+              : getRegularPeriods(cfg).map((p) => p.periodNumber),
+          studentGroupMode: blocker.studentGroupMode,
+          studentGroupName: blocker.studentGroupName,
+          studentIds: blocker.studentIds,
+          durationMinsOverride: null,
+          constraintTightness: 0,
+        };
+
+        const relocated = findBestCandidate(blockerTask);
+        if (relocated) {
+          placeEntry(blockerTask, relocated.assignment, relocated.day, relocated.periodSlot);
+          repaired = true;
+          break;
+        } else {
+          // Roll back swap
+          removeEntry(placedNew);
+          placeEntry(
+            blockerTask,
+            blockerTask.candidateAssignments[0],
+            blocker.dayOfWeek,
+            blockerPeriod
           );
-          if (hasAdjacentSameSubj) score -= 240;
-        }
-
-        // Minimum spacing check
-        if (unit.minSpacingDays > 0 && existingDaysMap) {
-          for (const [prevDay, cnt] of existingDaysMap.entries()) {
-            if (cnt <= 0) continue;
-            const prevIdx = workingDays.indexOf(prevDay);
-            if (prevIdx !== -1 && Math.abs(dayIdx - prevIdx) <= unit.minSpacingDays) {
-              score -= allowSoftSpreadOverflow ? 150 : 320;
-            }
-          }
         }
       }
+    }
 
-      // 2. Teacher workload balance, consecutive cap, gap minimization & preferred free slots
-      for (const tid of unit.teacherIds) {
-        const t = teacherMap.get(tid);
-        if (!t) continue;
-        const dayLoad = state.teacherDayPeriods.get(`${tid}|${day}`)?.size || 0;
-        const weekLoad = state.teacherWeekTotal.get(tid) || 0;
-
-        if (dayLoad + windowPeriods.length > t.maxDaily) score -= 420;
-        if (weekLoad + windowPeriods.length > t.maxWeekly) score -= 350;
-        score -= dayLoad * 18; // Balance daily teaching evenly across the week
-
-        // Consecutive streak & idle-gap calculation
-        const merged = new Set(state.teacherDayPeriods.get(`${tid}|${day}`) || []);
-        windowPeriods.forEach((p) => merged.add(p));
-        const sortedP = Array.from(merged).sort((a, b) => a - b);
-        let maxRun = 1;
-        let run = 1;
-        for (let i = 1; i < sortedP.length; i++) {
-          if (sortedP[i] === sortedP[i - 1] + 1) {
-            run++;
-            if (run > maxRun) maxRun = run;
-          } else {
-            run = 1;
-          }
-        }
-        if (maxRun > t.maxConsecutive) score -= 260;
-
-        // Penalize unnecessary idle gaps in a teacher's daily timetable
-        if (sortedP.length >= 2) {
-          const span = sortedP[sortedP.length - 1] - sortedP[0] + 1;
-          const idleGaps = Math.max(0, span - sortedP.length);
-          score -= idleGaps * 16;
-        }
-
-        // Avoid placing into preferred free period
-        if (t.preferredFree.some((pf) => pf.day === day && windowPeriods.includes(Number(pf.period)))) {
-          score -= 220;
-        }
-      }
-
-      // 3. Preferred days & periods bonus
-      if (unit.preferredDays.length > 0 && unit.preferredDays.includes(day)) score += 160;
-      if (unit.preferredPeriods.length > 0 && windowPeriods.some((p) => unit.preferredPeriods.includes(p))) score += 140;
-
-      // 4. Morning preference for heavy core cognitive subjects
-      const isCoreHeavy = ['Mathematics', 'English', 'Kiswahili', 'Integrated Science', 'Science and Technology'].includes(unit.subjectName);
-      if (isCoreHeavy && windowPeriods[0] <= 4) score += 45;
-      if (!isCoreHeavy && windowPeriods[0] >= 5) score += 25;
-
-      // 5. Compactness bonus (prefer earlier available slots in the day to avoid awkward gaps)
-      score -= windowPeriods[0] * 3;
-
-      return score;
-    };
-
-    const commitUnitPlacement = (
-      unit: TTSessionUnit,
-      day: string,
-      windowPeriods: number[],
-      room: { id: string | null; name: string | null }
-    ): PlacedBlockRecord => {
-      const sessionBlockId = uid('ttblk');
-      windowPeriods.forEach((p, bIdx) => {
-        for (const tid of unit.teacherIds) {
-          state.teacherBusy.add(`${tid}|${day}|${p}`);
-          const tdKey = `${tid}|${day}`;
-          if (!state.teacherDayPeriods.has(tdKey)) state.teacherDayPeriods.set(tdKey, new Set());
-          if (!state.teacherDayPeriods.get(tdKey)!.has(p)) {
-            state.teacherDayPeriods.get(tdKey)!.add(p);
-            state.teacherWeekTotal.set(tid, (state.teacherWeekTotal.get(tid) || 0) + 1);
-          }
-        }
-        if (room.id) {
-          const rk = `${room.id}|${day}|${p}`;
-          state.roomBusyCount.set(rk, (state.roomBusyCount.get(rk) || 0) + 1);
-        }
-        for (const ct of unit.classTargets) {
-          state.classAnyBusy.add(`${ct.grade}|${ct.stream}|${day}|${p}`);
-          if (unit.isWholeClass) {
-            state.classWholeBusy.add(`${ct.grade}|${ct.stream}|${day}|${p}`);
-          } else {
-            state.classGroupBusy.add(`${ct.grade}|${ct.stream}|${unit.groupId || unit.groupName}|${day}|${p}`);
-          }
-          newlyPlaced.push({
-            id: uid('ttent'),
-            sessionBlockId,
-            unit: { ...unit, grade: ct.grade, stream: ct.stream },
-            day,
-            period: p,
-            blockIndex: bIdx,
-            roomId: room.id,
-            roomName: room.name,
-          });
-        }
+    if (!repaired) {
+      unplacedTasks.push({
+        categoryId: task.categoryId,
+        grade: task.grade,
+        stream: task.stream,
+        subjectName: task.subject.name,
+        reason: task.facility
+          ? `No conflict-free slot with teacher and shared facility "${task.facility.name}" both available.`
+          : 'No conflict-free slot available without causing teacher or student-group collision.',
       });
-
-      for (const ct of unit.classTargets) {
-        const sdKey = `${ct.grade}|${ct.stream}|${unit.subjectName}`;
-        if (!state.classSubjDays.has(sdKey)) state.classSubjDays.set(sdKey, new Map());
-        state.classSubjDays.get(sdKey)!.set(day, (state.classSubjDays.get(sdKey)!.get(day) || 0) + unit.blockLength);
-      }
-
-      const rec: PlacedBlockRecord = { sessionBlockId, unit, day, windowPeriods, room };
-      placedBlocks.push(rec);
-      return rec;
-    };
-
-    const uncommitPlacedBlock = (rec: PlacedBlockRecord) => {
-      const { sessionBlockId, unit, day, windowPeriods, room } = rec;
-      const bIdx = placedBlocks.indexOf(rec);
-      if (bIdx !== -1) placedBlocks.splice(bIdx, 1);
-
-      for (let i = newlyPlaced.length - 1; i >= 0; i--) {
-        if (newlyPlaced[i].sessionBlockId === sessionBlockId) {
-          newlyPlaced.splice(i, 1);
-        }
-      }
-
-      for (const p of windowPeriods) {
-        for (const tid of unit.teacherIds) {
-          state.teacherBusy.delete(`${tid}|${day}|${p}`);
-          const tdKey = `${tid}|${day}`;
-          const set = state.teacherDayPeriods.get(tdKey);
-          if (set && set.delete(p)) {
-            state.teacherWeekTotal.set(tid, Math.max(0, (state.teacherWeekTotal.get(tid) || 1) - 1));
-          }
-        }
-        if (room.id) {
-          const rk = `${room.id}|${day}|${p}`;
-          const nextCnt = Math.max(0, (state.roomBusyCount.get(rk) || 1) - 1);
-          if (nextCnt === 0) state.roomBusyCount.delete(rk);
-          else state.roomBusyCount.set(rk, nextCnt);
-        }
-        for (const ct of unit.classTargets) {
-          if (unit.isWholeClass) {
-            state.classWholeBusy.delete(`${ct.grade}|${ct.stream}|${day}|${p}`);
-          } else {
-            state.classGroupBusy.delete(`${ct.grade}|${ct.stream}|${unit.groupId || unit.groupName}|${day}|${p}`);
-          }
-          // Only clear classAnyBusy if no other split group occupies this class slot
-          const stillOccupied = newlyPlaced.some(
-            (pe) => pe.day === day && pe.period === p && pe.unit.grade === ct.grade && pe.unit.stream === ct.stream
-          );
-          if (!stillOccupied) {
-            state.classAnyBusy.delete(`${ct.grade}|${ct.stream}|${day}|${p}`);
-          }
-        }
-      }
-
-      for (const ct of unit.classTargets) {
-        const sdKey = `${ct.grade}|${ct.stream}|${unit.subjectName}`;
-        const m = state.classSubjDays.get(sdKey);
-        if (m) {
-          const prev = m.get(day) || 0;
-          const next = Math.max(0, prev - unit.blockLength);
-          if (next === 0) m.delete(day);
-          else m.set(day, next);
-        }
-      }
-    };
-
-    const findBestSlotForUnit = (
-      unit: TTSessionUnit,
-      tieSeed: number
-    ): { day: string; windowPeriods: number[]; score: number; room: { id: string | null; name: string | null } } | null => {
-      const maxGradeP = Math.min(
-        ...unit.classTargets.map((ct) => gradeSchedMap.get(ct.grade)?.periodsPerDay || Number(cfg?.default_periods_per_day || 8))
-      );
-      const contiguousWindows = getContiguousLessonStarts(periods, maxGradeP, unit.blockLength);
-      let best: { day: string; windowPeriods: number[]; score: number; room: { id: string | null; name: string | null } } | null = null;
-
-      for (const allowRelaxedSoft of [false, true]) {
-        for (const day of workingDays) {
-          for (const win of contiguousWindows) {
-            const sc = scoreCandidate(unit, day, win, allowRelaxedSoft);
-            if (sc === null) continue;
-            const jittered = sc + ((tieSeed + workingDays.indexOf(day)) % 3);
-            if (!best || jittered > best.score) {
-              const room = pickRoom(unit, day, win);
-              if (room) {
-                best = { day, windowPeriods: win, score: jittered, room };
-              }
-            }
-          }
-        }
-        if (best) break;
-      }
-      return best;
-    };
-
-    // Place sessions in 3 passes:
-    // Pass 1: strict spread + zero hard conflicts
-    // Pass 2: relax soft daily/spacing caps if needed
-    // Pass 3: conflict-directed 1-hop backtracking swap repair for any remaining tightly constrained unit
-    let processed = 0;
-    const totalCount = Math.max(1, remainingUnits.length);
-    const deferredForRepair: TTSessionUnit[] = [];
-
-    for (const unit of remainingUnits) {
-      processed++;
-      if (processed % 15 === 0) {
-        const pct = Math.min(80, 22 + Math.round((processed / totalCount) * 58));
-        updateJob({
-          progressPct: pct,
-          stageMessage: `Placing lesson blocks (${processed}/${remainingUnits.length})...`,
-        });
-        await yieldEventLoop();
-        if (isCancelled()) {
-          updateJob({ status: 'cancelled', stageMessage: 'Cancelled by administrator.', completedAt: new Date().toISOString() });
-          return;
-        }
-      }
-
-      // Strict assignment scope guard: NEVER place lessons with an unauthorized teacher or without an assigned teacher
-      if (unit.scopeViolationReason) {
-        unscheduledOut.push({
-          unit,
-          reason: unit.scopeViolationReason,
-          diagnostics: {
-            code: 'TEACHER_SCOPE_VIOLATION',
-            blockLength: unit.blockLength,
-            requiredRoomType: unit.requiredRoomType,
-            teachers: unit.teacherNames,
-            studentCount: unit.studentCount,
-          },
-        });
-        continue;
-      }
-      if (unit.teacherIds.length === 0) {
-        unscheduledOut.push({
-          unit,
-          reason: `No strictly assigned teacher for Grade ${unit.grade} ${unit.stream} · ${unit.subjectName}. Unassigned lessons are not placed on the timetable.`,
-          diagnostics: {
-            code: 'NO_ASSIGNED_TEACHER',
-            blockLength: unit.blockLength,
-            requiredRoomType: unit.requiredRoomType,
-            teachers: [],
-            studentCount: unit.studentCount,
-          },
-        });
-        continue;
-      }
-
-      const bestCandidate = findBestSlotForUnit(unit, processed);
-      if (bestCandidate) {
-        commitUnitPlacement(unit, bestCandidate.day, bestCandidate.windowPeriods, bestCandidate.room);
-      } else {
-        deferredForRepair.push(unit);
-      }
     }
-
-    // Pass 3: Conflict-Directed 1-Hop Backtracking Swap Repair
-    if (deferredForRepair.length > 0) {
-      updateJob({
-        progressPct: 84,
-        stageMessage: `Running backtracking conflict repair on ${deferredForRepair.length} tightly constrained session(s)...`,
-      });
-      await yieldEventLoop();
-
-      for (let rIdx = 0; rIdx < deferredForRepair.length; rIdx++) {
-        const unit = deferredForRepair[rIdx];
-        // Retry directly first (earlier swaps may have opened a slot)
-        const directNow = findBestSlotForUnit(unit, processed + rIdx);
-        if (directNow) {
-          commitUnitPlacement(unit, directNow.day, directNow.windowPeriods, directNow.room);
-          continue;
-        }
-
-        const maxGradeP = Math.min(
-          ...unit.classTargets.map((ct) => gradeSchedMap.get(ct.grade)?.periodsPerDay || Number(cfg?.default_periods_per_day || 8))
-        );
-        const contiguousWindows = getContiguousLessonStarts(periods, maxGradeP, unit.blockLength);
-        let repaired = false;
-
-        // Try relocating a single movable placed block that blocks this unit on a valid slot
-        outerRepair: for (const day of workingDays) {
-          for (const win of contiguousWindows) {
-            // Find movable placed blocks overlapping on teacher, stream, or specialized room at (day, win)
-            const blocking = placedBlocks.filter((pb) => {
-              if (pb.day !== day) return false;
-              const overlapsTime = pb.windowPeriods.some((p) => win.includes(p));
-              if (!overlapsTime) return false;
-              const teacherHit = pb.unit.teacherIds.some((tid) => unit.teacherIds.includes(tid));
-              const classHit = pb.unit.classTargets.some((pct) =>
-                unit.classTargets.some((uct) => uct.grade === pct.grade && uct.stream === pct.stream)
-              );
-              const roomHit =
-                unit.requiredRoomType !== 'general' &&
-                pb.room.id &&
-                roomMap.get(pb.room.id)?.roomType === unit.requiredRoomType;
-              return teacherHit || classHit || Boolean(roomHit);
-            });
-
-            if (blocking.length !== 1) continue;
-            const victim = blocking[0];
-            const savedVictim = { ...victim };
-
-            uncommitPlacedBlock(victim);
-            const targetScore = scoreCandidate(unit, day, win, true);
-            const targetRoom = targetScore !== null ? pickRoom(unit, day, win) : null;
-            if (targetScore !== null && targetRoom) {
-              const placedTarget = commitUnitPlacement(unit, day, win, targetRoom);
-              const victimNewSlot = findBestSlotForUnit(savedVictim.unit, processed + rIdx + 17);
-              if (victimNewSlot) {
-                commitUnitPlacement(savedVictim.unit, victimNewSlot.day, victimNewSlot.windowPeriods, victimNewSlot.room);
-                repaired = true;
-                break outerRepair;
-              } else {
-                // Roll back target and restore victim to original slot
-                uncommitPlacedBlock(placedTarget);
-                commitUnitPlacement(savedVictim.unit, savedVictim.day, savedVictim.windowPeriods, savedVictim.room);
-              }
-            } else {
-              // Restore victim to original slot
-              commitUnitPlacement(savedVictim.unit, savedVictim.day, savedVictim.windowPeriods, savedVictim.room);
-            }
-          }
-        }
-
-        if (!repaired) {
-          unscheduledOut.push({
-            unit,
-            reason:
-              unit.blockLength > 1
-                ? `No clash-free ${unit.blockLength}-period contiguous slot with ${unit.requiredRoomType} availability.`
-                : `All valid teaching slots conflicted with teacher, class, or room availability.`,
-            diagnostics: {
-              blockLength: unit.blockLength,
-              requiredRoomType: unit.requiredRoomType,
-              teachers: unit.teacherNames,
-              studentCount: unit.studentCount,
-            },
-          });
-        }
-      }
-    }
-
-    updateJob({
-      progressPct: 88,
-      stageMessage: 'Committing timetable entries, locking DB collision guards & running independent validation...',
-    });
-    await yieldEventLoop();
-
-    // Commit atomically in SQLite transaction AND enforce DB-level global teacher/stream booking locks
-    const now = new Date().toISOString();
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      if (preservedEntryIds.size > 0) {
-        const toDeleteIds = existingVersionEntries
-          .map((e) => String(e.id))
-          .filter((id) => !preservedEntryIds.has(id));
-        const delStmt = db.prepare(`DELETE FROM tt_entries WHERE id = ?`);
-        for (const delId of toDeleteIds) {
-          delStmt.run(delId);
-        }
-      } else {
-        db.prepare(`DELETE FROM tt_entries WHERE version_id = ?`).run(versionId);
-      }
-      db.prepare(`DELETE FROM tt_unscheduled_sessions WHERE version_id = ?`).run(versionId);
-
-      const insEntry = db.prepare(
-        `INSERT INTO tt_entries
-           (id, version_id, tenant_id, day_of_week, period_number, grade, stream, stream_label, group_id, group_name, joint_lesson_id, allocation_id, subject_name, teacher_ids_json, teacher_names_json, room_id, room_name, session_block_id, block_length, block_index, is_locked, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
-      );
-
-      for (const pe of newlyPlaced) {
-        const u = pe.unit;
-        insEntry.run(
-          pe.id,
-          versionId,
-          tenantId,
-          pe.day,
-          pe.period,
-          u.grade,
-          u.stream,
-          `Grade ${u.grade} ${u.stream}`,
-          u.groupId || null,
-          u.groupName || 'Whole Class',
-          u.jointLessonId || null,
-          u.allocationId || null,
-          u.subjectName,
-          JSON.stringify(u.teacherIds),
-          JSON.stringify(u.teacherNames),
-          pe.roomId,
-          pe.roomName || 'Assigned Room',
-          pe.sessionBlockId,
-          u.blockLength,
-          pe.blockIndex,
-          now
-        );
-      }
-
-      const insUnsched = db.prepare(
-        `INSERT INTO tt_unscheduled_sessions
-           (id, version_id, tenant_id, session_key, allocation_id, joint_lesson_id, grade, stream, group_id, group_name, subject_name, teacher_ids_json, teacher_names_json, block_length, required_room_type, reason, diagnostics_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      );
-
-      for (const us of unscheduledOut) {
-        insUnsched.run(
-          uid('ttun'),
-          versionId,
-          tenantId,
-          us.unit.sessionKey,
-          us.unit.allocationId || null,
-          us.unit.jointLessonId || null,
-          us.unit.grade,
-          us.unit.stream,
-          us.unit.groupId || null,
-          us.unit.groupName || 'Whole Class',
-          us.unit.subjectName,
-          JSON.stringify(us.unit.teacherIds),
-          JSON.stringify(us.unit.teacherNames),
-          us.unit.blockLength,
-          us.unit.requiredRoomType,
-          us.reason,
-          JSON.stringify(us.diagnostics)
-        );
-      }
-
-      // Enforce physical DB-level teacher & stream booking uniqueness inside the same transaction
-      syncVersionBookingLocks(db, versionId, { useOwnTransaction: false });
-
-      db.exec('COMMIT');
-    } catch (txErr) {
-      db.exec('ROLLBACK');
-      throw txErr;
-    }
-
-    // Run independent post-generation validation
-    const validation = validateTimetableVersion(db, versionId);
-    const totalEntries = (
-      db.prepare(`SELECT COUNT(*) as c FROM tt_entries WHERE version_id = ?`).get(versionId) as any
-    ).c;
-
-    const metrics = {
-      totalEntries,
-      lockedPreserved: lockedEntries.length,
-      placedThisRun: newlyPlaced.length,
-      unscheduledCount: unscheduledOut.length,
-      hardErrors: validation.hardErrors,
-      warnings: validation.warnings,
-      allocationIssuesCount: allocationIssues.length,
-      generatedAt: now,
-    };
-
-    db.prepare(
-      `UPDATE tt_versions SET status = 'generated', metrics_json = ?, updated_at = ? WHERE id = ?`
-    ).run(JSON.stringify(metrics), now, versionId);
-
-    updateJob({
-      status: 'completed',
-      progressPct: 100,
-      stageMessage:
-        unscheduledOut.length === 0 && validation.hardErrors === 0
-          ? `Schedule generated cleanly with ${totalEntries} entries and zero hard conflicts.`
-          : `Schedule generated with ${totalEntries} entries, ${unscheduledOut.length} unscheduled sessions, ${validation.hardErrors} hard errors, ${validation.warnings} warnings.`,
-      diagnostics: metrics,
-      completedAt: now,
-    });
-
-    notifyMySqlTablesChanged([
-      'tt_versions',
-      'tt_entries',
-      'tt_teacher_bookings',
-      'tt_stream_bookings',
-      'tt_unscheduled_sessions',
-      'tt_validation_conflicts',
-      'tt_generation_jobs',
-    ]);
-    broadcastChange({
-      type: 'collection:updated',
-      collection: 'edusmart_timetable_v1',
-      tenantId,
-      recordId: versionId,
-      timestamp: now,
-    });
-  } catch (err: any) {
-    console.error('[timetableEngine] Generation error:', err);
-    updateJob({
-      status: 'failed',
-      progressPct: 100,
-      stageMessage: 'Timetable generation encountered an error.',
-      errorMessage: err?.message || 'Unknown solver error',
-      completedAt: new Date().toISOString(),
-    });
   }
+
+  const audit = validateTimetableEntries(input, entries);
+  return {
+    success: unplacedTasks.length === 0 && audit.teacherCollisions.length === 0 && audit.facilityOverflows.length === 0 && audit.studentGroupConflicts.length === 0,
+    entries,
+    unplacedTasks,
+    audit,
+  };
 }
 
 /**
- * Sync published version entries into legacy `edusmart_timetable_v1` collection
- * and broadcast notification in `edusmart_notifications_v1` so all portals stay in sync.
+ * Full timetable validation audit covering Requirement G:
+ * - Zero teacher collisions
+ * - Shared facility booking capacity across all 3 categories
+ * - Participating student-group overlap verification for Remedial 1 & 2
+ * - Zero-unexplained-blank-session check across active streams
+ * - Teacher workload calculations (core, common activities, clubs/maktaba, remedial)
+ * - Stream completeness checks
  */
-export function publishVersionEffects(
-  db: DatabaseSync,
-  tenantId: string,
-  versionId: string,
-  actorId: string,
-  actorName: string
-): void {
-  const version = db.prepare(`SELECT * FROM tt_versions WHERE id = ?`).get(versionId) as any;
-  if (!version) return;
-  const cfg = db.prepare(`SELECT * FROM tt_configs WHERE id = ?`).get(String(version.config_id)) as any;
-  const periods = db.prepare(`SELECT * FROM tt_periods WHERE config_id = ?`).all(String(version.config_id)) as any[];
-  const pTimeMap = new Map<number, { startTime: string; endTime: string }>();
-  for (const p of periods) {
-    if (Number(p.period_number) > 0) {
-      pTimeMap.set(Number(p.period_number), { startTime: String(p.start_time), endTime: String(p.end_time) });
+export function validateTimetableEntries(
+  input: EngineInput,
+  entries: EngineTimetableEntry[]
+): TimetableAuditReport {
+  const readiness = validateTimetableReadiness(input);
+
+  // 1. Teacher collision check
+  const byTeacherSlot = new Map<string, EngineTimetableEntry[]>();
+  for (const e of entries) {
+    const key = `${e.teacherId}::${e.dayOfWeek}::${e.periodNumber}`;
+    if (!byTeacherSlot.has(key)) byTeacherSlot.set(key, []);
+    byTeacherSlot.get(key)!.push(e);
+  }
+  const teacherCollisions: TimetableAuditReport['teacherCollisions'] = [];
+  for (const list of byTeacherSlot.values()) {
+    if (list.length > 1) {
+      teacherCollisions.push({
+        teacherId: list[0].teacherId,
+        teacherName: list[0].teacherName,
+        dayOfWeek: list[0].dayOfWeek,
+        periodNumber: list[0].periodNumber,
+        entries: list.map((x) => ({
+          grade: x.grade,
+          stream: x.stream,
+          subjectName: x.subjectName,
+        })),
+      });
     }
   }
 
-  const entries = db.prepare(`SELECT * FROM tt_entries WHERE version_id = ?`).all(versionId) as any[];
-  const now = new Date().toISOString();
+  // 2. Shared facility capacity & utilization check across all 3 categories
+  const facilityMap = new Map(input.facilities.map((f) => [f.id, f]));
+  const byFacilitySlot = new Map<string, EngineTimetableEntry[]>();
+  const facilityBookingsByCat = new Map<string, Record<TimetableCategoryId, number>>();
+  const facilityTotalBooked = new Map<string, number>();
+  const facilityPeak = new Map<string, number>();
+  const facilityOverflowCount = new Map<string, number>();
 
-  // Soft-delete previous legacy timetable records for this tenant
-  db.prepare(
-    `UPDATE collections_store SET deleted_at = ?, updated_at = ?
-     WHERE collection_key = 'edusmart_timetable_v1' AND tenant_id = ?`
-  ).run(now, now, tenantId);
-
-  for (const e of entries) {
-    const pt = pTimeMap.get(Number(e.period_number)) || { startTime: '08:00', endTime: '08:40' };
-    const names = safeJsonParse<string[]>(e.teacher_names_json, []);
-    const legacySlot = {
-      id: String(e.id),
-      schoolId: tenantId,
-      grade: Number(e.grade),
-      stream: String(e.stream),
-      dayOfWeek: String(e.day_of_week),
-      period: Number(e.period_number),
-      startTime: pt.startTime,
-      endTime: pt.endTime,
-      subject: String(e.subject_name),
-      teacherName: names.join(' & ') || 'Subject Teacher',
-      roomName: String(e.room_name || 'Classroom'),
-      roomType: e.joint_lesson_id ? 'shared' : 'classroom',
-      groupName: String(e.group_name || 'Whole Class'),
-      isJointLesson: Boolean(e.joint_lesson_id),
-      isDoublePeriod: Number(e.block_length || 1) >= 2,
-      term: String(cfg?.term || 'Term 1'),
-      academicYear: String(cfg?.academic_year || '2026'),
-      versionId,
-    };
-    upsertCollectionRecord(db, 'edusmart_timetable_v1', legacySlot.id, tenantId, legacySlot, false);
+  for (const f of input.facilities) {
+    facilityBookingsByCat.set(f.id, { cat_1_3: 0, cat_4_6: 0, cat_7_9: 0 });
+    facilityTotalBooked.set(f.id, 0);
+    facilityPeak.set(f.id, 0);
+    facilityOverflowCount.set(f.id, 0);
   }
 
-  // Sync published Library Lesson entries into edusmart_library_timetable_v1 so Library Bookings reflect free vs occupied slots
-  db.prepare(
-    `UPDATE collections_store SET deleted_at = ?, updated_at = ?
-     WHERE collection_key = 'edusmart_library_timetable_v1' AND tenant_id = ? AND record_id LIKE 'mt-lib-%'`
-  ).run(now, now, tenantId);
-
-  let syncedLibraryLessonsCount = 0;
   for (const e of entries) {
-    if (!String(e.subject_name || '').toLowerCase().includes('library')) continue;
-    const pt = pTimeMap.get(Number(e.period_number)) || { startTime: '08:00', endTime: '08:40' };
-    const names = safeJsonParse<string[]>(e.teacher_names_json, []);
-    const libSlotId = `mt-lib-${String(e.id)}`;
-    upsertCollectionRecord(
-      db,
-      'edusmart_library_timetable_v1',
-      libSlotId,
-      tenantId,
-      {
-        id: libSlotId,
-        schoolId: tenantId,
-        dayOfWeek: String(e.day_of_week),
-        startTime: pt.startTime,
-        endTime: pt.endTime,
-        grade: Number(e.grade),
-        stream: String(e.stream),
-        teacherInCharge: names.join(' & ') || 'Subject Teacher',
-        sessionType: 'Library Reading Period',
-        venue: String(e.room_name || 'Main Library Reading Hall'),
+    if (!e.facilityId) continue;
+    const key = `${e.facilityId}::${e.dayOfWeek}::${e.periodNumber}`;
+    if (!byFacilitySlot.has(key)) byFacilitySlot.set(key, []);
+    byFacilitySlot.get(key)!.push(e);
+
+    facilityTotalBooked.set(e.facilityId, (facilityTotalBooked.get(e.facilityId) ?? 0) + 1);
+    const catRec = facilityBookingsByCat.get(e.facilityId);
+    if (catRec) catRec[e.categoryId] = (catRec[e.categoryId] ?? 0) + 1;
+  }
+
+  const facilityOverflows: TimetableAuditReport['facilityOverflows'] = [];
+  for (const list of byFacilitySlot.values()) {
+    const facId = list[0].facilityId!;
+    const fac = facilityMap.get(facId);
+    const cap = Math.max(1, fac?.capacityStreams ?? 1);
+    facilityPeak.set(facId, Math.max(facilityPeak.get(facId) ?? 0, list.length));
+
+    if (list.length > cap) {
+      facilityOverflowCount.set(facId, (facilityOverflowCount.get(facId) ?? 0) + 1);
+      facilityOverflows.push({
+        facilityId: facId,
+        facilityName: fac?.name ?? list[0].facilityName ?? facId,
+        dayOfWeek: list[0].dayOfWeek,
+        periodNumber: list[0].periodNumber,
+        capacityStreams: cap,
+        bookedStreams: list.length,
+        entries: list.map((x) => ({
+          grade: x.grade,
+          stream: x.stream,
+          subjectName: x.subjectName,
+        })),
+      });
+    }
+  }
+
+  const facilityUtilization: FacilityUtilizationReport[] = input.facilities
+    .filter((f) => f.isActive)
+    .map((f) => ({
+      facilityId: f.id,
+      facilityName: f.name,
+      facilityType: f.facilityType,
+      capacityStreams: f.capacityStreams,
+      totalBookedSlots: facilityTotalBooked.get(f.id) ?? 0,
+      peakConcurrentStreams: facilityPeak.get(f.id) ?? 0,
+      overflowSlots: facilityOverflowCount.get(f.id) ?? 0,
+      bookingsByCategory: facilityBookingsByCat.get(f.id) ?? {
+        cat_1_3: 0,
+        cat_4_6: 0,
+        cat_7_9: 0,
       },
-      false
-    );
-    syncedLibraryLessonsCount++;
+    }));
+
+  // 3. Participating student-group overlap check (Remedial 1 & 2 vs other sessions)
+  const byStreamSlot = new Map<string, EngineTimetableEntry[]>();
+  for (const e of entries) {
+    const key = `${e.grade}::${e.stream}::${e.dayOfWeek}::${e.periodNumber}`;
+    if (!byStreamSlot.has(key)) byStreamSlot.set(key, []);
+    byStreamSlot.get(key)!.push(e);
   }
 
-  // Emit tenant-wide notification when timetable is published
-  const notifId = uid('ttnotif');
-  upsertCollectionRecord(
-    db,
-    'edusmart_notifications_v1',
-    notifId,
-    tenantId,
-    {
-      id: notifId,
-      schoolId: tenantId,
-      title: `Published Timetable Updated (${cfg?.term || 'Term 1'} ${cfg?.academic_year || '2026'})`,
-      message: `${version.name} has been officially approved and published by ${actorName}. Open Timetable to view your updated weekly schedule.`,
-      targetRoles: ['admin', 'head_teacher', 'deputy_head', 'dean_of_studies', 'class_teacher', 'teacher', 'student', 'parent'],
-      type: 'timetable_published',
-      createdAt: now,
-      read: false,
-      senderId: actorId,
-    },
-    false
-  );
+  const studentGroupConflicts: TimetableAuditReport['studentGroupConflicts'] = [];
+  for (const list of byStreamSlot.values()) {
+    if (list.length <= 1) continue;
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        let overlap: string[] = [];
+        if (a.studentGroupMode === 'whole_stream' || b.studentGroupMode === 'whole_stream') {
+          overlap =
+            a.studentGroupMode === 'selected_learners'
+              ? a.studentIds
+              : b.studentGroupMode === 'selected_learners'
+                ? b.studentIds
+                : ['WHOLE_STREAM'];
+        } else {
+          overlap = arraysOverlap(a.studentIds, b.studentIds);
+        }
+        if (overlap.length > 0) {
+          studentGroupConflicts.push({
+            grade: a.grade,
+            stream: a.stream,
+            dayOfWeek: a.dayOfWeek,
+            periodNumber: a.periodNumber,
+            overlappingStudentIds: overlap,
+            subjects: [a.subjectName, b.subjectName],
+          });
+        }
+      }
+    }
+  }
 
-  notifyMySqlTablesChanged(['collections_store']);
-  broadcastChange({
-    type: 'collection:updated',
-    collection: 'edusmart_timetable_v1',
-    tenantId,
-    recordId: versionId,
-    timestamp: now,
-  });
-  if (syncedLibraryLessonsCount > 0) {
-    broadcastChange({
-      type: 'collection:updated',
-      collection: 'edusmart_library_timetable_v1',
-      tenantId,
-      recordId: versionId,
-      timestamp: now,
+  // 4. Zero-unexplained-blank-session & stream completeness checks
+  const unexplainedBlankSessions: TimetableAuditReport['unexplainedBlankSessions'] = [];
+  const streamCompleteness: StreamCompletenessReport[] = [];
+
+  for (const st of input.streams) {
+    const cfg = input.scheduleConfigs[st.categoryId];
+    if (!cfg) continue;
+    const regularPeriods = getRegularPeriods(cfg);
+    const expectedRegularPeriods = cfg.days.length * regularPeriods.length;
+
+    const streamEntries = entries.filter((e) => e.grade === st.grade && e.stream === st.stream);
+    const regularEntries = streamEntries.filter((e) =>
+      regularPeriods.some((rp) => rp.periodNumber === e.periodNumber)
+    );
+    const remedialEntries = streamEntries.filter((e) => e.subjectKind === 'remedial');
+
+    let blanks = 0;
+    for (const day of cfg.days) {
+      for (const rp of regularPeriods) {
+        const occupied = streamEntries.some(
+          (e) => e.dayOfWeek === day && e.periodNumber === rp.periodNumber
+        );
+        if (!occupied) {
+          blanks += 1;
+          unexplainedBlankSessions.push({
+            categoryId: st.categoryId,
+            grade: st.grade,
+            stream: st.stream,
+            dayOfWeek: day,
+            periodNumber: rp.periodNumber,
+          });
+        }
+      }
+    }
+
+    // Per-subject expected vs scheduled completeness
+    const catSubjects = input.subjects.filter(
+      (s) => s.categoryId === st.categoryId && s.isActive && s.lessonsPerWeek > 0 && s.subjectKind !== 'remedial'
+    );
+    const missingLessons: StreamCompletenessReport['missingLessons'] = [];
+    for (const sub of catSubjects) {
+      const scheduled = streamEntries.filter((e) => e.subjectId === sub.id).length;
+      if (scheduled < sub.lessonsPerWeek) {
+        missingLessons.push({
+          subjectName: sub.name,
+          expected: sub.lessonsPerWeek,
+          scheduled,
+        });
+      }
+    }
+
+    // Also verify configured remedial sessions for this stream
+    const streamRemedials = input.remedialConfigs.filter(
+      (rc) => rc.isActive && rc.grade === st.grade && rc.stream === st.stream && rc.weeklyFrequency > 0
+    );
+    for (const rc of streamRemedials) {
+      const scheduled = streamEntries.filter((e) => e.remedialConfigId === rc.id).length;
+      if (scheduled < rc.weeklyFrequency) {
+        const sub = input.subjects.find((s) => s.id === rc.subjectId);
+        missingLessons.push({
+          subjectName: `${sub?.name ?? rc.remedialType} (${rc.studentGroupName || 'Group'})`,
+          expected: rc.weeklyFrequency,
+          scheduled,
+        });
+      }
+    }
+
+    streamCompleteness.push({
+      categoryId: st.categoryId,
+      grade: st.grade,
+      stream: st.stream,
+      expectedRegularPeriods,
+      scheduledRegularPeriods: regularEntries.length,
+      unexplainedBlankPeriods: blanks,
+      remedialSessionsScheduled: remedialEntries.length,
+      missingLessons,
+      isComplete: blanks === 0 && missingLessons.length === 0,
     });
   }
-  broadcastChange({
-    type: 'collection:updated',
-    collection: 'edusmart_notifications_v1',
-    tenantId,
-    recordId: notifId,
-    timestamp: now,
-  });
+
+  // 5. Teacher workload calculations (including all core, common activities, clubs, maktaba, remedial)
+  const teacherMaxMap = new Map<string, { name: string; max: number }>();
+  for (const a of input.teacherAssignments) {
+    if (!a.isActive) continue;
+    const prev = teacherMaxMap.get(a.teacherId);
+    if (!prev || a.maxWeeklyPeriods > prev.max) {
+      teacherMaxMap.set(a.teacherId, { name: a.teacherName, max: a.maxWeeklyPeriods });
+    }
+  }
+  for (const rc of input.remedialConfigs) {
+    if (!rc.isActive || !rc.teacherId) continue;
+    if (!teacherMaxMap.has(rc.teacherId)) {
+      teacherMaxMap.set(rc.teacherId, { name: rc.teacherName, max: 28 });
+    }
+  }
+  for (const e of entries) {
+    if (!teacherMaxMap.has(e.teacherId)) {
+      teacherMaxMap.set(e.teacherId, { name: e.teacherName, max: 28 });
+    }
+  }
+
+  const teacherWorkloads: TeacherWorkloadReport[] = Array.from(teacherMaxMap.entries())
+    .map(([teacherId, info]) => {
+      const tEntries = entries.filter((e) => e.teacherId === teacherId);
+      const corePeriods = tEntries.filter((e) => e.subjectKind === 'core').length;
+      const commonActivityPeriods = tEntries.filter(
+        (e) => e.subjectKind === 'common_activity'
+      ).length;
+      const remedialPeriods = tEntries.filter((e) => e.subjectKind === 'remedial').length;
+      const clubsAndMaktabaPeriods = tEntries.filter((e) => {
+        const lower = e.subjectName.toLowerCase();
+        return lower === 'clubs' || lower === 'maktaba';
+      }).length;
+      const scheduledTotal = tEntries.length;
+      const maxWeeklyPeriods = Math.max(1, info.max);
+      const utilizationPct = Math.round((scheduledTotal / maxWeeklyPeriods) * 100);
+      const categoriesTaught = Array.from(
+        new Set(tEntries.map((e) => e.categoryId))
+      ) as TimetableCategoryId[];
+
+      return {
+        teacherId,
+        teacherName: info.name,
+        maxWeeklyPeriods,
+        scheduledTotal,
+        corePeriods,
+        commonActivityPeriods,
+        remedialPeriods,
+        clubsAndMaktabaPeriods,
+        utilizationPct,
+        isOverloaded: scheduledTotal > maxWeeklyPeriods,
+        categoriesTaught,
+      };
+    })
+    .sort((a, b) => b.scheduledTotal - a.scheduledTotal || a.teacherName.localeCompare(b.teacherName));
+
+  const isValid =
+    entries.length > 0 &&
+    teacherCollisions.length === 0 &&
+    facilityOverflows.length === 0 &&
+    studentGroupConflicts.length === 0 &&
+    unexplainedBlankSessions.length === 0 &&
+    streamCompleteness.every((sc) => sc.isComplete);
+
+  return {
+    isValid,
+    readyToGenerate: readiness.readyToGenerate,
+    readinessIssues: readiness.issues,
+    teacherCollisions,
+    facilityOverflows,
+    studentGroupConflicts,
+    unexplainedBlankSessions,
+    categoryTotals: readiness.categoryTotals,
+    teacherWorkloads,
+    facilityUtilization,
+    streamCompleteness,
+  };
 }

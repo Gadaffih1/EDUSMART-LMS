@@ -227,7 +227,7 @@ export const CampusSwitcherWindow: React.FC<CampusSwitcherWindowProps> = ({
                 </span>
               </h2>
               <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-                Each campus operates in an isolated tenant partition with independent learner records, timetables, and CBC rubrics.
+                Each campus operates in an isolated tenant partition with independent learner records, classes, and CBC rubrics.
               </p>
             </div>
 

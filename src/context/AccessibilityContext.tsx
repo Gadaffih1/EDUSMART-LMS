@@ -19,7 +19,7 @@ export const LMS_WORKSPACES_A11Y: LMSWorkspaceA11yInfo[] = [
     category: 'Learner',
     role: 'student',
     screenReaderLabel: 'Learner Workspace: Access CBC curriculum strands, digital textbooks, homework submissions, and formative performance rubrics.',
-    ariaDescription: 'Primary workspace for pupils to view daily timetable, complete assignments, and track termly competency badges.',
+    ariaDescription: 'Primary workspace for pupils to access curriculum resources, complete assignments, and track termly competency badges.',
     shortcutKey: 'Alt + 1'
   },
   {

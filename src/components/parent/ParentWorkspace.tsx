@@ -22,12 +22,12 @@ import { AchievementSystem } from '../student/AchievementSystem';
 import { TenantSchoolLogo } from '../common/TenantSchoolLogo';
 import { useTenant } from '../../context/TenantContext';
 import { SanatoriumSection } from '../sanatorium/SanatoriumSection';
-import { TimetablePortal } from '../timetable/TimetablePortal';
 import { LearnerLunchRegister } from '../meals/LearnerLunchRegister';
 import { SchoolEventsManager } from '../events/SchoolEventsManager';
 import { EventTicketModal } from '../events/EventTicketModal';
 import { ahApiFetch, type GradeAnnouncementItem } from '../academic-hierarchy/academicHierarchyTypes';
 import { ParentVirtualLearningPanel } from '../virtual-classroom/ParentVirtualLearningPanel';
+import { TimetablePortal } from '../timetable/TimetablePortal';
 import { 
   Home,
   Users, 
@@ -98,12 +98,12 @@ export type ParentNavigationTab =
   | 'performance'           // 3. Academic Performance
   | 'attendance'            // 4. Attendance
   | 'assignments'           // 5. Assignments
-  | 'timetable'             // 6. Timetable
-  | 'virtual_learning'      // 6b. Virtual Classrooms
+  | 'virtual_learning'      // 6. Virtual Classrooms
   | 'fees'                  // 7. Fees & Payments
   | 'messages'              // 8. Messages
   | 'announcements'         // 9. School Announcements
   | 'calendar'              // 10. School Calendar
+  | 'timetable'             // 10b. Class Timetable
   | 'transport'             // 11. Transport
   | 'gate_records'          // 12. Gate / Exit Records
   | 'sanatorium'            // 13. Sanatorium & Clinic Visits
@@ -174,7 +174,7 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       const customEvent = e as CustomEvent<string>;
       const tab = customEvent.detail;
       if (tab) {
-        if (['dashboard', 'my_children', 'performance', 'attendance', 'assignments', 'timetable', 'virtual_learning', 'fees', 'messages', 'announcements', 'calendar', 'transport', 'gate_records', 'achievements', 'discipline', 'resources', 'reports', 'notifications'].includes(tab)) {
+        if (['dashboard', 'my_children', 'performance', 'attendance', 'assignments', 'virtual_learning', 'fees', 'messages', 'announcements', 'calendar', 'transport', 'gate_records', 'achievements', 'discipline', 'resources', 'reports', 'notifications'].includes(tab)) {
           setActiveTab(tab as ParentNavigationTab);
         } else if (tab === 'grades' || tab === 'results' || tab === 'gradebook' || tab === 'report_cards' || tab === 'reporting_hub') {
           setActiveTab('reports');
@@ -497,10 +497,10 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
         { id: 'performance' as ParentNavigationTab, label: '3. Academic Performance', icon: TrendingUp },
         { id: 'attendance' as ParentNavigationTab, label: '4. Attendance Register', icon: ClipboardCheck },
         { id: 'assignments' as ParentNavigationTab, label: '5. Assignments & Tasks', icon: FileText },
-        { id: 'timetable' as ParentNavigationTab, label: '6. Class Timetable', icon: Calendar },
-        { id: 'virtual_learning' as ParentNavigationTab, label: '6b. Virtual Classrooms', icon: Video },
+        { id: 'virtual_learning' as ParentNavigationTab, label: '6. Virtual Classrooms', icon: Video },
         { id: 'resources' as ParentNavigationTab, label: '7. Learning Resources', icon: BookOpen },
         { id: 'reports' as ParentNavigationTab, label: '8. Termly Reports', icon: FileSpreadsheet },
+        { id: 'timetable' as ParentNavigationTab, label: '8b. Class Timetable', icon: CalendarDays },
         { id: 'achievements' as ParentNavigationTab, label: '9. Honours & Badges', icon: Trophy }
       ]
     },
@@ -1691,47 +1691,6 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       )}
 
       {/* ========================================================
-          6. 📅 TIMETABLE & DAILY BELL SCHEDULE
-          ======================================================== */}
-      {activeTab === 'timetable' && (
-        <div className="space-y-6">
-          {/* Child Selector Pills for Parent */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900">
-                Child Timetable View
-              </h3>
-              <p className="text-xs text-slate-500">
-                Inspect weekly class timetable, assigned subject teachers, and Google Meet rooms for each child.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
-              {myChildren.map(child => (
-                <button
-                  key={child.id}
-                  onClick={() => setSelectedChildId(child.id)}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                    (selectedChild?.id === child.id || (selectedChildId === 'all' && myChildren[0]?.id === child.id))
-                      ? 'bg-emerald-700 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {child.name} (Grade {child.grade} {child.stream})
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <TimetablePortal 
-            currentUser={currentUser}
-            initialGrade={selectedChild?.grade || myChildren[0]?.grade || 4}
-            initialStream={selectedChild?.stream || myChildren[0]?.stream || 'Dove'}
-            readOnly={true}
-          />
-        </div>
-      )}
-
-      {/* ========================================================
           7. 💳 FEES & PAYMENTS (WITH M-PESA & RECEIPT)
           ======================================================== */}
       {activeTab === 'fees' && (
@@ -2002,6 +1961,13 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
           ======================================================== */}
       {activeTab === 'calendar' && (
         <SchoolEventsManager currentUser={currentUser} readOnly={true} />
+      )}
+
+      {activeTab === 'timetable' && (
+        <TimetablePortal
+          user={selectedChild || currentUser}
+          schoolName={currentTenant.name}
+        />
       )}
 
       {/* ========================================================

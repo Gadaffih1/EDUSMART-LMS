@@ -6,8 +6,7 @@ import {
   SanatoriumRecord,
   TransportRoute,
   LibraryBook,
-  Announcement,
-  BellPeriodDef
+  Announcement
 } from '../types';
 import { Tenant } from '../types/tenant';
 

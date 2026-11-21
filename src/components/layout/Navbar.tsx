@@ -281,7 +281,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                 aria-label={
                   screenReaderMode
-                    ? "School Calendar: Academic timetable, exam schedules, and holiday dates"
+                    ? "School Calendar: Academic terms, exam schedules, and holiday dates"
                     : "School Calendar"
                 }
               >

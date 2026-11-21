@@ -900,31 +900,6 @@ export const SeniorTeacherWorkspace: React.FC<SeniorTeacherWorkspaceProps> = ({ 
                   </table>
                 </div>
               )}
-
-              {/* Preserved Faculty Absences Watch */}
-              <div className="pt-4 border-t border-slate-200 space-y-3">
-                <h3 className="text-sm font-bold text-slate-900">Reported Faculty Absences & Relief Cover</h3>
-                {Storage.getTeacherAbsenceReports().length === 0 ? (
-                  <div className="p-4 border border-slate-200 rounded-lg text-xs text-slate-500">
-                    All teaching staff are present on duty today.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {Storage.getTeacherAbsenceReports().map((rep) => (
-                      <div key={rep.id} className="p-3.5 border border-slate-200 rounded-lg text-xs space-y-1">
-                        <div className="flex items-center justify-between font-semibold text-slate-900">
-                          <span>{rep.teacherName}</span>
-                          <span className={rep.reliefStatus === 'fully_assigned' ? 'text-emerald-700' : 'text-rose-700'}>
-                            {rep.reliefStatus === 'fully_assigned' ? 'Covered' : 'Relief Needed'}
-                          </span>
-                        </div>
-                        <div className="text-slate-600">{rep.leaveType.replace('_', ' ')} · {rep.startDate} to {rep.endDate}</div>
-                        <div className="text-slate-700">{rep.reason}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </section>
           )}
 

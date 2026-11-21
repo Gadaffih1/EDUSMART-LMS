@@ -204,7 +204,7 @@ export const PlatformStudioCustomizer: React.FC<{ onPreviewLanding?: () => void 
       headlineStart: 'Empowering Next-Gen',
       headlineMid: 'Learners & Teachers.',
       headlineHighlight: 'Interactive Discovery.',
-      subtitle: 'Comprehensive educational governance connecting roll call attendance, automated CBA assessment sheets, smart timetable coordination, and parent communications.',
+      subtitle: 'Comprehensive educational governance connecting roll call attendance, automated CBA assessment sheets, academic department coordination, and parent communications.',
       primaryCta: 'Explore Digital Portals',
       primaryCtaAction: 'portals' as const,
       secondaryCta: 'Request Executive Demo',

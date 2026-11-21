@@ -2,9 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { initTimetableSchema } from './timetableSchema.ts';
 import { initAcademicHierarchySchema } from './academicHierarchySchema.ts';
 import { initVirtualClassroomSchema } from './virtualClassroomSchema.ts';
+import { initTimetableSchema } from './timetableSchema.ts';
 
 export interface DbContext {
   db: DatabaseSync;
@@ -407,9 +407,9 @@ export function initDatabase(rootDir: string = process.cwd()): DbContext {
     CREATE INDEX IF NOT EXISTS idx_exec_groups_school ON executive_report_groups(school_id, deleted_at);
   `);
 
-  initTimetableSchema(db);
   initAcademicHierarchySchema(db);
   initVirtualClassroomSchema(db);
+  initTimetableSchema(db);
 
   cachedContext = { db, dbPath, uploadsDir };
   return cachedContext;

@@ -1,361 +1,325 @@
 import { ClientDataStore } from '../../utils/clientDataStore';
 
-export interface TTConfigData {
-  id: string;
-  tenantId: string;
-  academicYear: string;
-  term: string;
-  cycleDays: number;
-  workingDays: string[];
+export type TimetableCategoryId = 'cat_1_3' | 'cat_4_6' | 'cat_7_9';
+export type TimetableSubjectKind = 'core' | 'common_activity' | 'remedial';
+export type FacilityType =
+  | 'computer_lab'
+  | 'ict_robotics_lab'
+  | 'library'
+  | 'swimming_pool'
+  | 'maktaba_room'
+  | 'clubs_venue'
+  | 'general_room';
+export type TeacherAssignmentRole = 'subject_teacher' | 'supervisor' | 'remedial_teacher';
+export type StudentGroupMode = 'whole_stream' | 'selected_learners';
+
+export interface TimetableCategoryMeta {
+  id: TimetableCategoryId;
+  label: string;
+  shortLabel: string;
+  grades: number[];
   defaultPeriodsPerDay: number;
-  cycleLabel: string;
-  activeVersionId: string | null;
+  defaultPeriodDurationMins: number;
 }
 
-export interface TTGradeSchedule {
-  id: string;
-  grade: number;
-  periodsPerDay: number;
-  workingDays: string[];
-  assemblyDay: string;
-  assemblyPeriod: number;
-  customNotes: string;
-}
-
-export interface TTPeriodItem {
-  id: string;
-  gradeBand: string;
+export interface PeriodSlotDefinition {
   periodNumber: number;
   label: string;
-  kind: 'lesson' | 'break' | 'lunch' | 'assembly';
   startTime: string;
   endTime: string;
+  durationMins: number;
+  slotType: 'regular' | 'remedial';
+}
+
+export interface ScheduleConfig {
+  categoryId: TimetableCategoryId;
+  days: string[];
+  periodsPerDay: number;
+  periodDurationMins: number;
+  periods: PeriodSlotDefinition[];
+}
+
+export interface TimetableSubject {
+  id: string;
+  categoryId: TimetableCategoryId;
+  code: string;
+  name: string;
+  shortCode: string;
+  subjectKind: TimetableSubjectKind;
+  isAdditionalCommon: boolean;
+  lessonsPerWeek: number;
+  requiresFacilityType: FacilityType | null;
+  defaultFacilityId: string | null;
+  equipmentNotes: string;
+  allowedDays: string[];
+  allowedPeriods: number[];
+  isActive: boolean;
   sortOrder: number;
 }
 
-export interface TTSubjectItem {
+export interface TimetableFacility {
   id: string;
   name: string;
-  code: string;
-  department: string;
-  isPractical: boolean;
-  requiresRoomType: string;
-  colorToken: string;
+  facilityType: FacilityType;
+  capacityStreams: number;
+  seatCapacity: number;
+  equipment: string[];
+  availableDays: string[];
+  availablePeriods: number[];
+  notes: string;
   isActive: boolean;
 }
 
-export interface TTDepartmentItem {
+export interface TimetableTeacherAssignment {
   id: string;
-  name: string;
-  code: string;
-  hodUserId?: string;
-  headName: string;
-  description: string;
-  isActive: boolean;
-}
-
-export interface TTClassroomItem {
-  id: string;
-  name: string;
-  roomCode: string;
-  roomType: string;
-  capacity: number;
-  maxConcurrentClasses?: number;
-  responsibleStaff?: string;
-  location: string;
-  assignedGrade: number | null;
-  assignedStream: string | null;
-  availability: Record<string, Record<string, boolean>>;
-  isActive: boolean;
-}
-
-export interface TTStudentGroupItem {
-  id: string;
-  grade: number;
-  stream: string;
-  groupName: string;
-  groupCode: string;
-  studentCount: number;
-  isWholeClass: boolean;
-  parentClassKey: string;
-}
-
-export interface TTTeacherProfileItem {
-  id: string;
-  userId: string;
+  teacherId: string;
   teacherName: string;
   teacherEmail: string;
-  tscNumber: string;
-  department: string;
-  qualifiedSubjects: string[];
-  availability: Record<string, Record<string, boolean>>;
-  maxDailyPeriods: number;
+  categoryId: TimetableCategoryId;
+  subjectId: string;
+  grade: number | null;
+  stream: string | null;
+  roleType: TeacherAssignmentRole;
   maxWeeklyPeriods: number;
-  maxConsecutiveLessons: number;
-  preferredFreePeriods: Array<{ day: string; period: number }>;
-  offDutySlots?: Array<{ day: string; period: number }>;
-  activeInTimetable: boolean;
-  archivedAt: string | null;
-}
-
-export type TTCategoryCode = 'lower_primary' | 'upper_primary' | 'junior_school';
-
-export interface TTCategoryItem {
-  id: string;
-  code: TTCategoryCode;
-  name: string;
-  label: string;
-  minGrade: number;
-  maxGrade: number;
-  sortOrder: number;
+  facilityId: string | null;
+  equipmentNotes: string;
+  allowedDays: string[];
+  allowedPeriods: number[];
   isActive: boolean;
 }
 
-export interface TTCategoryAllocationItem {
+export interface TimetableRemedialConfig {
   id: string;
-  categoryCode: TTCategoryCode;
-  subjectName: string;
-  requiredWeeklyPeriods: number;
-  singleLessons: number;
-  doubleLessons: number;
-  tripleLessons: number;
-  patternPreference: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  requiredRoomType: string;
-  defaultRoomId: string | null;
-  isActive: boolean;
-  updatedAt?: string;
-}
-
-export interface TTGradeAllocationItem {
-  id: string;
-  grade: number;
-  categoryCode?: TTCategoryCode;
-  categoryAllocationId?: string | null;
-  isCategoryOverride?: boolean;
-  subjectName: string;
-  requiredWeeklyPeriods: number;
-  singleLessons: number;
-  doubleLessons: number;
-  tripleLessons: number;
-  patternPreference: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  preferredDays: string[];
-  preferredPeriods: number[];
-  requiredRoomType: string;
-  defaultRoomId: string | null;
-  teacherIds: string[];
-  studentGroupLabel: string;
-  isActive: boolean;
-}
-
-export interface TTStreamAllocationItem {
-  id: string;
+  categoryId: TimetableCategoryId;
+  remedialType: 'remedial_1' | 'remedial_2';
+  subjectId: string;
   grade: number;
   stream: string;
-  groupId: string | null;
-  subjectName: string;
-  inheritedFromId: string | null;
-  isOverridden: boolean;
-  requiredWeeklyPeriods: number;
-  singleLessons: number;
-  doubleLessons: number;
-  tripleLessons: number;
-  patternPreference: string;
-  maxPerDay: number;
-  minSpacingDays: number;
-  preferredDays: string[];
-  preferredPeriods: number[];
-  requiredRoomType: string;
-  roomId: string | null;
-  teacherIds: string[];
+  weeklyFrequency: number;
+  teacherId: string;
+  teacherName: string;
+  studentGroupMode: StudentGroupMode;
+  studentGroupName: string;
+  studentIds: string[];
+  durationMins: number;
+  availableDays: string[];
+  availablePeriods: number[];
+  facilityId: string | null;
+  notes: string;
   isActive: boolean;
 }
 
-export interface TTJointLessonItem {
-  id: string;
-  title: string;
-  subjectName: string;
-  participatingClasses: Array<{ grade: number; stream: string }>;
-  teacherIds: string[];
-  weeklyPeriods: number;
-  lessonLength: number;
-  roomId: string | null;
-  requiredRoomType: string;
-  combinedStudents: number;
-  preferredDays: string[];
-  preferredPeriods: number[];
-  isActive: boolean;
+export interface TimetableStream {
+  grade: number;
+  stream: string;
+  categoryId: TimetableCategoryId;
+  studentIds: string[];
 }
 
-export interface TTEntryItem {
+export interface DirectoryTeacher {
   id: string;
-  versionId: string;
-  tenantId: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface DirectoryStudent {
+  id: string;
+  name: string;
+  admissionNumber: string;
+  grade: number;
+  stream: string;
+}
+
+export interface TimetableVersion {
+  id: string;
+  name: string;
+  termLabel: string;
+  academicYear: string;
+  status: 'draft' | 'published' | 'archived';
+  createdBy: string;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface TimetableEntry {
+  id: string;
+  categoryId: TimetableCategoryId;
+  grade: number;
+  stream: string;
   dayOfWeek: string;
   periodNumber: number;
-  grade: number;
-  stream: string;
-  streamLabel: string;
-  groupId: string | null;
-  groupName: string;
-  jointLessonId: string | null;
-  allocationId: string | null;
+  startTime: string;
+  endTime: string;
+  durationMins: number;
+  subjectId: string;
   subjectName: string;
-  teacherIds: string[];
-  teacherNames: string[];
-  roomId: string | null;
-  roomName: string;
-  sessionBlockId: string;
-  blockLength: number;
-  blockIndex: number;
+  subjectKind: TimetableSubjectKind;
+  teacherId: string;
+  teacherName: string;
+  facilityId: string | null;
+  facilityName: string | null;
+  remedialConfigId: string | null;
+  studentGroupMode: StudentGroupMode;
+  studentGroupName: string;
+  studentIds: string[];
   isLocked: boolean;
-  lockedBy: string | null;
   notes: string;
 }
 
-export interface TTUnscheduledItem {
-  id: string;
-  sessionKey: string;
-  allocationId: string | null;
-  jointLessonId: string | null;
+export interface ValidationIssue {
+  code: string;
+  severity: 'error' | 'warning';
+  categoryId?: TimetableCategoryId;
+  grade?: number;
+  stream?: string;
+  message: string;
+}
+
+export interface CategoryAllocationSummary {
+  categoryId: TimetableCategoryId;
+  label: string;
+  availableRegularPeriods: number;
+  allocatedCoreLessons: number;
+  allocatedCommonLessons: number;
+  allocatedRemedialLessons: number;
+  totalAllocatedRegularLessons: number;
+  remainingRegularPeriods: number;
+  activeStreamCount: number;
+}
+
+export interface TeacherWorkloadReport {
+  teacherId: string;
+  teacherName: string;
+  maxWeeklyPeriods: number;
+  scheduledTotal: number;
+  corePeriods: number;
+  commonActivityPeriods: number;
+  remedialPeriods: number;
+  clubsAndMaktabaPeriods: number;
+  utilizationPct: number;
+  isOverloaded: boolean;
+  categoriesTaught: TimetableCategoryId[];
+}
+
+export interface FacilityUtilizationReport {
+  facilityId: string;
+  facilityName: string;
+  facilityType: FacilityType;
+  capacityStreams: number;
+  totalBookedSlots: number;
+  peakConcurrentStreams: number;
+  overflowSlots: number;
+  bookingsByCategory: Record<TimetableCategoryId, number>;
+}
+
+export interface StreamCompletenessReport {
+  categoryId: TimetableCategoryId;
   grade: number;
   stream: string;
-  groupId: string | null;
-  groupName: string;
-  subjectName: string;
-  teacherIds: string[];
-  teacherNames: string[];
-  blockLength: number;
-  requiredRoomType: string;
-  reason: string;
-  diagnostics: any;
+  expectedRegularPeriods: number;
+  scheduledRegularPeriods: number;
+  unexplainedBlankPeriods: number;
+  remedialSessionsScheduled: number;
+  missingLessons: Array<{ subjectName: string; expected: number; scheduled: number }>;
+  isComplete: boolean;
 }
 
-export interface TTConflictItem {
-  id: string;
-  severity: 'error' | 'warning';
-  conflictType: string;
-  dayOfWeek: string | null;
-  periodNumber: number | null;
-  message: string;
-  details: any;
-}
-
-export interface TTJobItem {
-  id: string;
-  versionId?: string;
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  progressPct: number;
-  stageMessage: string;
-  preserveLocked: boolean;
-  retries: number;
-  diagnostics: any;
-  errorMessage: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt?: string;
-}
-
-export interface TTVersionSummary {
-  id: string;
-  versionNumber: number;
-  name: string;
-  status: 'draft' | 'generated' | 'review' | 'approved' | 'published' | 'archived';
-  metrics: any;
-  reviewComments: string;
-  createdByName: string;
-  approvedBy: string | null;
-  approvedAt: string | null;
-  publishedBy: string | null;
-  publishedAt: string | null;
-  withdrawnAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface TTVersionDetail extends TTVersionSummary {
-  tenantId: string;
-  configId: string;
-  entries: TTEntryItem[];
-  unscheduled: TTUnscheduledItem[];
-  conflicts: TTConflictItem[];
-  jobs: TTJobItem[];
-}
-
-export interface TTWorkspacePayload {
-  tenantId: string;
-  config: TTConfigData;
-  categories?: TTCategoryItem[];
-  categoryAllocations?: TTCategoryAllocationItem[];
-  gradeSchedules: TTGradeSchedule[];
-  periods: TTPeriodItem[];
-  subjects: TTSubjectItem[];
-  departments?: TTDepartmentItem[];
-  classrooms: TTClassroomItem[];
-  studentGroups: TTStudentGroupItem[];
-  teachers: TTTeacherProfileItem[];
-  gradeAllocations: TTGradeAllocationItem[];
-  streamAllocations: TTStreamAllocationItem[];
-  jointLessons: TTJointLessonItem[];
-  versions: TTVersionSummary[];
-  activeVersion: TTVersionDetail | null;
-  allocationIssues: Array<{ grade: number; stream: string; subject: string; message: string }>;
-  streamLoadSummary: Array<{
+export interface TimetableAuditReport {
+  isValid: boolean;
+  readyToGenerate: boolean;
+  readinessIssues: ValidationIssue[];
+  teacherCollisions: Array<{
+    teacherId: string;
+    teacherName: string;
+    dayOfWeek: string;
+    periodNumber: number;
+    entries: Array<{ grade: number; stream: string; subjectName: string }>;
+  }>;
+  facilityOverflows: Array<{
+    facilityId: string;
+    facilityName: string;
+    dayOfWeek: string;
+    periodNumber: number;
+    capacityStreams: number;
+    bookedStreams: number;
+    entries: Array<{ grade: number; stream: string; subjectName: string }>;
+  }>;
+  studentGroupConflicts: Array<{
     grade: number;
     stream: string;
-    requiredPeriods: number;
-    availablePeriods: number;
-    deficitOrExcess: number;
+    dayOfWeek: string;
+    periodNumber: number;
+    overlappingStudentIds: string[];
+    subjects: string[];
   }>;
-  auditLogs: Array<{
-    id: string;
-    versionId: string | null;
-    action: string;
-    actorName: string;
-    actorRole: string;
-    details: any;
-    createdAt: string;
+  unexplainedBlankSessions: Array<{
+    categoryId: TimetableCategoryId;
+    grade: number;
+    stream: string;
+    dayOfWeek: string;
+    periodNumber: number;
   }>;
+  categoryTotals: CategoryAllocationSummary[];
+  teacherWorkloads: TeacherWorkloadReport[];
+  facilityUtilization: FacilityUtilizationReport[];
+  streamCompleteness: StreamCompletenessReport[];
 }
 
-export async function ttApiFetch<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, {
+export interface TimetableBootstrapResponse {
+  schoolId: string;
+  categories: TimetableCategoryMeta[];
+  weekdays: string[];
+  scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
+  subjects: TimetableSubject[];
+  facilities: TimetableFacility[];
+  teacherAssignments: TimetableTeacherAssignment[];
+  remedialConfigs: TimetableRemedialConfig[];
+  streams: TimetableStream[];
+  teachers: DirectoryTeacher[];
+  students: DirectoryStudent[];
+  versions: TimetableVersion[];
+  activeVersion: TimetableVersion | null;
+  entries: TimetableEntry[];
+  audit: TimetableAuditReport;
+  canManage: boolean;
+}
+
+export const FACILITY_TYPE_LABELS: Record<FacilityType, string> = {
+  computer_lab: 'Computer Laboratory',
+  ict_robotics_lab: 'ICT / Robotics Lab',
+  library: 'Library',
+  swimming_pool: 'Swimming Pool',
+  maktaba_room: 'Maktaba Room',
+  clubs_venue: 'Clubs Venue',
+  general_room: 'General Room',
+};
+
+export async function ttApiFetch<T = any>(
+  url: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...ClientDataStore.getAuthHeaders(),
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  const response = await fetch(url, {
     ...options,
+    headers,
     credentials: 'include',
-    headers: ClientDataStore.getAuthHeaders({
-      'Content-Type': 'application/json',
-      ...(options.headers ? (options.headers as Record<string, string>) : {}),
-    }),
   });
-  const text = await res.text();
-  let data: any = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
-  }
-  if (!res.ok) {
-    const err = new Error(data?.error || `Request failed (${res.status})`) as Error & { status?: number; payload?: any };
-    err.status = res.status;
-    err.payload = data;
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = new Error(payload?.error || `Request failed (${response.status})`) as Error & {
+      payload?: any;
+      status?: number;
+    };
+    err.payload = payload;
+    err.status = response.status;
     throw err;
   }
-  return data as T;
+  return payload as T;
 }
-
-export const ROOM_TYPE_LABELS: Record<string, string> = {
-  general: 'Standard Classroom',
-  science_lab: 'Science Laboratory',
-  computer_lab: 'Computer / ICT Lab',
-  workshop: 'Pre-Tech Workshop',
-  art_room: 'Creative Arts & Music Studio',
-  library: 'School Library / Reading Hall',
-  maktaba: 'Maktaba Reading Room',
-  clubs: 'Clubs Activity Room',
-  swimming_pool: 'Swimming Pool',
-  field: 'Sports Field',
-  hall: 'Assembly Hall',
-};

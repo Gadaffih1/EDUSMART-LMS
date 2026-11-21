@@ -53,7 +53,6 @@ export type AdminActionTab =
   | 'passwords'
   | 'virtual_rooms'
   | 'work_entry_audit'
-  | 'timetable'
   | 'sanatorium'
   | 'lunch_register'
   | 'transport'
@@ -62,6 +61,7 @@ export type AdminActionTab =
   | 'reports'
   | 'pwa_analytics'
   | 'operations'
+  | 'timetable'
   | 'school_settings';
 
 interface ActionItem {
@@ -118,6 +118,7 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
         { id: 'class_assignments', label: 'Class Teacher Assignments', icon: ClipboardCheck },
         { id: 'grade_performance', label: 'Grade Performance', icon: BarChart3 },
         { id: 'consolidated_reports', label: 'Consolidated Reports', icon: FileSpreadsheet },
+        { id: 'timetable', label: 'Master Timetable', icon: CalendarDays },
       ],
     },
     {
@@ -150,7 +151,6 @@ export const SchoolActionMenu: React.FC<SchoolActionMenuProps> = ({
     {
       title: 'Daily school life',
       items: [
-        { id: 'timetable', label: 'Curriculum Timetable & Bell Schedule', icon: CalendarDays },
         { id: 'sanatorium', label: 'Sanatorium Logs', icon: HeartPulse },
         { id: 'lunch_register', label: 'Learner Lunch Register', icon: Utensils },
         { id: 'transport', label: 'School Transport', icon: Bus },

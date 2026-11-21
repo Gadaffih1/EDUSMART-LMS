@@ -37,11 +37,9 @@ const IMMEDIATE_PERSIST_COLLECTIONS = new Set([
   'edusmart_school_departments_v1',
   'edusmart_subjects_v1',
   'edusmart_activities_v1',
-  'edusmart_bell_schedule_v1',
   'edusmart_fixed_lessons_v1',
   'edusmart_shared_resources_v1',
   'edusmart_exam_timetable_v1',
-  'edusmart_timetable_v1',
   'edusmart_grade_passwords_v1',
   'edusmart_library_policies_v1',
   'edusmart_system_settings_v1',
@@ -190,10 +188,8 @@ function emitWindowEvents(key: string): void {
       window.dispatchEvent(new CustomEvent('tenants-synced'));
     } else if (key === 'school_settings') {
       window.dispatchEvent(new CustomEvent('school-settings-updated'));
-    } else if (key === 'edusmart_timetable_v1' || key === 'edusmart_exam_timetable_v1') {
-      window.dispatchEvent(new CustomEvent('timetable-updated'));
-    } else if (key === 'edusmart_bell_schedule_v1') {
-      window.dispatchEvent(new CustomEvent('bell-schedule-updated'));
+    } else if (key === 'edusmart_exam_timetable_v1') {
+      window.dispatchEvent(new CustomEvent('exam-timetables-updated'));
     } else if (key === 'edusmart_subjects_v1') {
       window.dispatchEvent(new CustomEvent('subjects-catalog-updated'));
     } else if (key.startsWith('edusmart_ops_')) {

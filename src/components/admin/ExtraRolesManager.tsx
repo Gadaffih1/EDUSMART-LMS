@@ -967,7 +967,6 @@ export const ExtraRolesManager: React.FC<ExtraRolesManagerProps> = ({
                         { key: 'canAccessAcademicReports', label: 'Moderate CBC Reports' },
                         { key: 'canEditCommentWriteUps', label: 'Edit Report Remarks' },
                         { key: 'canRepublishReports', label: 'Republish Results' },
-                        { key: 'canAccessTimetable', label: 'Curriculum Timetable' },
                         { key: 'canAccessVirtualRooms', label: 'Virtual Classrooms' },
                         { key: 'canManageDiscipline', label: 'Pastoral Discipline' }
                       ].map(({ key, label }) => (

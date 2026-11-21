@@ -12,7 +12,6 @@ import {
 } from '../../utils/departmentStore';
 import { Storage } from '../../utils/storage';
 import { ClientDataStore } from '../../utils/clientDataStore';
-import { ttApiFetch } from '../timetable/timetableTypes';
 import { AlertTriangle, ChevronLeft, Pencil, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
 import { User } from '../../types';
 
@@ -140,35 +139,6 @@ export const DepartmentPages: React.FC<DepartmentPagesProps> = ({ schoolId }) =>
     return hodUser;
   };
 
-  const syncBackendTimetableDepartment = async (
-    previousName: string,
-    nextName: string,
-    hodUserId: string,
-    headName: string
-  ) => {
-    try {
-      const ws = await ttApiFetch<{ departments?: Array<{ id: string; name: string }> }>('/api/timetable/workspace');
-      const existing = (ws?.departments || []).find(
-        (d) =>
-          d.name.toLowerCase() === previousName.toLowerCase() ||
-          d.name.toLowerCase() === nextName.toLowerCase()
-      );
-      if (existing) {
-        await ttApiFetch(`/api/timetable/departments/${existing.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ name: nextName, hodUserId, headName }),
-        });
-      } else {
-        await ttApiFetch('/api/timetable/departments', {
-          method: 'POST',
-          body: JSON.stringify({ name: nextName, hodUserId, headName }),
-        });
-      }
-    } catch {
-      // Best-effort sync when backend session is active
-    }
-  };
-
   const renameUsers = (previous: string, next: string) => {
     if (previous === next) return;
     Storage.getUsers()
@@ -192,7 +162,6 @@ export const DepartmentPages: React.FC<DepartmentPagesProps> = ({ schoolId }) =>
       if (hodUser) {
         syncUserAsDepartmentHod(created.name, hodUser.id);
       }
-      void syncBackendTimetableDepartment(created.name, created.name, hodUser?.id || '', hodUser?.name || '');
       setName('');
       setNewHodUserId('');
       refresh();
@@ -214,7 +183,6 @@ export const DepartmentPages: React.FC<DepartmentPagesProps> = ({ schoolId }) =>
       if (hodUser) {
         syncUserAsDepartmentHod(saved.next.name, hodUser.id);
       }
-      void syncBackendTimetableDepartment(saved.previous, saved.next.name, hodUser?.id || '', hodUser?.name || '');
       setEditingId('');
       setEditHodUserId('');
       setNotice(
@@ -236,7 +204,6 @@ export const DepartmentPages: React.FC<DepartmentPagesProps> = ({ schoolId }) =>
     if (hodUser) {
       syncUserAsDepartmentHod(dept.name, hodUser.id);
     }
-    void syncBackendTimetableDepartment(dept.name, dept.name, hodUser?.id || '', hodUser?.name || '');
     setNotice(
       hodUser
         ? `${hodUser.name} is now linked as Head of Department for ${dept.name}.`
@@ -492,7 +459,7 @@ export const DepartmentPages: React.FC<DepartmentPagesProps> = ({ schoolId }) =>
               <div>
                 <p className="text-sm font-bold text-slate-800">Specific Head of Department (HoD)</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Linking a staff member here sets them as the designated HoD for {opened.name} across academic appraisals, supervision, and Master Timetable setup.
+                  Linking a staff member here sets them as the designated HoD for {opened.name} across academic appraisals and supervision.
                 </p>
                 <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center gap-2">
                   <select

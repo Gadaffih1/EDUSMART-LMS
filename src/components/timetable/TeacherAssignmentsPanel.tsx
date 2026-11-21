@@ -28,6 +28,7 @@ import {
 } from './timetableTypes';
 
 interface Props {
+  schoolId?: string;
   categories: TimetableCategoryMeta[];
   weekdays: string[];
   scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
@@ -55,6 +56,7 @@ const ROLE_LABELS: Record<TeacherAssignmentRole, string> = {
 };
 
 export const TeacherAssignmentsPanel: React.FC<Props> = ({
+  schoolId,
   categories,
   weekdays,
   scheduleConfigs,
@@ -332,27 +334,31 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
     setSaving(true);
     setFeedback(null);
     try {
-      const res = await ttApiFetch('/api/timetable/teacher-assignments', {
-        method: 'POST',
-        body: JSON.stringify({
-          teacherId: teacher.id,
-          teacherName: teacher.name,
-          teacherEmail: teacher.email,
-          categoryId,
-          subjectId,
-          grade: grade ? Number(grade) : null,
-          stream: stream || null,
-          lessonsPerWeek: grade && stream ? lessonsPerWeek : null,
-          allocationSource: isIndividualMode ? 'individual' : 'category_redistribution',
-          replaceExisting,
-          roleType,
-          maxWeeklyPeriods,
-          facilityId: facilityId || null,
-          equipmentNotes,
-          allowedDays,
-          allowedPeriods,
-        }),
-      });
+      const res = await ttApiFetch(
+        '/api/timetable/teacher-assignments',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            teacherId: teacher.id,
+            teacherName: teacher.name,
+            teacherEmail: teacher.email,
+            categoryId,
+            subjectId,
+            grade: grade ? Number(grade) : null,
+            stream: stream || null,
+            lessonsPerWeek: grade && stream ? lessonsPerWeek : null,
+            allocationSource: isIndividualMode ? 'individual' : 'category_redistribution',
+            replaceExisting,
+            roleType,
+            maxWeeklyPeriods,
+            facilityId: facilityId || null,
+            equipmentNotes,
+            allowedDays,
+            allowedPeriods,
+          }),
+        },
+        schoolId
+      );
       await onRefresh();
       const scopeDesc = grade
         ? `Grade ${grade}${stream ? ` ${stream}` : ' (All streams)'}`
@@ -383,10 +389,14 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
     setUpdatingRowId(assignment.id);
     setFeedback(null);
     try {
-      await ttApiFetch(`/api/timetable/teacher-assignments/${assignment.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ lessonsPerWeek: next }),
-      });
+      await ttApiFetch(
+        `/api/timetable/teacher-assignments/${assignment.id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ lessonsPerWeek: next }),
+        },
+        schoolId
+      );
       await onRefresh();
     } catch (err: any) {
       setFeedback({ type: 'err', text: err.message || 'Failed to update weekly lessons.' });
@@ -398,7 +408,7 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
   const handleDelete = async (id: string) => {
     if (!canManage) return;
     try {
-      await ttApiFetch(`/api/timetable/teacher-assignments/${id}`, { method: 'DELETE' });
+      await ttApiFetch(`/api/timetable/teacher-assignments/${id}`, { method: 'DELETE' }, schoolId);
       await onRefresh();
       setFeedback({ type: 'ok', text: 'Teacher assignment removed.' });
     } catch (err: any) {
@@ -979,6 +989,7 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
                   const cat = categories.find((c) => c.id === a.categoryId);
                   const teacherTotal =
                     teacherLoadSummary.find((t) => t.teacherId === a.teacherId)?.linkedLessons ?? 0;
+                  const isBridgedLms = a.id.startsWith('lms_');
                   const isConcreteStream = a.grade !== null && Boolean(a.stream);
                   const effectiveLessons =
                     a.lessonsPerWeek !== null && a.lessonsPerWeek !== undefined
@@ -1006,7 +1017,7 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
                           : 'All grades in category'}
                       </td>
                       <td className="py-2.5 px-4">
-                        {isConcreteStream && canManage ? (
+                        {isConcreteStream && canManage && !isBridgedLms ? (
                           <div className="flex items-center justify-center gap-1">
                             <button
                               type="button"
@@ -1032,7 +1043,11 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
                           <div className="text-center font-mono text-xs font-semibold text-slate-700 tabular-nums">
                             {effectiveLessons}/wk
                             <span className="block text-[10px] font-sans font-normal text-slate-400">
-                              {isConcreteStream ? 'Fixed' : 'From category'}
+                              {isBridgedLms
+                                ? 'EduSmart LMS'
+                                : isConcreteStream
+                                  ? 'Fixed'
+                                  : 'From category'}
                             </span>
                           </div>
                         )}
@@ -1041,9 +1056,11 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
                         <div className="flex items-center gap-1.5 text-slate-800 font-medium">
                           <GitBranch className="w-3 h-3 text-slate-400 shrink-0" />
                           <span>
-                            {a.allocationSource === 'category_redistribution'
-                              ? 'Category Redistributed'
-                              : 'Individual Assignment'}
+                            {isBridgedLms
+                              ? 'EduSmart LMS Staff Record'
+                              : a.allocationSource === 'category_redistribution'
+                                ? 'Category Redistributed'
+                                : 'Individual Assignment'}
                           </span>
                         </div>
                         <div className="text-slate-500 mt-0.5">
@@ -1076,14 +1093,20 @@ export const TeacherAssignmentsPanel: React.FC<Props> = ({
                       </td>
                       {canManage && (
                         <td className="py-2.5 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(a.id)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 rounded whitespace-nowrap shrink-0"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Remove
-                          </button>
+                          {isBridgedLms ? (
+                            <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                              LMS Synced
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(a.id)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 rounded whitespace-nowrap shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Remove
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>

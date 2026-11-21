@@ -3,22 +3,20 @@ import {
   AlertTriangle,
   Building2,
   Check,
-  CheckCircle2,
-  GitBranch,
-  Link2,
   Minus,
+  Play,
   Plus,
   RotateCcw,
   Save,
   SlidersHorizontal,
+  Sparkles,
   UserPlus,
 } from 'lucide-react';
 import {
   FACILITY_TYPE_LABELS,
   ttApiFetch,
-  type AllocationProcessingMode,
   type CategoryAllocationSummary,
-  type DirectoryTeacher,
+  type GradeSubjectOverride,
   type ResolvedStreamAllocation,
   type ScheduleConfig,
   type TimetableCategoryId,
@@ -28,26 +26,25 @@ import {
   type TimetableStream,
   type TimetableSubject,
   type TimetableTeacherAssignment,
+  type ValidationIssue,
 } from './timetableTypes';
 
 interface Props {
+  schoolId?: string;
   categories: TimetableCategoryMeta[];
   weekdays: string[];
   scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
   subjects: TimetableSubject[];
+  gradeOverrides: GradeSubjectOverride[];
   facilities: TimetableFacility[];
   streams: TimetableStream[];
-  teachers: DirectoryTeacher[];
   teacherAssignments: TimetableTeacherAssignment[];
   remedialConfigs: TimetableRemedialConfig[];
   streamAllocations: ResolvedStreamAllocation[];
   categoryTotals: CategoryAllocationSummary[];
   canManage: boolean;
-  onChangeAllocationMode: (
-    categoryId: TimetableCategoryId,
-    mode: AllocationProcessingMode
-  ) => Promise<void>;
-  onRefresh: () => Promise<void>;
+  onRefresh: (versionId?: string) => Promise<void>;
+  onGeneratedSuccess: (versionId: string, targetCategoryId?: TimetableCategoryId) => void;
   onJumpToTeachers: (categoryId: TimetableCategoryId, subjectId: string) => void;
   onJumpToRemedials: (
     categoryId: TimetableCategoryId,
@@ -66,38 +63,45 @@ interface EditableSubjectRow {
 }
 
 export const SubjectAllocationTable: React.FC<Props> = ({
+  schoolId,
   categories,
   weekdays,
   scheduleConfigs,
   subjects,
+  gradeOverrides,
   facilities,
   streams,
-  teachers,
   teacherAssignments,
   remedialConfigs,
-  streamAllocations,
   categoryTotals,
   canManage,
-  onChangeAllocationMode,
   onRefresh,
+  onGeneratedSuccess,
   onJumpToTeachers,
   onJumpToRemedials,
 }) => {
   const [activeCategory, setActiveCategory] = useState<TimetableCategoryId>('cat_1_3');
   const [drafts, setDrafts] = useState<Record<string, EditableSubjectRow>>({});
+  // Key: `${grade}::${subjectId}` -> string value ('' = inherit category default)
+  const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({});
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
-  const [switchingMode, setSwitchingMode] = useState(false);
-  const [redistributing, setRedistributing] = useState(false);
-  const [selectedMatrixStream, setSelectedMatrixStream] = useState<string>('all');
-  const [inlineTeacherPick, setInlineTeacherPick] = useState<Record<string, string>>({});
-  const [linkingKey, setLinkingKey] = useState<string | null>(null);
+  const [generatingScope, setGeneratingScope] = useState<TimetableCategoryId | 'whole_school' | null>(
+    null
+  );
+  const [termLabel, setTermLabel] = useState('Term 1');
+  const [academicYear, setAcademicYear] = useState(String(new Date().getFullYear()));
+
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [generationIssues, setGenerationIssues] = useState<ValidationIssue[]>([]);
+  const [unplacedErrors, setUnplacedErrors] = useState<
+    Array<{ grade: number; stream: string; subjectName: string; reason: string }>
+  >([]);
 
   const currentConfig = scheduleConfigs[activeCategory];
-  const activeMode: AllocationProcessingMode =
-    currentConfig?.allocationMode ?? 'category_redistribution';
+  const currentCategoryMeta = categories.find((c) => c.id === activeCategory);
   const [periodsPerDay, setPeriodsPerDay] = useState<number>(currentConfig?.periodsPerDay ?? 8);
   const [periodDurationMins, setPeriodDurationMins] = useState<number>(
     currentConfig?.periodDurationMins ?? 35
@@ -111,7 +115,6 @@ export const SubjectAllocationTable: React.FC<Props> = ({
       setPeriodDurationMins(cfg.periodDurationMins);
       setSelectedDays(cfg.days);
     }
-    setSelectedMatrixStream('all');
   }, [activeCategory, scheduleConfigs]);
 
   const categorySubjects = useMemo(
@@ -127,13 +130,15 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     [streams, activeCategory]
   );
 
-  const categoryResolvedAllocations = useMemo(() => {
-    const list = streamAllocations.filter((ra) => ra.categoryId === activeCategory);
-    if (selectedMatrixStream === 'all') return list;
-    return list.filter((ra) => `${ra.grade}::${ra.stream}` === selectedMatrixStream);
-  }, [streamAllocations, activeCategory, selectedMatrixStream]);
+  const categoryGrades = useMemo(() => {
+    const metaGrades = currentCategoryMeta?.grades ?? [];
+    const activeGrades = Array.from(new Set(categoryStreams.map((s) => s.grade))).sort(
+      (a, b) => a - b
+    );
+    return activeGrades.length > 0 ? activeGrades : metaGrades;
+  }, [currentCategoryMeta, categoryStreams]);
 
-  // Sync server subjects into local draft map for the active category
+  // Sync server subjects & overrides into local drafts when category or server data changes
   useEffect(() => {
     const next: Record<string, EditableSubjectRow> = {};
     for (const s of categorySubjects) {
@@ -148,10 +153,18 @@ export const SubjectAllocationTable: React.FC<Props> = ({
       };
     }
     setDrafts(next);
-    setExpandedRowId(null);
-  }, [categorySubjects]);
 
-  const hasDirtyChanges = useMemo(() => {
+    const nextOv: Record<string, string> = {};
+    for (const ov of gradeOverrides) {
+      if (ov.categoryId === activeCategory) {
+        nextOv[`${ov.grade}::${ov.subjectId}`] = String(ov.lessonsPerWeek);
+      }
+    }
+    setOverrideDrafts(nextOv);
+    setExpandedRowId(null);
+  }, [categorySubjects, gradeOverrides, activeCategory]);
+
+  const hasDirtySubjects = useMemo(() => {
     return categorySubjects.some((s) => {
       const d = drafts[s.id];
       if (!d) return false;
@@ -164,6 +177,24 @@ export const SubjectAllocationTable: React.FC<Props> = ({
       );
     });
   }, [categorySubjects, drafts]);
+
+  const hasDirtyOverrides = useMemo(() => {
+    const serverMap = new Map<string, string>();
+    for (const ov of gradeOverrides) {
+      if (ov.categoryId === activeCategory) {
+        serverMap.set(`${ov.grade}::${ov.subjectId}`, String(ov.lessonsPerWeek));
+      }
+    }
+    const allKeys = new Set([...serverMap.keys(), ...Object.keys(overrideDrafts)]);
+    for (const k of allKeys) {
+      if ((serverMap.get(k) ?? '') !== (overrideDrafts[k] ?? '')) {
+        return true;
+      }
+    }
+    return false;
+  }, [gradeOverrides, overrideDrafts, activeCategory]);
+
+  const hasDirtyChanges = hasDirtySubjects || hasDirtyOverrides;
 
   const hasDirtySchedule = useMemo(() => {
     if (!currentConfig) return false;
@@ -192,11 +223,6 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     const remainingRegular = availableRegularPeriods - regularAllocated;
     return { coreTotal, commonTotal, remedialTotal, regularAllocated, remainingRegular };
   }, [categorySubjects, drafts, availableRegularPeriods]);
-
-  const activeCategorySummary = useMemo(
-    () => categoryTotals.find((ct) => ct.categoryId === activeCategory) || null,
-    [categoryTotals, activeCategory]
-  );
 
   const updateRow = (id: string, patch: Partial<EditableSubjectRow>) => {
     setDrafts((prev) => ({
@@ -243,27 +269,73 @@ export const SubjectAllocationTable: React.FC<Props> = ({
       };
     }
     setDrafts(reset);
+
+    const nextOv: Record<string, string> = {};
+    for (const ov of gradeOverrides) {
+      if (ov.categoryId === activeCategory) {
+        nextOv[`${ov.grade}::${ov.subjectId}`] = String(ov.lessonsPerWeek);
+      }
+    }
+    setOverrideDrafts(nextOv);
     setFeedback(null);
   };
 
-  const persistAllocationsOnly = async () => {
-    const payload = categorySubjects.map((s) => {
-      const d = drafts[s.id];
-      return {
-        id: s.id,
-        lessonsPerWeek: d ? d.lessonsPerWeek : s.lessonsPerWeek,
-        defaultFacilityId: d?.defaultFacilityId || null,
-        equipmentNotes: d?.equipmentNotes || '',
-        allowedDays: d?.allowedDays || [],
-        allowedPeriods: d?.allowedPeriods || [],
-        isActive: d ? d.isActive : s.isActive,
-      };
-    });
+  const persistCurrentCategory = async () => {
+    if (hasDirtySubjects) {
+      const payload = categorySubjects.map((s) => {
+        const d = drafts[s.id];
+        return {
+          id: s.id,
+          lessonsPerWeek: d ? d.lessonsPerWeek : s.lessonsPerWeek,
+          defaultFacilityId: d?.defaultFacilityId || null,
+          equipmentNotes: d?.equipmentNotes || '',
+          allowedDays: d?.allowedDays || [],
+          allowedPeriods: d?.allowedPeriods || [],
+          isActive: d ? d.isActive : s.isActive,
+        };
+      });
 
-    await ttApiFetch(`/api/timetable/allocations/${activeCategory}`, {
-      method: 'PUT',
-      body: JSON.stringify({ allocations: payload }),
-    });
+      await ttApiFetch(
+        `/api/timetable/allocations/${activeCategory}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ allocations: payload }),
+        },
+        schoolId
+      );
+    }
+
+    if (hasDirtyOverrides) {
+      const overridesPayload: Array<{
+        grade: number;
+        subjectId: string;
+        lessonsPerWeek: number | null;
+      }> = [];
+      for (const grade of categoryGrades) {
+        for (const sub of categorySubjects) {
+          const key = `${grade}::${sub.id}`;
+          const raw = overrideDrafts[key];
+          if (raw === undefined || raw.trim() === '') {
+            overridesPayload.push({ grade, subjectId: sub.id, lessonsPerWeek: null });
+          } else {
+            overridesPayload.push({
+              grade,
+              subjectId: sub.id,
+              lessonsPerWeek: Math.max(0, Math.min(30, Math.trunc(Number(raw) || 0))),
+            });
+          }
+        }
+      }
+
+      await ttApiFetch(
+        `/api/timetable/grade-overrides/${activeCategory}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ overrides: overridesPayload }),
+        },
+        schoolId
+      );
+    }
   };
 
   const handleSaveSchedule = async () => {
@@ -271,17 +343,21 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     setSavingSchedule(true);
     setFeedback(null);
     try {
-      await ttApiFetch(`/api/timetable/schedule-config/${activeCategory}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          days: selectedDays,
-          periodsPerDay,
-          periodDurationMins,
-          allocationMode: activeMode,
-        }),
-      });
+      await ttApiFetch(
+        `/api/timetable/schedule-config/${activeCategory}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            days: selectedDays,
+            periodsPerDay,
+            periodDurationMins,
+            allocationMode: 'category_redistribution',
+          }),
+        },
+        schoolId
+      );
       await onRefresh();
-      setFeedback({ type: 'ok', text: 'Category schedule limits saved to database.' });
+      setFeedback({ type: 'ok', text: 'Working days and period schedule saved to database.' });
     } catch (err: any) {
       setFeedback({ type: 'err', text: err.message || 'Failed to save schedule settings.' });
     } finally {
@@ -294,13 +370,11 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     setSaving(true);
     setFeedback(null);
     try {
-      await persistAllocationsOnly();
+      await persistCurrentCategory();
       await onRefresh();
       setFeedback({
         type: 'ok',
-        text: `Weekly lesson allocations saved for ${
-          categories.find((c) => c.id === activeCategory)?.label
-        }.`,
+        text: `Weekly lesson allocations saved for ${currentCategoryMeta?.label || activeCategory}.`,
       });
     } catch (err: any) {
       setFeedback({ type: 'err', text: err.message || 'Failed to save allocations.' });
@@ -309,113 +383,66 @@ export const SubjectAllocationTable: React.FC<Props> = ({
     }
   };
 
-  const handleModeChange = async (mode: AllocationProcessingMode) => {
-    if (!canManage || mode === activeMode) return;
-    setSwitchingMode(true);
-    setFeedback(null);
-    try {
-      await onChangeAllocationMode(activeCategory, mode);
-      setFeedback({
-        type: 'ok',
-        text:
-          mode === 'category_redistribution'
-            ? 'Switched to Option 2: Category allocations redistribute to all active streams and link strictly to assigned teachers.'
-            : 'Switched to Option 1: Timetable processing now reads individual teacher-grade-stream weekly lesson assignments directly.',
-      });
-    } catch (err: any) {
-      setFeedback({ type: 'err', text: err.message || 'Failed to switch processing mode.' });
-    } finally {
-      setSwitchingMode(false);
-    }
-  };
-
-  const handleRedistributeToStreams = async () => {
+  const handleGenerate = async (targetCategoryId?: TimetableCategoryId) => {
     if (!canManage) return;
-    setRedistributing(true);
+    const scopeKey = targetCategoryId ?? 'whole_school';
+    setGeneratingScope(scopeKey);
     setFeedback(null);
+    setGenerationIssues([]);
+    setUnplacedErrors([]);
+
     try {
+      // Automatically persist any unsaved edits in the active category before generating
       if (hasDirtyChanges) {
-        await persistAllocationsOnly();
+        await persistCurrentCategory();
       }
-      const res = await ttApiFetch(`/api/timetable/redistribute-category/${activeCategory}`, {
-        method: 'POST',
-      });
-      await onRefresh();
-
-      const parts: string[] = [
-        `Redistributed across ${categoryStreams.length} active stream(s): ${
-          (res.syncedCount || 0) + (res.createdCount || 0)
-        } stream-subject slot(s) synced`,
-      ];
-      if (res.unlinkedSlots?.length > 0) {
-        parts.push(`${res.unlinkedSlots.length} awaiting teacher link`);
-      }
-      if (res.conflictSlots?.length > 0) {
-        parts.push(`${res.conflictSlots.length} duplicate conflict(s)`);
-      }
-      if (res.overloadedSlots?.length > 0) {
-        parts.push(`${res.overloadedSlots.length} blocked by teacher physical slot limit`);
+      if (hasDirtySchedule) {
+        await ttApiFetch(
+          `/api/timetable/schedule-config/${activeCategory}`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({
+              days: selectedDays,
+              periodsPerDay,
+              periodDurationMins,
+              allocationMode: 'category_redistribution',
+            }),
+          },
+          schoolId
+        );
       }
 
-      setFeedback({
-        type:
-          (res.conflictSlots?.length || 0) > 0 || (res.overloadedSlots?.length || 0) > 0
-            ? 'err'
-            : 'ok',
-        text: `${parts.join(' · ')}.`,
-      });
+      const resp = await ttApiFetch(
+        '/api/timetable/generate',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            termLabel,
+            academicYear,
+            targetCategoryId: targetCategoryId || undefined,
+          }),
+        },
+        schoolId
+      );
+
+      await onRefresh(resp.version?.id);
+      if (resp.version?.id) {
+        onGeneratedSuccess(resp.version.id, targetCategoryId);
+      }
     } catch (err: any) {
+      const payload = err?.payload;
+      if (Array.isArray(payload?.audit?.readinessIssues)) {
+        setGenerationIssues(payload.audit.readinessIssues);
+      }
+      if (Array.isArray(payload?.unplacedTasks)) {
+        setUnplacedErrors(payload.unplacedTasks);
+      }
       setFeedback({
         type: 'err',
-        text: err.message || 'Failed to redistribute category allocations to streams.',
+        text: err.message || 'Timetable generation could not complete. Review details below.',
       });
     } finally {
-      setRedistributing(false);
-    }
-  };
-
-  const handleInlineLinkTeacher = async (ra: ResolvedStreamAllocation) => {
-    if (!canManage) return;
-    const rowKey = `${ra.grade}::${ra.stream}::${ra.subjectId}`;
-    const pickedTeacherId = inlineTeacherPick[rowKey];
-    const teacher = teachers.find((t) => t.id === pickedTeacherId);
-    if (!teacher) {
-      setFeedback({ type: 'err', text: 'Select an authorized teacher before linking.' });
-      return;
-    }
-
-    const sub = subjects.find((s) => s.id === ra.subjectId);
-    setLinkingKey(rowKey);
-    setFeedback(null);
-    try {
-      await ttApiFetch('/api/timetable/teacher-assignments', {
-        method: 'POST',
-        body: JSON.stringify({
-          teacherId: teacher.id,
-          teacherName: teacher.name,
-          teacherEmail: teacher.email,
-          categoryId: ra.categoryId,
-          subjectId: ra.subjectId,
-          grade: ra.grade,
-          stream: ra.stream,
-          lessonsPerWeek: ra.lessonsPerWeek,
-          allocationSource:
-            activeMode === 'individual_teacher' ? 'individual' : 'category_redistribution',
-          replaceExisting: true,
-          roleType:
-            sub?.code === 'clubs' || sub?.code === 'maktaba' ? 'supervisor' : 'subject_teacher',
-          facilityId: sub?.defaultFacilityId || null,
-        }),
-      });
-      await onRefresh();
-      setFeedback({
-        type: 'ok',
-        text: `Strictly linked ${teacher.name} to Grade ${ra.grade} ${ra.stream} · ${ra.subjectName} (${ra.lessonsPerWeek}/wk) with zero duplicates.`,
-      });
-    } catch (err: any) {
-      setFeedback({ type: 'err', text: err.message || 'Failed to link teacher.' });
-    } finally {
-      setLinkingKey(null);
+      setGeneratingScope(null);
     }
   };
 
@@ -423,18 +450,13 @@ export const SubjectAllocationTable: React.FC<Props> = ({
 
   return (
     <div className="space-y-5">
-      {/* Category Selector Bar */}
+      {/* Three Independent Category Tabs + Save Allocation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           {categories.map((cat) => {
             const isSelected = cat.id === activeCategory;
             const catSummary = categoryTotals.find((c) => c.categoryId === cat.id);
-            const catSubs = subjects.filter((s) => s.categoryId === cat.id);
-            const catAllocated =
-              catSummary?.totalAllocatedRegularLessons ??
-              catSubs
-                .filter((s) => s.subjectKind !== 'remedial')
-                .reduce((acc, s) => acc + s.lessonsPerWeek, 0);
+            const catAllocated = catSummary?.totalAllocatedRegularLessons ?? 0;
             const cfg = scheduleConfigs[cat.id];
             const catAvailable = cfg ? cfg.days.length * cfg.periodsPerDay : 0;
 
@@ -445,6 +467,8 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                 onClick={() => {
                   setActiveCategory(cat.id);
                   setFeedback(null);
+                  setGenerationIssues([]);
+                  setUnplacedErrors([]);
                 }}
                 className={`px-3.5 py-2 rounded-md text-sm font-medium border transition-colors whitespace-nowrap shrink-0 ${
                   isSelected
@@ -473,7 +497,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-md hover:bg-slate-50 whitespace-nowrap shrink-0"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Discard Changes
+              Discard
             </button>
           )}
           {canManage && (
@@ -488,92 +512,145 @@ export const SubjectAllocationTable: React.FC<Props> = ({
               }`}
             >
               <Save className="w-4 h-4" />
-              {saving ? 'Saving...' : 'Save Allocations'}
+              {saving ? 'Saving...' : 'Save Allocation'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Dual-Mode Processing Control Bar */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <GitBranch className="w-4 h-4 text-indigo-600" />
-            <span>Timetable Allocation & Linking Mode</span>
-          </div>
-          <p className="text-xs text-slate-600">
-            {activeMode === 'category_redistribution'
-              ? 'Option 2 Active: Weekly lessons defined in this category table redistribute across all active streams in this category and link strictly to their authorized teachers.'
-              : 'Option 1 Active: Timetable processing reads individual teacher-subject-grade-stream weekly lesson assignments directly from the Teachers & Supervisors tab.'}
-          </p>
-        </div>
+      {/* Prominent Automatic Timetable Generation Action Bar */}
+      {canManage && (
+        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Sparkles className="w-4 h-4 text-indigo-600" />
+                <span>Automatic Timetable Generator</span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Enter lessons per week below, save, and generate an individual category (keeping
+                other categories untouched while checking school-wide teacher &amp; facility
+                availability) or the whole school at once.
+              </p>
+            </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
-            <button
-              type="button"
-              disabled={!canManage || switchingMode}
-              onClick={() => handleModeChange('category_redistribution')}
-              className={`px-3 py-1.5 rounded font-medium transition-colors whitespace-nowrap shrink-0 ${
-                activeMode === 'category_redistribution'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Option 2: Category → Streams
-            </button>
-            <button
-              type="button"
-              disabled={!canManage || switchingMode}
-              onClick={() => handleModeChange('individual_teacher')}
-              className={`px-3 py-1.5 rounded font-medium transition-colors whitespace-nowrap shrink-0 ${
-                activeMode === 'individual_teacher'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Option 1: Individual Teacher
-            </button>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-slate-600">
+                <span>Term</span>
+                <input
+                  type="text"
+                  value={termLabel}
+                  onChange={(e) => setTermLabel(e.target.value)}
+                  className="w-24 px-2 py-1.5 border border-slate-300 rounded text-slate-900"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-slate-600">
+                <span>Year</span>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  className="w-20 px-2 py-1.5 border border-slate-300 rounded font-mono text-slate-900"
+                />
+              </label>
+            </div>
           </div>
 
-          {canManage && activeMode === 'category_redistribution' && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
             <button
               type="button"
-              disabled={redistributing || totals.remainingRegular < 0}
-              onClick={handleRedistributeToStreams}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-medium rounded-md hover:bg-slate-800 disabled:opacity-40 whitespace-nowrap shrink-0"
+              disabled={generatingScope !== null}
+              onClick={() => handleGenerate('cat_1_3')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-md hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap shrink-0"
             >
-              <Link2 className="w-3.5 h-3.5" />
-              {redistributing
-                ? 'Redistributing...'
-                : `Redistribute to ${categoryStreams.length} Stream${
-                    categoryStreams.length === 1 ? '' : 's'
-                  } & Sync`}
+              <Play className="w-3.5 h-3.5 text-indigo-600" />
+              {generatingScope === 'cat_1_3' ? 'Generating...' : 'Generate Grades 1–3'}
             </button>
-          )}
+            <button
+              type="button"
+              disabled={generatingScope !== null}
+              onClick={() => handleGenerate('cat_4_6')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-md hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap shrink-0"
+            >
+              <Play className="w-3.5 h-3.5 text-indigo-600" />
+              {generatingScope === 'cat_4_6' ? 'Generating...' : 'Generate Grades 4–6'}
+            </button>
+            <button
+              type="button"
+              disabled={generatingScope !== null}
+              onClick={() => handleGenerate('cat_7_9')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 text-slate-900 text-xs font-semibold rounded-md hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap shrink-0"
+            >
+              <Play className="w-3.5 h-3.5 text-indigo-600" />
+              {generatingScope === 'cat_7_9' ? 'Generating...' : 'Generate Grades 7–9'}
+            </button>
+            <button
+              type="button"
+              disabled={generatingScope !== null}
+              onClick={() => handleGenerate(undefined)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap shrink-0 ml-auto"
+            >
+              <Play className="w-3.5 h-3.5" />
+              {generatingScope === 'whole_school' ? 'Generating Whole School...' : 'Generate Whole School'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
+      {/* Feedback & Generation Error Details */}
       {feedback && (
         <div
-          className={`px-4 py-2.5 rounded-md border text-sm flex items-center justify-between ${
+          className={`px-4 py-3 rounded-md border text-sm space-y-2 ${
             feedback.type === 'ok'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-red-50 border-red-200 text-red-800'
           }`}
         >
-          <span>{feedback.text}</span>
-          <button
-            type="button"
-            onClick={() => setFeedback(null)}
-            className="text-xs font-medium underline ml-4 whitespace-nowrap shrink-0"
-          >
-            Dismiss
-          </button>
+          <div className="flex items-center justify-between gap-4">
+            <span className="font-medium">{feedback.text}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setFeedback(null);
+                setGenerationIssues([]);
+                setUnplacedErrors([]);
+              }}
+              className="text-xs font-medium underline whitespace-nowrap shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+
+          {generationIssues.length > 0 && (
+            <div className="pt-2 border-t border-red-200/70 space-y-1 text-xs">
+              {generationIssues.slice(0, 10).map((issue, idx) => (
+                <div key={`${issue.code}_${idx}`}>
+                  <span className="font-semibold uppercase mr-1.5">[{issue.severity}]</span>
+                  {issue.message}
+                </div>
+              ))}
+              {generationIssues.length > 10 && (
+                <div className="text-red-700/80">
+                  +{generationIssues.length - 10} additional validation notice(s)
+                </div>
+              )}
+            </div>
+          )}
+
+          {unplacedErrors.length > 0 && (
+            <div className="pt-2 border-t border-red-200/70 space-y-1 text-xs">
+              {unplacedErrors.slice(0, 10).map((u, idx) => (
+                <div key={idx}>
+                  <span className="font-semibold">[UNPLACED]</span> Grade {u.grade} {u.stream} ·{' '}
+                  {u.subjectName}: {u.reason}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Compact Schedule Capacity & Live Allocation Summary Strip */}
+      {/* Compact Capacity & Live Weekly Totals Strip */}
       <div className="bg-white border border-slate-200 rounded-lg p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-6">
@@ -582,7 +659,8 @@ export const SubjectAllocationTable: React.FC<Props> = ({
               <div className="text-xl font-semibold text-slate-900 font-mono tabular-nums mt-0.5">
                 {availableRegularPeriods}
                 <span className="text-xs font-sans font-normal text-slate-500 ml-1.5">
-                  ({selectedDays.length}d × {periodsPerDay}p)
+                  ({selectedDays.length}d × {periodsPerDay}p · {categoryStreams.length} stream
+                  {categoryStreams.length === 1 ? '' : 's'})
                 </span>
               </div>
             </div>
@@ -599,7 +677,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
             </div>
             <div className="h-8 w-px bg-slate-200 hidden sm:block" />
             <div>
-              <div className="text-xs font-medium text-slate-500">Remaining Available Periods</div>
+              <div className="text-xs font-medium text-slate-500">Remaining Periods</div>
               <div
                 className={`text-xl font-semibold font-mono tabular-nums mt-0.5 ${
                   totals.remainingRegular < 0
@@ -614,40 +692,13 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                   {totals.remainingRegular < 0
                     ? 'Over capacity'
                     : totals.remainingRegular === 0
-                      ? 'Balanced'
+                      ? 'Exact fit'
                       : 'Unallocated'}
                 </span>
               </div>
             </div>
-            {activeCategorySummary && (
-              <>
-                <div className="h-8 w-px bg-slate-200 hidden sm:block" />
-                <div>
-                  <div className="text-xs font-medium text-slate-500">Stream-Teacher Sync</div>
-                  <div className="text-xl font-semibold text-slate-900 font-mono tabular-nums mt-0.5">
-                    {activeCategorySummary.linkedStreamSlots}
-                    <span className="text-xs font-sans font-normal text-slate-500 ml-1.5">
-                      linked
-                      {activeCategorySummary.unlinkedStreamSlots > 0 && (
-                        <span className="text-amber-700 font-medium">
-                          {' '}
-                          · {activeCategorySummary.unlinkedStreamSlots} unlinked
-                        </span>
-                      )}
-                      {activeCategorySummary.duplicateConflicts > 0 && (
-                        <span className="text-red-600 font-medium">
-                          {' '}
-                          · {activeCategorySummary.duplicateConflicts} conflict(s)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
 
-          {/* Inline Periods/Day & Duration Config */}
           {canManage && (
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <label className="flex items-center gap-1.5 text-slate-600">
@@ -664,7 +715,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                 />
               </label>
               <label className="flex items-center gap-1.5 text-slate-600">
-                <span>Minutes/Period</span>
+                <span>Mins/Period</span>
                 <input
                   type="number"
                   min={20}
@@ -684,7 +735,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 text-white rounded text-xs font-medium hover:bg-slate-800 whitespace-nowrap shrink-0"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  {savingSchedule ? 'Updating...' : 'Apply Limits'}
+                  {savingSchedule ? 'Updating...' : 'Apply'}
                 </button>
               )}
             </div>
@@ -695,7 +746,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs text-red-700">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
-              Regular weekly allocations exceed available periods by{' '}
+              Allocated weekly lessons exceed available periods by{' '}
               <strong className="font-mono">{Math.abs(totals.remainingRegular)}</strong>. Reduce
               lesson counts or increase Periods/Day before generating.
             </span>
@@ -703,16 +754,15 @@ export const SubjectAllocationTable: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Unified Weekly Subject & Activity Allocation Table */}
+      {/* Clean Subject Allocation Table */}
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wider">
                 <th className="py-3 px-4">Subject / Activity Name</th>
-                <th className="py-3 px-4">Category & Facility</th>
                 <th className="py-3 px-4 text-center">Lessons Per Week</th>
-                <th className="py-3 px-4">Authorized Teachers / Config</th>
+                <th className="py-3 px-4">Assigned Teachers (EduSmart Records)</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -731,6 +781,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                 const assigned = teacherAssignments.filter(
                   (ta) => ta.isActive && ta.categoryId === activeCategory && ta.subjectId === sub.id
                 );
+                const uniqueTeacherNames = Array.from(new Set(assigned.map((a) => a.teacherName)));
                 const remConfigsForSub =
                   sub.subjectKind === 'remedial'
                     ? remedialConfigs.filter(
@@ -748,6 +799,11 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                   (idx === 0 || !categorySubjects[idx - 1].isAdditionalCommon);
 
                 const isExpanded = expandedRowId === sub.id;
+                const activeGradeOverrideCount = categoryGrades.filter((g) => {
+                  const v = overrideDrafts[`${g}::${sub.id}`];
+                  return v !== undefined && v.trim() !== '';
+                }).length;
+
                 const isModified =
                   draft.lessonsPerWeek !== sub.lessonsPerWeek ||
                   draft.defaultFacilityId !== (sub.defaultFacilityId || '') ||
@@ -759,27 +815,27 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                   draft.lessonsPerWeek > 0 &&
                   (sub.subjectKind === 'remedial'
                     ? remConfigsForSub.length === 0
-                    : assigned.length === 0);
+                    : uniqueTeacherNames.length === 0);
 
                 return (
                   <React.Fragment key={sub.id}>
                     {isFirstAdditional && (
-                      <tr className="bg-slate-50/80 border-t border-slate-200">
+                      <tr className="bg-slate-50/90 border-t border-slate-200">
                         <td
-                          colSpan={5}
+                          colSpan={4}
                           className="py-2 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider"
                         >
-                          Additional Common Subjects & Activities (Independent Allocation for{' '}
-                          {categories.find((c) => c.id === activeCategory)?.shortLabel})
+                          Additional Common Subjects &amp; Activities ({currentCategoryMeta?.shortLabel})
                         </td>
                       </tr>
                     )}
+
                     <tr
                       className={`hover:bg-slate-50/70 transition-colors ${
                         isModified ? 'bg-indigo-50/30' : ''
                       }`}
                     >
-                      {/* Column 1: Subject / Activity Name */}
+                      {/* Subject / Activity Name */}
                       <td className="py-3 px-4">
                         <div className="font-medium text-slate-900 flex items-center gap-2">
                           <span>{sub.name}</span>
@@ -789,43 +845,24 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
+                        <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <span className="font-mono">{sub.shortCode}</span>
-                          {' · '}
-                          {sub.subjectKind === 'core'
-                            ? 'Core Learning Area'
-                            : sub.subjectKind === 'remedial'
-                              ? 'Schedulable Remedial Type'
-                              : 'Common Subject / Activity'}
-                          {draft.allowedDays.length > 0 &&
-                            ` · Days: ${draft.allowedDays.map((d) => d.slice(0, 3)).join(', ')}`}
-                          {draft.allowedPeriods.length > 0 &&
-                            ` · Periods: P${draft.allowedPeriods.join(', P')}`}
+                          {linkedFacility && (
+                            <span className="inline-flex items-center gap-1 text-slate-600">
+                              <Building2 className="w-3 h-3" />
+                              {linkedFacility.name}
+                            </span>
+                          )}
+                          {activeGradeOverrideCount > 0 && (
+                            <span className="text-indigo-700 font-medium">
+                              · {activeGradeOverrideCount} grade override
+                              {activeGradeOverrideCount === 1 ? '' : 's'}
+                            </span>
+                          )}
                         </div>
                       </td>
 
-                      {/* Column 2: Shared Facility / Requirements */}
-                      <td className="py-3 px-4 text-xs text-slate-600">
-                        {linkedFacility ? (
-                          <div className="flex items-center gap-1.5 text-slate-800 font-medium">
-                            <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                            <span>{linkedFacility.name}</span>
-                          </div>
-                        ) : sub.requiresFacilityType ? (
-                          <span className="text-amber-700 font-medium">
-                            Requires {FACILITY_TYPE_LABELS[sub.requiresFacilityType]}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">Classroom / Flexible</span>
-                        )}
-                        {draft.equipmentNotes && (
-                          <div className="text-slate-500 mt-0.5 truncate max-w-[220px]">
-                            {draft.equipmentNotes}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Column 3: Lessons Per Week (- / numeric input / +) */}
+                      {/* Lessons Per Week (- / input / +) */}
                       <td className="py-3 px-4">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -865,57 +902,59 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                         </div>
                       </td>
 
-                      {/* Column 4: Authorized Teachers / Remedial Config */}
+                      {/* Assigned Teachers (from EduSmart LMS + Timetable Assignments) */}
                       <td className="py-3 px-4 text-xs">
                         {sub.subjectKind === 'remedial' ? (
                           remConfigsForSub.length > 0 ? (
-                            <div className="text-slate-700">
+                            <span className="text-slate-700">
                               <span className="font-mono font-semibold text-slate-900">
                                 {remConfigsForSub.length}
                               </span>{' '}
                               remedial group(s) configured
-                            </div>
+                            </span>
                           ) : (
                             <span
                               className={
                                 needsTeacherWarning
-                                  ? 'text-amber-700 font-medium'
+                                  ? 'text-amber-700 font-medium inline-flex items-center gap-1'
                                   : 'text-slate-400'
                               }
                             >
+                              {needsTeacherWarning && <AlertTriangle className="w-3.5 h-3.5" />}
                               {needsTeacherWarning
-                                ? 'Configure remedial groups & teacher'
+                                ? 'Remedial teacher & group required'
                                 : 'No remedial groups yet'}
                             </span>
                           )
-                        ) : assigned.length > 0 ? (
+                        ) : uniqueTeacherNames.length > 0 ? (
                           <div className="text-slate-700">
-                            <span className="font-mono font-semibold text-slate-900">
-                              {assigned.length}
-                            </span>{' '}
-                            assigned ·{' '}
-                            <span className="text-slate-500">
-                              {assigned
-                                .slice(0, 2)
-                                .map((a) => a.teacherName)
-                                .join(', ')}
-                              {assigned.length > 2 ? ` +${assigned.length - 2}` : ''}
+                            <span className="font-medium text-slate-900">
+                              {uniqueTeacherNames.slice(0, 2).join(', ')}
                             </span>
+                            {uniqueTeacherNames.length > 2 && (
+                              <span className="text-slate-500">
+                                {' '}
+                                +{uniqueTeacherNames.length - 2} more
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span
                             className={
-                              needsTeacherWarning ? 'text-amber-700 font-medium' : 'text-slate-400'
+                              needsTeacherWarning
+                                ? 'text-amber-700 font-medium inline-flex items-center gap-1'
+                                : 'text-slate-400'
                             }
                           >
+                            {needsTeacherWarning && <AlertTriangle className="w-3.5 h-3.5" />}
                             {needsTeacherWarning
-                              ? 'Teacher assignment required'
-                              : 'Not assigned (manual setup)'}
+                              ? 'Missing teacher assignment'
+                              : 'Unassigned'}
                           </span>
                         )}
                       </td>
 
-                      {/* Column 5: Actions */}
+                      {/* Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="inline-flex items-center justify-end gap-2">
                           <button
@@ -924,7 +963,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded hover:bg-slate-50 whitespace-nowrap shrink-0"
                           >
                             <SlidersHorizontal className="w-3.5 h-3.5" />
-                            {isExpanded ? 'Hide Rules' : 'Facility & Slots'}
+                            {isExpanded ? 'Close' : 'Grade Overrides & Lab'}
                           </button>
                           {sub.subjectKind === 'remedial' ? (
                             <button
@@ -937,7 +976,7 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                               }
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 whitespace-nowrap shrink-0"
                             >
-                              Configure Groups
+                              Remedial Setup
                             </button>
                           ) : (
                             <button
@@ -946,18 +985,64 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 whitespace-nowrap shrink-0"
                             >
                               <UserPlus className="w-3.5 h-3.5" />
-                              Assign Teacher
+                              Teachers
                             </button>
                           )}
                         </div>
                       </td>
                     </tr>
 
-                    {/* Expandable Inline Facility, Equipment & Allowed Days/Periods Editor */}
+                    {/* Expandable Inline Grade Overrides, Facility & Allowed Slots Drawer */}
                     {isExpanded && (
                       <tr className="bg-slate-50">
-                        <td colSpan={5} className="p-4 border-t border-slate-200">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <td colSpan={4} className="p-4 border-t border-slate-200">
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+                            {/* Grade-specific weekly lesson overrides */}
+                            {sub.subjectKind !== 'remedial' && (
+                              <div>
+                                <div className="font-semibold text-slate-700 mb-1.5">
+                                  Grade-Specific Weekly Overrides (optional)
+                                </div>
+                                <p className="text-[11px] text-slate-500 mb-2">
+                                  Leave blank to inherit the category allocation (
+                                  <span className="font-mono">{draft.lessonsPerWeek}</span>/wk).
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {categoryGrades.map((g) => {
+                                    const key = `${g}::${sub.id}`;
+                                    const val = overrideDrafts[key] ?? '';
+                                    return (
+                                      <label
+                                        key={g}
+                                        className="flex items-center gap-1.5 bg-white border border-slate-200 rounded px-2 py-1"
+                                      >
+                                        <span className="font-medium text-slate-700">
+                                          Grade {g}
+                                        </span>
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={30}
+                                          disabled={!canManage}
+                                          placeholder={String(draft.lessonsPerWeek)}
+                                          value={val}
+                                          onChange={(e) => {
+                                            setOverrideDrafts((prev) => ({
+                                              ...prev,
+                                              [key]: e.target.value,
+                                            }));
+                                            setFeedback(null);
+                                          }}
+                                          className="w-12 text-center border border-slate-300 rounded font-mono text-slate-900 py-0.5"
+                                        />
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Shared Facility Selection */}
                             <div>
                               <label className="block font-semibold text-slate-700 mb-1">
                                 Shared Facility / Laboratory
@@ -976,74 +1061,63 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                                   .map((f) => (
                                     <option key={f.id} value={f.id}>
                                       {f.name} ({FACILITY_TYPE_LABELS[f.facilityType]} · Cap:{' '}
-                                      {f.capacityStreams} stream{f.capacityStreams > 1 ? 's' : ''})
+                                      {f.capacityStreams})
                                     </option>
                                   ))}
                               </select>
-                              <label className="block font-semibold text-slate-700 mt-2.5 mb-1">
-                                Equipment / Lab Requirements
-                              </label>
-                              <input
-                                type="text"
-                                disabled={!canManage}
-                                placeholder="e.g., Robotics kits, 40 PCs, Projector..."
-                                value={draft.equipmentNotes}
-                                onChange={(e) =>
-                                  updateRow(sub.id, { equipmentNotes: e.target.value })
-                                }
-                                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900"
-                              />
                             </div>
 
-                            <div>
-                              <div className="font-semibold text-slate-700 mb-1">
-                                Allocated Days (leave empty for any day)
+                            {/* Allowed Days & Periods */}
+                            <div className="space-y-2">
+                              <div>
+                                <div className="font-semibold text-slate-700 mb-1">
+                                  Allowed Days (empty = any day)
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {weekdays.map((day) => {
+                                    const active = draft.allowedDays.includes(day);
+                                    return (
+                                      <button
+                                        key={day}
+                                        type="button"
+                                        disabled={!canManage}
+                                        onClick={() => toggleDayOnSubject(sub.id, day)}
+                                        className={`px-2 py-1 rounded border text-[11px] font-medium ${
+                                          active
+                                            ? 'bg-slate-900 text-white border-slate-900'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                        }`}
+                                      >
+                                        {day.slice(0, 3)}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {weekdays.map((day) => {
-                                  const active = draft.allowedDays.includes(day);
-                                  return (
-                                    <button
-                                      key={day}
-                                      type="button"
-                                      disabled={!canManage}
-                                      onClick={() => toggleDayOnSubject(sub.id, day)}
-                                      className={`px-2.5 py-1 rounded border text-xs font-medium ${
-                                        active
-                                          ? 'bg-slate-900 text-white border-slate-900'
-                                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                                      }`}
-                                    >
-                                      {day.slice(0, 3)}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            <div>
-                              <div className="font-semibold text-slate-700 mb-1">
-                                Allocated Periods (leave empty for any period)
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {regularPeriodNumbers.map((p) => {
-                                  const active = draft.allowedPeriods.includes(p);
-                                  return (
-                                    <button
-                                      key={p}
-                                      type="button"
-                                      disabled={!canManage}
-                                      onClick={() => togglePeriodOnSubject(sub.id, p)}
-                                      className={`w-8 h-7 rounded border font-mono text-xs font-medium ${
-                                        active
-                                          ? 'bg-slate-900 text-white border-slate-900'
-                                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
-                                      }`}
-                                    >
-                                      P{p}
-                                    </button>
-                                  );
-                                })}
+                              <div>
+                                <div className="font-semibold text-slate-700 mb-1">
+                                  Allowed Periods (empty = any period)
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {regularPeriodNumbers.map((pNum) => {
+                                    const active = draft.allowedPeriods.includes(pNum);
+                                    return (
+                                      <button
+                                        key={pNum}
+                                        type="button"
+                                        disabled={!canManage}
+                                        onClick={() => togglePeriodOnSubject(sub.id, pNum)}
+                                        className={`w-7 h-7 rounded border font-mono text-[11px] font-medium ${
+                                          active
+                                            ? 'bg-slate-900 text-white border-slate-900'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                        }`}
+                                      >
+                                        P{pNum}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1053,177 +1127,6 @@ export const SubjectAllocationTable: React.FC<Props> = ({
                   </React.Fragment>
                 );
               })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-slate-50 border-t-2 border-slate-200 font-semibold text-slate-900 text-sm">
-                <td className="py-3 px-4" colSpan={2}>
-                  Weekly Allocation Total ({categories.find((c) => c.id === activeCategory)?.label})
-                </td>
-                <td className="py-3 px-4 text-center font-mono tabular-nums">
-                  {totals.regularAllocated} / {availableRegularPeriods} regular
-                  {totals.remedialTotal > 0 && (
-                    <span className="text-xs font-normal text-slate-500 block">
-                      +{totals.remedialTotal} remedial
-                    </span>
-                  )}
-                </td>
-                <td className="py-3 px-4 font-mono tabular-nums text-xs" colSpan={2}>
-                  Remaining Available Periods:{' '}
-                  <span
-                    className={
-                      totals.remainingRegular < 0
-                        ? 'text-red-600'
-                        : totals.remainingRegular === 0
-                          ? 'text-emerald-700'
-                          : 'text-amber-700'
-                    }
-                  >
-                    {totals.remainingRegular}
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* Live Stream Redistribution & Strictly Linked Teacher Matrix */}
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Link2 className="w-4 h-4 text-slate-600" />
-              <span>
-                Stream Redistribution & Linked Teacher Matrix (
-                {categories.find((c) => c.id === activeCategory)?.shortLabel})
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Every active stream-subject demand feeding the timetable generator. Strictly enforces
-              one linked teacher per stream-subject with zero duplicate ownership or overload
-              collisions.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <label className="text-slate-600 font-medium">Filter Stream:</label>
-            <select
-              value={selectedMatrixStream}
-              onChange={(e) => setSelectedMatrixStream(e.target.value)}
-              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded text-slate-900"
-            >
-              <option value="all">All Streams ({categoryStreams.length})</option>
-              {categoryStreams.map((st) => (
-                <option key={`${st.grade}::${st.stream}`} value={`${st.grade}::${st.stream}`}>
-                  Grade {st.grade} · {st.stream}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600 uppercase tracking-wider">
-                <th className="py-2.5 px-4">Grade & Stream</th>
-                <th className="py-2.5 px-4">Subject / Activity</th>
-                <th className="py-2.5 px-4 text-center">Lessons / Wk</th>
-                <th className="py-2.5 px-4">Linked Teacher</th>
-                <th className="py-2.5 px-4">Status</th>
-                {canManage && <th className="py-2.5 px-4 text-right">Strict Link / Reassign</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {categoryResolvedAllocations.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={canManage ? 6 : 5}
-                    className="py-8 px-4 text-center text-slate-500"
-                  >
-                    {activeMode === 'category_redistribution'
-                      ? 'Allocate lessons per week above and click Save Allocations or Redistribute to Streams to populate stream demands.'
-                      : 'No individual teacher stream assignments found for this category yet. Use the Teachers & Supervisors tab to assign teachers individually.'}
-                  </td>
-                </tr>
-              ) : (
-                categoryResolvedAllocations.map((ra) => {
-                  const rowKey = `${ra.grade}::${ra.stream}::${ra.subjectId}`;
-                  const selectedT = inlineTeacherPick[rowKey] ?? ra.teacherId ?? '';
-                  return (
-                    <tr key={rowKey} className="hover:bg-slate-50/70">
-                      <td className="py-2.5 px-4 font-medium text-slate-900">
-                        Grade {ra.grade} · {ra.stream}
-                      </td>
-                      <td className="py-2.5 px-4 font-medium text-slate-800">{ra.subjectName}</td>
-                      <td className="py-2.5 px-4 text-center font-mono font-semibold text-slate-900 tabular-nums">
-                        {ra.lessonsPerWeek}
-                      </td>
-                      <td className="py-2.5 px-4">
-                        {ra.status === 'linked' ? (
-                          <span className="font-medium text-slate-900">{ra.teacherName}</span>
-                        ) : ra.status === 'duplicate_conflict' ? (
-                          <span className="text-red-700 font-semibold">
-                            Conflict: {ra.conflictTeachers.join(' vs ')}
-                          </span>
-                        ) : (
-                          <span className="text-amber-700 font-medium">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-4">
-                        {ra.status === 'linked' ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Linked
-                          </span>
-                        ) : ra.status === 'duplicate_conflict' ? (
-                          <span className="inline-flex items-center gap-1 text-red-700 font-semibold">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            Duplicate Conflict
-                          </span>
-                        ) : (
-                          <span className="text-amber-700 font-medium">Needs Teacher</span>
-                        )}
-                      </td>
-                      {canManage && (
-                        <td className="py-2.5 px-4 text-right">
-                          <div className="inline-flex items-center justify-end gap-1.5">
-                            <select
-                              value={selectedT}
-                              onChange={(e) =>
-                                setInlineTeacherPick((prev) => ({
-                                  ...prev,
-                                  [rowKey]: e.target.value,
-                                }))
-                              }
-                              className="px-2 py-1 bg-white border border-slate-300 rounded text-xs text-slate-900 max-w-[180px]"
-                            >
-                              <option value="">Select teacher...</option>
-                              {teachers.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              disabled={!selectedT || linkingKey === rowKey}
-                              onClick={() => handleInlineLinkTeacher(ra)}
-                              className="px-2.5 py-1 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 disabled:opacity-40 whitespace-nowrap shrink-0"
-                            >
-                              {linkingKey === rowKey
-                                ? 'Linking...'
-                                : ra.status === 'linked'
-                                  ? 'Update'
-                                  : 'Link'}
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
             </tbody>
           </table>
         </div>

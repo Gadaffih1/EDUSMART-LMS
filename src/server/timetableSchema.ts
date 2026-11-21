@@ -8,6 +8,7 @@ export type TimetableSubjectKind = 'core' | 'common_activity' | 'remedial';
 export type FacilityType =
   | 'computer_lab'
   | 'ict_robotics_lab'
+  | 'science_lab'
   | 'library'
   | 'swimming_pool'
   | 'maktaba_room'
@@ -37,7 +38,7 @@ export interface PeriodSlotDefinition {
   startTime: string;
   endTime: string;
   durationMins: number;
-  slotType: 'regular' | 'remedial';
+  slotType: 'regular' | 'break' | 'lunch' | 'remedial';
 }
 
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
@@ -140,9 +141,14 @@ export function getCategoryForGrade(grade: number): TimetableCategoryId {
   return 'cat_7_9';
 }
 
-export function buildDefaultPeriodSlots(periodsPerDay: number, durationMins: number): PeriodSlotDefinition[] {
+export function buildDefaultPeriodSlots(
+  periodsPerDay: number,
+  durationMins: number,
+  startHour = 8,
+  startMinute = 0
+): PeriodSlotDefinition[] {
   const slots: PeriodSlotDefinition[] = [];
-  let cursorMins = 8 * 60; // 08:00 start
+  let cursorMins = startHour * 60 + startMinute;
 
   const formatTime = (totalMins: number): string => {
     const h = Math.floor(totalMins / 60) % 24;
@@ -151,10 +157,48 @@ export function buildDefaultPeriodSlots(periodsPerDay: number, durationMins: num
   };
 
   for (let p = 1; p <= periodsPerDay; p++) {
-    // Short break after Period 2 (15m), Tea break after Period 4 (25m), Lunch break after Period 6 (45m)
-    if (p === 3) cursorMins += 15;
-    if (p === 5) cursorMins += 25;
-    if (p === 7) cursorMins += 45;
+    // Short break after Period 2 (15 mins)
+    if (p === 3) {
+      const bStart = formatTime(cursorMins);
+      cursorMins += 15;
+      const bEnd = formatTime(cursorMins);
+      slots.push({
+        periodNumber: -1,
+        label: 'Short Break',
+        startTime: bStart,
+        endTime: bEnd,
+        durationMins: 15,
+        slotType: 'break',
+      });
+    }
+    // Mid-Morning Break after Period 4 (25 mins)
+    if (p === 5) {
+      const bStart = formatTime(cursorMins);
+      cursorMins += 25;
+      const bEnd = formatTime(cursorMins);
+      slots.push({
+        periodNumber: -2,
+        label: 'Mid-Morning Break',
+        startTime: bStart,
+        endTime: bEnd,
+        durationMins: 25,
+        slotType: 'break',
+      });
+    }
+    // Lunch Break after Period 6 (45 mins)
+    if (p === 7) {
+      const lStart = formatTime(cursorMins);
+      cursorMins += 45;
+      const lEnd = formatTime(cursorMins);
+      slots.push({
+        periodNumber: -3,
+        label: 'Lunch Break',
+        startTime: lStart,
+        endTime: lEnd,
+        durationMins: 45,
+        slotType: 'lunch',
+      });
+    }
 
     const start = formatTime(cursorMins);
     cursorMins += durationMins;
@@ -375,6 +419,17 @@ export function initTimetableSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_tt_entries_stream ON tt_entries(version_id, grade, stream, day_of_week, period_number);
     CREATE INDEX IF NOT EXISTS idx_tt_entries_teacher ON tt_entries(version_id, teacher_id, day_of_week, period_number);
     CREATE INDEX IF NOT EXISTS idx_tt_entries_facility ON tt_entries(version_id, facility_id, day_of_week, period_number);
+
+    CREATE TABLE IF NOT EXISTS tt_grade_subject_overrides (
+      school_id TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      grade INTEGER NOT NULL,
+      subject_id TEXT NOT NULL,
+      lessons_per_week INTEGER NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (school_id, grade, subject_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tt_grade_overrides_school ON tt_grade_subject_overrides(school_id, category_id, grade);
   `);
 
   const ensureColumn = (tableName: string, columnName: string, alterSql: string) => {
@@ -473,6 +528,14 @@ export function ensureTimetableSeedForSchool(db: DatabaseSync, schoolId: string)
         equipment: ['25m 6-Lane Pool', 'Kickboards', 'Lifeguard Rescue Kit', 'Changing Rooms'],
         notes: 'Shared aquatics facility for Swimming across Categories 1–3.',
       },
+      {
+        name: 'Integrated Science Laboratory',
+        facilityType: 'science_lab',
+        capacityStreams: 1,
+        seatCapacity: 40,
+        equipment: ['Lab Benches', 'Microscopes', 'Bunsen Burners', 'Safety Shower'],
+        notes: 'Shared science laboratory for practical Integrated Science sessions.',
+      },
     ];
 
     const insertFac = db.prepare(`
@@ -507,6 +570,31 @@ export function ensureTimetableSeedForSchool(db: DatabaseSync, schoolId: string)
     for (const f of existingFacs) {
       if (!defaultFacilityIdsByType[f.facility_type]) {
         defaultFacilityIdsByType[f.facility_type] = f.id;
+      }
+    }
+    // Upgrade already-seeded schools with Integrated Science Laboratory if absent
+    if (!defaultFacilityIdsByType.science_lab) {
+      const anySciLab = db
+        .prepare("SELECT id FROM tt_facilities WHERE school_id = ? AND facility_type = 'science_lab' LIMIT 1")
+        .get(schoolId) as { id: string } | undefined;
+      if (!anySciLab) {
+        const id = `fac_${crypto.randomBytes(6).toString('hex')}`;
+        defaultFacilityIdsByType.science_lab = id;
+        db.prepare(`
+          INSERT INTO tt_facilities (
+            id, school_id, name, facility_type, capacity_streams, seat_capacity,
+            equipment_json, available_days_json, available_periods_json, notes, is_active, updated_at
+          ) VALUES (?, ?, ?, 'science_lab', 1, 40, ?, ?, ?, ?, 1, ?)
+        `).run(
+          id,
+          schoolId,
+          'Integrated Science Laboratory',
+          JSON.stringify(['Lab Benches', 'Microscopes', 'Bunsen Burners', 'Safety Shower']),
+          JSON.stringify([...WEEKDAYS]),
+          JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+          'Shared science laboratory for practical Integrated Science sessions.',
+          now
+        );
       }
     }
   }

@@ -1966,7 +1966,9 @@ export const ParentWorkspace: React.FC<ParentWorkspaceProps> = ({ currentUser, o
       {activeTab === 'timetable' && (
         <TimetablePortal
           user={selectedChild || currentUser}
+          schoolId={currentTenant.id}
           schoolName={currentTenant.name}
+          schoolLogoUrl={currentTenant.logoUrl}
         />
       )}
 

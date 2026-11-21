@@ -503,7 +503,12 @@ export const HeadTeacherWorkspace: React.FC<HeadTeacherWorkspaceProps> = ({ curr
       )}
 
       {activeTab === 'timetable' && (
-        <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
+        <TimetablePortal
+          user={currentUser}
+          schoolId={currentTenant.id}
+          schoolName={currentTenant.name}
+          schoolLogoUrl={currentTenant.logoUrl}
+        />
       )}
         </main>
       </div>

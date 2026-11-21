@@ -14,6 +14,7 @@ import {
 } from './timetableTypes';
 
 interface Props {
+  schoolId?: string;
   categories: TimetableCategoryMeta[];
   weekdays: string[];
   scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export const RemedialConfigPanel: React.FC<Props> = ({
+  schoolId,
   categories,
   weekdays,
   scheduleConfigs,
@@ -142,29 +144,33 @@ export const RemedialConfigPanel: React.FC<Props> = ({
     setSaving(true);
     setFeedback(null);
     try {
-      await ttApiFetch('/api/timetable/remedials', {
-        method: 'POST',
-        body: JSON.stringify({
-          remedialType,
-          grade: activeStream.grade,
-          stream: activeStream.stream,
-          weeklyFrequency,
-          teacherId: teacher.id,
-          teacherName: teacher.name,
-          studentGroupMode,
-          studentGroupName:
-            studentGroupName.trim() ||
-            (studentGroupMode === 'whole_stream'
-              ? `Grade ${activeStream.grade} ${activeStream.stream} (Whole Stream)`
-              : `${remedialType === 'remedial_1' ? 'Remedial 1' : 'Remedial 2'} Group`),
-          studentIds: studentGroupMode === 'selected_learners' ? selectedStudentIds : [],
-          durationMins,
-          availableDays,
-          availablePeriods,
-          facilityId: facilityId || null,
-          notes,
-        }),
-      });
+      await ttApiFetch(
+        '/api/timetable/remedials',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            remedialType,
+            grade: activeStream.grade,
+            stream: activeStream.stream,
+            weeklyFrequency,
+            teacherId: teacher.id,
+            teacherName: teacher.name,
+            studentGroupMode,
+            studentGroupName:
+              studentGroupName.trim() ||
+              (studentGroupMode === 'whole_stream'
+                ? `Grade ${activeStream.grade} ${activeStream.stream} (Whole Stream)`
+                : `${remedialType === 'remedial_1' ? 'Remedial 1' : 'Remedial 2'} Group`),
+            studentIds: studentGroupMode === 'selected_learners' ? selectedStudentIds : [],
+            durationMins,
+            availableDays,
+            availablePeriods,
+            facilityId: facilityId || null,
+            notes,
+          }),
+        },
+        schoolId
+      );
       await onRefresh();
       setFeedback({
         type: 'ok',
@@ -183,7 +189,7 @@ export const RemedialConfigPanel: React.FC<Props> = ({
   const handleDelete = async (id: string) => {
     if (!canManage) return;
     try {
-      await ttApiFetch(`/api/timetable/remedials/${id}`, { method: 'DELETE' });
+      await ttApiFetch(`/api/timetable/remedials/${id}`, { method: 'DELETE' }, schoolId);
       await onRefresh();
       setFeedback({ type: 'ok', text: 'Remedial configuration deleted.' });
     } catch (err: any) {
@@ -454,7 +460,9 @@ export const RemedialConfigPanel: React.FC<Props> = ({
                   Available Periods (including Remedial Slot)
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {(activeScheduleConfig?.periods || []).map((slot) => {
+                  {(activeScheduleConfig?.periods || [])
+                    .filter((slot) => slot.slotType === 'regular' || slot.slotType === 'remedial')
+                    .map((slot) => {
                     const active = availablePeriods.includes(slot.periodNumber);
                     return (
                       <button

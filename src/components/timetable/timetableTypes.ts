@@ -5,6 +5,7 @@ export type TimetableSubjectKind = 'core' | 'common_activity' | 'remedial';
 export type FacilityType =
   | 'computer_lab'
   | 'ict_robotics_lab'
+  | 'science_lab'
   | 'library'
   | 'swimming_pool'
   | 'maktaba_room'
@@ -30,7 +31,26 @@ export interface PeriodSlotDefinition {
   startTime: string;
   endTime: string;
   durationMins: number;
-  slotType: 'regular' | 'remedial';
+  slotType: 'regular' | 'break' | 'lunch' | 'remedial';
+}
+
+export interface SchoolBrandInfo {
+  id: string;
+  name: string;
+  logoUrl: string;
+  address: string;
+  city: string;
+  phone: string;
+  email: string;
+  motto: string;
+  printFooterNotes: string;
+}
+
+export interface GradeSubjectOverride {
+  categoryId: TimetableCategoryId;
+  grade: number;
+  subjectId: string;
+  lessonsPerWeek: number;
 }
 
 export interface ScheduleConfig {
@@ -294,10 +314,12 @@ export interface TimetableAuditReport {
 
 export interface TimetableBootstrapResponse {
   schoolId: string;
+  school?: SchoolBrandInfo;
   categories: TimetableCategoryMeta[];
   weekdays: string[];
   scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
   subjects: TimetableSubject[];
+  gradeOverrides?: GradeSubjectOverride[];
   facilities: TimetableFacility[];
   teacherAssignments: TimetableTeacherAssignment[];
   remedialConfigs: TimetableRemedialConfig[];
@@ -314,6 +336,7 @@ export interface TimetableBootstrapResponse {
 export const FACILITY_TYPE_LABELS: Record<FacilityType, string> = {
   computer_lab: 'Computer Laboratory',
   ict_robotics_lab: 'ICT / Robotics Lab',
+  science_lab: 'Science Laboratory',
   library: 'Library',
   swimming_pool: 'Swimming Pool',
   maktaba_room: 'Maktaba Room',
@@ -321,9 +344,16 @@ export const FACILITY_TYPE_LABELS: Record<FacilityType, string> = {
   general_room: 'General Room',
 };
 
+export function withTenantQuery(url: string, tenantId?: string): string {
+  if (!tenantId) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}tenantId=${encodeURIComponent(tenantId)}`;
+}
+
 export async function ttApiFetch<T = any>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  tenantId?: string
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -331,7 +361,7 @@ export async function ttApiFetch<T = any>(
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  const response = await fetch(url, {
+  const response = await fetch(withTenantQuery(url, tenantId), {
     ...options,
     headers,
     credentials: 'include',

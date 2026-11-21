@@ -26,9 +26,11 @@ import {
 import {
   generateTimetableSchedule,
   resolveEffectiveStreamAllocations,
+  validateSingleEntryEdit,
   validateTimetableEntries,
   validateTimetableReadiness,
   type EngineFacility,
+  type EngineGradeSubjectOverride,
   type EngineInput,
   type EngineRemedialConfig,
   type EngineScheduleConfig,
@@ -39,7 +41,9 @@ import {
 } from './timetableEngine.ts';
 
 const TIMETABLE_ADMIN_ROLES = new Set([
+  'super_admin',
   'admin',
+  'principal',
   'head_teacher',
   'deputy_head',
   'dean_of_studies',
@@ -58,6 +62,7 @@ const VALID_ALLOCATION_SOURCES = new Set<AssignmentAllocationSource>([
 const VALID_FACILITY_TYPES = new Set<FacilityType>([
   'computer_lab',
   'ict_robotics_lab',
+  'science_lab',
   'library',
   'swimming_pool',
   'maktaba_room',
@@ -121,6 +126,38 @@ interface DirectoryStudent {
   admissionNumber: string;
   grade: number;
   stream: string;
+}
+
+export interface SchoolBrandInfo {
+  id: string;
+  name: string;
+  logoUrl: string;
+  address: string;
+  city: string;
+  phone: string;
+  email: string;
+  motto: string;
+  printFooterNotes: string;
+}
+
+function loadSchoolBrandInfo(schoolId: string): SchoolBrandInfo {
+  const db = getDb();
+  const row = db
+    .prepare('SELECT id, name, payload_json FROM tenants WHERE id = ?')
+    .get(schoolId) as { id: string; name: string; payload_json?: string | null } | undefined;
+
+  const payload = safeParseJson<Record<string, any>>(row?.payload_json, {});
+  return {
+    id: row?.id || schoolId,
+    name: String(payload.name || row?.name || 'EduSmart School'),
+    logoUrl: String(payload.logoUrl || ''),
+    address: String(payload.address || ''),
+    city: String(payload.city || ''),
+    phone: String(payload.phone || ''),
+    email: String(payload.email || ''),
+    motto: String(payload.motto || ''),
+    printFooterNotes: String(payload.printFooterNotes || ''),
+  };
 }
 
 function loadSchoolDirectory(schoolId: string): {
@@ -198,6 +235,7 @@ function loadSchoolDirectory(schoolId: string): {
        FROM streams s
        JOIN grades g ON g.id = s.grade_id
        WHERE s.school_id = ? AND s.is_active = 1 AND g.is_active = 1
+         AND g.name NOT LIKE 'E2E %'
        ORDER BY g.grade_number ASC, s.name ASC`
     )
     .all(schoolId) as Array<{
@@ -210,7 +248,7 @@ function loadSchoolDirectory(schoolId: string): {
     const g = parseGradeNumber(row.grade_number ?? row.grade_name);
     if (!g) continue;
     const st = row.stream_name.trim();
-    if (!st) continue;
+    if (!st || /^e2e\b/i.test(st)) continue;
     const key = `${g}::${st.toLowerCase()}`;
     if (!streamKeyMap.has(key)) {
       streamKeyMap.set(key, {
@@ -228,7 +266,7 @@ function loadSchoolDirectory(schoolId: string): {
         `SELECT sg.name as grade_name, ss.name as stream_name
          FROM school_streams ss
          JOIN school_grades sg ON sg.id = ss.grade_id
-         WHERE ss.school_id = ?
+         WHERE ss.school_id = ? AND sg.name NOT LIKE 'E2E %'
          ORDER BY sg.name ASC, ss.name ASC`
       )
       .all(schoolId) as Array<{ grade_name: string; stream_name: string }>;
@@ -237,7 +275,33 @@ function loadSchoolDirectory(schoolId: string): {
       const g = parseGradeNumber(row.grade_name);
       if (!g) continue;
       const st = row.stream_name.trim();
-      if (!st) continue;
+      if (!st || /^e2e\b/i.test(st)) continue;
+      const key = `${g}::${st.toLowerCase()}`;
+      if (!streamKeyMap.has(key)) {
+        streamKeyMap.set(key, {
+          grade: g,
+          stream: st,
+          categoryId: getCategoryForGrade(g),
+          studentIds: [],
+        });
+      }
+    }
+  }
+
+  // Also include streams explicitly referenced in active staff profiles (users.payload_json)
+  const staffStreamRows = db
+    .prepare(
+      `SELECT payload_json FROM users
+       WHERE school_id = ? AND is_active = 1 AND payload_json IS NOT NULL`
+    )
+    .all(schoolId) as Array<{ payload_json: string }>;
+  for (const sr of staffStreamRows) {
+    const payload = safeParseJson<Record<string, any>>(sr.payload_json, {});
+    const assignedStreams = Array.isArray(payload.assignedStreams) ? payload.assignedStreams : [];
+    for (const asItem of assignedStreams) {
+      const g = parseGradeNumber(asItem?.grade);
+      const st = typeof asItem?.stream === 'string' ? asItem.stream.trim() : '';
+      if (!g || !st || /^e2e\b/i.test(st)) continue;
       const key = `${g}::${st.toLowerCase()}`;
       if (!streamKeyMap.has(key)) {
         streamKeyMap.set(key, {
@@ -366,15 +430,21 @@ function loadEngineInput(schoolId: string): {
       )
         ? (row.allocation_mode as AllocationProcessingMode)
         : 'category_redistribution';
+      const parsedPeriods = safeParseJson<PeriodSlotDefinition[]>(
+        row.periods_json,
+        buildDefaultPeriodSlots(row.periods_per_day, row.period_duration_mins)
+      );
+      const hasBreaks = parsedPeriods.some((p) => p.slotType === 'break' || p.slotType === 'lunch');
+      const normalizedPeriods = hasBreaks
+        ? parsedPeriods
+        : buildDefaultPeriodSlots(row.periods_per_day, row.period_duration_mins);
+
       scheduleConfigs[cat.id] = {
         categoryId: cat.id,
         days: safeParseJson<string[]>(row.days_json, [...WEEKDAYS]),
         periodsPerDay: row.periods_per_day,
         periodDurationMins: row.period_duration_mins,
-        periods: safeParseJson<PeriodSlotDefinition[]>(
-          row.periods_json,
-          buildDefaultPeriodSlots(row.periods_per_day, row.period_duration_mins)
-        ),
+        periods: normalizedPeriods,
         allocationMode: mode,
       };
     } else {
@@ -461,6 +531,201 @@ function loadEngineInput(schoolId: string): {
     isActive: Boolean(r.is_active),
   }));
 
+  // Bridge existing EduSmart LMS teacher assignments from `users.payload_json` & `grade_teacher_assignments`
+  // (Requirement 8: read existing teacher subject/grade/stream assignments directly; never invent them).
+  const matchSubjectsInCategory = (
+    catId: TimetableCategoryId,
+    rawSubjectName: string
+  ): EngineSubject[] => {
+    const clean = rawSubjectName.trim().toLowerCase();
+    if (!clean) return [];
+    const catSubs = subjects.filter((s) => s.categoryId === catId && s.isActive);
+    const exact = catSubs.find(
+      (s) => s.name.toLowerCase() === clean || s.code.toLowerCase() === clean
+    );
+    if (exact) return [exact];
+
+    const synonymMap: Record<string, string[]> = {
+      mathematics: ['mathematics', 'mathematical_activities'],
+      math: ['mathematics', 'mathematical_activities'],
+      english: ['english', 'english_activities'],
+      kiswahili: ['kiswahili', 'kiswahili_ksl'],
+      science: ['integrated_science', 'environmental_activities'],
+      'integrated science': ['integrated_science'],
+      'pretechnical education': ['pretechnical_studies'],
+      'pre-technical studies': ['pretechnical_studies'],
+      'pre-technical education': ['pretechnical_studies'],
+      'agriculture and nutrition': ['agriculture', 'nutrition'],
+      'agriculture & nutrition': ['agriculture', 'nutrition'],
+      'creative arts and sports': ['creative_arts', 'phe_sports', 'movement_creative_activities'],
+      cre: ['religious_education'],
+      ire: ['religious_education'],
+      hre: ['religious_education'],
+      ict: ['ict_robotics', 'computer_studies'],
+      'computer science': ['computer_studies'],
+      library: ['library_lessons'],
+      phe: ['phe_sports'],
+      sports: ['phe_sports'],
+    };
+
+    const targetCodes = synonymMap[clean];
+    if (targetCodes) {
+      const matched = catSubs.filter((s) => targetCodes.includes(s.code));
+      if (matched.length > 0) return matched;
+    }
+
+    const partial = catSubs.find(
+      (s) => s.name.toLowerCase().includes(clean) || clean.includes(s.name.toLowerCase())
+    );
+    return partial ? [partial] : [];
+  };
+
+  const existingScopeKeys = new Set<string>(
+    teacherAssignments
+      .filter((a) => a.isActive)
+      .map(
+        (a) =>
+          `${a.categoryId}::${a.subjectId}::${a.grade ?? 'all'}::${(a.stream || '').trim().toLowerCase()}`
+      )
+  );
+
+  // Also avoid bridging if an explicit timetable assignment already owns that (category, subject, grade, stream)
+  const addBridgedAssignment = (
+    teacherId: string,
+    teacherName: string,
+    teacherEmail: string,
+    grade: number,
+    stream: string | null,
+    subjectName: string
+  ) => {
+    const catId = getCategoryForGrade(grade);
+    const matchedSubs = matchSubjectsInCategory(catId, subjectName);
+    for (const sub of matchedSubs) {
+      const scopeKey = `${catId}::${sub.id}::${grade}::${(stream || '').trim().toLowerCase()}`;
+      if (existingScopeKeys.has(scopeKey)) continue;
+      existingScopeKeys.add(scopeKey);
+      teacherAssignments.push({
+        id: `lms_${teacherId}_${catId}_${sub.code}_g${grade}_${(stream || 'all').replace(/\s+/g, '')}`,
+        teacherId,
+        teacherName,
+        teacherEmail,
+        categoryId: catId,
+        subjectId: sub.id,
+        grade,
+        stream,
+        lessonsPerWeek: null,
+        allocationSource: 'category_redistribution',
+        roleType: 'subject_teacher',
+        maxWeeklyPeriods: 28,
+        facilityId: sub.defaultFacilityId,
+        equipmentNotes: '',
+        allowedDays: [],
+        allowedPeriods: [],
+        isActive: true,
+      });
+    }
+  };
+
+  // Source A: `users.payload_json` (`assignedSubjectAllocations`, `assignedSubjects` + `assignedStreams`)
+  const staffPayloadRows = db
+    .prepare(
+      `SELECT id, name, email, payload_json
+       FROM users
+       WHERE school_id = ? AND is_active = 1 AND payload_json IS NOT NULL`
+    )
+    .all(schoolId) as Array<{ id: string; name: string; email: string; payload_json: string }>;
+
+  for (const row of staffPayloadRows) {
+    const payload = safeParseJson<Record<string, any>>(row.payload_json, {});
+    const explicitAllocs = Array.isArray(payload.assignedSubjectAllocations)
+      ? payload.assignedSubjectAllocations
+      : [];
+    for (const al of explicitAllocs) {
+      const g = parseGradeNumber(al?.grade);
+      const subName = typeof al?.subject === 'string' ? al.subject : '';
+      const st = typeof al?.stream === 'string' && al.stream.trim() ? al.stream.trim() : null;
+      if (g && subName) {
+        addBridgedAssignment(row.id, row.name, row.email || '', g, st, subName);
+      }
+    }
+
+    const assignedSubjects: string[] = Array.isArray(payload.assignedSubjects)
+      ? payload.assignedSubjects.filter((s: unknown) => typeof s === 'string' && s.trim())
+      : [];
+    const assignedStreams: Array<{ grade?: number | string; stream?: string }> = Array.isArray(
+      payload.assignedStreams
+    )
+      ? payload.assignedStreams
+      : [];
+
+    if (assignedSubjects.length > 0 && assignedStreams.length > 0) {
+      for (const stObj of assignedStreams) {
+        const g = parseGradeNumber(stObj?.grade);
+        const stName =
+          typeof stObj?.stream === 'string' && stObj.stream.trim() ? stObj.stream.trim() : null;
+        if (!g) continue;
+        for (const subName of assignedSubjects) {
+          addBridgedAssignment(row.id, row.name, row.email || '', g, stName, subName);
+        }
+      }
+    }
+  }
+
+  // Source B: `grade_teacher_assignments` table
+  try {
+    const gtaRows = db
+      .prepare(
+        `SELECT gta.teacher_id, gta.subject_name, gta.grade_label, gta.stream_name,
+                u.name as teacher_name, u.email as teacher_email
+         FROM grade_teacher_assignments gta
+         LEFT JOIN users u ON u.id = gta.teacher_id
+         WHERE gta.school_id = ? AND gta.is_active = 1`
+      )
+      .all(schoolId) as Array<{
+      teacher_id: string;
+      subject_name: string | null;
+      grade_label: string | null;
+      stream_name: string | null;
+      teacher_name: string | null;
+      teacher_email: string | null;
+    }>;
+
+    for (const gta of gtaRows) {
+      const g = parseGradeNumber(gta.grade_label);
+      if (!g || !gta.subject_name || !gta.teacher_id) continue;
+      const tName =
+        gta.teacher_name ||
+        directory.teachers.find((t) => t.id === gta.teacher_id)?.name ||
+        gta.teacher_id;
+      const st = gta.stream_name && gta.stream_name.trim() ? gta.stream_name.trim() : null;
+      addBridgedAssignment(gta.teacher_id, tName, gta.teacher_email || '', g, st, gta.subject_name);
+    }
+  } catch {
+    // Table may not have matching columns on older DBs; safely ignore
+  }
+
+  // Load optional grade-specific subject overrides
+  const overrideRows = db
+    .prepare(
+      `SELECT category_id, grade, subject_id, lessons_per_week
+       FROM tt_grade_subject_overrides
+       WHERE school_id = ?
+       ORDER BY grade ASC`
+    )
+    .all(schoolId) as Array<{
+    category_id: TimetableCategoryId;
+    grade: number;
+    subject_id: string;
+    lessons_per_week: number;
+  }>;
+
+  const gradeOverrides: EngineGradeSubjectOverride[] = overrideRows.map((r) => ({
+    categoryId: r.category_id,
+    grade: Number(r.grade),
+    subjectId: r.subject_id,
+    lessonsPerWeek: Number(r.lessons_per_week) || 0,
+  }));
+
   const remRows = db
     .prepare(
       'SELECT * FROM tt_remedial_configs WHERE school_id = ? ORDER BY category_id ASC, grade ASC, stream ASC, remedial_type ASC'
@@ -496,6 +761,7 @@ function loadEngineInput(schoolId: string): {
       teacherAssignments,
       remedialConfigs,
       streams: directory.streams,
+      gradeOverrides,
     },
     teachers: directory.teachers,
     students: directory.students,
@@ -585,13 +851,16 @@ export function registerTimetableRoutes(app: Express): void {
 
       const entries = activeVersion ? loadVersionEntries(schoolId, activeVersion.id) : [];
       const audit = validateTimetableEntries(input, entries);
+      const school = loadSchoolBrandInfo(schoolId);
 
       return res.json({
         schoolId,
+        school,
         categories: TIMETABLE_CATEGORIES,
         weekdays: [...WEEKDAYS],
         scheduleConfigs: input.scheduleConfigs,
         subjects: input.subjects,
+        gradeOverrides: input.gradeOverrides ?? [],
         facilities: input.facilities,
         teacherAssignments: input.teacherAssignments,
         remedialConfigs: input.remedialConfigs,
@@ -620,6 +889,7 @@ export function registerTimetableRoutes(app: Express): void {
     try {
       const db = getDb();
       const { input } = loadEngineInput(schoolId);
+      const school = loadSchoolBrandInfo(schoolId);
       const published = db
         .prepare(
           `SELECT id, name, term_label, academic_year, status, created_by, created_at, published_at
@@ -634,6 +904,7 @@ export function registerTimetableRoutes(app: Express): void {
 
       return res.json({
         schoolId,
+        school,
         categories: TIMETABLE_CATEGORIES,
         weekdays: [...WEEKDAYS],
         scheduleConfigs: input.scheduleConfigs,
@@ -1118,7 +1389,70 @@ export function registerTimetableRoutes(app: Express): void {
     return res.json({
       ok: true,
       subjects: input.subjects.filter((s) => s.categoryId === categoryId),
+      gradeOverrides: input.gradeOverrides ?? [],
       categoryTotals: readiness.categoryTotals,
+      readiness,
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // PUT /api/timetable/grade-overrides/:categoryId
+  // Optional grade-specific weekly lesson overrides within a category
+  // -------------------------------------------------------------------------
+  app.put('/api/timetable/grade-overrides/:categoryId', requireAuth, (req: Request, res: Response) => {
+    const session = req.authSession!;
+    if (!isTimetableAdmin(session)) {
+      return res.status(403).json({ error: 'Administrator privileges required.' });
+    }
+    const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
+    if (!schoolId) return;
+
+    const categoryId = req.params.categoryId as TimetableCategoryId;
+    if (!VALID_CATEGORIES.has(categoryId)) {
+      return res.status(400).json({ error: 'Invalid category ID.' });
+    }
+
+    const overrides = req.body?.overrides;
+    if (!Array.isArray(overrides)) {
+      return res.status(400).json({ error: 'Overrides array is required.' });
+    }
+
+    const db = getDb();
+    ensureTimetableSeedForSchool(db, schoolId);
+    const now = new Date().toISOString();
+
+    const upsertStmt = db.prepare(`
+      INSERT INTO tt_grade_subject_overrides (school_id, category_id, grade, subject_id, lessons_per_week, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(school_id, grade, subject_id) DO UPDATE SET
+        lessons_per_week = excluded.lessons_per_week,
+        updated_at = excluded.updated_at
+    `);
+    const deleteStmt = db.prepare(
+      'DELETE FROM tt_grade_subject_overrides WHERE school_id = ? AND grade = ? AND subject_id = ?'
+    );
+
+    for (const item of overrides) {
+      if (!item || typeof item.subjectId !== 'string') continue;
+      const grade = Math.trunc(Number(item.grade));
+      if (!Number.isInteger(grade) || getCategoryForGrade(grade) !== categoryId) continue;
+
+      if (item.lessonsPerWeek === null || item.lessonsPerWeek === '' || item.lessonsPerWeek === undefined) {
+        deleteStmt.run(schoolId, grade, item.subjectId);
+      } else {
+        const lessons = Math.max(0, Math.min(30, Math.trunc(Number(item.lessonsPerWeek) || 0)));
+        upsertStmt.run(schoolId, categoryId, grade, item.subjectId, lessons, now);
+      }
+    }
+
+    notifyMySqlTablesChanged(['tt_grade_subject_overrides']);
+    emitTimetableBroadcast(schoolId, session.userId, 'record:updated', categoryId);
+
+    const { input } = loadEngineInput(schoolId);
+    const readiness = validateTimetableReadiness(input);
+    return res.json({
+      ok: true,
+      gradeOverrides: input.gradeOverrides ?? [],
       readiness,
     });
   });
@@ -2035,6 +2369,8 @@ export function registerTimetableRoutes(app: Express): void {
 
   // -------------------------------------------------------------------------
   // POST /api/timetable/generate
+  // Supports BOTH Independent Category Generation (targetCategoryId) and Whole School Generation.
+  // Strict Requirement 9: Never report success if required lessons remain unplaced or collisions exist.
   // -------------------------------------------------------------------------
   app.post('/api/timetable/generate', requireAuth, (req: Request, res: Response) => {
     const session = req.authSession!;
@@ -2044,6 +2380,14 @@ export function registerTimetableRoutes(app: Express): void {
     const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
     if (!schoolId) return;
 
+    const rawTargetCategory =
+      typeof req.body?.targetCategoryId === 'string' && req.body.targetCategoryId.trim()
+        ? (req.body.targetCategoryId.trim() as TimetableCategoryId)
+        : undefined;
+    if (rawTargetCategory && !VALID_CATEGORIES.has(rawTargetCategory)) {
+      return res.status(400).json({ error: 'Invalid target category ID.' });
+    }
+
     const termLabel =
       typeof req.body?.termLabel === 'string' && req.body.termLabel.trim()
         ? req.body.termLabel.trim().slice(0, 40)
@@ -2052,13 +2396,45 @@ export function registerTimetableRoutes(app: Express): void {
       typeof req.body?.academicYear === 'string' && req.body.academicYear.trim()
         ? req.body.academicYear.trim().slice(0, 16)
         : String(new Date().getFullYear());
+    const catShort = rawTargetCategory
+      ? TIMETABLE_CATEGORIES.find((c) => c.id === rawTargetCategory)?.shortLabel || rawTargetCategory
+      : 'Whole School';
     const name =
       typeof req.body?.name === 'string' && req.body.name.trim()
         ? req.body.name.trim().slice(0, 120)
-        : `${termLabel} ${academicYear} Master Timetable`;
+        : `${termLabel} ${academicYear} · ${catShort} Timetable`;
 
+    const db = getDb();
     const { input } = loadEngineInput(schoolId);
-    const result = generateTimetableSchedule(input);
+
+    // When generating a single category independently, preserve the OTHER categories' entries from
+    // the currently published (or latest active) version and check teacher & facility availability against them!
+    let lockedEntries: EngineTimetableEntry[] = [];
+    if (rawTargetCategory) {
+      const baseVersionId =
+        typeof req.body?.baseVersionId === 'string' && req.body.baseVersionId.trim()
+          ? req.body.baseVersionId.trim()
+          : (
+              db
+                .prepare(
+                  `SELECT id FROM tt_versions
+                   WHERE school_id = ?
+                   ORDER BY CASE WHEN status = 'published' THEN 0 ELSE 1 END, created_at DESC
+                   LIMIT 1`
+                )
+                .get(schoolId) as { id?: string } | undefined
+            )?.id;
+      if (baseVersionId) {
+        lockedEntries = loadVersionEntries(schoolId, baseVersionId).filter(
+          (e) => e.categoryId !== rawTargetCategory
+        );
+      }
+    }
+
+    const result = generateTimetableSchedule(input, {
+      targetCategoryId: rawTargetCategory,
+      lockedEntries,
+    });
 
     if (!result.audit.readyToGenerate) {
       return res.status(422).json({
@@ -2068,7 +2444,17 @@ export function registerTimetableRoutes(app: Express): void {
       });
     }
 
-    const db = getDb();
+    if (!result.success || result.unplacedTasks.length > 0) {
+      return res.status(422).json({
+        error:
+          result.unplacedTasks.length > 0
+            ? `Generation incomplete: ${result.unplacedTasks.length} required lesson(s) could not be scheduled without causing a teacher or shared facility collision.`
+            : 'Generation blocked: scheduling validation detected a teacher collision, facility overflow, or student-group conflict.',
+        audit: result.audit,
+        unplacedTasks: result.unplacedTasks,
+      });
+    }
+
     const versionId = `ttv_${crypto.randomBytes(6).toString('hex')}`;
     const now = new Date().toISOString();
     const actorLabel = session.user?.name || session.user?.email || session.userId;
@@ -2086,6 +2472,7 @@ export function registerTimetableRoutes(app: Express): void {
       academicYear,
       JSON.stringify({
         isValid: result.audit.isValid,
+        targetCategoryId: rawTargetCategory || 'whole_school',
         teacherCollisions: result.audit.teacherCollisions.length,
         facilityOverflows: result.audit.facilityOverflows.length,
         studentGroupConflicts: result.audit.studentGroupConflicts.length,
@@ -2142,7 +2529,7 @@ export function registerTimetableRoutes(app: Express): void {
       userEmail: session.user?.email,
       action: 'timetable_generated',
       resource: `tt_versions:${versionId}`,
-      details: `Generated timetable "${name}" (${result.entries.length} entries, ${result.unplacedTasks.length} unplaced)`,
+      details: `Generated ${catShort} timetable "${name}" (${result.entries.length} entries, 0 unplaced, 0 collisions)`,
     });
     notifyMySqlTablesChanged(['tt_versions', 'tt_entries']);
     emitTimetableBroadcast(schoolId, session.userId, 'record:created', versionId);
@@ -2150,6 +2537,7 @@ export function registerTimetableRoutes(app: Express): void {
     return res.status(201).json({
       ok: true,
       success: result.success,
+      targetCategoryId: rawTargetCategory || null,
       version: {
         id: versionId,
         name,
@@ -2165,6 +2553,123 @@ export function registerTimetableRoutes(app: Express): void {
       audit: result.audit,
     });
   });
+
+  // -------------------------------------------------------------------------
+  // PUT /api/timetable/versions/:versionId/entries/:entryId
+  // Manual timetable cell edit with strict whole-school zero-collision validation
+  // -------------------------------------------------------------------------
+  app.put(
+    '/api/timetable/versions/:versionId/entries/:entryId',
+    requireAuth,
+    (req: Request, res: Response) => {
+      const session = req.authSession!;
+      if (!isTimetableAdmin(session)) {
+        return res.status(403).json({ error: 'Administrator privileges required.' });
+      }
+      const schoolId = resolveAuthorizedTenantId(req, res, req.query.tenantId as string);
+      if (!schoolId) return;
+
+      const { versionId, entryId } = req.params;
+      const db = getDb();
+      const { input } = loadEngineInput(schoolId);
+      const allEntries = loadVersionEntries(schoolId, versionId);
+      const current = allEntries.find((e) => e.id === entryId);
+      if (!current) {
+        return res.status(404).json({ error: 'Timetable entry not found.' });
+      }
+
+      const dayOfWeek =
+        typeof req.body?.dayOfWeek === 'string' &&
+        (WEEKDAYS as readonly string[]).includes(req.body.dayOfWeek)
+          ? req.body.dayOfWeek
+          : current.dayOfWeek;
+      const periodNumber =
+        req.body?.periodNumber !== undefined
+          ? Math.trunc(Number(req.body.periodNumber))
+          : current.periodNumber;
+
+      const cfg = input.scheduleConfigs[current.categoryId];
+      const periodSlot = cfg?.periods.find(
+        (p) =>
+          p.periodNumber === periodNumber &&
+          (p.slotType === 'regular' || p.slotType === 'remedial')
+      );
+      if (!periodSlot) {
+        return res.status(400).json({ error: 'Selected period is not a valid teaching slot.' });
+      }
+
+      const teacherId =
+        typeof req.body?.teacherId === 'string' && req.body.teacherId.trim()
+          ? req.body.teacherId.trim()
+          : current.teacherId;
+      const teacherName =
+        typeof req.body?.teacherName === 'string' && req.body.teacherName.trim()
+          ? req.body.teacherName.trim()
+          : current.teacherName;
+
+      const facilityId =
+        req.body?.facilityId === undefined
+          ? current.facilityId
+          : typeof req.body.facilityId === 'string' && req.body.facilityId.trim()
+            ? req.body.facilityId.trim()
+            : null;
+      const facilityName = facilityId
+        ? input.facilities.find((f) => f.id === facilityId)?.name || current.facilityName
+        : null;
+
+      const updatedEntry: EngineTimetableEntry = {
+        ...current,
+        dayOfWeek,
+        periodNumber,
+        startTime: periodSlot.startTime,
+        endTime: periodSlot.endTime,
+        durationMins: periodSlot.durationMins,
+        teacherId,
+        teacherName,
+        facilityId,
+        facilityName,
+      };
+
+      const check = validateSingleEntryEdit(input, allEntries, updatedEntry);
+      if (!check.ok) {
+        return res.status(409).json({ error: check.error });
+      }
+
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE tt_entries
+        SET day_of_week = ?, period_number = ?, start_time = ?, end_time = ?, duration_mins = ?,
+            teacher_id = ?, teacher_name = ?, facility_id = ?, facility_name = ?, updated_at = ?
+        WHERE id = ? AND version_id = ? AND school_id = ?
+      `).run(
+        updatedEntry.dayOfWeek,
+        updatedEntry.periodNumber,
+        updatedEntry.startTime,
+        updatedEntry.endTime,
+        updatedEntry.durationMins,
+        updatedEntry.teacherId,
+        updatedEntry.teacherName,
+        updatedEntry.facilityId,
+        updatedEntry.facilityName,
+        now,
+        entryId,
+        versionId,
+        schoolId
+      );
+
+      notifyMySqlTablesChanged(['tt_entries']);
+      emitTimetableBroadcast(schoolId, session.userId, 'record:updated', versionId);
+
+      const refreshedEntries = loadVersionEntries(schoolId, versionId);
+      const audit = validateTimetableEntries(input, refreshedEntries);
+      return res.json({
+        ok: true,
+        entry: updatedEntry,
+        entries: refreshedEntries,
+        audit,
+      });
+    }
+  );
 
   // -------------------------------------------------------------------------
   // POST /api/timetable/versions/:versionId/publish
@@ -2188,6 +2693,13 @@ export function registerTimetableRoutes(app: Express): void {
     const { input } = loadEngineInput(schoolId);
     const entries = loadVersionEntries(schoolId, versionId);
     const audit = validateTimetableEntries(input, entries);
+
+    if (entries.length === 0) {
+      return res.status(422).json({
+        error: 'Cannot publish an empty timetable version.',
+        audit,
+      });
+    }
 
     if (
       audit.teacherCollisions.length > 0 ||

@@ -1581,7 +1581,12 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
           {activeTab === 'staff_appraisal' && <OwnStaffAppraisal currentUser={currentUser} />}
 
           {activeTab === 'timetable' && (
-            <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
+            <TimetablePortal
+              user={currentUser}
+              schoolId={currentTenant.id}
+              schoolName={currentTenant.name}
+              schoolLogoUrl={currentTenant.logoUrl}
+            />
           )}
         </main>
       </div>

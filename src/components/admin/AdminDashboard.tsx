@@ -744,7 +744,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       )}
 
       {activeTab === 'timetable' && (
-        <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
+        <TimetablePortal
+          user={currentUser}
+          schoolId={currentTenant.id}
+          schoolName={currentTenant.name}
+          schoolLogoUrl={currentTenant.logoUrl}
+        />
       )}
 
       {/* ========================================================

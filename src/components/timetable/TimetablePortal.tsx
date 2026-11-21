@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Building2,
@@ -15,6 +15,7 @@ import {
   ttApiFetch,
   type AllocationProcessingMode,
   type ScheduleConfig,
+  type SchoolBrandInfo,
   type TimetableBootstrapResponse,
   type TimetableCategoryId,
   type TimetableCategoryMeta,
@@ -26,46 +27,61 @@ import { SubjectAllocationTable } from './SubjectAllocationTable';
 import { TeacherAssignmentsPanel } from './TeacherAssignmentsPanel';
 import { RemedialConfigPanel } from './RemedialConfigPanel';
 import { SharedFacilitiesPanel } from './SharedFacilitiesPanel';
-import { TimetableViewsAndPrintPanel } from './TimetableViewsAndPrintPanel';
+import { TimetableMatrixGrid, TimetableViewsAndPrintPanel } from './TimetableViewsAndPrintPanel';
 
 interface TimetablePortalProps {
   user: User;
+  schoolId?: string;
   schoolName?: string;
+  schoolLogoUrl?: string;
 }
 
-type AdminSectionTab =
-  | 'allocations'
-  | 'teachers'
-  | 'remedials'
-  | 'facilities'
-  | 'timetables';
+type PrimarySectionTab = 'allocations' | 'timetables' | 'resources';
+type ResourceSubTab = 'teachers' | 'remedials' | 'facilities';
 
 const ADMIN_ROLES = new Set([
+  'super_admin',
   'admin',
+  'principal',
   'head_teacher',
   'deputy_head',
   'dean_of_studies',
   'curriculum_coordinator',
 ]);
 
+function userIsTimetableAdmin(user: User): boolean {
+  if (ADMIN_ROLES.has((user.role || '').toLowerCase())) return true;
+  if (Array.isArray(user.assignedRoles)) {
+    return user.assignedRoles.some((r) => ADMIN_ROLES.has(String(r || '').toLowerCase()));
+  }
+  return false;
+}
+
 export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   user,
+  schoolId,
   schoolName = 'EduSmart School',
+  schoolLogoUrl,
 }) => {
-  const isAdminViewer = ADMIN_ROLES.has((user.role || '').toLowerCase());
+  const isAdminViewer = useMemo(() => userIsTimetableAdmin(user), [user]);
 
-  // Admin mode full state
   const [bootstrap, setBootstrap] = useState<TimetableBootstrapResponse | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>(undefined);
-  const [activeTab, setActiveTab] = useState<AdminSectionTab>('allocations');
+  const [activeTab, setActiveTab] = useState<PrimarySectionTab>('allocations');
+  const [resourceSubTab, setResourceSubTab] = useState<ResourceSubTab>('teachers');
   const [preselectCategory, setPreselectCategory] = useState<TimetableCategoryId | null>(null);
   const [preselectSubjectId, setPreselectSubjectId] = useState<string | null>(null);
   const [preselectRemedialType, setPreselectRemedialType] = useState<
     'remedial_1' | 'remedial_2' | null
   >(null);
+  const [generatedFocusCategory, setGeneratedFocusCategory] =
+    useState<TimetableCategoryId | null>(null);
+
+  const selectedVersionRef = useRef<string | undefined>(undefined);
+  const roStreamKeyRef = useRef<string>('');
 
   // Read-only published state for Teachers / Students / Parents
   const [publishedData, setPublishedData] = useState<{
+    school?: SchoolBrandInfo;
     categories: TimetableCategoryMeta[];
     weekdays: string[];
     scheduleConfigs: Record<TimetableCategoryId, ScheduleConfig>;
@@ -85,19 +101,19 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
       setError(null);
       try {
         if (isAdminViewer) {
-          const vId = versionOverride ?? selectedVersionId;
+          const vId = versionOverride !== undefined ? versionOverride : selectedVersionRef.current;
           const query = vId ? `?versionId=${encodeURIComponent(vId)}` : '';
           const data = await ttApiFetch<TimetableBootstrapResponse>(
-            `/api/timetable/bootstrap${query}`
+            `/api/timetable/bootstrap${query}`,
+            {},
+            schoolId
           );
           setBootstrap(data);
-          if (data.activeVersion) {
-            setSelectedVersionId(data.activeVersion.id);
-          }
+          selectedVersionRef.current = data.activeVersion?.id;
         } else {
-          const data = await ttApiFetch('/api/timetable/published');
+          const data = await ttApiFetch('/api/timetable/published', {}, schoolId);
           setPublishedData(data);
-          if (data.streams?.length > 0 && !roStreamKey) {
+          if (data.streams?.length > 0 && !roStreamKeyRef.current) {
             const matchGrade = user.grade;
             const matchStream = user.stream;
             const matched =
@@ -106,7 +122,11 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
                   s.grade === matchGrade &&
                   (!matchStream || s.stream.toLowerCase() === matchStream.toLowerCase())
               ) || data.streams[0];
-            if (matched) setRoStreamKey(`${matched.grade}::${matched.stream}`);
+            if (matched) {
+              const key = `${matched.grade}::${matched.stream}`;
+              roStreamKeyRef.current = key;
+              setRoStreamKey(key);
+            }
           }
         }
       } catch (err: any) {
@@ -115,7 +135,7 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         setLoading(false);
       }
     },
-    [isAdminViewer, selectedVersionId, roStreamKey, user.grade, user.stream]
+    [isAdminViewer, schoolId, user.grade, user.stream]
   );
 
   useEffect(() => {
@@ -124,13 +144,17 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   const handleChangeAllocationMode = useCallback(
     async (catId: TimetableCategoryId, mode: AllocationProcessingMode) => {
-      await ttApiFetch(`/api/timetable/allocation-mode/${catId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ allocationMode: mode }),
-      });
+      await ttApiFetch(
+        `/api/timetable/allocation-mode/${catId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ allocationMode: mode }),
+        },
+        schoolId
+      );
       await loadData();
     },
-    [loadData]
+    [loadData, schoolId]
   );
 
   useEffect(() => {
@@ -168,24 +192,44 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   const readOnlyPeriods = useMemo(() => {
     if (!publishedData) return [];
-    const byNum = new Map<
-      number,
-      { periodNumber: number; label: string; startTime: string; endTime: string }
-    >();
-    for (const cfg of Object.values(publishedData.scheduleConfigs)) {
-      for (const p of cfg.periods) {
-        if (!byNum.has(p.periodNumber)) {
-          byNum.set(p.periodNumber, {
-            periodNumber: p.periodNumber,
-            label: p.label,
-            startTime: p.startTime,
-            endTime: p.endTime,
-          });
-        }
+    if (!isTeacherRole && roStreamKey) {
+      const [gStr, ...rest] = roStreamKey.split('::');
+      const stObj = publishedData.streams.find(
+        (s) => s.grade === Number(gStr) && s.stream === rest.join('::')
+      );
+      if (stObj && publishedData.scheduleConfigs[stObj.categoryId]) {
+        return publishedData.scheduleConfigs[stObj.categoryId].periods;
       }
     }
-    return Array.from(byNum.values()).sort((a, b) => a.periodNumber - b.periodNumber);
-  }, [publishedData]);
+    return (
+      publishedData.scheduleConfigs.cat_4_6?.periods ||
+      publishedData.scheduleConfigs.cat_7_9?.periods ||
+      publishedData.scheduleConfigs.cat_1_3?.periods ||
+      []
+    );
+  }, [publishedData, isTeacherRole, roStreamKey]);
+
+  const resolvedSchoolBrand: SchoolBrandInfo | undefined = useMemo(() => {
+    const src = bootstrap?.school || publishedData?.school;
+    if (src) {
+      return {
+        ...src,
+        logoUrl: src.logoUrl || schoolLogoUrl || '',
+        name: src.name || schoolName,
+      };
+    }
+    return {
+      id: schoolId || '',
+      name: schoolName,
+      logoUrl: schoolLogoUrl || '',
+      address: '',
+      city: '',
+      phone: '',
+      email: '',
+      motto: '',
+      printFooterNotes: '',
+    };
+  }, [bootstrap?.school, publishedData?.school, schoolId, schoolLogoUrl, schoolName]);
 
   if (loading && !bootstrap && !publishedData) {
     return (
@@ -197,12 +241,12 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   if (error) {
     return (
-      <div className="bg-white border border-red-200 rounded-lg p-6 text-sm text-red-700 flex items-center justify-between">
+      <div className="bg-white border border-red-200 rounded-lg p-6 text-sm text-red-700 flex items-center justify-between gap-4">
         <span>{error}</span>
         <button
           type="button"
           onClick={() => void loadData()}
-          className="px-3 py-1.5 bg-red-50 border border-red-200 rounded text-xs font-medium text-red-800 hover:bg-red-100"
+          className="px-3 py-1.5 bg-red-50 border border-red-200 rounded text-xs font-medium text-red-800 hover:bg-red-100 whitespace-nowrap shrink-0"
         >
           Retry
         </button>
@@ -213,89 +257,28 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
   // Non-Admin Published Timetable View (Teachers, Students, Parents)
   if (!isAdminViewer) {
     const days = publishedData?.weekdays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const entriesBySlot = new Map<string, TimetableEntry[]>();
-    for (const e of readOnlyEntries) {
-      const k = `${e.dayOfWeek}::${e.periodNumber}`;
-      if (!entriesBySlot.has(k)) entriesBySlot.set(k, []);
-      entriesBySlot.get(k)!.push(e);
-    }
-
     const sheetTitle = isTeacherRole
       ? `My Teaching & Supervision Timetable — ${user.name}`
       : `Class Timetable — Grade ${roStreamKey.replace('::', ' ')}`;
-
-    const renderGrid = () => (
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse table-fixed min-w-[700px]">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600">
-              <th className="py-2 px-3 w-32 border-r border-slate-200">Period / Time</th>
-              {days.map((d) => (
-                <th key={d} className="py-2 px-2.5 border-r border-slate-200 last:border-r-0">
-                  {d}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200 text-xs">
-            {readOnlyPeriods.map((slot) => (
-              <tr key={slot.periodNumber} className="align-top">
-                <td className="py-2 px-3 bg-slate-50/60 border-r border-slate-200 font-mono">
-                  <div className="font-semibold text-slate-900">{slot.label}</div>
-                  <div className="text-[11px] text-slate-500">
-                    {slot.startTime}–{slot.endTime}
-                  </div>
-                </td>
-                {days.map((day) => {
-                  const list = entriesBySlot.get(`${day}::${slot.periodNumber}`) || [];
-                  return (
-                    <td key={day} className="p-2 border-r border-slate-200 last:border-r-0">
-                      {list.length === 0 ? (
-                        <span className="text-slate-300">—</span>
-                      ) : (
-                        <div className="space-y-1">
-                          {list.map((e) => (
-                            <div
-                              key={e.id}
-                              className="rounded border border-slate-200 bg-white p-1.5"
-                            >
-                              <div className="font-semibold text-slate-900">{e.subjectName}</div>
-                              <div className="text-[11px] text-slate-600">
-                                {isTeacherRole ? `Grade ${e.grade} ${e.stream}` : e.teacherName}
-                              </div>
-                              {e.facilityName && (
-                                <div className="text-[10px] text-slate-500">{e.facilityName}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+    const sheetSubtitle = publishedData?.version
+      ? `${publishedData.version.name} · ${publishedData.version.termLabel} ${publishedData.version.academicYear}`
+      : 'No published timetable available yet';
 
     return (
       <div className="space-y-4">
         <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{sheetTitle}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {publishedData?.version
-                ? `${publishedData.version.name} · ${publishedData.version.termLabel} ${publishedData.version.academicYear}`
-                : 'No published timetable available yet'}
-            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{sheetSubtitle}</p>
           </div>
           <div className="flex items-center gap-2">
             {!isTeacherRole && publishedData && publishedData.streams.length > 0 && (
               <select
                 value={roStreamKey}
-                onChange={(e) => setRoStreamKey(e.target.value)}
+                onChange={(e) => {
+                  roStreamKeyRef.current = e.target.value;
+                  setRoStreamKey(e.target.value);
+                }}
                 className="px-2.5 py-1.5 bg-white border border-slate-300 rounded text-xs text-slate-900"
               >
                 {publishedData.streams.map((st) => (
@@ -317,24 +300,59 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-          {!publishedData?.version || readOnlyEntries.length === 0 ? (
-            <div className="p-10 text-center text-xs text-slate-500">
-              No published timetable sessions are scheduled for this view yet.
-            </div>
-          ) : (
-            renderGrid()
-          )}
-        </div>
+        {!publishedData?.version || readOnlyEntries.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-lg p-10 text-center text-xs text-slate-500">
+            No published timetable sessions are scheduled for this view yet.
+          </div>
+        ) : (
+          <TimetableMatrixGrid
+            title={sheetTitle}
+            subtitle={sheetSubtitle}
+            days={days}
+            periods={readOnlyPeriods}
+            entries={readOnlyEntries}
+            mode={isTeacherRole ? 'teacher' : 'stream'}
+          />
+        )}
 
         {roPrinting &&
           createPortal(
             <div className="printable-credential-portal hidden print:block bg-white text-slate-900 p-4">
-              <div className="mb-3 border-b border-slate-300 pb-2">
-                <div className="text-base font-bold">{schoolName}</div>
-                <div className="text-xs text-slate-600">{sheetTitle}</div>
+              <div className="mb-3 border-b-2 border-slate-800 pb-2 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  {resolvedSchoolBrand?.logoUrl && (
+                    <img
+                      src={resolvedSchoolBrand.logoUrl}
+                      alt={`${resolvedSchoolBrand.name} logo`}
+                      className="w-11 h-11 object-contain"
+                    />
+                  )}
+                  <div>
+                    <div className="text-base font-bold uppercase">
+                      {resolvedSchoolBrand?.name || schoolName}
+                    </div>
+                    {resolvedSchoolBrand?.motto && (
+                      <div className="text-[11px] italic text-slate-600">
+                        {resolvedSchoolBrand.motto}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold">{sheetTitle}</div>
+                  <div className="text-[11px] text-slate-600">{sheetSubtitle}</div>
+                </div>
               </div>
-              {renderGrid()}
+              <TimetableMatrixGrid
+                title={sheetTitle}
+                subtitle={sheetSubtitle}
+                days={days}
+                periods={readOnlyPeriods}
+                entries={readOnlyEntries}
+                mode={isTeacherRole ? 'teacher' : 'stream'}
+                compact
+                hideHeader
+              />
             </div>,
             document.body
           )}
@@ -344,35 +362,28 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
 
   if (!bootstrap) return null;
 
-  const tabs: Array<{ id: AdminSectionTab; label: string; icon: React.ReactNode; count?: number }> = [
+  const primaryTabs: Array<{
+    id: PrimarySectionTab;
+    label: string;
+    icon: React.ReactNode;
+    count?: number;
+  }> = [
     {
       id: 'allocations',
-      label: 'Subject Allocations',
+      label: 'Subject Allocations & Generate',
       icon: <TableProperties className="w-4 h-4" />,
     },
     {
-      id: 'teachers',
-      label: 'Teachers & Supervisors',
-      icon: <UserCheck className="w-4 h-4" />,
-      count: bootstrap.teacherAssignments.length,
-    },
-    {
-      id: 'remedials',
-      label: 'Remedial 1 & 2',
-      icon: <Users className="w-4 h-4" />,
-      count: bootstrap.remedialConfigs.length,
-    },
-    {
-      id: 'facilities',
-      label: 'Shared Facilities',
-      icon: <Building2 className="w-4 h-4" />,
-      count: bootstrap.facilities.length,
-    },
-    {
       id: 'timetables',
-      label: 'Timetables, Audit & Print',
+      label: 'Timetables & Print',
       icon: <LayoutGrid className="w-4 h-4" />,
       count: bootstrap.versions.length,
+    },
+    {
+      id: 'resources',
+      label: 'Teachers, Remedials & Facilities',
+      icon: <UserCheck className="w-4 h-4" />,
+      count: bootstrap.teacherAssignments.length,
     },
   ];
 
@@ -384,13 +395,13 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-slate-700" />
             <h1 className="text-xl font-semibold text-slate-900 tracking-tight">
-              EduSmart Timetable Management
+              EduSmart Automatic Timetable
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Independent Category 1–3 subject & activity allocations, explicit teacher &
-            supervisor authorization, Remedial 1 & 2 learner-group scheduling, shared facility
-            capacity enforcement, validation, and printing.
+            Configure weekly lessons per subject across Grades 1–3, Grades 4–6, and Grades 7–9,
+            then automatically generate collision-free stream, teacher, grade, category, and master
+            timetables.
           </p>
         </div>
 
@@ -404,10 +415,10 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         </button>
       </div>
 
-      {/* Primary Module Navigation Tabs */}
+      {/* Simplified 3-Tab Navigation */}
       <div className="border-b border-slate-200 overflow-x-auto">
         <div className="flex items-center gap-1 min-w-max">
-          {tabs.map((tab) => {
+          {primaryTabs.map((tab) => {
             const active = tab.id === activeTab;
             return (
               <button
@@ -433,86 +444,49 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
         </div>
       </div>
 
-      {/* Active Tab Content */}
+      {/* Tab 1: Subject Allocations & Automatic Generate */}
       {activeTab === 'allocations' && (
         <SubjectAllocationTable
+          schoolId={schoolId}
           categories={bootstrap.categories}
           weekdays={bootstrap.weekdays}
           scheduleConfigs={bootstrap.scheduleConfigs}
           subjects={bootstrap.subjects}
+          gradeOverrides={bootstrap.gradeOverrides ?? []}
           facilities={bootstrap.facilities}
           streams={bootstrap.streams}
-          teachers={bootstrap.teachers}
           teacherAssignments={bootstrap.teacherAssignments}
           remedialConfigs={bootstrap.remedialConfigs}
           streamAllocations={bootstrap.audit.streamAllocations}
           categoryTotals={bootstrap.audit.categoryTotals}
           canManage={bootstrap.canManage}
-          onChangeAllocationMode={handleChangeAllocationMode}
-          onRefresh={() => loadData()}
+          onRefresh={loadData}
+          onGeneratedSuccess={(versionId, targetCat) => {
+            selectedVersionRef.current = versionId;
+            setGeneratedFocusCategory(targetCat ?? null);
+            setActiveTab('timetables');
+          }}
           onJumpToTeachers={(catId, subId) => {
             setPreselectCategory(catId);
             setPreselectSubjectId(subId);
-            setActiveTab('teachers');
+            setResourceSubTab('teachers');
+            setActiveTab('resources');
           }}
           onJumpToRemedials={(catId, remType) => {
             setPreselectCategory(catId);
             setPreselectRemedialType(remType);
-            setActiveTab('remedials');
+            setResourceSubTab('remedials');
+            setActiveTab('resources');
           }}
         />
       )}
 
-      {activeTab === 'teachers' && (
-        <TeacherAssignmentsPanel
-          categories={bootstrap.categories}
-          weekdays={bootstrap.weekdays}
-          scheduleConfigs={bootstrap.scheduleConfigs}
-          subjects={bootstrap.subjects}
-          facilities={bootstrap.facilities}
-          streams={bootstrap.streams}
-          teachers={bootstrap.teachers}
-          teacherAssignments={bootstrap.teacherAssignments}
-          streamAllocations={bootstrap.audit.streamAllocations}
-          categoryTotals={bootstrap.audit.categoryTotals}
-          canManage={bootstrap.canManage}
-          preselectCategory={preselectCategory}
-          preselectSubjectId={preselectSubjectId}
-          onChangeAllocationMode={handleChangeAllocationMode}
-          onRefresh={() => loadData()}
-        />
-      )}
-
-      {activeTab === 'remedials' && (
-        <RemedialConfigPanel
-          categories={bootstrap.categories}
-          weekdays={bootstrap.weekdays}
-          scheduleConfigs={bootstrap.scheduleConfigs}
-          facilities={bootstrap.facilities}
-          streams={bootstrap.streams}
-          teachers={bootstrap.teachers}
-          students={bootstrap.students}
-          remedialConfigs={bootstrap.remedialConfigs}
-          canManage={bootstrap.canManage}
-          preselectCategory={preselectCategory}
-          preselectType={preselectRemedialType}
-          onRefresh={() => loadData()}
-        />
-      )}
-
-      {activeTab === 'facilities' && (
-        <SharedFacilitiesPanel
-          weekdays={bootstrap.weekdays}
-          facilities={bootstrap.facilities}
-          utilization={bootstrap.audit.facilityUtilization}
-          canManage={bootstrap.canManage}
-          onRefresh={() => loadData()}
-        />
-      )}
-
+      {/* Tab 2: Timetables, Manual Edit & 7-Mode Print */}
       {activeTab === 'timetables' && (
         <TimetableViewsAndPrintPanel
-          schoolName={schoolName}
+          schoolId={schoolId}
+          schoolName={resolvedSchoolBrand?.name || schoolName}
+          school={resolvedSchoolBrand}
           categories={bootstrap.categories}
           weekdays={bootstrap.weekdays}
           scheduleConfigs={bootstrap.scheduleConfigs}
@@ -524,12 +498,107 @@ export const TimetablePortal: React.FC<TimetablePortalProps> = ({
           entries={bootstrap.entries}
           audit={bootstrap.audit}
           canManage={bootstrap.canManage}
+          initialCategory={generatedFocusCategory}
           onSelectVersion={(vId) => {
-            setSelectedVersionId(vId);
+            selectedVersionRef.current = vId;
             void loadData(vId);
           }}
-          onRefresh={(vId) => loadData(vId)}
+          onRefresh={loadData}
         />
+      )}
+
+      {/* Tab 3: Teachers, Remedials & Shared Facilities */}
+      {activeTab === 'resources' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setResourceSubTab('teachers')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border whitespace-nowrap shrink-0 ${
+                resourceSubTab === 'teachers'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              Teacher &amp; Supervisor Assignments ({bootstrap.teacherAssignments.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setResourceSubTab('remedials')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border whitespace-nowrap shrink-0 ${
+                resourceSubTab === 'remedials'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Remedial 1 &amp; 2 Groups ({bootstrap.remedialConfigs.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setResourceSubTab('facilities')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border whitespace-nowrap shrink-0 ${
+                resourceSubTab === 'facilities'
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              Shared Facilities ({bootstrap.facilities.length})
+            </button>
+          </div>
+
+          {resourceSubTab === 'teachers' && (
+            <TeacherAssignmentsPanel
+              schoolId={schoolId}
+              categories={bootstrap.categories}
+              weekdays={bootstrap.weekdays}
+              scheduleConfigs={bootstrap.scheduleConfigs}
+              subjects={bootstrap.subjects}
+              facilities={bootstrap.facilities}
+              streams={bootstrap.streams}
+              teachers={bootstrap.teachers}
+              teacherAssignments={bootstrap.teacherAssignments}
+              streamAllocations={bootstrap.audit.streamAllocations}
+              categoryTotals={bootstrap.audit.categoryTotals}
+              canManage={bootstrap.canManage}
+              preselectCategory={preselectCategory}
+              preselectSubjectId={preselectSubjectId}
+              onChangeAllocationMode={handleChangeAllocationMode}
+              onRefresh={() => loadData()}
+            />
+          )}
+
+          {resourceSubTab === 'remedials' && (
+            <RemedialConfigPanel
+              schoolId={schoolId}
+              categories={bootstrap.categories}
+              weekdays={bootstrap.weekdays}
+              scheduleConfigs={bootstrap.scheduleConfigs}
+              facilities={bootstrap.facilities}
+              streams={bootstrap.streams}
+              teachers={bootstrap.teachers}
+              students={bootstrap.students}
+              remedialConfigs={bootstrap.remedialConfigs}
+              canManage={bootstrap.canManage}
+              preselectCategory={preselectCategory}
+              preselectType={preselectRemedialType}
+              onRefresh={() => loadData()}
+            />
+          )}
+
+          {resourceSubTab === 'facilities' && (
+            <SharedFacilitiesPanel
+              schoolId={schoolId}
+              weekdays={bootstrap.weekdays}
+              facilities={bootstrap.facilities}
+              utilization={bootstrap.audit.facilityUtilization}
+              canManage={bootstrap.canManage}
+              onRefresh={() => loadData()}
+            />
+          )}
+        </div>
       )}
     </div>
   );

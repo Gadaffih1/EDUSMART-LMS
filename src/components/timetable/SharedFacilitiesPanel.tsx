@@ -9,6 +9,7 @@ import {
 } from './timetableTypes';
 
 interface Props {
+  schoolId?: string;
   weekdays: string[];
   facilities: TimetableFacility[];
   utilization: FacilityUtilizationReport[];
@@ -19,6 +20,7 @@ interface Props {
 const ALL_FACILITY_TYPES: FacilityType[] = [
   'computer_lab',
   'ict_robotics_lab',
+  'science_lab',
   'library',
   'swimming_pool',
   'maktaba_room',
@@ -27,6 +29,7 @@ const ALL_FACILITY_TYPES: FacilityType[] = [
 ];
 
 export const SharedFacilitiesPanel: React.FC<Props> = ({
+  schoolId,
   weekdays,
   facilities,
   utilization,
@@ -67,19 +70,23 @@ export const SharedFacilitiesPanel: React.FC<Props> = ({
         .map((s) => s.trim())
         .filter(Boolean);
 
-      await ttApiFetch('/api/timetable/facilities', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: name.trim(),
-          facilityType,
-          capacityStreams,
-          seatCapacity,
-          equipment,
-          availableDays,
-          availablePeriods,
-          notes,
-        }),
-      });
+      await ttApiFetch(
+        '/api/timetable/facilities',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name: name.trim(),
+            facilityType,
+            capacityStreams,
+            seatCapacity,
+            equipment,
+            availableDays,
+            availablePeriods,
+            notes,
+          }),
+        },
+        schoolId
+      );
       await onRefresh();
       setName('');
       setEquipmentInput('');
@@ -95,7 +102,7 @@ export const SharedFacilitiesPanel: React.FC<Props> = ({
   const handleDelete = async (id: string, facName: string) => {
     if (!canManage) return;
     try {
-      await ttApiFetch(`/api/timetable/facilities/${id}`, { method: 'DELETE' });
+      await ttApiFetch(`/api/timetable/facilities/${id}`, { method: 'DELETE' }, schoolId);
       await onRefresh();
       setFeedback({ type: 'ok', text: `Removed facility "${facName}".` });
     } catch (err: any) {

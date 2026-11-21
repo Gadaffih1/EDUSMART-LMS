@@ -1792,7 +1792,12 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
       {activeTab === 'virtual_class' && <StudentVirtualClassroomPanel />}
 
       {activeTab === 'timetable' && (
-        <TimetablePortal user={currentUser} schoolName={currentTenant.name} />
+        <TimetablePortal
+          user={currentUser}
+          schoolId={currentTenant.id}
+          schoolName={currentTenant.name}
+          schoolLogoUrl={currentTenant.logoUrl}
+        />
       )}
 
       {/* ========================================================

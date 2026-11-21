@@ -124,6 +124,13 @@ export interface EngineTimetableEntry {
   notes: string;
 }
 
+export interface EngineGradeSubjectOverride {
+  categoryId: TimetableCategoryId;
+  grade: number;
+  subjectId: string;
+  lessonsPerWeek: number;
+}
+
 export interface EngineInput {
   scheduleConfigs: Record<TimetableCategoryId, EngineScheduleConfig>;
   subjects: EngineSubject[];
@@ -131,6 +138,12 @@ export interface EngineInput {
   teacherAssignments: EngineTeacherAssignment[];
   remedialConfigs: EngineRemedialConfig[];
   streams: EngineStream[];
+  gradeOverrides?: EngineGradeSubjectOverride[];
+}
+
+export interface GenerateScheduleOptions {
+  targetCategoryId?: TimetableCategoryId;
+  lockedEntries?: EngineTimetableEntry[];
 }
 
 export interface ValidationIssue {
@@ -270,11 +283,48 @@ export interface GenerateScheduleResult {
 function getRegularPeriods(config: EngineScheduleConfig): PeriodSlotDefinition[] {
   const regular = config.periods.filter((p) => p.slotType === 'regular');
   if (regular.length > 0) return regular;
-  return config.periods.slice(0, config.periodsPerDay);
+  return config.periods
+    .filter((p) => p.slotType !== 'break' && p.slotType !== 'lunch')
+    .slice(0, config.periodsPerDay);
 }
 
-function getAllPeriods(config: EngineScheduleConfig): PeriodSlotDefinition[] {
-  return config.periods;
+function getSchedulablePeriods(config: EngineScheduleConfig): PeriodSlotDefinition[] {
+  return config.periods.filter((p) => p.slotType === 'regular' || p.slotType === 'remedial');
+}
+
+export function parseTimeToMinutes(timeStr: string | null | undefined): number {
+  if (!timeStr) return -1;
+  const parts = String(timeStr).trim().split(':');
+  if (parts.length < 2) return -1;
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return -1;
+  return h * 60 + m;
+}
+
+export function timeRangesOverlap(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number
+): boolean {
+  if (aStart < 0 || aEnd <= aStart || bStart < 0 || bEnd <= bStart) return false;
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function entriesTimeOverlap(
+  a: { dayOfWeek: string; periodNumber: number; startTime: string; endTime: string },
+  b: { dayOfWeek: string; periodNumber: number; startTime: string; endTime: string }
+): boolean {
+  if (a.dayOfWeek !== b.dayOfWeek) return false;
+  const aS = parseTimeToMinutes(a.startTime);
+  const aE = parseTimeToMinutes(a.endTime);
+  const bS = parseTimeToMinutes(b.startTime);
+  const bE = parseTimeToMinutes(b.endTime);
+  if (aS >= 0 && aE > aS && bS >= 0 && bE > bS) {
+    return timeRangesOverlap(aS, aE, bS, bE);
+  }
+  return a.periodNumber === b.periodNumber;
 }
 
 function slotKey(day: string, periodNumber: number): string {
@@ -327,6 +377,11 @@ export function resolveEffectiveStreamAllocations(
   input: EngineInput
 ): ResolvedStreamAllocation[] {
   const subjectById = new Map(input.subjects.map((s) => [s.id, s]));
+  const overrideMap = new Map<string, number>();
+  for (const ov of input.gradeOverrides ?? []) {
+    overrideMap.set(`${ov.grade}::${ov.subjectId}`, Math.max(0, Math.trunc(ov.lessonsPerWeek)));
+  }
+
   const resolved: ResolvedStreamAllocation[] = [];
 
   for (const st of input.streams) {
@@ -376,14 +431,17 @@ export function resolveEffectiveStreamAllocations(
       }
     } else {
       const catSubjects = input.subjects.filter(
-        (s) =>
-          s.categoryId === st.categoryId &&
-          s.isActive &&
-          s.lessonsPerWeek > 0 &&
-          s.subjectKind !== 'remedial'
+        (s) => s.categoryId === st.categoryId && s.isActive && s.subjectKind !== 'remedial'
       );
 
       for (const sub of catSubjects) {
+        const overrideKey = `${st.grade}::${sub.id}`;
+        const effectiveLessons = overrideMap.has(overrideKey)
+          ? overrideMap.get(overrideKey)!
+          : sub.lessonsPerWeek;
+
+        if (effectiveLessons <= 0) continue;
+
         const matches = findMatchingAssignments(
           input.teacherAssignments,
           st.categoryId,
@@ -401,7 +459,7 @@ export function resolveEffectiveStreamAllocations(
             subjectId: sub.id,
             subjectName: sub.name,
             subjectKind: sub.subjectKind,
-            lessonsPerWeek: sub.lessonsPerWeek,
+            lessonsPerWeek: effectiveLessons,
             source: 'category_redistribution',
             linkedAssignmentId: null,
             teacherId: null,
@@ -418,7 +476,7 @@ export function resolveEffectiveStreamAllocations(
             subjectId: sub.id,
             subjectName: sub.name,
             subjectKind: sub.subjectKind,
-            lessonsPerWeek: sub.lessonsPerWeek,
+            lessonsPerWeek: effectiveLessons,
             source: 'category_redistribution',
             linkedAssignmentId: matches[0].id,
             teacherId: matches[0].teacherId,
@@ -435,7 +493,7 @@ export function resolveEffectiveStreamAllocations(
             subjectId: sub.id,
             subjectName: sub.name,
             subjectKind: sub.subjectKind,
-            lessonsPerWeek: sub.lessonsPerWeek,
+            lessonsPerWeek: effectiveLessons,
             source: 'category_redistribution',
             linkedAssignmentId: matches[0].id,
             teacherId: matches[0].teacherId,
@@ -537,30 +595,46 @@ export function computeCategoryTotals(
  * - Enforces shared facility capacity across all 3 categories.
  * - Enforces Remedial 1 & 2 configuration completeness.
  */
-export function validateTimetableReadiness(input: EngineInput): {
+export function validateTimetableReadiness(
+  input: EngineInput,
+  options?: { targetCategoryId?: TimetableCategoryId; lockedEntries?: EngineTimetableEntry[] }
+): {
   readyToGenerate: boolean;
   issues: ValidationIssue[];
   categoryTotals: CategoryAllocationSummary[];
   streamAllocations: ResolvedStreamAllocation[];
 } {
   const issues: ValidationIssue[] = [];
+  const targetCat = options?.targetCategoryId;
+  const lockedEntries = options?.lockedEntries ?? [];
   const streamAllocations = resolveEffectiveStreamAllocations(input);
   const categoryTotals = computeCategoryTotals(input, streamAllocations);
   const subjectById = new Map(input.subjects.map((s) => [s.id, s]));
 
-  if (input.streams.length === 0) {
+  const relevantStreams = targetCat
+    ? input.streams.filter((st) => st.categoryId === targetCat)
+    : input.streams;
+  const relevantAllocations = targetCat
+    ? streamAllocations.filter((a) => a.categoryId === targetCat)
+    : streamAllocations;
+
+  if (relevantStreams.length === 0) {
+    const catLabel = targetCat
+      ? TIMETABLE_CATEGORIES.find((c) => c.id === targetCat)?.label || targetCat
+      : 'school';
     issues.push({
       code: 'NO_ACTIVE_STREAMS',
       severity: 'error',
-      message: 'No active grades or streams found. Configure grades and streams in Academic Structure first.',
+      categoryId: targetCat,
+      message: `No active grades or streams found for ${catLabel}. Configure grades and streams in Academic Structure first.`,
     });
   }
 
-  let totalConfiguredLessonsAcrossSchool = 0;
+  let totalConfiguredLessonsInScope = 0;
 
-  // 1. Validate every resolved stream allocation (duplicate conflicts, missing teachers, facilities)
-  for (const alloc of streamAllocations) {
-    totalConfiguredLessonsAcrossSchool += alloc.lessonsPerWeek;
+  // 1. Validate every resolved stream allocation in scope
+  for (const alloc of relevantAllocations) {
+    totalConfiguredLessonsInScope += alloc.lessonsPerWeek;
     const catLabel =
       TIMETABLE_CATEGORIES.find((c) => c.id === alloc.categoryId)?.label || alloc.categoryId;
 
@@ -571,7 +645,7 @@ export function validateTimetableReadiness(input: EngineInput): {
         categoryId: alloc.categoryId,
         grade: alloc.grade,
         stream: alloc.stream,
-        message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${alloc.subjectName}" has conflicting duplicate teacher assignments (${alloc.conflictTeachers.join(', ')}). Keep exactly one assigned teacher per stream-subject to guarantee zero collisions.`,
+        message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${alloc.subjectName}" has conflicting duplicate teacher assignments (${alloc.conflictTeachers.join(', ')}). Keep exactly one assigned teacher per stream-subject.`,
       });
     } else if (alloc.status === 'unassigned') {
       issues.push({
@@ -580,7 +654,7 @@ export function validateTimetableReadiness(input: EngineInput): {
         categoryId: alloc.categoryId,
         grade: alloc.grade,
         stream: alloc.stream,
-        message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${alloc.subjectName}" has ${alloc.lessonsPerWeek} lesson(s)/week allocated but no authorized teacher/supervisor assigned.`,
+        message: `${catLabel} · Grade ${alloc.grade} ${alloc.stream}: "${alloc.subjectName}" has ${alloc.lessonsPerWeek} lesson(s)/week allocated but no authorized teacher/supervisor assigned in EduSmart teacher records.`,
       });
     }
 
@@ -605,12 +679,12 @@ export function validateTimetableReadiness(input: EngineInput): {
     }
   }
 
-  // 2. Per-stream period budget check across all streams
-  for (const st of input.streams) {
+  // 2. Per-stream period budget check
+  for (const st of relevantStreams) {
     const cfg = input.scheduleConfigs[st.categoryId];
     if (!cfg) continue;
     const availableRegular = cfg.days.length * getRegularPeriods(cfg).length;
-    const stRows = streamAllocations.filter((r) => r.grade === st.grade && r.stream === st.stream);
+    const stRows = relevantAllocations.filter((r) => r.grade === st.grade && r.stream === st.stream);
     const streamRegularTotal = stRows.reduce((acc, r) => acc + r.lessonsPerWeek, 0);
     const catLabel =
       TIMETABLE_CATEGORIES.find((c) => c.id === st.categoryId)?.label || st.categoryId;
@@ -636,8 +710,12 @@ export function validateTimetableReadiness(input: EngineInput): {
     }
   }
 
-  // 3. Check Remedial 1 and Remedial 2 per category
-  for (const summary of categoryTotals) {
+  // 3. Check Remedial 1 and Remedial 2 per category in scope
+  const relevantSummaries = targetCat
+    ? categoryTotals.filter((c) => c.categoryId === targetCat)
+    : categoryTotals;
+
+  for (const summary of relevantSummaries) {
     const catStreams = input.streams.filter((st) => st.categoryId === summary.categoryId);
     if (catStreams.length === 0) continue;
     const catSubjects = input.subjects.filter(
@@ -649,7 +727,7 @@ export function validateTimetableReadiness(input: EngineInput): {
       const configsForSub = input.remedialConfigs.filter(
         (rc) => rc.isActive && rc.categoryId === summary.categoryId && rc.subjectId === remSub.id
       );
-      totalConfiguredLessonsAcrossSchool += configsForSub.reduce(
+      totalConfiguredLessonsInScope += configsForSub.reduce(
         (acc, rc) => acc + rc.weeklyFrequency,
         0
       );
@@ -686,17 +764,21 @@ export function validateTimetableReadiness(input: EngineInput): {
     }
   }
 
-  if (totalConfiguredLessonsAcrossSchool === 0) {
+  if (totalConfiguredLessonsInScope === 0) {
+    const scopeLabel = targetCat
+      ? TIMETABLE_CATEGORIES.find((c) => c.id === targetCat)?.label || targetCat
+      : 'any category';
     issues.push({
       code: 'ZERO_LESSONS_CONFIGURED',
       severity: 'error',
-      message: 'No weekly lessons have been allocated yet. Configure individual teacher stream assignments (Option 1) or category weekly allocations (Option 2) before generating.',
+      categoryId: targetCat,
+      message: `No weekly lessons have been allocated yet for ${scopeLabel}. Enter lessons per week in the subject allocation table and save before generating.`,
     });
   }
 
-  // 4. Cross-category shared facility total weekly demand vs capacity check (from effective resolved allocations)
+  // 4. Cross-category shared facility total weekly demand vs capacity check
   const facilityDemand = new Map<string, number>();
-  for (const alloc of streamAllocations) {
+  for (const alloc of relevantAllocations) {
     const sub = subjectById.get(alloc.subjectId);
     if (!sub) continue;
     const preferredFacId = alloc.candidateAssignments[0]?.facilityId || sub.defaultFacilityId;
@@ -708,6 +790,13 @@ export function validateTimetableReadiness(input: EngineInput): {
     if (!fac) continue;
     facilityDemand.set(fac.id, (facilityDemand.get(fac.id) || 0) + alloc.lessonsPerWeek);
   }
+  // Include locked other-category facility bookings when regenerating one category
+  if (targetCat && lockedEntries.length > 0) {
+    for (const le of lockedEntries) {
+      if (le.categoryId === targetCat || !le.facilityId) continue;
+      facilityDemand.set(le.facilityId, (facilityDemand.get(le.facilityId) || 0) + 1);
+    }
+  }
 
   for (const [facId, totalDemand] of facilityDemand.entries()) {
     const fac = input.facilities.find((f) => f.id === facId);
@@ -718,7 +807,7 @@ export function validateTimetableReadiness(input: EngineInput): {
       issues.push({
         code: 'FACILITY_CAPACITY_EXCEEDED',
         severity: 'error',
-        message: `Shared facility "${fac.name}" demand across all categories (${totalDemand} stream-periods/week) exceeds its weekly capacity (${weeklyCapacity} = ${fac.availableDays.length} days × ${fac.availablePeriods.length} periods × ${fac.capacityStreams} concurrent stream(s)).`,
+        message: `Shared facility "${fac.name}" demand across categories (${totalDemand} stream-periods/week) exceeds its weekly capacity (${weeklyCapacity} = ${fac.availableDays.length} days × ${fac.availablePeriods.length} periods × ${fac.capacityStreams} concurrent stream(s)).`,
       });
     }
   }
@@ -730,7 +819,7 @@ export function validateTimetableReadiness(input: EngineInput): {
   );
   const maxPhysicalTotalSlots = Math.max(
     maxPhysicalRegularSlots,
-    ...Object.values(input.scheduleConfigs).map((c) => c.days.length * getAllPeriods(c).length)
+    ...Object.values(input.scheduleConfigs).map((c) => c.days.length * getSchedulablePeriods(c).length)
   );
 
   const teacherProjectedDemand = new Map<
@@ -738,7 +827,7 @@ export function validateTimetableReadiness(input: EngineInput): {
     { name: string; regularDemand: number; totalDemand: number; max: number }
   >();
 
-  for (const alloc of streamAllocations) {
+  for (const alloc of relevantAllocations) {
     if (alloc.status !== 'linked' || !alloc.teacherId) continue;
     const a = alloc.candidateAssignments[0];
     const prev = teacherProjectedDemand.get(alloc.teacherId) || {
@@ -753,7 +842,26 @@ export function validateTimetableReadiness(input: EngineInput): {
     teacherProjectedDemand.set(alloc.teacherId, prev);
   }
 
-  for (const rc of input.remedialConfigs) {
+  // Include locked other-category bookings for teachers when generating a single category
+  if (targetCat && lockedEntries.length > 0) {
+    for (const le of lockedEntries) {
+      if (le.categoryId === targetCat) continue;
+      const prev = teacherProjectedDemand.get(le.teacherId) || {
+        name: le.teacherName,
+        regularDemand: 0,
+        totalDemand: 0,
+        max: 28,
+      };
+      if (le.subjectKind !== 'remedial') prev.regularDemand += 1;
+      prev.totalDemand += 1;
+      teacherProjectedDemand.set(le.teacherId, prev);
+    }
+  }
+
+  const relevantRemedials = targetCat
+    ? input.remedialConfigs.filter((rc) => rc.categoryId === targetCat)
+    : input.remedialConfigs;
+  for (const rc of relevantRemedials) {
     if (!rc.isActive || !rc.teacherId || rc.weeklyFrequency <= 0) continue;
     const prev = teacherProjectedDemand.get(rc.teacherId) || {
       name: rc.teacherName,
@@ -816,13 +924,27 @@ interface PlacementTask {
  * - Remedial 1 & 2 participating student-group overlap verification
  * - Clubs & Maktaba supervisor, day, and period constraints
  */
-export function generateTimetableSchedule(input: EngineInput): GenerateScheduleResult {
-  const readiness = validateTimetableReadiness(input);
+export function generateTimetableSchedule(
+  input: EngineInput,
+  options?: GenerateScheduleOptions
+): GenerateScheduleResult {
+  const targetCategoryId = options?.targetCategoryId;
+  // Keep locked entries from the OTHER categories untouched when regenerating a single category
+  const preservedLockedEntries: EngineTimetableEntry[] = targetCategoryId
+    ? (options?.lockedEntries ?? [])
+        .filter((e) => e.categoryId !== targetCategoryId)
+        .map((e) => ({ ...e, id: `tte_${crypto.randomBytes(6).toString('hex')}` }))
+    : [];
+
+  const readiness = validateTimetableReadiness(input, {
+    targetCategoryId,
+    lockedEntries: preservedLockedEntries,
+  });
   if (!readiness.readyToGenerate) {
-    const audit = validateTimetableEntries(input, []);
+    const audit = validateTimetableEntries(input, preservedLockedEntries, { targetCategoryId });
     return {
       success: false,
-      entries: [],
+      entries: preservedLockedEntries,
       unplacedTasks: [],
       audit,
     };
@@ -850,13 +972,13 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
   };
 
   // Build regular + common activity tasks directly from resolved, strictly-linked stream allocations
-  // (Supports BOTH Option 1 Individual Teacher Assignment and Option 2 Category Redistribution)
   const subjectById = new Map(input.subjects.map((s) => [s.id, s]));
   const streamByKey = new Map(
     input.streams.map((st) => [`${st.grade}::${st.stream.trim().toLowerCase()}`, st])
   );
 
   for (const alloc of readiness.streamAllocations) {
+    if (targetCategoryId && alloc.categoryId !== targetCategoryId) continue;
     if (alloc.status !== 'linked' || alloc.lessonsPerWeek <= 0) continue;
     const sub = subjectById.get(alloc.subjectId);
     const cfg = input.scheduleConfigs[alloc.categoryId];
@@ -916,13 +1038,14 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
   // Build Remedial 1 & Remedial 2 tasks from explicit remedial configurations
   for (const rc of input.remedialConfigs) {
     if (!rc.isActive || rc.weeklyFrequency <= 0 || !rc.teacherId) continue;
+    const catId = getCategoryForGrade(rc.grade);
+    if (targetCategoryId && catId !== targetCategoryId) continue;
     const sub = input.subjects.find((s) => s.id === rc.subjectId && s.isActive);
     if (!sub) continue;
-    const catId = getCategoryForGrade(rc.grade);
     const cfg = input.scheduleConfigs[catId];
     if (!cfg) continue;
 
-    const allPeriods = getAllPeriods(cfg).map((p) => p.periodNumber);
+    const schedulablePeriods = getSchedulablePeriods(cfg).map((p) => p.periodNumber);
     const remedialPeriods = cfg.periods
       .filter((p) => p.slotType === 'remedial')
       .map((p) => p.periodNumber);
@@ -934,10 +1057,10 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
 
     const allowedPeriods =
       rc.availablePeriods.length > 0
-        ? allPeriods.filter((p) => rc.availablePeriods.includes(p))
+        ? schedulablePeriods.filter((p) => rc.availablePeriods.includes(p))
         : remedialPeriods.length > 0
           ? remedialPeriods
-          : allPeriods;
+          : schedulablePeriods;
 
     const fac = resolveFacility(rc.facilityId || sub.defaultFacilityId, sub.requiresFacilityType);
     const streamObj = input.streams.find((s) => s.grade === rc.grade && s.stream === rc.stream);
@@ -985,7 +1108,6 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
             : `Grade ${rc.grade} ${rc.stream}`),
         studentIds: participatingStudentIds,
         durationMinsOverride: rc.durationMins || null,
-        // Place remedial tasks after regular whole-stream lessons unless restricted to regular periods
         constraintTightness: 500 + allowedDays.length * allowedPeriods.length,
       });
     }
@@ -994,26 +1116,112 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
   // Sort by MRV tightness (tightest tasks first; regular/facility/clubs before remedial)
   tasks.sort((a, b) => a.constraintTightness - b.constraintTightness);
 
-  // Occupancy maps
+  // Occupancy maps (tracking BOTH period slot AND exact clock-time intervals for cross-category safety)
+  interface BookedInterval {
+    entryId: string;
+    periodNumber: number;
+    startMins: number;
+    endMins: number;
+  }
+
   const entries: EngineTimetableEntry[] = [];
-  const teacherBusy = new Map<string, Set<string>>(); // teacherId -> Set<slotKey>
+  const teacherDayIntervals = new Map<string, BookedInterval[]>(); // `${teacherId}::${day}` -> intervals
   const teacherLoad = new Map<string, number>(); // teacherId -> count
-  const facilityUsage = new Map<string, Map<string, number>>(); // facilityId -> slotKey -> count
+  const facilityDayIntervals = new Map<string, BookedInterval[]>(); // `${facilityId}::${day}` -> intervals
   const streamWholeOccupied = new Map<string, Set<string>>(); // streamKey -> Set<slotKey>
   const streamEntriesBySlot = new Map<string, EngineTimetableEntry[]>(); // `${streamKey}::${slotKey}` -> entries
   const subjectPerStreamDayCount = new Map<string, number>(); // `${streamKey}::${subjectId}::${day}` -> count
+  const lockedEntryIds = new Set<string>();
 
-  const isTeacherFree = (teacherId: string, sk: string): boolean => {
-    return !(teacherBusy.get(teacherId)?.has(sk));
+  const registerOccupancy = (entry: EngineTimetableEntry): void => {
+    const sk = slotKey(entry.dayOfWeek, entry.periodNumber);
+    const stKey = streamKey(entry.grade, entry.stream);
+    const combinedKey = `${stKey}::${sk}`;
+    const startMins = parseTimeToMinutes(entry.startTime);
+    const endMins = parseTimeToMinutes(entry.endTime);
+
+    const tdKey = `${entry.teacherId}::${entry.dayOfWeek}`;
+    if (!teacherDayIntervals.has(tdKey)) teacherDayIntervals.set(tdKey, []);
+    teacherDayIntervals.get(tdKey)!.push({
+      entryId: entry.id,
+      periodNumber: entry.periodNumber,
+      startMins,
+      endMins,
+    });
+    teacherLoad.set(entry.teacherId, (teacherLoad.get(entry.teacherId) ?? 0) + 1);
+
+    if (entry.facilityId) {
+      const fdKey = `${entry.facilityId}::${entry.dayOfWeek}`;
+      if (!facilityDayIntervals.has(fdKey)) facilityDayIntervals.set(fdKey, []);
+      facilityDayIntervals.get(fdKey)!.push({
+        entryId: entry.id,
+        periodNumber: entry.periodNumber,
+        startMins,
+        endMins,
+      });
+    }
+
+    if (entry.studentGroupMode === 'whole_stream') {
+      if (!streamWholeOccupied.has(stKey)) streamWholeOccupied.set(stKey, new Set());
+      streamWholeOccupied.get(stKey)!.add(sk);
+    }
+
+    if (!streamEntriesBySlot.has(combinedKey)) streamEntriesBySlot.set(combinedKey, []);
+    streamEntriesBySlot.get(combinedKey)!.push(entry);
+
+    const daySubKey = `${stKey}::${entry.subjectId}::${entry.dayOfWeek}`;
+    subjectPerStreamDayCount.set(daySubKey, (subjectPerStreamDayCount.get(daySubKey) ?? 0) + 1);
   };
 
-  const isFacilityAvailable = (fac: EngineFacility | null, day: string, periodNum: number): boolean => {
+  // Pre-seed occupancy with preserved locked entries from OTHER categories
+  for (const locked of preservedLockedEntries) {
+    entries.push(locked);
+    lockedEntryIds.add(locked.id);
+    registerOccupancy(locked);
+  }
+
+  const isTeacherFreeAtSlot = (
+    teacherId: string,
+    day: string,
+    periodSlot: PeriodSlotDefinition
+  ): boolean => {
+    const list = teacherDayIntervals.get(`${teacherId}::${day}`);
+    if (!list || list.length === 0) return true;
+    const s = parseTimeToMinutes(periodSlot.startTime);
+    const e = parseTimeToMinutes(periodSlot.endTime);
+    for (const booked of list) {
+      if (s >= 0 && e > s && booked.startMins >= 0 && booked.endMins > booked.startMins) {
+        if (timeRangesOverlap(s, e, booked.startMins, booked.endMins)) return false;
+      } else if (booked.periodNumber === periodSlot.periodNumber) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const isFacilityAvailableAtSlot = (
+    fac: EngineFacility | null,
+    day: string,
+    periodSlot: PeriodSlotDefinition
+  ): boolean => {
     if (!fac) return true;
     if (fac.availableDays.length > 0 && !fac.availableDays.includes(day)) return false;
-    if (fac.availablePeriods.length > 0 && !fac.availablePeriods.includes(periodNum)) return false;
-    const sk = slotKey(day, periodNum);
-    const used = facilityUsage.get(fac.id)?.get(sk) ?? 0;
-    return used < Math.max(1, fac.capacityStreams);
+    if (fac.availablePeriods.length > 0 && !fac.availablePeriods.includes(periodSlot.periodNumber)) {
+      return false;
+    }
+    const list = facilityDayIntervals.get(`${fac.id}::${day}`);
+    if (!list || list.length === 0) return true;
+    const s = parseTimeToMinutes(periodSlot.startTime);
+    const e = parseTimeToMinutes(periodSlot.endTime);
+    let concurrent = 0;
+    for (const booked of list) {
+      const overlaps =
+        s >= 0 && e > s && booked.startMins >= 0 && booked.endMins > booked.startMins
+          ? timeRangesOverlap(s, e, booked.startMins, booked.endMins)
+          : booked.periodNumber === periodSlot.periodNumber;
+      if (overlaps) concurrent += 1;
+    }
+    return concurrent < Math.max(1, fac.capacityStreams);
   };
 
   const canPlaceForStreamAndStudents = (task: PlacementTask, sk: string): boolean => {
@@ -1022,24 +1230,13 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
     const existing = streamEntriesBySlot.get(combinedKey) ?? [];
 
     if (task.studentGroupMode === 'whole_stream') {
-      // Whole-stream regular lesson cannot share a slot with another whole-stream lesson
-      // nor with a remedial session that includes learners from this stream (unless remedial is in a remedial slot)
       if (streamWholeOccupied.get(stKey)?.has(sk)) return false;
       if (existing.length > 0) return false;
       return true;
     }
 
-    // Selected-learners remedial session:
-    // Cannot collide with a whole-stream regular lesson if those learners would be in class at the same period,
-    // UNLESS it's a dedicated remedial slot or no overlapping participating students are occupied.
-    // Specifically: if a whole-stream lesson occupies this period, participating learners in that stream are in that regular lesson!
-    // However, two separate selected-learner remedial sessions in the SAME period with DISJOINT studentIds CAN run concurrently!
     for (const ex of existing) {
-      if (ex.studentGroupMode === 'whole_stream') {
-        // Whole stream includes all learners of the stream -> conflicts with selected learners
-        return false;
-      }
-      // Both are selected_learners -> check actual participating student_ids overlap
+      if (ex.studentGroupMode === 'whole_stream') return false;
       const overlap = arraysOverlap(task.studentIds, ex.studentIds);
       if (overlap.length > 0) return false;
     }
@@ -1052,9 +1249,6 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
     day: string,
     periodSlot: PeriodSlotDefinition
   ): EngineTimetableEntry => {
-    const sk = slotKey(day, periodSlot.periodNumber);
-    const stKey = streamKey(task.grade, task.stream);
-    const combinedKey = `${stKey}::${sk}`;
     const durationMins = task.durationMinsOverride || periodSlot.durationMins;
 
     const entry: EngineTimetableEntry = {
@@ -1083,28 +1277,7 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
     };
 
     entries.push(entry);
-
-    if (!teacherBusy.has(assignment.teacherId)) teacherBusy.set(assignment.teacherId, new Set());
-    teacherBusy.get(assignment.teacherId)!.add(sk);
-    teacherLoad.set(assignment.teacherId, (teacherLoad.get(assignment.teacherId) ?? 0) + 1);
-
-    if (task.facility) {
-      if (!facilityUsage.has(task.facility.id)) facilityUsage.set(task.facility.id, new Map());
-      const fm = facilityUsage.get(task.facility.id)!;
-      fm.set(sk, (fm.get(sk) ?? 0) + 1);
-    }
-
-    if (task.studentGroupMode === 'whole_stream') {
-      if (!streamWholeOccupied.has(stKey)) streamWholeOccupied.set(stKey, new Set());
-      streamWholeOccupied.get(stKey)!.add(sk);
-    }
-
-    if (!streamEntriesBySlot.has(combinedKey)) streamEntriesBySlot.set(combinedKey, []);
-    streamEntriesBySlot.get(combinedKey)!.push(entry);
-
-    const daySubKey = `${stKey}::${task.subject.id}::${day}`;
-    subjectPerStreamDayCount.set(daySubKey, (subjectPerStreamDayCount.get(daySubKey) ?? 0) + 1);
-
+    registerOccupancy(entry);
     return entry;
   };
 
@@ -1116,12 +1289,25 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
     const stKey = streamKey(entry.grade, entry.stream);
     const combinedKey = `${stKey}::${sk}`;
 
-    teacherBusy.get(entry.teacherId)?.delete(sk);
+    const tdKey = `${entry.teacherId}::${entry.dayOfWeek}`;
+    const tList = teacherDayIntervals.get(tdKey);
+    if (tList) {
+      teacherDayIntervals.set(
+        tdKey,
+        tList.filter((b) => b.entryId !== entry.id)
+      );
+    }
     teacherLoad.set(entry.teacherId, Math.max(0, (teacherLoad.get(entry.teacherId) ?? 1) - 1));
 
     if (entry.facilityId) {
-      const fm = facilityUsage.get(entry.facilityId);
-      if (fm) fm.set(sk, Math.max(0, (fm.get(sk) ?? 1) - 1));
+      const fdKey = `${entry.facilityId}::${entry.dayOfWeek}`;
+      const fList = facilityDayIntervals.get(fdKey);
+      if (fList) {
+        facilityDayIntervals.set(
+          fdKey,
+          fList.filter((b) => b.entryId !== entry.id)
+        );
+      }
     }
 
     if (entry.studentGroupMode === 'whole_stream') {
@@ -1136,7 +1322,10 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
     }
 
     const daySubKey = `${stKey}::${entry.subjectId}::${entry.dayOfWeek}`;
-    subjectPerStreamDayCount.set(daySubKey, Math.max(0, (subjectPerStreamDayCount.get(daySubKey) ?? 1) - 1));
+    subjectPerStreamDayCount.set(
+      daySubKey,
+      Math.max(0, (subjectPerStreamDayCount.get(daySubKey) ?? 1) - 1)
+    );
   };
 
   const findBestCandidate = (
@@ -1144,7 +1333,9 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
   ): { assignment: EngineTeacherAssignment; day: string; periodSlot: PeriodSlotDefinition; score: number } | null => {
     const cfg = input.scheduleConfigs[task.categoryId];
     if (!cfg) return null;
-    const periodMap = new Map(cfg.periods.map((p) => [p.periodNumber, p]));
+    const periodMap = new Map(
+      getSchedulablePeriods(cfg).map((p) => [p.periodNumber, p])
+    );
     const stKey = streamKey(task.grade, task.stream);
 
     let best: {
@@ -1168,17 +1359,14 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
           if (!periodSlot) continue;
 
           const sk = slotKey(day, periodNum);
-          if (!isTeacherFree(assignment.teacherId, sk)) continue;
-          if (!isFacilityAvailable(task.facility, day, periodNum)) continue;
+          if (!isTeacherFreeAtSlot(assignment.teacherId, day, periodSlot)) continue;
+          if (!isFacilityAvailableAtSlot(task.facility, day, periodSlot)) continue;
           if (!canPlaceForStreamAndStudents(task, sk)) continue;
 
-          // Score slot: prefer spreading same subject across different days, prefer balanced teacher load,
-          // prefer remedial slot for remedial sessions if available
           const sameDayCount = subjectPerStreamDayCount.get(`${stKey}::${task.subject.id}::${day}`) ?? 0;
           const overloadPenalty = currentLoad >= assignment.maxWeeklyPeriods ? 500 : 0;
           const remedialSlotBonus =
             task.remedialConfig && periodSlot.slotType === 'remedial' ? -30 : 0;
-          // Mild spread across days based on day index & stream hash to avoid clumping
           const dayIdx = WEEKDAYS.indexOf(day as (typeof WEEKDAYS)[number]);
           const score =
             sameDayCount * 100 +
@@ -1207,14 +1395,16 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
       continue;
     }
 
-    // Single-step Kempe-style swap repair: try relocating an existing entry in the same stream
-    // so that this task can take its freed slot while preserving zero collisions.
+    // Single-step Kempe-style swap repair within the same stream (never touching locked entries)
     let repaired = false;
     const cfg = input.scheduleConfigs[task.categoryId];
     if (cfg && task.studentGroupMode === 'whole_stream') {
-      const periodMap = new Map(cfg.periods.map((p) => [p.periodNumber, p]));
+      const periodMap = new Map(
+        getSchedulablePeriods(cfg).map((p) => [p.periodNumber, p])
+      );
       const streamEntries = entries.filter(
         (e) =>
+          !lockedEntryIds.has(e.id) &&
           e.grade === task.grade &&
           e.stream === task.stream &&
           e.studentGroupMode === 'whole_stream' &&
@@ -1223,21 +1413,18 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
       );
 
       for (const blocker of streamEntries) {
-        const blockerSk = slotKey(blocker.dayOfWeek, blocker.periodNumber);
         const blockerPeriod = periodMap.get(blocker.periodNumber);
         if (!blockerPeriod) continue;
 
-        // Check if our task's teacher & facility could take blocker's slot
         const eligibleAssignment = task.candidateAssignments.find(
           (a) =>
-            isTeacherFree(a.teacherId, blockerSk) &&
+            isTeacherFreeAtSlot(a.teacherId, blocker.dayOfWeek, blockerPeriod) &&
             (a.allowedDays.length === 0 || a.allowedDays.includes(blocker.dayOfWeek)) &&
             (a.allowedPeriods.length === 0 || a.allowedPeriods.includes(blocker.periodNumber))
         );
         if (!eligibleAssignment) continue;
-        if (!isFacilityAvailable(task.facility, blocker.dayOfWeek, blocker.periodNumber)) continue;
+        if (!isFacilityAvailableAtSlot(task.facility, blocker.dayOfWeek, blockerPeriod)) continue;
 
-        // Temporarily remove blocker and see if blocker can move somewhere else cleanly
         const blockerSub = input.subjects.find((s) => s.id === blocker.subjectId);
         if (!blockerSub) continue;
         const blockerFac = blocker.facilityId ? facilityById.get(blocker.facilityId) ?? null : null;
@@ -1305,7 +1492,6 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
           repaired = true;
           break;
         } else {
-          // Roll back swap
           removeEntry(placedNew);
           placeEntry(
             blockerTask,
@@ -1324,15 +1510,22 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
         stream: task.stream,
         subjectName: task.subject.name,
         reason: task.facility
-          ? `No conflict-free slot with teacher and shared facility "${task.facility.name}" both available.`
-          : 'No conflict-free slot available without causing teacher or student-group collision.',
+          ? `No conflict-free slot with teacher and shared facility "${task.facility.name}" both available (checking all categories).`
+          : 'No conflict-free slot available without causing a cross-school teacher or student-group collision.',
       });
     }
   }
 
-  const audit = validateTimetableEntries(input, entries);
+  const audit = validateTimetableEntries(input, entries, {
+    targetCategoryId,
+    lockedEntries: preservedLockedEntries,
+  });
   return {
-    success: unplacedTasks.length === 0 && audit.teacherCollisions.length === 0 && audit.facilityOverflows.length === 0 && audit.studentGroupConflicts.length === 0,
+    success:
+      unplacedTasks.length === 0 &&
+      audit.teacherCollisions.length === 0 &&
+      audit.facilityOverflows.length === 0 &&
+      audit.studentGroupConflicts.length === 0,
     entries,
     unplacedTasks,
     audit,
@@ -1350,37 +1543,49 @@ export function generateTimetableSchedule(input: EngineInput): GenerateScheduleR
  */
 export function validateTimetableEntries(
   input: EngineInput,
-  entries: EngineTimetableEntry[]
+  entries: EngineTimetableEntry[],
+  options?: { targetCategoryId?: TimetableCategoryId; lockedEntries?: EngineTimetableEntry[] }
 ): TimetableAuditReport {
-  const readiness = validateTimetableReadiness(input);
+  const readiness = validateTimetableReadiness(input, options);
+  const targetCat = options?.targetCategoryId;
 
-  // 1. Teacher collision check
-  const byTeacherSlot = new Map<string, EngineTimetableEntry[]>();
+  // 1. Strict Whole-School Teacher Collision Check (BOTH same period AND cross-category clock-time overlap)
+  const byTeacherDay = new Map<string, EngineTimetableEntry[]>();
   for (const e of entries) {
-    const key = `${e.teacherId}::${e.dayOfWeek}::${e.periodNumber}`;
-    if (!byTeacherSlot.has(key)) byTeacherSlot.set(key, []);
-    byTeacherSlot.get(key)!.push(e);
+    const key = `${e.teacherId}::${e.dayOfWeek}`;
+    if (!byTeacherDay.has(key)) byTeacherDay.set(key, []);
+    byTeacherDay.get(key)!.push(e);
   }
   const teacherCollisions: TimetableAuditReport['teacherCollisions'] = [];
-  for (const list of byTeacherSlot.values()) {
-    if (list.length > 1) {
-      teacherCollisions.push({
-        teacherId: list[0].teacherId,
-        teacherName: list[0].teacherName,
-        dayOfWeek: list[0].dayOfWeek,
-        periodNumber: list[0].periodNumber,
-        entries: list.map((x) => ({
-          grade: x.grade,
-          stream: x.stream,
-          subjectName: x.subjectName,
-        })),
-      });
+  const seenCollisionPairs = new Set<string>();
+  for (const list of byTeacherDay.values()) {
+    if (list.length <= 1) continue;
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        if (entriesTimeOverlap(a, b)) {
+          const pairKey = [a.id, b.id].sort().join('::');
+          if (seenCollisionPairs.has(pairKey)) continue;
+          seenCollisionPairs.add(pairKey);
+          teacherCollisions.push({
+            teacherId: a.teacherId,
+            teacherName: a.teacherName,
+            dayOfWeek: a.dayOfWeek,
+            periodNumber: a.periodNumber,
+            entries: [
+              { grade: a.grade, stream: a.stream, subjectName: `${a.subjectName} (${a.startTime}–${a.endTime})` },
+              { grade: b.grade, stream: b.stream, subjectName: `${b.subjectName} (${b.startTime}–${b.endTime})` },
+            ],
+          });
+        }
+      }
     }
   }
 
-  // 2. Shared facility capacity & utilization check across all 3 categories
+  // 2. Shared facility capacity & utilization check across ALL 3 categories (clock-time overlap aware)
   const facilityMap = new Map(input.facilities.map((f) => [f.id, f]));
-  const byFacilitySlot = new Map<string, EngineTimetableEntry[]>();
+  const byFacilityDay = new Map<string, EngineTimetableEntry[]>();
   const facilityBookingsByCat = new Map<string, Record<TimetableCategoryId, number>>();
   const facilityTotalBooked = new Map<string, number>();
   const facilityPeak = new Map<string, number>();
@@ -1395,9 +1600,9 @@ export function validateTimetableEntries(
 
   for (const e of entries) {
     if (!e.facilityId) continue;
-    const key = `${e.facilityId}::${e.dayOfWeek}::${e.periodNumber}`;
-    if (!byFacilitySlot.has(key)) byFacilitySlot.set(key, []);
-    byFacilitySlot.get(key)!.push(e);
+    const key = `${e.facilityId}::${e.dayOfWeek}`;
+    if (!byFacilityDay.has(key)) byFacilityDay.set(key, []);
+    byFacilityDay.get(key)!.push(e);
 
     facilityTotalBooked.set(e.facilityId, (facilityTotalBooked.get(e.facilityId) ?? 0) + 1);
     const catRec = facilityBookingsByCat.get(e.facilityId);
@@ -1405,27 +1610,35 @@ export function validateTimetableEntries(
   }
 
   const facilityOverflows: TimetableAuditReport['facilityOverflows'] = [];
-  for (const list of byFacilitySlot.values()) {
+  const recordedFacOverflow = new Set<string>();
+  for (const list of byFacilityDay.values()) {
     const facId = list[0].facilityId!;
     const fac = facilityMap.get(facId);
     const cap = Math.max(1, fac?.capacityStreams ?? 1);
-    facilityPeak.set(facId, Math.max(facilityPeak.get(facId) ?? 0, list.length));
 
-    if (list.length > cap) {
-      facilityOverflowCount.set(facId, (facilityOverflowCount.get(facId) ?? 0) + 1);
-      facilityOverflows.push({
-        facilityId: facId,
-        facilityName: fac?.name ?? list[0].facilityName ?? facId,
-        dayOfWeek: list[0].dayOfWeek,
-        periodNumber: list[0].periodNumber,
-        capacityStreams: cap,
-        bookedStreams: list.length,
-        entries: list.map((x) => ({
-          grade: x.grade,
-          stream: x.stream,
-          subjectName: x.subjectName,
-        })),
-      });
+    for (const anchor of list) {
+      const concurrent = list.filter((other) => entriesTimeOverlap(anchor, other));
+      facilityPeak.set(facId, Math.max(facilityPeak.get(facId) ?? 0, concurrent.length));
+
+      if (concurrent.length > cap) {
+        const overflowKey = `${facId}::${anchor.dayOfWeek}::${concurrent.map((c) => c.id).sort().join(',')}`;
+        if (recordedFacOverflow.has(overflowKey)) continue;
+        recordedFacOverflow.add(overflowKey);
+        facilityOverflowCount.set(facId, (facilityOverflowCount.get(facId) ?? 0) + 1);
+        facilityOverflows.push({
+          facilityId: facId,
+          facilityName: fac?.name ?? anchor.facilityName ?? facId,
+          dayOfWeek: anchor.dayOfWeek,
+          periodNumber: anchor.periodNumber,
+          capacityStreams: cap,
+          bookedStreams: concurrent.length,
+          entries: concurrent.map((x) => ({
+            grade: x.grade,
+            stream: x.stream,
+            subjectName: `${x.subjectName} (${x.startTime}–${x.endTime})`,
+          })),
+        });
+      }
     }
   }
 
@@ -1502,54 +1715,61 @@ export function validateTimetableEntries(
     );
     const remedialEntries = streamEntries.filter((e) => e.subjectKind === 'remedial');
 
+    const streamExpectedAllocs = readiness.streamAllocations.filter(
+      (a) => a.grade === st.grade && a.stream === st.stream && a.lessonsPerWeek > 0
+    );
+    const streamRemedials = input.remedialConfigs.filter(
+      (rc) => rc.isActive && rc.grade === st.grade && rc.stream === st.stream && rc.weeklyFrequency > 0
+    );
+
+    const inActiveScope =
+      !targetCat || st.categoryId === targetCat || streamEntries.length > 0;
+    const hasConfiguredWork = streamExpectedAllocs.length > 0 || streamRemedials.length > 0;
+
     let blanks = 0;
-    for (const day of cfg.days) {
-      for (const rp of regularPeriods) {
-        const occupied = streamEntries.some(
-          (e) => e.dayOfWeek === day && e.periodNumber === rp.periodNumber
-        );
-        if (!occupied) {
-          blanks += 1;
-          unexplainedBlankSessions.push({
-            categoryId: st.categoryId,
-            grade: st.grade,
-            stream: st.stream,
-            dayOfWeek: day,
-            periodNumber: rp.periodNumber,
-          });
+    if (inActiveScope && (hasConfiguredWork || streamEntries.length > 0)) {
+      for (const day of cfg.days) {
+        for (const rp of regularPeriods) {
+          const occupied = streamEntries.some(
+            (e) => e.dayOfWeek === day && e.periodNumber === rp.periodNumber
+          );
+          if (!occupied) {
+            blanks += 1;
+            unexplainedBlankSessions.push({
+              categoryId: st.categoryId,
+              grade: st.grade,
+              stream: st.stream,
+              dayOfWeek: day,
+              periodNumber: rp.periodNumber,
+            });
+          }
         }
       }
     }
 
-    // Per-subject expected vs scheduled completeness (synced with effective Option 1 or Option 2 allocations)
-    const streamExpectedAllocs = readiness.streamAllocations.filter(
-      (a) => a.grade === st.grade && a.stream === st.stream && a.lessonsPerWeek > 0
-    );
     const missingLessons: StreamCompletenessReport['missingLessons'] = [];
-    for (const alloc of streamExpectedAllocs) {
-      const scheduled = streamEntries.filter((e) => e.subjectId === alloc.subjectId).length;
-      if (scheduled < alloc.lessonsPerWeek) {
-        missingLessons.push({
-          subjectName: alloc.subjectName,
-          expected: alloc.lessonsPerWeek,
-          scheduled,
-        });
+    if (inActiveScope) {
+      for (const alloc of streamExpectedAllocs) {
+        const scheduled = streamEntries.filter((e) => e.subjectId === alloc.subjectId).length;
+        if (scheduled < alloc.lessonsPerWeek) {
+          missingLessons.push({
+            subjectName: alloc.subjectName,
+            expected: alloc.lessonsPerWeek,
+            scheduled,
+          });
+        }
       }
-    }
 
-    // Also verify configured remedial sessions for this stream
-    const streamRemedials = input.remedialConfigs.filter(
-      (rc) => rc.isActive && rc.grade === st.grade && rc.stream === st.stream && rc.weeklyFrequency > 0
-    );
-    for (const rc of streamRemedials) {
-      const scheduled = streamEntries.filter((e) => e.remedialConfigId === rc.id).length;
-      if (scheduled < rc.weeklyFrequency) {
-        const sub = input.subjects.find((s) => s.id === rc.subjectId);
-        missingLessons.push({
-          subjectName: `${sub?.name ?? rc.remedialType} (${rc.studentGroupName || 'Group'})`,
-          expected: rc.weeklyFrequency,
-          scheduled,
-        });
+      for (const rc of streamRemedials) {
+        const scheduled = streamEntries.filter((e) => e.remedialConfigId === rc.id).length;
+        if (scheduled < rc.weeklyFrequency) {
+          const sub = input.subjects.find((s) => s.id === rc.subjectId);
+          missingLessons.push({
+            subjectName: `${sub?.name ?? rc.remedialType} (${rc.studentGroupName || 'Group'})`,
+            expected: rc.weeklyFrequency,
+            scheduled,
+          });
+        }
       }
     }
 
@@ -1562,11 +1782,13 @@ export function validateTimetableEntries(
       unexplainedBlankPeriods: blanks,
       remedialSessionsScheduled: remedialEntries.length,
       missingLessons,
-      isComplete: blanks === 0 && missingLessons.length === 0,
+      isComplete:
+        (!hasConfiguredWork && streamEntries.length === 0) ||
+        (blanks === 0 && missingLessons.length === 0),
     });
   }
 
-  // 5. Teacher workload calculations (including all core, common activities, clubs, maktaba, remedial)
+  // 5. Teacher workload calculations
   const teacherMaxMap = new Map<string, { name: string; max: number }>();
   for (const a of input.teacherAssignments) {
     if (!a.isActive) continue;
@@ -1644,4 +1866,65 @@ export function validateTimetableEntries(
     facilityUtilization,
     streamCompleteness,
   };
+}
+
+/**
+ * Strict validation for manual timetable cell editing (Requirement 7):
+ * Checks whole-school teacher clock-time collisions, shared facility capacity,
+ * and stream/student-group conflicts before persisting any manual edit.
+ */
+export function validateSingleEntryEdit(
+  input: EngineInput,
+  allEntries: EngineTimetableEntry[],
+  updatedEntry: EngineTimetableEntry
+): { ok: true } | { ok: false; error: string } {
+  const others = allEntries.filter((e) => e.id !== updatedEntry.id);
+
+  // 1. Strict whole-school teacher collision check (clock-time overlap across all categories)
+  for (const other of others) {
+    if (other.teacherId === updatedEntry.teacherId && entriesTimeOverlap(updatedEntry, other)) {
+      return {
+        ok: false,
+        error: `Teacher collision blocked: ${updatedEntry.teacherName} is already scheduled to teach ${other.subjectName} in Grade ${other.grade} ${other.stream} on ${other.dayOfWeek} (${other.startTime}–${other.endTime}).`,
+      };
+    }
+  }
+
+  // 2. Stream / participating student-group conflict check
+  for (const other of others) {
+    if (
+      other.grade === updatedEntry.grade &&
+      other.stream.toLowerCase() === updatedEntry.stream.toLowerCase() &&
+      other.dayOfWeek === updatedEntry.dayOfWeek &&
+      other.periodNumber === updatedEntry.periodNumber
+    ) {
+      const conflicts =
+        updatedEntry.studentGroupMode === 'whole_stream' ||
+        other.studentGroupMode === 'whole_stream' ||
+        arraysOverlap(updatedEntry.studentIds, other.studentIds).length > 0;
+      if (conflicts) {
+        return {
+          ok: false,
+          error: `Stream slot conflict: Grade ${updatedEntry.grade} ${updatedEntry.stream} already has ${other.subjectName} scheduled on ${other.dayOfWeek} Period ${other.periodNumber}.`,
+        };
+      }
+    }
+  }
+
+  // 3. Shared facility capacity check across all categories
+  if (updatedEntry.facilityId) {
+    const fac = input.facilities.find((f) => f.id === updatedEntry.facilityId && f.isActive);
+    const cap = Math.max(1, fac?.capacityStreams ?? 1);
+    const concurrent = others.filter(
+      (o) => o.facilityId === updatedEntry.facilityId && entriesTimeOverlap(updatedEntry, o)
+    );
+    if (concurrent.length >= cap) {
+      return {
+        ok: false,
+        error: `Shared facility capacity exceeded: "${fac?.name || updatedEntry.facilityName || 'Facility'}" is already booked (${concurrent.length}/${cap} streams) during ${updatedEntry.dayOfWeek} ${updatedEntry.startTime}–${updatedEntry.endTime}.`,
+      };
+    }
+  }
+
+  return { ok: true };
 }

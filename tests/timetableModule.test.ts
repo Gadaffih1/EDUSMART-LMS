@@ -13,9 +13,11 @@ import {
 } from '../src/server/timetableSchema.ts';
 import {
   generateTimetableSchedule,
+  validateSingleEntryEdit,
   validateTimetableEntries,
   validateTimetableReadiness,
   type EngineFacility,
+  type EngineGradeSubjectOverride,
   type EngineInput,
   type EngineRemedialConfig,
   type EngineScheduleConfig,
@@ -241,7 +243,7 @@ test('Scheduling engine enforces independent allocations, zero teacher collision
     { id: 'c3_lib', categoryId: 'cat_7_9', code: 'library_lessons', name: 'Library Lessons', shortCode: 'LIB', subjectKind: 'common_activity', isAdditionalCommon: true, lessonsPerWeek: 1, requiresFacilityType: 'library', defaultFacilityId: 'fac_lib', equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 5 },
     { id: 'c3_mkt', categoryId: 'cat_7_9', code: 'maktaba', name: 'Maktaba', shortCode: 'MKT', subjectKind: 'common_activity', isAdditionalCommon: true, lessonsPerWeek: 1, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: ['Monday'], allowedPeriods: [4], isActive: true, sortOrder: 6 },
     { id: 'c3_swm', categoryId: 'cat_7_9', code: 'swimming', name: 'Swimming', shortCode: 'SWM', subjectKind: 'common_activity', isAdditionalCommon: true, lessonsPerWeek: 3, requiresFacilityType: 'swimming_pool', defaultFacilityId: 'fac_pool', equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 7 },
-    { id: 'c3_clb', categoryId: 'cat_7_9', code: 'clubs', name: 'Clubs', shortCode: 'CLB', subjectKind: 'common_activity', isAdditionalCommon: true, lessonsPerWeek: 1, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: ['Friday'], allowedPeriods: [3], isActive: true, sortOrder: 8 },
+    { id: 'c3_clb', categoryId: 'cat_7_9', code: 'clubs', name: 'Clubs', shortCode: 'CLB', subjectKind: 'common_activity', isAdditionalCommon: true, lessonsPerWeek: 1, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: ['Wednesday'], allowedPeriods: [4], isActive: true, sortOrder: 8 },
   ];
 
   // First verify Requirement F: readiness MUST fail when teachers are unassigned
@@ -708,4 +710,152 @@ test('Option 2 (category_redistribution): Category weekly allocations redistribu
   assert.equal(result.audit.streamAllocations.length, 6);
   assert.ok(result.audit.streamAllocations.every((ra) => ra.status === 'linked'));
 });
+
+test('Clock-time overlap prevention across categories, Break/Lunch exclusion, Grade Overrides, Independent Category Generation, and Manual Cell Edit Collision Guard', () => {
+  // Cat 2 uses 35-min periods, Cat 3 uses 40-min periods -> different period numbers can overlap in real clock time!
+  const scheduleConfigs: Record<TimetableCategoryId, EngineScheduleConfig> = {
+    cat_1_3: {
+      categoryId: 'cat_1_3',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'category_redistribution',
+    },
+    cat_4_6: {
+      categoryId: 'cat_4_6',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 35,
+      periods: buildDefaultPeriodSlots(4, 35),
+      allocationMode: 'category_redistribution',
+    },
+    cat_7_9: {
+      categoryId: 'cat_7_9',
+      days: [...WEEKDAYS],
+      periodsPerDay: 4,
+      periodDurationMins: 40,
+      periods: buildDefaultPeriodSlots(4, 40),
+      allocationMode: 'category_redistribution',
+    },
+  };
+
+  // Verify standard full-day period slots include Short Break, Mid-Morning Break, and Lunch Break
+  const fullDaySlots = buildDefaultPeriodSlots(8, 35);
+  assert.ok(fullDaySlots.some((p) => p.slotType === 'break' && p.label === 'Short Break'));
+  assert.ok(fullDaySlots.some((p) => p.slotType === 'break' && p.label === 'Mid-Morning Break'));
+  assert.ok(fullDaySlots.some((p) => p.slotType === 'lunch' && p.label === 'Lunch Break'));
+  assert.ok(scheduleConfigs.cat_4_6.periods.some((p) => p.slotType === 'break'));
+
+  const facilities: EngineFacility[] = [
+    {
+      id: 'fac_sci',
+      name: 'Integrated Science Laboratory',
+      facilityType: 'science_lab',
+      capacityStreams: 1,
+      seatCapacity: 40,
+      equipment: ['Lab Benches'],
+      availableDays: [...WEEKDAYS],
+      availablePeriods: [1, 2, 3, 4],
+      notes: '',
+      isActive: true,
+    },
+  ];
+
+  const streams: EngineStream[] = [
+    { grade: 5, stream: 'East', categoryId: 'cat_4_6', studentIds: [] },
+    { grade: 6, stream: 'East', categoryId: 'cat_4_6', studentIds: [] },
+    { grade: 7, stream: 'West', categoryId: 'cat_7_9', studentIds: [] },
+  ];
+
+  const subjects: EngineSubject[] = [
+    // Cat 2 base: 10 Math + 10 Science = 20 lessons/wk
+    { id: 'c2_mat', categoryId: 'cat_4_6', code: 'mathematics', name: 'Mathematics', shortCode: 'MAT', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 10, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 1 },
+    { id: 'c2_sci', categoryId: 'cat_4_6', code: 'integrated_science', name: 'Integrated Science', shortCode: 'SCI', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 10, requiresFacilityType: 'science_lab', defaultFacilityId: 'fac_sci', equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 2 },
+    // Cat 3 base: 10 Math + 10 English = 20 lessons/wk
+    { id: 'c3_mat', categoryId: 'cat_7_9', code: 'mathematics', name: 'Mathematics', shortCode: 'MAT', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 10, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 1 },
+    { id: 'c3_eng', categoryId: 'cat_7_9', code: 'english', name: 'English', shortCode: 'ENG', subjectKind: 'core', isAdditionalCommon: false, lessonsPerWeek: 10, requiresFacilityType: null, defaultFacilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true, sortOrder: 2 },
+  ];
+
+  // Grade-specific override for Grade 6: 12 Math + 8 Science (still 20 total, different from Grade 5's 10 + 10)
+  const gradeOverrides: EngineGradeSubjectOverride[] = [
+    { categoryId: 'cat_4_6', grade: 6, subjectId: 'c2_mat', lessonsPerWeek: 12 },
+    { categoryId: 'cat_4_6', grade: 6, subjectId: 'c2_sci', lessonsPerWeek: 8 },
+  ];
+
+  // Shared teacher t_shared teaches Grade 5 East Math (10/wk) AND Grade 7 West Math (10/wk) = 20/wk across categories!
+  const teacherAssignments: EngineTeacherAssignment[] = [
+    { id: 'ta1', teacherId: 't_shared', teacherName: 'Teacher A (Shared Math)', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 5, stream: 'East', lessonsPerWeek: null, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'ta2', teacherId: 't_g6_mat', teacherName: 'Mr. G6 Math', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_mat', grade: 6, stream: 'East', lessonsPerWeek: null, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'ta3', teacherId: 't_sci', teacherName: 'Ms. Science', teacherEmail: '', categoryId: 'cat_4_6', subjectId: 'c2_sci', grade: null, stream: null, lessonsPerWeek: null, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: 'fac_sci', equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'ta4', teacherId: 't_shared', teacherName: 'Teacher A (Shared Math)', teacherEmail: '', categoryId: 'cat_7_9', subjectId: 'c3_mat', grade: 7, stream: 'West', lessonsPerWeek: null, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+    { id: 'ta5', teacherId: 't_g7_eng', teacherName: 'Ms. G7 Eng', teacherEmail: '', categoryId: 'cat_7_9', subjectId: 'c3_eng', grade: 7, stream: 'West', lessonsPerWeek: null, allocationSource: 'category_redistribution', roleType: 'subject_teacher', maxWeeklyPeriods: 28, facilityId: null, equipmentNotes: '', allowedDays: [], allowedPeriods: [], isActive: true },
+  ];
+
+  const input: EngineInput = {
+    scheduleConfigs,
+    subjects,
+    gradeOverrides,
+    facilities,
+    teacherAssignments,
+    remedialConfigs: [],
+    streams,
+  };
+
+  // 1. First generate ONLY Category 3 (Grades 7-9)
+  const cat3Gen = generateTimetableSchedule(input, { targetCategoryId: 'cat_7_9' });
+  assert.equal(cat3Gen.success, true, `Cat 3 generation failed: ${JSON.stringify(cat3Gen.unplacedTasks)}`);
+  const cat3Entries = cat3Gen.entries.filter((e) => e.categoryId === 'cat_7_9');
+  assert.equal(cat3Entries.length, 20, 'Grade 7 West must have all 20 lessons');
+  assert.ok(cat3Entries.every((e) => e.periodNumber > 0), 'Break/Lunch slots must never be scheduled');
+
+  // 2. Now independently generate Category 2 (Grades 4-6) while LOCKING Category 3 entries untouched
+  const cat2Gen = generateTimetableSchedule(input, {
+    targetCategoryId: 'cat_4_6',
+    lockedEntries: cat3Entries,
+  });
+  assert.equal(cat2Gen.success, true, `Independent Cat 2 generation failed: ${JSON.stringify(cat2Gen.unplacedTasks)}`);
+  assert.equal(cat2Gen.audit.teacherCollisions.length, 0, 'Zero clock-time or period collisions across categories');
+  assert.equal(cat2Gen.audit.facilityOverflows.length, 0, 'Zero science lab overflows');
+
+  // Verify Category 3 locked entries were preserved identically (same day/period/times/subject/teacher/facility)
+  const normalizeForCompare = (list: typeof cat3Entries) =>
+    list
+      .map(({ id: _rowId, ...rest }) => rest)
+      .sort((a, b) =>
+        `${a.dayOfWeek}-${a.periodNumber}-${a.grade}-${a.stream}-${a.subjectId}`.localeCompare(
+          `${b.dayOfWeek}-${b.periodNumber}-${b.grade}-${b.stream}-${b.subjectId}`
+        )
+      );
+  const preservedCat3 = cat2Gen.entries.filter((e) => e.categoryId === 'cat_7_9');
+  assert.deepEqual(
+    normalizeForCompare(preservedCat3),
+    normalizeForCompare(cat3Entries),
+    'Other categories must remain untouched when regenerating a single category'
+  );
+
+  // Verify Grade 6 override was honored (12 Math + 8 Science, whereas Grade 5 got 10 Math + 10 Science)
+  const g5Math = cat2Gen.entries.filter((e) => e.grade === 5 && e.subjectId === 'c2_mat');
+  const g6Math = cat2Gen.entries.filter((e) => e.grade === 6 && e.subjectId === 'c2_mat');
+  const g6Sci = cat2Gen.entries.filter((e) => e.grade === 6 && e.subjectId === 'c2_sci');
+  assert.equal(g5Math.length, 10);
+  assert.equal(g6Math.length, 12);
+  assert.equal(g6Sci.length, 8);
+
+  // 3. Verify manual cell edit guard rejects moving a Grade 5 Math lesson into a slot overlapping Grade 7 Math for Teacher A
+  const sampleG5Math = g5Math[0];
+  const sampleG7Math = preservedCat3.find((e) => e.teacherId === 't_shared')!;
+  const collidingEdit = validateSingleEntryEdit(input, cat2Gen.entries, {
+    ...sampleG5Math,
+    dayOfWeek: sampleG7Math.dayOfWeek,
+    periodNumber: sampleG7Math.periodNumber,
+    startTime: sampleG7Math.startTime,
+    endTime: sampleG7Math.endTime,
+  });
+  assert.equal(collidingEdit.ok, false, 'Manual cell edit must reject cross-category teacher clock-time collision');
+  if (!collidingEdit.ok) {
+    assert.ok(collidingEdit.error.includes('Teacher collision'));
+  }
+});
+
 

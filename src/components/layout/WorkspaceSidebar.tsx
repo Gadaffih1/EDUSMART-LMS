@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, LucideIcon, Menu, X } from 'lucide-react';
+import { Bot, ChevronDown, ChevronRight, ExternalLink, LucideIcon, Menu, X } from 'lucide-react';
+
+export interface WorkspaceSidebarExternalLink {
+  label: string;
+  href: string;
+  icon?: LucideIcon;
+  title?: string;
+}
 
 export interface WorkspaceSidebarItem<T extends string = string> {
   id: T;
@@ -29,6 +36,7 @@ interface WorkspaceSidebarProps<T extends string = string> {
   footerNote?: string;
   statusText?: string;
   showMobileBottomNav?: boolean;
+  bottomExternalLinks?: WorkspaceSidebarExternalLink[];
 }
 
 const themeActiveGradients: Record<string, string> = {
@@ -76,6 +84,7 @@ export const WorkspaceSidebar = <T extends string = string>({
   footerNote = 'CBC Competency & Security',
   statusText = 'Online',
   showMobileBottomNav = true,
+  bottomExternalLinks,
 }: WorkspaceSidebarProps<T>) => {
   const activeGradient = themeActiveGradients[themeColor] || themeActiveGradients.emerald;
   const badgeBorder = themeBadgeColors[themeColor] || themeBadgeColors.emerald;
@@ -224,6 +233,31 @@ export const WorkspaceSidebar = <T extends string = string>({
               </div>
             );
           })}
+
+          {bottomExternalLinks && bottomExternalLinks.length > 0 && (
+            <div className="pt-2 border-t border-slate-800/80 space-y-1">
+              {bottomExternalLinks.map((link) => {
+                const LinkIcon = link.icon || Bot;
+                return (
+                  <a
+                    key={link.href + link.label}
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={closeDrawer}
+                    title={link.title || link.label}
+                    className="w-full min-h-[42px] flex items-center justify-between px-3 py-2 rounded-xl font-black bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-xs transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <LinkIcon className="w-4 h-4 shrink-0 text-white" />
+                      <span className="truncate">{link.label}</span>
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-85" />
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         {/* Bottom Portal Stamp */}

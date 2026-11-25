@@ -981,19 +981,6 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
             </button>
           )}
 
-          {/* EduCOBOT External Link Button */}
-          <a
-            href="https://innov8r.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl text-xs font-black shadow-xs inline-flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
-            title="Open EduCOBOT (innov8r.ai)"
-          >
-            <Bot className="w-3.5 h-3.5 shrink-0" />
-            <span>EduCOBOT</span>
-            <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
-          </a>
-
           {/* Quick School Library Access */}
           <button
             type="button"
@@ -1053,6 +1040,9 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           themeColor="blue"
           footerNote={`Grade ${defaultGrade} ${defaultStream}`}
           statusText="● Verified"
+          bottomExternalLinks={[
+            { label: 'EduCOBOT', href: 'https://innov8r.ai', icon: Bot, title: 'Open EduCOBOT (innov8r.ai)' },
+          ]}
         />
 
         {/* Content View Area */}

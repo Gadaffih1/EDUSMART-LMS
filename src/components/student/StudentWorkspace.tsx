@@ -352,19 +352,6 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
 
         {/* Quick Top Tools */}
         <div className="flex items-center gap-2">
-          {/* EduCOBOT External Link Button */}
-          <a
-            href="https://innov8r.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-xs font-black shadow-xs inline-flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
-            title="Open EduCOBOT (innov8r.ai)"
-          >
-            <Bot className="w-3.5 h-3.5 shrink-0" />
-            <span>EduCOBOT</span>
-            <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
-          </a>
-
           {/* Safe Browser Button */}
           <button
             onClick={() => setActiveTab('browser')}
@@ -518,6 +505,26 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
                 </div>
               </div>
             ))}
+
+            {/* EduCOBOT External Link at Bottom of Sidebar List */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <a
+                href="https://innov8r.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMobileSidebarOpen(false)}
+                title="Open EduCOBOT (innov8r.ai)"
+                className={`w-full flex items-center ${
+                  isSidebarCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
+                } rounded-xl font-black bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-xs transition-all cursor-pointer`}
+              >
+                <div className={`flex items-center gap-2.5 ${isSidebarCollapsed ? 'justify-center' : 'truncate'}`}>
+                  <Bot className="w-4 h-4 shrink-0 text-white" />
+                  {!isSidebarCollapsed && <span className="truncate">EduCOBOT</span>}
+                </div>
+                {!isSidebarCollapsed && <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-85" />}
+              </a>
+            </div>
           </div>
 
           {/* Bottom Stamp */}

@@ -69,8 +69,7 @@ import {
   Upload,
   ChevronRight,
   ClipboardCheck,
-  Bot,
-  ExternalLink
+  Bot
 } from 'lucide-react';
 
 interface DeputyHeadWorkspaceProps {
@@ -495,20 +494,7 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* EduCOBOT External Link Button */}
-          <a
-            href="https://innov8r.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl text-xs font-black shadow-xs inline-flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
-            title="Open EduCOBOT (innov8r.ai)"
-          >
-            <Bot className="w-3.5 h-3.5 shrink-0" />
-            <span>EduCOBOT</span>
-            <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
-          </a>
-
+        <div className="flex items-center gap-3">
           {/* Quick Result Upload Action Button */}
           <button
             onClick={() => setActiveTab('results_upload')}
@@ -541,6 +527,9 @@ export const DeputyHeadWorkspace: React.FC<DeputyHeadWorkspaceProps> = ({ curren
           themeColor="blue"
           footerNote="Safety & CBC Integrity"
           statusText="● Active Duty"
+          bottomExternalLinks={[
+            { label: 'EduCOBOT', href: 'https://innov8r.ai', icon: Bot, title: 'Open EduCOBOT (innov8r.ai)' },
+          ]}
         />
 
         {/* Content View Area */}

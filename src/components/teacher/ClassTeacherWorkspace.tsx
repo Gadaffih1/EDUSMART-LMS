@@ -72,7 +72,6 @@ import {
   Library,
   CalendarDays,
   Bot,
-  ExternalLink,
 } from 'lucide-react';
 
 export type ClassTeacherTab =
@@ -631,6 +630,9 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
         themeColor="emerald"
         footerNote={`${currentTenant.name} · Academic Governance`}
         statusText={`${streamLabel} Active`}
+        bottomExternalLinks={[
+          { label: 'EduCOBOT', href: 'https://innov8r.ai', icon: Bot, title: 'Open EduCOBOT (innov8r.ai)' },
+        ]}
       />
 
       {/* Main Workspace Body */}
@@ -698,18 +700,6 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
                 ))}
               </div>
             ) : null}
-
-            <a
-              href="https://innov8r.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 rounded-lg whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
-              title="Open EduCOBOT (innov8r.ai)"
-            >
-              <Bot className="w-3.5 h-3.5 shrink-0" />
-              <span>EduCOBOT</span>
-              <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
-            </a>
 
             <button
               type="button"

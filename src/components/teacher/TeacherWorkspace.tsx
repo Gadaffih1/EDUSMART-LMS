@@ -894,7 +894,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
     {
       title: 'CLASSROOM & INSTRUCTION',
       items: [
-        { id: 'work_entry', label: '1. Lesson Work Entry', icon: Briefcase },
+        { id: 'work_entry', label: 'Work Entry Register', icon: Briefcase },
         { id: 'class_register', label: '2. Class Roll Call Register', icon: UserCheck, badge: isClassTeacher ? `${currentUser.stream || 'Stream'}` : undefined },
         ...(canAllocateStreams
           ? [{ id: 'stream_management' as TeacherTab, label: '3. Student Stream Allocations', icon: Users, badge: 'CBC Streams', badgeColor: 'bg-blue-600' }]
@@ -1114,7 +1114,7 @@ export const TeacherWorkspace: React.FC<TeacherWorkspaceProps> = ({
           TAB 1: WORK ENTRY SIGN IN (OFFICIAL INSTITUTIONAL PROTOCOL)
           ======================================================== */}
       {activeTab === 'work_entry' && (
-        <section className="space-y-6">
+        <section className="space-y-4">
           <TeacherWorkEntryForm 
             currentUser={currentUser} 
             onSuccess={(newLog) => {

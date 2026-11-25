@@ -597,7 +597,7 @@ export const ClassTeacherWorkspace: React.FC<ClassTeacherWorkspaceProps> = ({
         { id: 'gate_exit', label: 'Student Gate Exit', icon: DoorOpen },
         { id: 'virtual_classrooms', label: 'Virtual Classrooms', icon: Video },
         { id: 'timetable', label: 'Class & Teaching Timetable', icon: CalendarDays },
-        { id: 'work_entry', label: 'Daily Work Entry', icon: Briefcase },
+        { id: 'work_entry', label: 'Work Entry Register', icon: Briefcase },
         { id: 'staff_appraisal', label: 'TPAD Appraisal', icon: TrendingUp },
       ],
     },

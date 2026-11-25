@@ -384,550 +384,454 @@ export const TeacherWorkEntryForm: React.FC<TeacherWorkEntryFormProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto my-4 font-sans text-slate-800">
-      
-      {/* ========================================================
-          OFFICIAL WORK ENTRY SIGN-IN CARD WRAPPER & COVER HEADER
-          Cover: Official Logo centered at 80x80 with shadow
-          ======================================================== */}
-      <div className="bg-[#ecedf3] rounded-3xl p-3 sm:p-6 shadow-md border border-slate-300/80">
-        
-        {/* Top Cover Logo Badge (Tenant School Logo) */}
-        <div className="flex justify-center -mt-8 sm:-mt-10 mb-4">
-          <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-amber-400 flex flex-col items-center">
-            <TenantSchoolLogo variant="full" size="md" />
+    <div className="w-full max-w-lg mx-auto font-sans text-slate-800">
+      {/* Compact Official Work Entry Card */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        {/* Compact Institutional Header Bar */}
+        <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="bg-white p-1 rounded-lg border border-amber-400/70 shadow-2xs shrink-0">
+              <TenantSchoolLogo variant="horizontal" size="xs" compactMobile />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-extrabold text-[#2C3345] tracking-tight leading-tight truncate">
+                Work Entry Sign-In Form (Teacher)
+              </h1>
+              <p className="text-[10px] text-slate-500 truncate">
+                Log duty attendance, live GPS locality &amp; staff clock-in verification.
+              </p>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-md text-blue-900 text-[10px] font-bold uppercase tracking-wide shrink-0">
+            <Building2 className="w-3 h-3 text-blue-700 shrink-0" />
+            <span className="truncate max-w-[140px]">{currentTenant.name} · {currentTenant.code}</span>
           </div>
         </div>
 
-        {/* Main White Institutional Body Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-          
-          {/* Header Bar */}
-          <div className="p-6 sm:p-8 border-b border-slate-200 bg-white text-center relative">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-blue-900 text-xs font-bold uppercase tracking-wider mb-2">
-              <Building2 className="w-3.5 h-3.5 text-blue-700" />
-              <span>{currentTenant.name} · {currentTenant.code}</span>
+        {/* Submission Success Banner */}
+        {submissionSuccess ? (
+          <div className="p-4 text-center space-y-3 bg-emerald-50/50">
+            <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <Check className="w-5 h-5 stroke-[3]" />
             </div>
-            
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#2C3345] tracking-tight">
-              Work Entry Sign-In Form (Teacher)
-            </h1>
-            <p className="text-xs text-slate-500 mt-2 max-w-xl mx-auto">
-              Please complete this official sign-in form to log duty attendance, capture verified live GPS street/locality location, and confirm staff clock-in.
-            </p>
 
-            <div className="w-24 h-1 bg-amber-500 mx-auto mt-4 rounded-full" />
+            <div>
+              <h2 className="text-base font-black text-slate-900">
+                Work Entry Successfully Logged!
+              </h2>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Stamped and filed into the school institutional audit register.
+              </p>
+            </div>
+
+            {/* Receipt / Details Card */}
+            <div className="bg-white p-3 rounded-xl border border-slate-200 text-left text-[11px] space-y-1.5 shadow-2xs">
+              <div className="flex justify-between gap-2 border-b pb-1.5 border-slate-100">
+                <span className="text-slate-500">Staff Member:</span>
+                <span className="font-bold text-slate-900 text-right">{submissionSuccess.teacherName} ({submissionSuccess.staffNo})</span>
+              </div>
+              <div className="flex justify-between gap-2 border-b pb-1.5 border-slate-100">
+                <span className="text-slate-500">Date &amp; Time:</span>
+                <span className="font-mono font-semibold text-slate-800">{submissionSuccess.date} · {submissionSuccess.time}</span>
+              </div>
+              <div className="flex justify-between gap-2 border-b pb-1.5 border-slate-100">
+                <span className="text-slate-500">Strictly Work Email:</span>
+                <span className="font-mono text-slate-800 truncate">{submissionSuccess.email}</span>
+              </div>
+              <div className="flex justify-between gap-2 border-b pb-1.5 border-slate-100">
+                <span className="text-slate-500">Sign-In Location:</span>
+                <span className="font-medium text-slate-900 text-right">{submissionSuccess.signInLocation}</span>
+              </div>
+              <div className="flex justify-between items-center pt-0.5">
+                <span className="text-slate-500">Geo Stamp:</span>
+                <span className="text-[10px] font-mono text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold">
+                  {submissionSuccess.geoStamp ? `${submissionSuccess.geoStamp.latitude.toFixed(4)}°, ${submissionSuccess.geoStamp.longitude.toFixed(4)}°` : 'Live GPS Verified'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowPreviewModal(true)}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg shadow-2xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>View Official Signed Slip</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResetForm}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg shadow-2xs transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                <span>Log Another Sign-In</span>
+              </button>
+            </div>
           </div>
-
-          {/* Submission Success Banner */}
-          {submissionSuccess ? (
-            <div className="p-8 text-center space-y-6 bg-emerald-50/50">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <Check className="w-8 h-8 stroke-[3]" />
+        ) : (
+          /* ========================================================
+              COMPACT OFFICIAL FORM FIELDS (TEACHER SIGN-IN PROTOCOL)
+             ======================================================== */
+          <form onSubmit={handleSubmit} className="p-3.5 sm:p-4 space-y-2.5">
+            {/* FIELD 1: Staff No:* + Spreadsheet-to-Form Auto-Fill */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-1">
+                <label className="text-[11px] font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                  <span>Staff No:</span>
+                  <span className="text-rose-600 font-bold">*</span>
+                </label>
+                <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 inline-flex items-center gap-1">
+                  <Sparkles className="w-2.5 h-2.5 text-blue-600" />
+                  Auto-Fill Active
+                </span>
               </div>
 
-              <div>
-                <h2 className="text-2xl font-black text-slate-900">
-                  Work Entry Successfully Logged!
-                </h2>
-                <p className="text-xs text-slate-600 mt-1 max-w-md mx-auto">
-                  Your work entry sign-in record has been stamped and filed into the school institutional audit register.
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <input
+                  type="text"
+                  required
+                  value={staffNo}
+                  onChange={(e) => setStaffNo(e.target.value)}
+                  placeholder="Staff No (e.g. TSC/44120/ED)"
+                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                />
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) setStaffNo(e.target.value);
+                  }}
+                  value=""
+                  className="w-full px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium rounded-lg border border-slate-300 transition-colors cursor-pointer"
+                  title="Select a staff member from roster"
+                >
+                  <option value="" disabled>Select Staff Roster No...</option>
+                  <option value="TSC/44120/ED">TSC/44120/ED - Mr. David Kiprono (Class Teacher)</option>
+                  <option value="TSC/14982/ED">TSC/14982/ED - Dr. Arthur Mwangi (Head Teacher)</option>
+                  <option value="TSC/23491/ED">TSC/23491/ED - Mr. Charles Omondi (Deputy Head)</option>
+                  <option value="TSC/38910/ED">TSC/38910/ED - Ms. Beatrice Wanjiku (Dean of Studies)</option>
+                  <option value="TSC/31204/ED">TSC/31204/ED - Dr. Mercy Mwangi (HOD Sciences)</option>
+                  <option value="TSC/29410/ED">TSC/29410/ED - Mr. Peter Ochieng (Senior Teacher)</option>
+                  <option value="TSC/48102/ED">TSC/48102/ED - Mrs. Esther Kamau (Librarian)</option>
+                  <option value="ADM/45120/SEC">ADM/45120/SEC - Mrs. Sarah Cherono (Registrar)</option>
+                  <option value="TSC-48192-ED">TSC-48192-ED - Standard Staff Record</option>
+                </select>
+              </div>
+              {isStaffFilled ? (
+                <p className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                  <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span>Recognized: Remaining credentials auto-filled &amp; locked.</span>
                 </p>
-              </div>
-
-              {/* Receipt / Details Card */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 max-w-md mx-auto text-left text-xs space-y-2.5 shadow-sm">
-                <div className="flex justify-between border-b pb-2 border-slate-100">
-                  <span className="text-slate-500">Staff Member:</span>
-                  <span className="font-bold text-slate-900">{submissionSuccess.teacherName} ({submissionSuccess.staffNo})</span>
-                </div>
-                <div className="flex justify-between border-b pb-2 border-slate-100">
-                  <span className="text-slate-500">Date & Time:</span>
-                  <span className="font-mono font-semibold text-slate-800">{submissionSuccess.date} · {submissionSuccess.time}</span>
-                </div>
-                <div className="flex justify-between border-b pb-2 border-slate-100">
-                  <span className="text-slate-500">Strictly Work Email:</span>
-                  <span className="font-mono text-slate-800">{submissionSuccess.email}</span>
-                </div>
-                <div className="flex justify-between border-b pb-2 border-slate-100">
-                  <span className="text-slate-500">Sign-In Location:</span>
-                  <span className="font-medium text-slate-900">{submissionSuccess.signInLocation}</span>
-                </div>
-                <div className="flex justify-between items-center pt-1">
-                  <span className="text-slate-500">Geo Stamp:</span>
-                  <span className="text-[11px] font-mono text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
-                    {submissionSuccess.geoStamp ? `${submissionSuccess.geoStamp.latitude.toFixed(4)}°, ${submissionSuccess.geoStamp.longitude.toFixed(4)}°` : 'Live GPS Verified'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPreviewModal(true)}
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>View Official Signed Slip</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResetForm}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>Log Another Sign-In</span>
-                </button>
-              </div>
+              ) : (
+                <p className="text-[10px] text-amber-700 font-medium">
+                  Enter or select Staff No above to auto-fill and lock credentials.
+                </p>
+              )}
             </div>
-          ) : (
-            /* ========================================================
-                OFFICIAL FORM FIELDS (TEACHER SIGN-IN PROTOCOL)
-               ======================================================== */
-            <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
-              
-              {/* FIELD 1: Staff No:* + Spreadsheet-to-Form Auto-Fill Simulator */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                    <span>Staff No:</span>
-                    <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  <span className="text-[11px] text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-blue-600" />
-                    Auto-Fill Trigger Active
-                  </span>
-                </div>
 
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={staffNo}
-                    onChange={(e) => {
-                      setStaffNo(e.target.value);
-                    }}
-                    placeholder="Enter Staff No (e.g. TSC/44120/ED or TSC-48192-ED)"
-                    className="flex-1 px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-2xs"
-                  />
-                  <select
-                    onChange={(e) => {
-                      if (e.target.value) setStaffNo(e.target.value);
-                    }}
-                    value=""
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-xl border border-slate-300 transition-colors cursor-pointer"
-                    title="Select a staff member from roster"
-                  >
-                    <option value="" disabled>Select Staff Roster No...</option>
-                    <option value="TSC/44120/ED">TSC/44120/ED - Mr. David Kiprono (Class Teacher)</option>
-                    <option value="TSC/14982/ED">TSC/14982/ED - Dr. Arthur Mwangi (Head Teacher)</option>
-                    <option value="TSC/23491/ED">TSC/23491/ED - Mr. Charles Omondi (Deputy Head)</option>
-                    <option value="TSC/38910/ED">TSC/38910/ED - Ms. Beatrice Wanjiku (Dean of Studies)</option>
-                    <option value="TSC/31204/ED">TSC/31204/ED - Dr. Mercy Mwangi (HOD Sciences)</option>
-                    <option value="TSC/29410/ED">TSC/29410/ED - Mr. Peter Ochieng (Senior Teacher)</option>
-                    <option value="TSC/48102/ED">TSC/48102/ED - Mrs. Esther Kamau (Librarian)</option>
-                    <option value="ADM/45120/SEC">ADM/45120/SEC - Mrs. Sarah Cherono (Registrar)</option>
-                    <option value="TSC-48192-ED">TSC-48192-ED - Standard Staff Record</option>
-                  </select>
-                </div>
-                {isStaffFilled ? (
-                  <p className="text-[11px] text-emerald-700 font-bold flex items-center gap-1.5 mt-1">
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Staff Number Recognized: All remaining fields have been auto-filled and locked against manual edits.</span>
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-amber-700 font-medium mt-1">
-                    Enter or select Staff No above to auto-fill all credentials and lock the form.
-                  </p>
+            {/* FIELD 2: Teacher or Staff Name* (First Name + Last Name) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-1">
+                <label className="text-[11px] font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                  <UserIcon className="w-3 h-3 text-slate-500" />
+                  <span>Teacher / Staff Name</span>
+                  <span className="text-rose-600 font-bold">*</span>
+                </label>
+                {isStaffFilled && (
+                  <span className="text-[10px] font-mono text-emerald-800 inline-flex items-center gap-1 font-semibold">
+                    <Lock className="w-2.5 h-2.5 text-emerald-600" />
+                    <span>Auto-filled &amp; Locked</span>
+                  </span>
                 )}
               </div>
 
-              {/* FIELD 2: Teacher or Staff Name* (First Name + Last Name) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                    <UserIcon className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Teacher or Staff Name</span>
-                    <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  {isStaffFilled && (
-                    <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
-                      <Lock className="w-3 h-3 text-emerald-600" />
-                      <span>Locked: Auto-filled from Staff No</span>
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <input
-                      type="text"
-                      required
-                      readOnly={isStaffFilled}
-                      disabled={isStaffFilled}
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="First Name"
-                      className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-all shadow-2xs ${
-                        isStaffFilled
-                          ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
-                          : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      }`}
-                      title={isStaffFilled ? "First Name is auto-filled and locked against manual edits" : "Enter First Name"}
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1 block">First Name</span>
-                  </div>
-
-                  <div>
-                    <input
-                      type="text"
-                      required
-                      readOnly={isStaffFilled}
-                      disabled={isStaffFilled}
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Last Name"
-                      className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-bold transition-all shadow-2xs ${
-                        isStaffFilled
-                          ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
-                          : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
-                      }`}
-                      title={isStaffFilled ? "Last Name is auto-filled and locked against manual edits" : "Enter Last Name"}
-                    />
-                    <span className="text-[10px] text-slate-400 mt-1 block">Last Name</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* FIELD 3: Sign-In Date and Time* (Autofill to "current" and cannot be edited) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                    <CalendarIcon className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Sign-In Date and Time</span>
-                    <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
-                    <Lock className="w-3 h-3 text-emerald-600" />
-                    <span>Locked: Auto-filled (Current Time)</span>
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
-                  {/* Day */}
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={signDateDay}
-                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
-                      title="Sign-In Day is auto-filled to current date and cannot be edited"
-                    />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Day</span>
-                  </div>
-
-                  {/* Month */}
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={signDateMonth}
-                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
-                      title="Sign-In Month is auto-filled to current month and cannot be edited"
-                    />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Month</span>
-                  </div>
-
-                  {/* Year */}
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={signDateYear}
-                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
-                      title="Sign-In Year is auto-filled to current year and cannot be edited"
-                    />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Year</span>
-                  </div>
-
-                  {/* Hour */}
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={signTimeHour}
-                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
-                      title="Sign-In Hour is auto-filled to current hour and cannot be edited"
-                    />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Hour</span>
-                  </div>
-
-                  {/* Minute */}
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={signTimeMinute}
-                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
-                      title="Sign-In Minute is auto-filled to current minute and cannot be edited"
-                    />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">Minutes</span>
-                  </div>
-
-                  {/* AM/PM */}
-                  <div>
-                    <input
-                      type="text"
-                      readOnly
-                      disabled
-                      value={signTimeAmPm}
-                      className="w-full px-2.5 py-2 text-center border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none focus:outline-none shadow-2xs"
-                      title="Sign-In AM/PM is auto-filled to current and cannot be edited"
-                    />
-                    <span className="text-[10px] text-slate-400 text-center block mt-1 font-medium">AM/PM</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 pt-0.5">
-                  <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span>Official duty timestamp is auto-filled to current system time and locked against manual edits.</span>
-                </div>
-              </div>
-
-              {/* FIELD 4: Strictly Work Email* */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                    <Mail className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Strictly Work Email</span>
-                    <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  {isStaffFilled && (
-                    <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1 font-bold">
-                      <Lock className="w-3 h-3 text-emerald-600" />
-                      <span>Locked: Auto-filled from Staff No</span>
-                    </span>
-                  )}
-                </div>
-
+              <div className="grid grid-cols-2 gap-1.5">
                 <div>
                   <input
-                    type="email"
+                    type="text"
                     required
                     readOnly={isStaffFilled}
                     disabled={isStaffFilled}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="example@example.com"
-                    className={`w-full px-3.5 py-2.5 border rounded-xl text-xs font-mono font-bold transition-all shadow-2xs ${
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First Name"
+                    className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-bold ${
                       isStaffFilled
                         ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
                         : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
                     }`}
-                    title={isStaffFilled ? "Work Email is auto-filled from staff record and cannot be edited" : "Enter Work Email"}
+                    title={isStaffFilled ? 'First Name is auto-filled and locked against manual edits' : 'Enter First Name'}
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">example@example.com</span>
+                  <span className="text-[9px] text-slate-400 mt-0.5 block">First Name</span>
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    required
+                    readOnly={isStaffFilled}
+                    disabled={isStaffFilled}
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Last Name"
+                    className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-bold ${
+                      isStaffFilled
+                        ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
+                        : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+                    }`}
+                    title={isStaffFilled ? 'Last Name is auto-filled and locked against manual edits' : 'Enter Last Name'}
+                  />
+                  <span className="text-[9px] text-slate-400 mt-0.5 block">Last Name</span>
                 </div>
               </div>
+            </div>
 
-              {/* FIELD 5: Sign-In Location* & Live Reverse-Geocoded Geo Stamp (Captures actual geographic place name, never campus name) */}
-              <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Sign-In Physical Location &amp; Live GPS Stamp</span>
-                    <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 font-bold ${
-                    geoCoords
-                      ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
-                      : 'text-rose-800 bg-rose-50 border-rose-200'
-                  }`}>
-                    <Lock className="w-3 h-3" />
-                    <span>{isLocating ? 'Acquiring Live GPS...' : geoCoords ? 'Locked: Live Street/Locality GPS' : 'GPS Permission Required'}</span>
+            {/* FIELD 3: Sign-In Date and Time* (Autofill to "current" and locked) */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-1">
+                <label className="text-[11px] font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                  <CalendarIcon className="w-3 h-3 text-slate-500" />
+                  <span>Sign-In Date &amp; Time</span>
+                  <span className="text-rose-600 font-bold">*</span>
+                </label>
+                <span className="text-[10px] font-mono text-emerald-800 inline-flex items-center gap-1 font-semibold">
+                  <Lock className="w-2.5 h-2.5 text-emerald-600" />
+                  <span>Locked (Live Clock)</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-6 gap-1">
+                {[
+                  { val: signDateDay, label: 'Day', title: 'Sign-In Day (auto-filled)' },
+                  { val: signDateMonth, label: 'Month', title: 'Sign-In Month (auto-filled)' },
+                  { val: signDateYear, label: 'Year', title: 'Sign-In Year (auto-filled)' },
+                  { val: signTimeHour, label: 'Hour', title: 'Sign-In Hour (auto-filled)' },
+                  { val: signTimeMinute, label: 'Min', title: 'Sign-In Minutes (auto-filled)' },
+                  { val: signTimeAmPm, label: 'AM/PM', title: 'Sign-In AM/PM (auto-filled)' },
+                ].map((part) => (
+                  <div key={part.label}>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={part.val}
+                      className="w-full px-1 py-1 text-center border border-slate-200 bg-slate-100 rounded-md text-[11px] font-mono font-bold text-slate-700 cursor-not-allowed select-none"
+                      title={part.title}
+                    />
+                    <span className="text-[9px] text-slate-400 text-center block mt-0.5 font-medium">{part.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* FIELD 4: Strictly Work Email* */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-1">
+                <label className="text-[11px] font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                  <Mail className="w-3 h-3 text-slate-500" />
+                  <span>Strictly Work Email</span>
+                  <span className="text-rose-600 font-bold">*</span>
+                </label>
+                {isStaffFilled && (
+                  <span className="text-[10px] font-mono text-emerald-800 inline-flex items-center gap-1 font-semibold">
+                    <Lock className="w-2.5 h-2.5 text-emerald-600" />
+                    <span>Auto-filled &amp; Locked</span>
                   </span>
-                </div>
+                )}
+              </div>
 
+              <input
+                type="email"
+                required
+                readOnly={isStaffFilled}
+                disabled={isStaffFilled}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@example.com"
+                className={`w-full px-2.5 py-1.5 border rounded-lg text-xs font-mono font-bold ${
+                  isStaffFilled
+                    ? 'border-slate-200 bg-slate-100 text-slate-700 cursor-not-allowed select-none'
+                    : 'border-slate-300 text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600'
+                }`}
+                title={isStaffFilled ? 'Work Email is auto-filled from staff record and cannot be edited' : 'Enter Work Email'}
+              />
+            </div>
+
+            {/* FIELD 5: Sign-In Physical Location* & Live Reverse-Geocoded Geo Stamp */}
+            <div className="space-y-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between gap-1">
+                <label className="text-[11px] font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-emerald-700 shrink-0" />
+                  <span>Physical Location &amp; Live GPS</span>
+                  <span className="text-rose-600 font-bold">*</span>
+                </label>
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border inline-flex items-center gap-1 font-bold ${
+                  geoCoords
+                    ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                    : 'text-rose-800 bg-rose-50 border-rose-200'
+                }`}>
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>{isLocating ? 'Locating...' : geoCoords ? 'Live GPS Locked' : 'GPS Required'}</span>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
                 <input
                   type="text"
                   required
                   readOnly
                   disabled
                   value={signInLocation}
-                  placeholder={isLocating ? 'Detecting actual physical location...' : 'Enable GPS to capture actual geographic location'}
-                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-not-allowed select-none shadow-2xs focus:outline-none"
-                  title="Sign-In Location is captured directly from your device GPS and reverse-geocoded; manual edits and campus placeholders are blocked"
+                  placeholder={isLocating ? 'Detecting physical location...' : 'Enable GPS to capture actual locality'}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 cursor-not-allowed select-none"
+                  title="Sign-In Location is captured directly from device GPS and reverse-geocoded; manual edits are blocked"
                 />
+                <button
+                  type="button"
+                  onClick={requestGeoLocation}
+                  disabled={isLocating}
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-emerald-800 text-[10px] font-bold rounded-lg border border-slate-300 inline-flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap cursor-pointer"
+                  title="Capture current live GPS reading"
+                >
+                  <Compass className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
+                  <span>{isLocating ? 'Locating...' : 'Capture GPS'}</span>
+                </button>
+              </div>
 
-                {geoCoords ? (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-950 font-mono">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span>Geo Stamp: {geoCoords.latitude.toFixed(5)}°, {geoCoords.longitude.toFixed(5)}° (±{geoCoords.accuracy}m)</span>
+              {geoCoords ? (
+                <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1 bg-emerald-50 rounded-lg border border-emerald-200 text-[10px] text-emerald-950 font-mono">
+                  <span className="inline-flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span>{geoCoords.latitude.toFixed(5)}°, {geoCoords.longitude.toFixed(5)}° (±{geoCoords.accuracy}m)</span>
+                  </span>
+                  <span className="text-emerald-800 font-bold">Live Place Verified</span>
+                </div>
+              ) : (
+                <div className="px-2 py-1 bg-rose-50 rounded-lg border border-rose-200 text-[10px] text-rose-800 font-medium">
+                  {geoError || 'Waiting for device GPS permission. Live coordinates are required to submit.'}
+                </div>
+              )}
+            </div>
+
+            {/* FIELD 6: Take Personal Photo* */}
+            <div className="space-y-1.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
+                  <Camera className="w-3 h-3 text-blue-700" />
+                  <span>Take Personal Photo</span>
+                  <span className="text-rose-600 font-bold">*</span>
+                </label>
+                <span className="text-[10px] text-slate-500 font-medium">Biometric Clock-In Stamp</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {photoDataUrl ? (
+                  <div className="relative shrink-0">
+                    <img
+                      src={photoDataUrl}
+                      alt="Captured Personal Staff Snapshot"
+                      className="w-16 h-16 object-cover rounded-xl border-2 border-emerald-500 shadow-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoDataUrl(null);
+                        startCamera();
+                      }}
+                      className="absolute -bottom-1 -right-1 bg-slate-900/90 hover:bg-slate-900 text-white p-1 rounded-md shadow-xs cursor-pointer"
+                      title="Retake Snapshot"
+                    >
+                      <RotateCw className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : isCameraActive ? (
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative rounded-xl overflow-hidden border-2 border-blue-500 w-24 h-24 bg-black shrink-0">
+                      <video
+                        ref={videoRef}
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <span className="text-emerald-800 font-bold bg-white px-2 py-0.5 rounded border border-emerald-300 self-start sm:self-auto flex items-center gap-1">
-                      <Lock className="w-3 h-3 text-emerald-600" />
-                      <span>Live Geographic Place Verified</span>
-                    </span>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={capturePhoto}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Camera className="w-3 h-3" />
+                        <span>Snap Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopCamera}
+                        className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-semibold rounded-lg cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200 text-[11px] text-rose-800 font-medium">
-                    {geoError || 'Waiting for device GPS location permission. Submission is restricted until actual geographic coordinates are captured.'}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="px-2.5 py-1.5 bg-white hover:bg-blue-50 text-blue-900 text-[11px] font-bold rounded-lg border border-blue-200 inline-flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Open Camera</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={generateSimulatedSnapshot}
+                      className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer"
+                      title="Generate Institutional Digital Stamp"
+                    >
+                      Digital Stamp
+                    </button>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5 gap-2">
-                  <div className="flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span>Captures real street, neighbourhood &amp; town from GPS (never school/campus name). Cannot be manually edited.</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={requestGeoLocation}
-                    disabled={isLocating}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 text-emerald-800 text-[10px] font-bold rounded-lg border border-slate-300 flex items-center gap-1 shadow-2xs transition-colors shrink-0 cursor-pointer"
-                    title="Capture current live GPS reading"
-                  >
-                    <Compass className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
-                    <span>{isLocating ? 'Locating...' : 'Capture Live GPS'}</span>
-                  </button>
-                </div>
+                {!isCameraActive && (
+                  <p className="text-[10px] text-slate-500 leading-snug">
+                    Embedded with staff ID, live time &amp; GPS verification.
+                  </p>
+                )}
               </div>
 
-              {/* FIELD 6: Take Personal Photo* */}
-              <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#2C3345] uppercase tracking-wide flex items-center gap-1">
-                    <Camera className="w-3.5 h-3.5 text-blue-700" />
-                    <span>Take Personal Photo</span>
-                    <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                </div>
-
-                {/* Camera View or Captured Photo */}
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {photoDataUrl ? (
-                    <div className="relative group">
-                      <img 
-                        src={photoDataUrl} 
-                        alt="Captured Personal Staff Snapshot" 
-                        className="w-28 h-28 sm:w-32 sm:h-32 object-cover rounded-2xl border-2 border-emerald-500 shadow-md"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPhotoDataUrl(null);
-                          startCamera();
-                        }}
-                        className="absolute bottom-1.5 right-1.5 bg-slate-900/80 hover:bg-slate-900 text-white p-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors"
-                        title="Retake Snapshot"
-                      >
-                        <RotateCw className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : isCameraActive ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="relative rounded-2xl overflow-hidden border-2 border-blue-500 shadow-md w-48 h-48 bg-black">
-                        <video 
-                          ref={videoRef} 
-                          playsInline 
-                          muted 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={capturePhoto}
-                          className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1"
-                        >
-                          <Camera className="w-3.5 h-3.5" />
-                          <span>Snap Photo</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={stopCamera}
-                          className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={startCamera}
-                        className="px-4 py-3 bg-white hover:bg-blue-50 text-blue-900 text-xs font-bold rounded-xl border border-blue-200 flex items-center gap-2 shadow-2xs transition-colors"
-                      >
-                        <Camera className="w-4 h-4 text-blue-600" />
-                        <span>Open Camera / Take Photo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={generateSimulatedSnapshot}
-                        className="px-3 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition-colors"
-                        title="Generate Institutional Digital Stamp"
-                      >
-                        Institutional Stamp Snapshot
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-slate-500 max-w-sm">
-                    <p className="font-medium text-slate-700">Digital Identity Verification</p>
-                    <p className="text-[11px] mt-0.5 leading-relaxed">
-                      Instant biometric time-stamp for official teacher clock-in protocol. Embedded with real-time staff identification and GPS verification.
-                    </p>
-                  </div>
-                </div>
-
-                <canvas ref={canvasRef} className="hidden" />
-              </div>
-
-              {/* ========================================================
-                  OFFICIAL SUBMISSION BUTTON (TEACHER PROTOCOL)
-                 ======================================================== */}
-              <div className="pt-6 border-t border-slate-200">
-                <button
-                  type="submit"
-                  disabled={isSubmitting || isLocating || !geoCoords || !signInLocation.trim()}
-                  className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 hover:from-blue-800 hover:to-indigo-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm tracking-wide shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                >
-                  <FileCheck2 className="w-5 h-5 text-amber-400" />
-                  <span>
-                    {isSubmitting
-                      ? 'Submitting Work Entry...'
-                      : !geoCoords
-                      ? 'Live GPS Location Required to Submit'
-                      : 'Submit Work Entry Sign-In Form'}
-                  </span>
-                </button>
-                <div className="text-center mt-2.5 text-[11px] text-slate-400">
-                  All fields marked with an asterisk (<span className="text-rose-600 font-bold">*</span>) are mandatory and audited by Academic Leadership.
-                </div>
-              </div>
-
-            </form>
-          )}
-
-          {/* Form Footer Stamp (Tenant School Logo) */}
-          <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
-            <div className="flex items-center gap-2">
-              <TenantSchoolLogo variant="horizontal" size="xs" />
-              <span>· Work Entry Sign-In Portal</span>
+              <canvas ref={canvasRef} className="hidden" />
             </div>
-            <div className="flex items-center gap-2 text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Secured with SSL Geo-Verification &amp; Biometric Audit</span>
-            </div>
-          </div>
 
+            {/* OFFICIAL SUBMISSION BUTTON */}
+            <div className="pt-2 border-t border-slate-200">
+              <button
+                type="submit"
+                disabled={isSubmitting || isLocating || !geoCoords || !signInLocation.trim()}
+                className="w-full py-2 px-4 rounded-lg bg-gradient-to-r from-blue-700 via-blue-800 to-indigo-900 hover:from-blue-800 hover:to-indigo-950 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs tracking-wide shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <FileCheck2 className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  {isSubmitting
+                    ? 'Submitting Work Entry...'
+                    : !geoCoords
+                    ? 'Live GPS Location Required to Submit'
+                    : 'Submit Work Entry Sign-In Form'}
+                </span>
+              </button>
+              <div className="text-center mt-1.5 text-[10px] text-slate-400">
+                Mandatory fields (<span className="text-rose-600 font-bold">*</span>) are audited by Academic Leadership.
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* Compact Footer Stamp */}
+        <div className="px-3.5 py-2 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+          <span className="font-semibold text-slate-600">{currentTenant.name} · Work Entry Register</span>
+          <span className="inline-flex items-center gap-1 text-slate-400">
+            <ShieldCheck className="w-3 h-3 text-emerald-600" />
+            <span>Geo-Verified &amp; Biometric Audit</span>
+          </span>
         </div>
       </div>
 

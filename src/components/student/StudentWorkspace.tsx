@@ -78,7 +78,8 @@ import {
   Laptop,
   Atom,
   Eye,
-  Download
+  Download,
+  Bot
 } from 'lucide-react';
 import { PrintReportModal } from '../common/PrintReportModal';
 import { ScienceViewerModal } from '../virtuallab/ScienceViewerModal';
@@ -351,6 +352,19 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = ({ currentUser 
 
         {/* Quick Top Tools */}
         <div className="flex items-center gap-2">
+          {/* EduCOBOT External Link Button */}
+          <a
+            href="https://innov8r.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-xs font-black shadow-xs inline-flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+            title="Open EduCOBOT (innov8r.ai)"
+          >
+            <Bot className="w-3.5 h-3.5 shrink-0" />
+            <span>EduCOBOT</span>
+            <ExternalLink className="w-3 h-3 opacity-80 shrink-0" />
+          </a>
+
           {/* Safe Browser Button */}
           <button
             onClick={() => setActiveTab('browser')}
